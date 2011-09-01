@@ -633,6 +633,7 @@ void perf_pmu_disable(struct pmu *pmu)
 	if (!(*count)++)
 		pmu->pmu_disable(pmu);
 }
+EXPORT_SYMBOL_GPL(perf_pmu_disable);
 
 void perf_pmu_enable(struct pmu *pmu)
 {
@@ -640,6 +641,7 @@ void perf_pmu_enable(struct pmu *pmu)
 	if (!--(*count))
 		pmu->pmu_enable(pmu);
 }
+EXPORT_SYMBOL_GPL(perf_pmu_enable);
 
 static DEFINE_PER_CPU(struct list_head, rotation_list);
 
@@ -6052,6 +6054,7 @@ free_pdc:
 	free_percpu(pmu->pmu_disable_count);
 	goto unlock;
 }
+EXPORT_SYMBOL_GPL(perf_pmu_register);
 
 void perf_pmu_unregister(struct pmu *pmu)
 {
@@ -6073,6 +6076,7 @@ void perf_pmu_unregister(struct pmu *pmu)
 	put_device(pmu->dev);
 	free_pmu_context(pmu);
 }
+EXPORT_SYMBOL_GPL(perf_pmu_unregister);
 
 struct pmu *perf_init_event(struct perf_event *event)
 {
