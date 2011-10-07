@@ -131,6 +131,11 @@ KBUILD_CFLAGS	+= $(call cc-option,-fno-dwarf2-cfi-asm)
 # often slow when they are implemented at all
 KBUILD_CFLAGS		+= -mno-string
 
+ifeq ($(CONFIG_DEBUG_CW),y)
+CFLAGS += -g2 -gdwarf-2
+AFLAGS_KERNEL += -Wa,-gdwarf2
+endif
+
 ifeq ($(CONFIG_6xx),y)
 KBUILD_CFLAGS		+= -mcpu=powerpc
 endif

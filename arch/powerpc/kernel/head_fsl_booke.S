@@ -21,7 +21,7 @@
  *		debbie_chu@mvista.com
  *    Copyright 2002-2004 MontaVista Software, Inc.
  *	PowerPC 44x support, Matt Porter <mporter@kernel.crashing.org>
- *    Copyright 2004 Freescale Semiconductor, Inc
+ *    Copyright 2004,2010 Freescale Semiconductor, Inc
  *	PowerPC e500 modifications, Kumar Gala <galak@kernel.crashing.org>
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -149,7 +149,7 @@ _ENTRY(__early_start)
 	mtspr	SPRN_HID0, r2
 #endif
 
-#if !defined(CONFIG_BDI_SWITCH)
+#if !defined(CONFIG_BDI_SWITCH) && !defined(CONFIG_DEBUG_CW)
 	/*
 	 * The Abatron BDI JTAG debugger does not tolerate others
 	 * mucking with the debug registers.
@@ -211,6 +211,13 @@ _ENTRY(__early_start)
 /*
  * Decide what sort of machine this is and initialize the MMU.
  */
+#if defined(CONFIG_DEBUG_CW)
+	lis	r10, 0x1008 /* clear the V bit from the L2MMU_CAM8 register */
+	mtspr	SPRN_MAS0, r10
+	lis	r10, 0x0
+	mtspr	SPRN_MAS1, r10
+	tlbwe
+#endif
 	mr	r3,r30
 	mr	r4,r31
 	bl	machine_init

@@ -42,7 +42,11 @@
 #define MSR_KERNEL	(MSR_ME|MSR_RI|MSR_IR|MSR_DR|MSR_CE)
 #define MSR_USER	(MSR_KERNEL|MSR_PR|MSR_EE)
 #else
+#if defined(CONFIG_DEBUG_CW)
+#define MSR_KERNEL	(MSR_ME|MSR_RI|MSR_CE|MSR_DE)
+#else
 #define MSR_KERNEL	(MSR_ME|MSR_RI|MSR_CE)
+#endif
 #define MSR_USER	(MSR_KERNEL|MSR_PR|MSR_EE)
 #endif
 

@@ -76,8 +76,11 @@ void cpu_idle(void)
 				stop_critical_timings();
 
 				/* check again after disabling irqs */
-				if (!need_resched() && !cpu_should_die())
+				if (!need_resched() && !cpu_should_die()) {
+#if !defined(CONFIG_DEBUG_CW)
 					ppc_md.power_save();
+#endif
+				}
 
 				start_critical_timings();
 
