@@ -3,7 +3,7 @@
  *
  * Author: Kriston Carson
  *
- * Copyright (c) 2005, 2009 Freescale Semiconductor, Inc.
+ * Copyright (c) 2005, 2009, 2011 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -45,6 +45,10 @@
 
 /* Vitesse Auxiliary Control/Status Register */
 #define MII_VSC8244_AUX_CONSTAT        	0x1c
+#define MII_VSC82X4_EXT_PAGE_16E	0x10
+#define MII_VSC82X4_EXT_PAGE_17E	0x11
+#define MII_VSC82X4_EXT_PAGE_18E	0x12
+#define MII_VSC82X4_EXT_PAGE_ACCESS	0x1f
 #define MII_VSC8244_AUXCONSTAT_INIT    	0x0000
 #define MII_VSC8244_AUXCONSTAT_DUPLEX  	0x0020
 #define MII_VSC8244_AUXCONSTAT_SPEED   	0x0018
@@ -141,7 +145,6 @@ static int vsc82xx_config_intr(struct phy_device *phydev)
 	return err;
 }
 
-
 static int vsc8221_config_init(struct phy_device *phydev)
 {
 	int err;
@@ -154,6 +157,65 @@ static int vsc8221_config_init(struct phy_device *phydev)
 	   Options are 802.3Z SerDes or SGMII */
 }
 
+/* vsc82x4_config_autocross_enable - Enable auto MDI/MDI-X for forced links
+ * @phydev: target phy_device struct
+ *
+ * Enable auto MDI/MDI-X when in 10/100 forced link speeds by writing
+ * special values in the VSC8234/VSC8244 extended reserved registers
+ *
+ */
+static int vsc82x4_config_autocross_enable(struct phy_device *phydev)
+{
+	int ret;
+
+	if (phydev->autoneg == AUTONEG_ENABLE || phydev->speed > SPEED_100)
+		return 0;
+
+	/* map extended registers set 0x10 - 0x1e */
+	ret = phy_write(phydev, MII_VSC82X4_EXT_PAGE_ACCESS, 0x52b5);
+	if (ret >= 0)
+		ret = phy_write(phydev, MII_VSC82X4_EXT_PAGE_18E, 0x0012);
+	if (ret >= 0)
+		ret = phy_write(phydev, MII_VSC82X4_EXT_PAGE_17E, 0x2803);
+	if (ret >= 0)
+		ret = phy_write(phydev, MII_VSC82X4_EXT_PAGE_16E, 0x87fa);
+	/* map standard registers set 0x10 - 0x1e */
+	if (ret >= 0)
+		ret = phy_write(phydev, MII_VSC82X4_EXT_PAGE_ACCESS, 0x0000);
+	else
+		phy_write(phydev, MII_VSC82X4_EXT_PAGE_ACCESS, 0x0000);
+
+	return ret;
+}
+
+/**
+ * vsc82x4_config_aneg - restart auto-negotiation or write BMCR
+ * @phydev: target phy_device struct
+ *
+ * Description: If auto-negotiation is enabled, we configure the
+ *   advertising, and then restart auto-negotiation.  If it is not
+ *   enabled, then we write the BMCR and also start the auto
+ *   MDI/MDI-X feature
+ *
+ */
+static int vsc82x4_config_aneg(struct phy_device *phydev)
+{
+	int ret;
+
+	/* Enable auto MDI/MDI-X when in 10/100 forced link speeds by
+	 * writing special values in the VSC8234 extended reserved registers */
+	if (phydev->autoneg != AUTONEG_ENABLE && phydev->speed <= SPEED_100) {
+		ret = genphy_setup_forced(phydev);
+
+		if (ret < 0) /* error */
+			return ret;
+
+		return vsc82x4_config_autocross_enable(phydev);
+	}
+
+	return genphy_config_aneg(phydev);
+}
+
 /* Vitesse 824x */
 static struct phy_driver vsc82xx_driver[] = {
 {
@@ -163,7 +225,7 @@ static struct phy_driver vsc82xx_driver[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= &vsc824x_config_init,
-	.config_aneg	= &genphy_config_aneg,
+	.config_aneg	= &vsc82x4_config_aneg,
 	.read_status	= &genphy_read_status,
 	.ack_interrupt	= &vsc824x_ack_interrupt,
 	.config_intr	= &vsc82xx_config_intr,
@@ -202,7 +264,7 @@ static struct phy_driver vsc82xx_driver[] = {
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= &vsc824x_config_init,
-	.config_aneg	= &genphy_config_aneg,
+	.config_aneg	= &vsc82x4_config_aneg,
 	.read_status	= &genphy_read_status,
 	.ack_interrupt	= &vsc824x_ack_interrupt,
 	.config_intr	= &vsc82xx_config_intr,
