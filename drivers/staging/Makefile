@@ -65,4 +65,4 @@ obj-$(CONFIG_SB105X)		+= sb105x/
 obj-$(CONFIG_FIREWIRE_SERIAL)	+= fwserial/
 obj-$(CONFIG_FSL_DPA)           += fsl_qbman/
 obj-$(CONFIG_FSL_PME2)          += fsl_pme2/
-
+obj-$(CONFIG_FSL_RMAN_UIO)	+= fsl_rman/
