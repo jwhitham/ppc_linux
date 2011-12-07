@@ -1576,6 +1576,27 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 	return ret;
 }
 
+/*
+ * Return values for the sdhci_get_cd callback:
+ * 0: for a absent card
+ * 1: for a present card
+ * -ENOSYS: when not supported (equal to NULL callback)
+ */
+static int sdhci_get_cd(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+	unsigned long flags;
+	int present = -ENOSYS;
+
+	if (host->ops->get_cd) {
+		spin_lock_irqsave(&host->lock, flags);
+		present = host->ops->get_cd(host);
+		spin_unlock_irqrestore(&host->lock, flags);
+	}
+
+	return present;
+}
+
 static void sdhci_enable_sdio_irq_nolock(struct sdhci_host *host, int enable)
 {
 	if (host->flags & SDHCI_DEVICE_DEAD)
@@ -2023,6 +2044,7 @@ static const struct mmc_host_ops sdhci_ops = {
 	.request	= sdhci_request,
 	.set_ios	= sdhci_set_ios,
 	.get_ro		= sdhci_get_ro,
+	.get_cd		= sdhci_get_cd,
 	.hw_reset	= sdhci_hw_reset,
 	.enable_sdio_irq = sdhci_enable_sdio_irq,
 	.start_signal_voltage_switch	= sdhci_start_signal_voltage_switch,
