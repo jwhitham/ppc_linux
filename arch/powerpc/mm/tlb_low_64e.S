@@ -110,9 +110,9 @@ END_FTR_SECTION_IFSET(CPU_FTR_EMB_HV)
 	ori	r10,r10,_PAGE_PRESENT
 	oris	r11,r10,_PAGE_ACCESSED@h
 
-#ifdef CONFIG_FSL_THREADS
+BEGIN_FTR_SECTION
 	ld	r10,PACA_TLB_PER_CORE_PTR(r13)
-#endif
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 
 	TLB_MISS_STATS_SAVE_INFO_BOLTED
 	bne	tlb_miss_kernel_bolted
@@ -130,11 +130,11 @@ tlb_miss_common_bolted:
  * r10 = tlb_per_core ptr
  */
 
-#ifdef CONFIG_FSL_THREADS
 	/*
 	 * Search if we already have an entry for that virtual
 	 * address, and if we do, bail out.
 	 */
+BEGIN_FTR_SECTION
 	mtocrf	0x01,r10
 	addi	r10,r10,PACA_TLB_LOCK-1 /* -1 to compensate for low bit set */
 	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
@@ -151,17 +151,17 @@ tlb_miss_common_bolted:
 	b	2b
 	.previous
 1:
-#endif
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 
 	rldicl	r15,r16,64-PGDIR_SHIFT+3,64-PGD_INDEX_SIZE-3
 	cmpldi	cr0,r14,0
 	clrrdi	r15,r15,3
 	beq	tlb_miss_fault_bolted	/* No PGDIR, bail */
 
-#ifdef CONFIG_FSL_THREADS
+	ldx	r14,r14,r15		/* grab pgd entry */
+BEGIN_FTR_SECTION
 	mfspr	r10,SPRN_MAS2
 	tlbsx	0,r16
-	ldx	r14,r14,r15		/* grab pgd entry */
 	mfspr	r15,SPRN_MAS1
 	andis.	r15,r15,MAS1_VALID@h
 	bne	tlb_miss_done_bolted	/* tlb exists already, bail */
@@ -171,9 +171,7 @@ tlb_miss_common_bolted:
 	oris	r15,r15,MAS1_VALID@h
 	mtspr	SPRN_MAS1,r15
 	mtspr	SPRN_MAS2,r10
-#else
-	ldx	r14,r14,r15		/* grab pgd entry */
-#endif
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 
 #ifndef CONFIG_PPC_64K_PAGES
 	rldicl	r15,r16,64-PUD_SHIFT+3,64-PUD_INDEX_SIZE-3
@@ -228,14 +226,14 @@ tlb_miss_common_bolted:
 
 tlb_miss_done_bolted:
 	.macro	tlb_unlock_bolted
-#ifdef CONFIG_FSL_THREADS
+BEGIN_FTR_SECTION
 	ld	r10,PACA_TLB_PER_CORE_PTR(r13)
 	bf	31,1f
 	li	r15,0
 	isync
 	stb	r15,PACA_TLB_LOCK-1(r10)
 1:
-#endif
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 	.endm
 
 	tlb_unlock_bolted
@@ -278,9 +276,9 @@ itlb_miss_fault_bolted:
 	TLB_MISS_STATS_SAVE_INFO_BOLTED
 	bne-	itlb_miss_fault_bolted
 
-#ifdef CONFIG_FSL_THREADS
+BEGIN_FTR_SECTION
 	ld	r10,PACA_TLB_PER_CORE_PTR(r13)
-#endif
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 	li	r11,_PAGE_PRESENT|_PAGE_EXEC	/* Base perm */
 
 	/* We do the user/kernel test for the PID here along with the RW test

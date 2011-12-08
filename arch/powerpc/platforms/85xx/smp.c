@@ -26,6 +26,7 @@
 #include <asm/cacheflush.h>
 #include <asm/dbell.h>
 #include <asm/fsl_guts.h>
+#include <asm/cputhreads.h>
 
 #include <sysdev/fsl_soc.h>
 #include <sysdev/mpic.h>
@@ -155,6 +156,19 @@ static int __cpuinit smp_85xx_kick_cpu(int nr)
 	WARN_ON(hw_cpu < 0 || hw_cpu >= NR_CPUS);
 
 	pr_debug("smp_85xx_kick_cpu: kick CPU #%d\n", nr);
+
+#ifdef CONFIG_PPC64
+	/* If the cpu we're kicking is a thread, kick it and return */
+	if (cpu_thread_in_core(nr) != 0) {
+		local_irq_save(flags);
+
+		smp_generic_kick_cpu(nr);
+
+		local_irq_restore(flags);
+
+		return 0;
+	}
+#endif
 
 	np = of_get_cpu_node(nr, NULL);
 	cpu_rel_addr = of_get_property(np, "cpu-release-addr", NULL);

@@ -308,12 +308,10 @@ static int __init early_init_dt_scan_cpus(unsigned long node,
 
 	/* Get physical cpuid */
 	intserv = of_get_flat_dt_prop(node, "ibm,ppc-interrupt-server#s", &len);
-	if (intserv) {
-		nthreads = len / sizeof(int);
-	} else {
-		intserv = of_get_flat_dt_prop(node, "reg", NULL);
-		nthreads = 1;
-	}
+	if (!intserv)
+		intserv = of_get_flat_dt_prop(node, "reg", &len);
+
+	nthreads = len / sizeof(int);
 
 	/*
 	 * Now see if any of these threads match our boot cpu.
@@ -848,22 +846,17 @@ struct device_node *of_get_cpu_node(int cpu, unsigned int *thread)
 		intserv = of_get_property(np, "ibm,ppc-interrupt-server#s",
 				&plen);
 		if (intserv == NULL) {
-			const u32 *reg = of_get_property(np, "reg", NULL);
-			if (reg == NULL)
+			intserv = of_get_property(np, "reg", &plen);
+			if (intserv == NULL)
 				continue;
-			if (*reg == hardid) {
+		}
+
+		plen /= sizeof(u32);
+		for (t = 0; t < plen; t++) {
+			if (hardid == intserv[t]) {
 				if (thread)
-					*thread = 0;
+					*thread = t;
 				return np;
-			}
-		} else {
-			plen /= sizeof(u32);
-			for (t = 0; t < plen; t++) {
-				if (hardid == intserv[t]) {
-					if (thread)
-						*thread = t;
-					return np;
-				}
 			}
 		}
 	}
