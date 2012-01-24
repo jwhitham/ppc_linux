@@ -30,8 +30,13 @@
 #define MSR_64BIT	MSR_CM
 
 #define MSR_		MSR_ME | MSR_CE
+#if defined(CONFIG_DEBUG_CW)
+#define MSR_KERNEL	(MSR_ | MSR_64BIT | MSR_DE)
+#define MSR_USER32	(MSR_ | MSR_PR | MSR_EE | MSR_DE)
+#else
 #define MSR_KERNEL	MSR_ | MSR_64BIT
 #define MSR_USER32	MSR_ | MSR_PR | MSR_EE
+#endif
 #define MSR_USER64	MSR_USER32 | MSR_64BIT
 #elif defined (CONFIG_40x)
 #define MSR_KERNEL	(MSR_ME|MSR_RI|MSR_IR|MSR_DR|MSR_CE)
