@@ -1176,6 +1176,10 @@ get_entries(struct net *net, struct ip6t_get_entries __user *uptr,
 	return ret;
 }
 
+#ifdef CONFIG_AS_FASTPATH
+extern void (*pfnfirewall_asfctrl)(void);
+#endif
+
 static int
 __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 	     struct xt_table_info *newinfo, unsigned int num_counters,
@@ -1238,6 +1242,13 @@ __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 		ret = -EFAULT;
 	vfree(counters);
 	xt_table_unlock(t);
+
+#ifdef CONFIG_AS_FASTPATH
+	/* Call the  ASF CTRL CB */
+	if (!ret && pfnfirewall_asfctrl)
+		pfnfirewall_asfctrl();
+#endif
+
 	return ret;
 
  put_module:
