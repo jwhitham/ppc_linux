@@ -21,6 +21,17 @@ struct device_node;
 
 extern void fsl_rstcr_restart(char *cmd);
 
+#ifdef CONFIG_FSL_PMC
+int mpc85xx_pmc_set_wake(struct device *dev, bool enable);
+void mpc85xx_pmc_set_lossless_ethernet(int enable);
+#else
+static inline int mpc85xx_pmc_set_wake(struct device *dev, bool enable)
+{
+	return -ENODEV;
+}
+#define mpc85xx_pmc_set_lossless_ethernet(enable)	do { } while (0)
+#endif
+
 #if defined(CONFIG_FB_FSL_DIU) || defined(CONFIG_FB_FSL_DIU_MODULE)
 
 /* The different ports that the DIU can be connected to */
