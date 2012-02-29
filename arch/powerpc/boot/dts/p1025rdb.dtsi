@@ -1,7 +1,7 @@
 /*
  * P1025 RDB Device Tree Source stub (no addresses or top-level ranges)
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,6 +31,13 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+/{
+       aliases {
+		ethernet3 = &enet3;
+		ethernet4 = &enet4;
+       };
+};
 
 &lbc {
 	nor@0,0 {
@@ -201,6 +208,12 @@
 			reg = <0x1>;
 		};
 
+		phy2: ethernet-phy@2 {
+			interrupt-parent = <&mpic>;
+			interrupts = <1 1>;
+			reg = <0x2>;
+		};
+
 		tbi0: tbi-phy@11 {
 			reg = <0x11>;
 			device_type = "tbi-phy";
@@ -223,6 +236,7 @@
 
 	enet0: ethernet@b0000 {
 		fixed-link = <1 1 1000 0 0>;
+		phy-handle = <&phy2>;
 		phy-connection-type = "rgmii-id";
 
 	};

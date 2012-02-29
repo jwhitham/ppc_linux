@@ -1,7 +1,7 @@
 /*
  * P1025 RDB Device Tree Source (36-bit address map)
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -55,7 +55,7 @@
 
 	pci0: pcie@fffe09000 {
 		reg = <0xf 0xffe09000 0 0x1000>;
-		ranges = <0x2000000 0x0 0xe0000000 0xe 0x20000000 0x0 0x20000000
+		ranges = <0x2000000 0x0 0xe0000000 0xc 0x20000000 0x0 0x20000000
 			  0x1000000 0x0 0x00000000 0xf 0xffc10000 0x0 0x10000>;
 		pcie@0 {
 			ranges = <0x2000000 0x0 0xe0000000
@@ -80,6 +80,53 @@
 				  0x1000000 0x0 0x0
 				  0x1000000 0x0 0x0
 				  0x0 0x100000>;
+		};
+	};
+
+	qe: qe@fffe80000 {
+		ranges = <0x0 0xf 0xffe80000 0x40000>;
+		reg = <0xf 0xffe80000 0 0x480>;
+		brg-frequency = <0>;
+		bus-frequency = <0>;
+		status = "disabled"; /* no firmware loaded */
+
+		enet3: ucc@2000 {
+			device_type = "network";
+			compatible = "ucc_geth";
+			rx-clock-name = "clk12";
+			tx-clock-name = "clk9";
+			pio-handle = <&pio1>;
+			phy-handle = <&qe_phy0>;
+			phy-connection-type = "mii";
+		};
+
+		mdio@2120 {
+			qe_phy0: ethernet-phy@0 {
+				interrupt-parent = <&mpic>;
+				interrupts = <4 1 0 0>;
+				reg = <0x6>;
+				device_type = "ethernet-phy";
+			};
+			qe_phy1: ethernet-phy@03 {
+				interrupt-parent = <&mpic>;
+				interrupts = <5 1 0 0>;
+				reg = <0x3>;
+				device_type = "ethernet-phy";
+			};
+			tbi-phy@11 {
+				reg = <0x11>;
+				device_type = "tbi-phy";
+			};
+		};
+
+		enet4: ucc@2400 {
+			device_type = "network";
+			compatible = "ucc_geth";
+			rx-clock-name = "none";
+			tx-clock-name = "clk13";
+			pio-handle = <&pio2>;
+			phy-handle = <&qe_phy1>;
+			phy-connection-type = "rmii";
 		};
 	};
 };
