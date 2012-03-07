@@ -1,7 +1,7 @@
 /*
  * Freescale SEC (talitos) device register and descriptor header defines
  *
- * Copyright (c) 2006-2011 Freescale Semiconductor, Inc.
+ * Copyright (c) 2006-2012 Freescale Semiconductor, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
  *
  */
 
+#define TALITOS_NAPI_WEIGHT	12
 #define TALITOS_TIMEOUT 100000
 #define TALITOS_MAX_DATA_LEN 65535
 
@@ -96,6 +97,7 @@ struct talitos_channel {
 struct talitos_private {
 	struct device *dev;
 	struct platform_device *ofdev;
+	struct net_device __percpu *netdev;
 	void __iomem *reg;
 	int irq[2];
 
@@ -123,8 +125,8 @@ struct talitos_private {
 	/* next channel to be assigned next incoming descriptor */
 	atomic_t last_chan ____cacheline_aligned;
 
-	/* request callback tasklet */
-	struct tasklet_struct done_task[2];
+	/* request callback napi */
+	struct napi_struct __percpu *done_task[2];
 
 	/* list of registered algorithms */
 	struct list_head alg_list;

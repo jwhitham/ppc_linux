@@ -1,7 +1,7 @@
 /*
  * talitos - Freescale Integrated Security Engine (SEC) device driver
  *
- * Copyright (c) 2008-2011 Freescale Semiconductor, Inc.
+ * Copyright (c) 2008-2012 Freescale Semiconductor, Inc.
  *
  * Scatterlist Crypto API glue code copied from files with the following:
  * Copyright (c) 2006-2007 Herbert Xu <herbert@gondor.apana.org.au>
@@ -37,6 +37,7 @@
 #include <linux/io.h>
 #include <linux/spinlock.h>
 #include <linux/rtnetlink.h>
+#include <linux/netdevice.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 
@@ -243,17 +244,18 @@ EXPORT_SYMBOL(talitos_submit);
 /*
  * process what was done, notify callback of error if not
  */
-static void flush_channel(struct device *dev, int ch, int error, int reset_ch)
+static int flush_channel(struct device *dev, int ch, int error, int reset_ch,
+			 int weight)
 {
 	struct talitos_private *priv = dev_get_drvdata(dev);
 	struct talitos_request *request, saved_req;
 	unsigned long flags;
-	int tail, status;
+	int tail, status, count = 0;
 
 	spin_lock_irqsave(&priv->chan[ch].tail_lock, flags);
 
 	tail = priv->chan[ch].tail;
-	while (priv->chan[ch].fifo[tail].desc) {
+	while (priv->chan[ch].fifo[tail].desc && (count < weight)) {
 		request = &priv->chan[ch].fifo[tail];
 
 		/* descriptors with their done bits set don't get the error */
@@ -290,46 +292,58 @@ static void flush_channel(struct device *dev, int ch, int error, int reset_ch)
 				   status);
 		/* channel may resume processing in single desc error case */
 		if (error && !reset_ch && status == error)
-			return;
+			return 0;
 		spin_lock_irqsave(&priv->chan[ch].tail_lock, flags);
 		tail = priv->chan[ch].tail;
+		count++;
 	}
 
 	spin_unlock_irqrestore(&priv->chan[ch].tail_lock, flags);
+
+	return count;
 }
 
 /*
  * process completed requests for channels that have done status
  */
-#define DEF_TALITOS_DONE(name, ch_done_mask)				\
-static void talitos_done_##name(unsigned long data)			\
+#define DEF_TALITOS_DONE(name, ch_done_mask, num_ch)			\
+static int talitos_done_##name(struct napi_struct *napi, int budget)	\
 {									\
-	struct device *dev = (struct device *)data;			\
+	struct device *dev = &napi->dev->dev;				\
 	struct talitos_private *priv = dev_get_drvdata(dev);		\
+	int budget_per_ch, work_done = 0;				\
 	unsigned long flags;						\
 									\
+	budget_per_ch = budget / num_ch;				\
 	if (ch_done_mask & 1)						\
-		flush_channel(dev, 0, 0, 0);				\
+		work_done += flush_channel(dev, 0, 0, 0, budget_per_ch);\
 	if (priv->num_channels == 1)					\
 		goto out;						\
 	if (ch_done_mask & (1 << 2))					\
-		flush_channel(dev, 1, 0, 0);				\
+		work_done += flush_channel(dev, 1, 0, 0, budget_per_ch);\
 	if (ch_done_mask & (1 << 4))					\
-		flush_channel(dev, 2, 0, 0);				\
+		work_done += flush_channel(dev, 2, 0, 0, budget_per_ch);\
 	if (ch_done_mask & (1 << 6))					\
-		flush_channel(dev, 3, 0, 0);				\
+		work_done += flush_channel(dev, 3, 0, 0, budget_per_ch);\
 									\
 out:									\
-	/* At this point, all completed channels have been processed */	\
-	/* Unmask done interrupts for channels completed later on. */	\
-	spin_lock_irqsave(&priv->reg_lock, flags);			\
-	setbits32(priv->reg + TALITOS_IMR, ch_done_mask);		\
-	setbits32(priv->reg + TALITOS_IMR_LO, TALITOS_IMR_LO_INIT);	\
-	spin_unlock_irqrestore(&priv->reg_lock, flags);			\
+	if (work_done < budget) {					\
+		napi_complete(napi);					\
+		/* At this point, all completed channels have been */	\
+		/* processed. Unmask done interrupts for channels */	\
+		/* completed later on. */				\
+		spin_lock_irqsave(&priv->reg_lock, flags);		\
+		setbits32(priv->reg + TALITOS_IMR, ch_done_mask);	\
+		setbits32(priv->reg + TALITOS_IMR_LO,			\
+			  TALITOS_IMR_LO_INIT);				\
+		spin_unlock_irqrestore(&priv->reg_lock, flags);		\
+	}								\
+									\
+	return work_done;						\
 }
-DEF_TALITOS_DONE(4ch, TALITOS_ISR_4CHDONE)
-DEF_TALITOS_DONE(ch0_2, TALITOS_ISR_CH_0_2_DONE)
-DEF_TALITOS_DONE(ch1_3, TALITOS_ISR_CH_1_3_DONE)
+DEF_TALITOS_DONE(4ch, TALITOS_ISR_4CHDONE, 4)
+DEF_TALITOS_DONE(ch0_2, TALITOS_ISR_CH_0_2_DONE, 2)
+DEF_TALITOS_DONE(ch1_3, TALITOS_ISR_CH_1_3_DONE, 2)
 
 /*
  * locate current (offending) descriptor
@@ -479,7 +493,7 @@ static void talitos_error(struct device *dev, u32 isr, u32 isr_lo)
 		if (v_lo & TALITOS_CCPSR_LO_SRL)
 			dev_err(dev, "scatter return/length error\n");
 
-		flush_channel(dev, ch, error, reset_ch);
+		flush_channel(dev, ch, error, reset_ch, priv->fifo_len);
 
 		if (reset_ch) {
 			reset_channel(dev, ch);
@@ -503,14 +517,14 @@ static void talitos_error(struct device *dev, u32 isr, u32 isr_lo)
 
 		/* purge request queues */
 		for (ch = 0; ch < priv->num_channels; ch++)
-			flush_channel(dev, ch, -EIO, 1);
+			flush_channel(dev, ch, -EIO, 1, priv->fifo_len);
 
 		/* reset and reinitialize the device */
 		init_device(dev);
 	}
 }
 
-#define DEF_TALITOS_INTERRUPT(name, ch_done_mask, ch_err_mask, tlet)	       \
+#define DEF_TALITOS_INTERRUPT(name, ch_done_mask, ch_err_mask, sirq)	       \
 static irqreturn_t talitos_interrupt_##name(int irq, void *data)	       \
 {									       \
 	struct device *dev = data;					       \
@@ -534,7 +548,8 @@ static irqreturn_t talitos_interrupt_##name(int irq, void *data)	       \
 			/* mask further done interrupts. */		       \
 			clrbits32(priv->reg + TALITOS_IMR, ch_done_mask);      \
 			/* done_task will unmask done interrupts at exit */    \
-			tasklet_schedule(&priv->done_task[tlet]);	       \
+			napi_schedule(per_cpu_ptr(priv->done_task[sirq],       \
+						  smp_processor_id()));	       \
 		}							       \
 		spin_unlock_irqrestore(&priv->reg_lock, flags);		       \
 	}								       \
@@ -2520,7 +2535,7 @@ static int talitos_remove(struct platform_device *ofdev)
 	struct device *dev = &ofdev->dev;
 	struct talitos_private *priv = dev_get_drvdata(dev);
 	struct talitos_crypto_alg *t_alg, *n;
-	int i;
+	int i, j;
 
 	list_for_each_entry_safe(t_alg, n, &priv->alg_list, entry) {
 		switch (t_alg->algt.type) {
@@ -2539,24 +2554,31 @@ static int talitos_remove(struct platform_device *ofdev)
 	if (hw_supports(dev, DESC_HDR_SEL0_RNG))
 		talitos_unregister_rng(dev);
 
+	for (i = 0; i < 2; i++)
+		if (priv->irq[i]) {
+			free_irq(priv->irq[i], dev);
+			irq_dispose_mapping(priv->irq[i]);
+
+			for_each_possible_cpu(j) {
+				napi_disable(per_cpu_ptr(priv->done_task[i],
+							 j));
+				netif_napi_del(per_cpu_ptr(priv->done_task[i],
+							   j));
+			}
+
+			free_percpu(priv->done_task[i]);
+		}
+
 	for (i = 0; i < priv->num_channels; i++)
 		kfree(priv->chan[i].fifo);
 
 	kfree(priv->chan);
 
-	for (i = 0; i < 2; i++)
-		if (priv->irq[i]) {
-			free_irq(priv->irq[i], dev);
-			irq_dispose_mapping(priv->irq[i]);
-		}
-
-	tasklet_kill(&priv->done_task[0]);
-	if (priv->irq[1])
-		tasklet_kill(&priv->done_task[1]);
-
 	iounmap(priv->reg);
 
 	dev_set_drvdata(dev, NULL);
+
+	free_percpu(priv->netdev);
 
 	kfree(priv);
 
@@ -2703,21 +2725,63 @@ static int talitos_probe(struct platform_device *ofdev)
 	dev_set_drvdata(dev, priv);
 
 	priv->ofdev = ofdev;
+	priv->dev = dev;
 
 	spin_lock_init(&priv->reg_lock);
+
+	priv->netdev = alloc_percpu(struct net_device);
+	if (!priv->netdev) {
+		dev_err(dev, "failed to allocate netdevice\n");
+		err = -ENOMEM;
+		goto err_out;
+	}
+
+	for_each_possible_cpu(i) {
+		err = init_dummy_netdev(per_cpu_ptr(priv->netdev, i));
+		if (err) {
+			dev_err(dev, "failed to initialize dummy netdevice\n");
+			goto err_out;
+		}
+		(per_cpu_ptr(priv->netdev, i))->dev = *dev;
+	}
 
 	err = talitos_probe_irq(ofdev);
 	if (err)
 		goto err_out;
 
+	priv->done_task[0] = alloc_percpu(struct napi_struct);
+	if (!priv->done_task[0]) {
+		dev_err(dev, "failed to allocate napi for 1st irq\n");
+		err = -ENOMEM;
+		goto err_out;
+	}
+
 	if (!priv->irq[1]) {
-		tasklet_init(&priv->done_task[0], talitos_done_4ch,
-			     (unsigned long)dev);
+		for_each_possible_cpu(i) {
+			netif_napi_add(per_cpu_ptr(priv->netdev, i),
+				       per_cpu_ptr(priv->done_task[0], i),
+				       talitos_done_4ch, TALITOS_NAPI_WEIGHT);
+			napi_enable(per_cpu_ptr(priv->done_task[0], i));
+		}
 	} else {
-		tasklet_init(&priv->done_task[0], talitos_done_ch0_2,
-			     (unsigned long)dev);
-		tasklet_init(&priv->done_task[1], talitos_done_ch1_3,
-			     (unsigned long)dev);
+		priv->done_task[1] = alloc_percpu(struct napi_struct);
+		if (!priv->done_task[1]) {
+			dev_err(dev, "failed to allocate napi for 2nd irq\n");
+			err = -ENOMEM;
+			goto err_out;
+		}
+
+		for_each_possible_cpu(i) {
+			netif_napi_add(per_cpu_ptr(priv->netdev, i),
+				       per_cpu_ptr(priv->done_task[0], i),
+				       talitos_done_ch0_2, TALITOS_NAPI_WEIGHT);
+			napi_enable(per_cpu_ptr(priv->done_task[0], i));
+
+			netif_napi_add(per_cpu_ptr(priv->netdev, i),
+				       per_cpu_ptr(priv->done_task[1], i),
+				       talitos_done_ch1_3, TALITOS_NAPI_WEIGHT);
+			napi_enable(per_cpu_ptr(priv->done_task[1], i));
+		}
 	}
 
 	INIT_LIST_HEAD(&priv->alg_list);
