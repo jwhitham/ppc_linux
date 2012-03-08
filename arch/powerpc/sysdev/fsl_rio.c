@@ -35,6 +35,8 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include <asm/machdep.h>
+#include <asm/mpc85xx.h>
+#include <sysdev/fsl_soc.h>
 
 #include "fsl_rio.h"
 
@@ -321,6 +323,37 @@ static inline void fsl_rio_info(struct device *dev, u32 ccsr)
 	}
 }
 
+#define CCSR_ECM_EEBPCR_OFF 0x10
+/*
+ * fixup_erratum_srio135 - Fix Serial RapidIO atomic operation erratum
+ */
+static int fixup_erratum_srio135(struct device *dev)
+{
+	struct device_node *np;
+	void __iomem *ecm;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,mpc8548-ecm");
+	if (!np) {
+		dev_err(dev, "no ECM node found.\n");
+		return -ENODEV;
+	}
+
+	ecm = of_iomap(np, 0);
+	of_node_put(np);
+	if (!ecm) {
+		dev_err(dev, "failed to map ECM register base.\n");
+		return -ENODEV;
+	}
+	/*
+	 * Set bits 13 and 29 of the EEBPCR register in the ECM
+	 * during initialization and leave them set indefinitely.
+	 */
+	setbits32(ecm + CCSR_ECM_EEBPCR_OFF, 0x00040004);
+	iounmap(ecm);
+
+	return 0;
+}
+
 /**
  * fsl_rio_setup - Setup Freescale PowerPC RapidIO interface
  * @dev: platform_device pointer
@@ -358,6 +391,17 @@ int fsl_rio_setup(struct platform_device *dev)
 				dev->dev.of_node->full_name);
 		return -EFAULT;
 	}
+
+	/* Fix erratum NMG_SRIO135 */
+	if (fsl_svr_is(SVR_8548) || fsl_svr_is(SVR_8548_E)) {
+		rc = fixup_erratum_srio135(&dev->dev);
+		if (rc) {
+			dev_err(&dev->dev,
+				"failed to fix the erratum NMG_SRIO135.");
+			return rc;
+		}
+	}
+
 	dev_info(&dev->dev, "Of-device full name %s\n",
 			dev->dev.of_node->full_name);
 	dev_info(&dev->dev, "Regs: %pR\n", &regs);
