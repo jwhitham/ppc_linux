@@ -53,5 +53,10 @@ void fsl_hv_halt(void);
  * code can be compatible with both 32-bit & 36-bit.
  */
 extern void mpc85xx_enter_deep_sleep(u64 ccsrbar, u32 powmgtreq);
+
+static inline void mpc85xx_enter_jog(u64 ccsrbar, u32 powmgtreq)
+{
+	mpc85xx_enter_deep_sleep(ccsrbar, powmgtreq);
+}
 #endif
 #endif

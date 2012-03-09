@@ -146,6 +146,8 @@ void notify_cpu_starting(unsigned int cpu);
 extern void cpu_maps_update_begin(void);
 extern void cpu_maps_update_done(void);
 
+extern void cpu_hotplug_disable_before_freeze(void);
+extern void cpu_hotplug_enable_after_thaw(void);
 #else	/* CONFIG_SMP */
 
 #define cpu_notifier(fn, pri)	do { (void)(fn); } while (0)
@@ -167,6 +169,8 @@ static inline void cpu_maps_update_done(void)
 {
 }
 
+static inline void cpu_hotplug_disable_before_freeze(void)	{}
+static inline void cpu_hotplug_enable_after_thaw(void)	{}
 #endif /* CONFIG_SMP */
 extern struct bus_type cpu_subsys;
 

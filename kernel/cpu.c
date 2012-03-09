@@ -450,6 +450,36 @@ out:
 }
 EXPORT_SYMBOL_GPL(cpu_up);
 
+/*
+ * Prevent regular CPU hotplug from racing with the freezer, by disabling CPU
+ * hotplug when tasks are about to be frozen. Also, don't allow the freezer
+ * to continue until any currently running CPU hotplug operation gets
+ * completed.
+ * To modify the 'cpu_hotplug_disabled' flag, we need to acquire the
+ * 'cpu_add_remove_lock'. And this same lock is also taken by the regular
+ * CPU hotplug path and released only after it is complete. Thus, we
+ * (and hence the freezer) will block here until any currently running CPU
+ * hotplug operation gets completed.
+ */
+void cpu_hotplug_disable_before_freeze(void)
+{
+	cpu_maps_update_begin();
+	cpu_hotplug_disabled = 1;
+	cpu_maps_update_done();
+}
+
+
+/*
+ * When tasks have been thawed, re-enable regular CPU hotplug (which had been
+ * disabled while beginning to freeze tasks).
+ */
+void cpu_hotplug_enable_after_thaw(void)
+{
+	cpu_maps_update_begin();
+	cpu_hotplug_disabled = 0;
+	cpu_maps_update_done();
+}
+
 #ifdef CONFIG_PM_SLEEP_SMP
 static cpumask_var_t frozen_cpus;
 
@@ -535,36 +565,6 @@ static int __init alloc_frozen_cpus(void)
 	return 0;
 }
 core_initcall(alloc_frozen_cpus);
-
-/*
- * Prevent regular CPU hotplug from racing with the freezer, by disabling CPU
- * hotplug when tasks are about to be frozen. Also, don't allow the freezer
- * to continue until any currently running CPU hotplug operation gets
- * completed.
- * To modify the 'cpu_hotplug_disabled' flag, we need to acquire the
- * 'cpu_add_remove_lock'. And this same lock is also taken by the regular
- * CPU hotplug path and released only after it is complete. Thus, we
- * (and hence the freezer) will block here until any currently running CPU
- * hotplug operation gets completed.
- */
-void cpu_hotplug_disable_before_freeze(void)
-{
-	cpu_maps_update_begin();
-	cpu_hotplug_disabled = 1;
-	cpu_maps_update_done();
-}
-
-
-/*
- * When tasks have been thawed, re-enable regular CPU hotplug (which had been
- * disabled while beginning to freeze tasks).
- */
-void cpu_hotplug_enable_after_thaw(void)
-{
-	cpu_maps_update_begin();
-	cpu_hotplug_disabled = 0;
-	cpu_maps_update_done();
-}
 
 /*
  * When callbacks for CPU hotplug notifications are being executed, we must

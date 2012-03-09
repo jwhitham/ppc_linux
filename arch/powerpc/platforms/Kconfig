@@ -235,6 +235,17 @@ config CPU_FREQ_PMAC64
 	  This adds support for frequency switching on Apple iMac G5,
 	  and some of the more recent desktop G5 machines as well.
 
+config MPC85xx_CPUFREQ
+	bool "Support for Freescale MPC85xx CPU freq"
+	depends on PPC_85xx && PPC32 && !PPC_E500MC
+	default y
+	select CPU_FREQ_TABLE
+	help
+	  This adds support for dynamic frequency switching on
+	  Freescale MPC85xx by cpufreq interface. MPC8536 and P1022
+	  have a JOG feature, which provides a dynamic mechanism
+	  to lower or raise the CPU core clock at runtime.
+
 config PPC_PASEMI_CPUFREQ
 	bool "Support for PA Semi PWRficient"
 	depends on PPC_PASEMI
