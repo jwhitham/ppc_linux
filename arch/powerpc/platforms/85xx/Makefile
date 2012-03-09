@@ -2,6 +2,9 @@
 # Makefile for the PowerPC 85xx linux kernel.
 #
 obj-$(CONFIG_SMP) += smp.o
+ifneq ($(CONFIG_PPC_E500MC),y)
+obj-$(CONFIG_SUSPEND)	+= sleep.o
+endif
 
 obj-y += common.o
 

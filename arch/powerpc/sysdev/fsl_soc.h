@@ -48,5 +48,10 @@ extern struct platform_diu_data_ops diu_ops;
 void fsl_hv_restart(char *cmd);
 void fsl_hv_halt(void);
 
+/*
+ * Cast the ccsrbar to 64-bit parameter so that the assembly
+ * code can be compatible with both 32-bit & 36-bit.
+ */
+extern void mpc85xx_enter_deep_sleep(u64 ccsrbar, u32 powmgtreq);
 #endif
 #endif

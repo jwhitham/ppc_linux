@@ -64,6 +64,9 @@ obj-$(CONFIG_FA_DUMP)		+= fadump.o
 ifeq ($(CONFIG_PPC32),y)
 obj-$(CONFIG_E500)		+= idle_e500.o
 endif
+ifneq ($(CONFIG_PPC_E500MC),y)
+obj-$(CONFIG_PPC_85xx)		+= l2cache_85xx.o
+endif
 obj-$(CONFIG_6xx)		+= idle_6xx.o l2cr_6xx.o cpu_setup_6xx.o
 obj-$(CONFIG_TAU)		+= tau_6xx.o
 obj-$(CONFIG_HIBERNATION)	+= swsusp.o suspend.o
