@@ -51,6 +51,45 @@ struct pci_inbound_window_regs {
 	u8	res2[12];
 };
 
+/* PCI Error Management Registers */
+struct pci_err_regs {
+	/*   0x.e00 - PCI Error Detect Register */
+	__be32	pedr;
+	/*   0x.e04 - PCI Error Capture Disable Register */
+	__be32	pecdr;
+	/*   0x.e08 - PCI Error Interrupt Enable Register */
+	__be32	peer;
+	/*   0x.e0c - PCI Error Attributes Capture Register */
+	__be32	peattrcr;
+	/*   0x.e10 - PCI Error Address Capture Register */
+	__be32	peaddrcr;
+	/*   0x.e14 - PCI Error Extended Address Capture Register */
+	__be32	peextaddrcr;
+	/*   0x.e18 - PCI Error Data Low Capture Register */
+	__be32	pedlcr;
+	/*   0x.e1c - PCI Error Data High Capture Register */
+	__be32	pedhcr;
+	/*   0x.e20 - PCI Gasket Timer Register */
+	__be32	gas_timr;
+	u8	res21[4];
+};
+
+/* PCI Express Error Management Registers */
+struct pcie_err_regs {
+	/*  0x.e00 - PCI/PCIE error detect register */
+	__be32	pex_err_dr;
+	u8	res21[4];
+	/*  0x.e08 - PCI/PCIE error interrupt enable register */
+	__be32	pex_err_en;
+	u8	res22[4];
+	/*  0x.e10 - PCI/PCIE error disable register */
+	__be32	pex_err_disr;
+	u8	res23[12];
+	/*  0x.e20 - PCI/PCIE error capture status register */
+	__be32	pex_err_cap_stat;
+	u8	res24[4];
+};
+
 /* PCI/PCI Express IO block registers for 85xx/86xx */
 struct ccsr_pci {
 	__be32	config_addr;		/* 0x.000 - PCI/PCIE Configuration Address Register */
@@ -83,15 +122,11 @@ struct ccsr_pci {
  * define an inbound window base extended address register.
  */
 	struct pci_inbound_window_regs piw[4];
-
-	__be32	pex_err_dr;		/* 0x.e00 - PCI/PCIE error detect register */
-	u8	res21[4];
-	__be32	pex_err_en;		/* 0x.e08 - PCI/PCIE error interrupt enable register */
-	u8	res22[4];
-	__be32	pex_err_disr;		/* 0x.e10 - PCI/PCIE error disable register */
-	u8	res23[12];
-	__be32	pex_err_cap_stat;	/* 0x.e20 - PCI/PCIE error capture status register */
-	u8	res24[4];
+/* PCI/PCI Express Error Management Registers */
+	union {
+		struct pci_err_regs pcier;
+		struct pcie_err_regs pexer;
+	};
 	__be32	pex_err_cap_r0;		/* 0x.e28 - PCIE error capture register 0 */
 	__be32	pex_err_cap_r1;		/* 0x.e2c - PCIE error capture register 0 */
 	__be32	pex_err_cap_r2;		/* 0x.e30 - PCIE error capture register 0 */
