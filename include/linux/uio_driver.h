@@ -80,6 +80,7 @@ struct uio_device;
  * @open:		open operation for this uio device
  * @release:		release operation for this uio device
  * @irqcontrol:		disable/enable irqs when 0/1 is written to /dev/uioX
+ * @set_pgprot:		allow driver to override default(noncached) pgprot
  */
 struct uio_info {
 	struct uio_device	*uio_dev;
@@ -95,6 +96,8 @@ struct uio_info {
 	int (*open)(struct uio_info *info, struct inode *inode);
 	int (*release)(struct uio_info *info, struct inode *inode);
 	int (*irqcontrol)(struct uio_info *info, s32 irq_on);
+	pgprot_t (*set_pgprot)(struct uio_info *uio, unsigned int mem_idx,
+			       pgprot_t prot);
 };
 
 extern int __must_check
