@@ -56,6 +56,33 @@ static int xfrm_bundle_ok(struct xfrm_dst *xdst);
 static struct xfrm_policy *__xfrm_policy_unlink(struct xfrm_policy *pol,
 						int dir);
 
+#ifdef CONFIG_AS_FASTPATH
+struct asf_ipsec_callbackfn_s	asf_cb_fns = {0};
+
+void  register_ipsec_offload_hook(struct asf_ipsec_callbackfn_s *p_fn_list)
+{
+	asf_cb_fns.ipsec_enc_hook = p_fn_list->ipsec_enc_hook;
+	asf_cb_fns.ipsec_dec_hook = p_fn_list->ipsec_dec_hook;
+	asf_cb_fns.ipsec_sync_sa = p_fn_list->ipsec_sync_sa;
+	asf_cb_fns.ipsec_encrypt_n_send
+			= p_fn_list->ipsec_encrypt_n_send;
+	asf_cb_fns.ipsec_decrypt_n_send
+			= p_fn_list->ipsec_decrypt_n_send;
+
+}
+EXPORT_SYMBOL(register_ipsec_offload_hook);
+
+void unregister_ipsec_offload_hook(void)
+{
+	asf_cb_fns.ipsec_enc_hook = NULL;
+	asf_cb_fns.ipsec_dec_hook = NULL;
+	asf_cb_fns.ipsec_sync_sa = NULL;
+	asf_cb_fns.ipsec_encrypt_n_send = NULL;
+	asf_cb_fns.ipsec_decrypt_n_send = NULL;
+}
+EXPORT_SYMBOL(unregister_ipsec_offload_hook);
+#endif	/* CONFIG_AS_FASTPATH */
+
 static inline bool
 __xfrm4_selector_match(const struct xfrm_selector *sel, const struct flowi *fl)
 {
@@ -606,6 +633,11 @@ int xfrm_policy_insert(int dir, struct xfrm_policy *policy, int excl)
 	if (delpol)
 		__xfrm_policy_unlink(delpol, dir);
 	policy->index = delpol ? delpol->index : xfrm_gen_index(net, dir);
+
+#ifdef CONFIG_AS_FASTPATH
+	policy->asf_cookie = delpol ? delpol->asf_cookie : 0;
+#endif
+
 	hlist_add_head(&policy->byidx, net->xfrm.policy_byidx+idx_hash(net, policy->index));
 	policy->curlft.add_time = get_seconds();
 	policy->curlft.use_time = 0;
@@ -981,6 +1013,7 @@ __xfrm_policy_lookup(struct net *net, const struct flowi *fl, u16 family, u8 dir
 #endif
 	return xfrm_policy_lookup_bytype(net, XFRM_POLICY_TYPE_MAIN, fl, family, dir);
 }
+EXPORT_SYMBOL(__xfrm_policy_lookup);
 
 static struct flow_cache_object *
 xfrm_policy_lookup(struct net *net, const struct flowi *fl, u16 family,
@@ -1147,6 +1180,11 @@ static struct xfrm_policy *clone_policy(const struct xfrm_policy *old, int dir)
 		newp->xfrm_nr = old->xfrm_nr;
 		newp->index = old->index;
 		newp->type = old->type;
+
+#ifdef CONFIG_AS_FASTPATH
+		newp->asf_cookie = old->asf_cookie;
+#endif
+
 		memcpy(newp->xfrm_vec, old->xfrm_vec,
 		       newp->xfrm_nr*sizeof(struct xfrm_tmpl));
 		write_lock_bh(&xfrm_policy_lock);

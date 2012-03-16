@@ -228,7 +228,10 @@ struct xfrm_state {
 
 	/* Security context */
 	struct xfrm_sec_ctx	*security;
-
+#ifdef CONFIG_AS_FASTPATH
+	uintptr_t	asf_sa_cookie;
+	u32		asf_sa_direction;
+#endif
 	/* Private data of this transformer, format is opaque,
 	 * interpreted by xfrm_type methods. */
 	void			*data;
@@ -522,6 +525,9 @@ struct xfrm_policy {
 	struct xfrm_lifetime_cfg lft;
 	struct xfrm_lifetime_cur curlft;
 	struct xfrm_policy_walk_entry walk;
+#ifdef CONFIG_AS_FASTPATH
+	u32			asf_cookie;
+#endif
 	u8			type;
 	u8			action;
 	u8			flags;
@@ -1160,12 +1166,12 @@ static inline void xfrm_sk_free_policy(struct sock *sk)
 
 static inline void xfrm_sk_free_policy(struct sock *sk) {}
 static inline int xfrm_sk_clone_policy(struct sock *sk) { return 0; }
-static inline int xfrm6_route_forward(struct sk_buff *skb) { return 1; }  
-static inline int xfrm4_route_forward(struct sk_buff *skb) { return 1; } 
+static inline int xfrm6_route_forward(struct sk_buff *skb) { return 1; }
+static inline int xfrm4_route_forward(struct sk_buff *skb) { return 1; }
 static inline int xfrm6_policy_check(struct sock *sk, int dir, struct sk_buff *skb)
-{ 
-	return 1; 
-} 
+{
+	return 1;
+}
 static inline int xfrm4_policy_check(struct sock *sk, int dir, struct sk_buff *skb)
 {
 	return 1;
@@ -1248,8 +1254,8 @@ __xfrm6_state_addr_check(const struct xfrm_state *x,
 			 const xfrm_address_t *daddr, const xfrm_address_t *saddr)
 {
 	if (!ipv6_addr_cmp((struct in6_addr *)daddr, (struct in6_addr *)&x->id.daddr) &&
-	    (!ipv6_addr_cmp((struct in6_addr *)saddr, (struct in6_addr *)&x->props.saddr)|| 
-	     ipv6_addr_any((struct in6_addr *)saddr) || 
+	    (!ipv6_addr_cmp((struct in6_addr *)saddr, (struct in6_addr *)&x->props.saddr)||
+	     ipv6_addr_any((struct in6_addr *)saddr) ||
 	     ipv6_addr_any((struct in6_addr *)&x->props.saddr)))
 		return 1;
 	return 0;
@@ -1512,7 +1518,7 @@ extern int xfrm_user_policy(struct sock *sk, int optname, u8 __user *optval, int
 static inline int xfrm_user_policy(struct sock *sk, int optname, u8 __user *optval, int optlen)
 {
  	return -ENOPROTOOPT;
-} 
+}
 
 static inline int xfrm4_udp_encap_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -1700,5 +1706,30 @@ static inline int xfrm_mark_put(struct sk_buff *skb, const struct xfrm_mark *m)
 		ret = nla_put(skb, XFRMA_MARK, sizeof(struct xfrm_mark), m);
 	return ret;
 }
+
+#ifdef CONFIG_AS_FASTPATH
+struct asf_ipsec_callbackfn_s {
+	/* Callback to offload the encryption Info*/
+	int	(*ipsec_enc_hook)(struct xfrm_policy *xp,
+			struct xfrm_state *xfrm, struct flowi *fl, int ifindex);
+
+	/* Callback to offload the decryption Info*/
+	int	(*ipsec_dec_hook)(struct xfrm_policy *xp,
+			struct xfrm_state *xfrm, struct flowi *fl, int ifindex);
+
+	/* Callback to receive the live SA Sync Info*/
+	int	(*ipsec_sync_sa)(struct xfrm_state *xfrm, int dir,
+			int seq_no, int bytes);
+
+	/* Callback to send the packet to ASF for further IPSEC processing */
+	int	(*ipsec_encrypt_n_send)(struct sk_buff *skb,
+			struct xfrm_state *xfrm);
+
+	/* Callback to send the packet to ASF for further IPSEC processing */
+	int	(*ipsec_decrypt_n_send)(struct sk_buff *skb,
+			struct xfrm_state *xfrm);
+};
+extern struct asf_ipsec_callbackfn_s	asf_cb_fns;
+#endif
 
 #endif	/* _NET_XFRM_H */
