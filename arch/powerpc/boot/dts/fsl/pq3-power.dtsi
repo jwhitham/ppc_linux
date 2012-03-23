@@ -36,6 +36,15 @@ power@e0070 {
 	compatible = "fsl,mpc8548-pmc";
 	reg = <0xe0070 0x20>;
 
+	usb1_clk: soc-clk@8 {
+		fsl,pmcdr-mask = <0x08000000>;
+	};
+	usb2_clk: soc-clk@9 {
+		fsl,pmcdr-mask = <0x04000000>;
+	};
+	usb3_clk: soc-clk@10 {
+		fsl,pmcdr-mask = <0x02000000>;
+	};
 	etsec1_clk: soc-clk@24 {
 		fsl,pmcdr-mask = <0x00000080>;
 	};

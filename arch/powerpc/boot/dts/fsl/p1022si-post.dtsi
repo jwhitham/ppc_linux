@@ -206,10 +206,12 @@
 /include/ "pq3-usb2-dr-0.dtsi"
 	usb@22000 {
 		compatible = "fsl-usb2-dr-v1.6", "fsl-usb2-dr";
+		fsl,pmc-handle = <&usb1_clk>;
 	};
 /include/ "pq3-usb2-dr-1.dtsi"
 	usb@23000 {
 		compatible = "fsl-usb2-dr-v1.6", "fsl-usb2-dr";
+		fsl,pmc-handle = <&usb2_clk>;
 	};
 
 /include/ "pq3-esdhc-0.dtsi"

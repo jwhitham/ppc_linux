@@ -30,6 +30,7 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/fsl_devices.h>
+#include <sysdev/fsl_soc.h>
 
 #include "ehci-fsl.h"
 
@@ -135,7 +136,7 @@ static int usb_hcd_fsl_probe(const struct hc_driver *driver,
 
 	/* Don't need to set host mode here. It will be done by tdi_reset() */
 
-	retval = usb_add_hcd(hcd, irq, IRQF_SHARED);
+	retval = usb_add_hcd(hcd, irq, IRQF_SHARED | IRQF_NO_SUSPEND);
 	if (retval != 0)
 		goto err4;
 
@@ -564,6 +565,8 @@ static int ehci_fsl_drv_suspend(struct device *dev)
 		return ehci_fsl_mpc512x_drv_suspend(dev);
 	}
 
+	mpc85xx_pmc_set_wake(dev, true);
+
 	ehci_prepare_ports_for_controller_suspend(hcd_to_ehci(hcd),
 			device_may_wakeup(dev));
 	if (!fsl_deep_sleep())
@@ -584,6 +587,8 @@ static int ehci_fsl_drv_resume(struct device *dev)
 				    "fsl,mpc5121-usb2-dr")) {
 		return ehci_fsl_mpc512x_drv_resume(dev);
 	}
+
+	mpc85xx_pmc_set_wake(dev, false);
 
 	ehci_prepare_ports_for_controller_resume(ehci);
 	if (!fsl_deep_sleep())
