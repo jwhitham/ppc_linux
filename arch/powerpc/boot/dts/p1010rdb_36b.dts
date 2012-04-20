@@ -52,6 +52,9 @@
 
 	board_soc: soc: soc@fffe00000 {
 		ranges = <0x0 0xf 0xffe00000 0x100000>;
+		tdm@16000 {
+			status = "disabled";
+		};
 	};
 
 	pci0: pcie@fffe09000 {

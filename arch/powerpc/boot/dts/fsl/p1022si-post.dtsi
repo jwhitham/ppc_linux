@@ -190,6 +190,7 @@
 		fsl,fifo-depth = <15>;
 	};
 
+/include/ "pq3-tdm1.0-0.dtsi"
 /include/ "pq3-sata2-0.dtsi"
 /include/ "pq3-sata2-1.dtsi"
 
