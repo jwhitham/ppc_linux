@@ -444,6 +444,17 @@ struct i2c_device_id {
 			__attribute__((aligned(sizeof(kernel_ulong_t))));
 };
 
+/* tdm */
+
+#define TDM_NAME_SIZE   20
+#define TDM_MODULE_PREFIX "tdm:"
+
+struct tdm_device_id {
+	char name[TDM_NAME_SIZE];
+	kernel_ulong_t driver_data      /* Data private to the driver */
+			__attribute__((aligned(sizeof(kernel_ulong_t))));
+};
+
 /* spi */
 
 #define SPI_NAME_SIZE	32
