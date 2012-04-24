@@ -31,4 +31,5 @@ config TDM_TEST
 	  a TDM Voice path between diff channels of a slic.
 
 source drivers/tdm/device/Kconfig
+source drivers/tdm/line_ctrl/Kconfig
 endif # TDM
