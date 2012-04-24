@@ -22,4 +22,5 @@ config TDM_DEBUG_CORE
 	  messages to the system log.  Select this if you are having a
 	  problem with TDM support and want to see more of what is going on.
 
+source drivers/tdm/device/Kconfig
 endif # TDM

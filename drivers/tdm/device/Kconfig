@@ -1,0 +1,15 @@
+#
+# TDM device configuration
+#
+
+menu "TDM Device support"
+
+config TDM_FSL
+        tristate "Driver for Freescale TDM controller"
+        depends on FSL_SOC
+        ---help---
+          This is a driver for Freescale TDM controller. The controller
+          is found in various Freescale SOCs viz MPC8315, P1020. The TDM driver
+          basically multiplexes and demultiplexes data from different channels.
+          The TDM can interface SLIC kind of devices.
+endmenu
