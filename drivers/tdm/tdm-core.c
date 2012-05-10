@@ -88,10 +88,11 @@ static int tdm_attach_driver_adap(struct tdm_driver *driver,
 
 	if (driver->attach_adapter) {
 		ret = driver->attach_adapter(adap);
-		if (ret < 0)
+		if (ret < 0) {
 			pr_err("attach_adapter failed for driver [%s] err:%d\n"
 				, driver->name, ret);
 			return ret;
+		}
 	}
 	adap->drv_count++;
 
@@ -574,9 +575,6 @@ unsigned int tdm_port_open(struct tdm_driver *driver, void **h_port)
 		goto out;
 	}
 
-	init_waitqueue_head(&port->ch_wait_queue);
-
-
 	port->rx_max_frames = NUM_SAMPLES_PER_FRAME;
 	port->port_cfg.port_mode = e_TDM_PORT_CHANNELIZED;
 
@@ -786,53 +784,34 @@ unsigned int tdm_channel_write(void *h_port, void *h_channel,
 }
 EXPORT_SYMBOL(tdm_channel_write);
 
-wait_queue_head_t *tdm_port_get_wait_queue(void  *h_port)
-{
-	struct tdm_port *port;
-	port = (struct tdm_port *)h_port;
-
-	if (port == NULL) { /* invalid handle*/
-		pr_err("Invalid Handle");
-		return NULL;
-	}
-
-	return &port->ch_wait_queue;
-
-}
-EXPORT_SYMBOL(tdm_port_get_wait_queue);
-
-/* Driver Function for select and poll. Based on Port no, it sleeps on
+/* Driver Function for select and poll. Based on Channel, it sleeps on
  * waitqueue */
-unsigned int tdm_port_poll(void *h_port, unsigned int wait_time)
+unsigned int tdm_ch_poll(void *h_channel, unsigned int wait_time)
 {
-	struct tdm_port *port;
+	struct tdm_channel *channel;
 	unsigned long timeout = msecs_to_jiffies(wait_time);
-	port = (struct tdm_port *)h_port;
+	channel = h_channel;
 
-	if (port == NULL) { /* invalid handle*/
-		pr_err("%s: Invalid Handle\n", __func__);
-		return -ENXIO;
-	}
-	if (!port->p_port_data || !port->in_use)
+	if (!channel->p_ch_data || !channel->in_use)
 		return -EIO;
 
-	if (port->p_port_data->rx_out_data->flag) {
+	if (channel->p_ch_data->rx_out_data->flag) {
 		pr_debug("Data Available");
 		return TDM_E_OK;
 	}
 	if (timeout) {
-		wait_event_interruptible_timeout(port->ch_wait_queue,
-					  port->p_port_data->rx_out_data->flag,
+		wait_event_interruptible_timeout(channel->ch_wait_queue,
+					  channel->p_ch_data->rx_out_data->flag,
 					  timeout);
 
-		if (port->p_port_data->rx_out_data->flag) {
+		if (channel->p_ch_data->rx_out_data->flag) {
 			pr_debug("Data Available");
 			return TDM_E_OK;
 		}
 	}
 	return -EAGAIN;
 }
-EXPORT_SYMBOL(tdm_port_poll);
+EXPORT_SYMBOL(tdm_ch_poll);
 
 unsigned int tdm_port_get_stats(void *h_port, struct tdm_port_stats *portStat)
 {
@@ -938,6 +917,8 @@ static int tdm_data_rx_deinterleave(struct tdm_adapter *adap)
 						channel->p_ch_data->rx_data_fifo
 						: ch_bd+1;
 					ch_data = 1;
+					wake_up_interruptible
+						(&channel->ch_wait_queue);
 				}
 			} else {
 				port->port_stat.rx_pkt_drop_count++;
@@ -947,7 +928,6 @@ static int tdm_data_rx_deinterleave(struct tdm_adapter *adap)
 
 		if (ch_data) {
 			/*	Wake up the Port Data Poll event */
-			wake_up_interruptible(&port->ch_wait_queue);
 #ifdef	TDM_CORE_DEBUG
 			pr_info("Port RX-%d-%d\n", channel->ch_id, ch_data_len);
 			for (i = 0; i < ch_data_len; i++)
@@ -1100,7 +1080,8 @@ int tdm_channel_open(u16 chanid, u16 ch_width, struct tdm_port *port,
 		goto out;
 	}
 
-	p_ch_data = kzalloc(sizeof(struct tdm_port_data), GFP_KERNEL);
+	init_waitqueue_head(&channel->ch_wait_queue);
+	p_ch_data = kzalloc(sizeof(struct tdm_ch_data), GFP_KERNEL);
 	if (!p_ch_data) {
 		res = -ENOMEM;
 		goto outdata;

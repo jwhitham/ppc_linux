@@ -109,7 +109,7 @@ static int tdm_thread(void *ptr)
 	while ((poll < poll_count) && !kthread_should_stop()) {
 
 		poll++;
-		while (tdm_port_poll(h_port, 10) != TDM_E_OK)
+		while (tdm_ch_poll(h_channel1, 10) != TDM_E_OK)
 				continue;
 
 		ret = tdm_channel_read(h_port, h_channel1, p_data1, &size);
@@ -214,7 +214,7 @@ static int test_detach_adapter(struct tdm_adapter *adap)
 }
 
 static const struct tdm_device_id test_id[] = {
-	{ "fsl", 0 },
+	{ "fsl_tdm", 0 },
 	{ }
 };
 

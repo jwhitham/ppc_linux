@@ -177,7 +177,6 @@ struct tdm_port {
 					 TDM port statistics. */
 	struct tdm_port_data *p_port_data;	/* a structure parameters
 						defining tdm channelised data */
-	wait_queue_head_t ch_wait_queue;	/* waitQueue for RX Port Data */
 
 	struct tdm_driver *driver;	/* driver for this port */
 	struct tdm_adapter *adapter;	/* adapter for this port */
@@ -220,6 +219,7 @@ struct tdm_channel {
 	u16 in_use;			/* channel is enabled? */
 	struct tdm_ch_cfg ch_cfg;	/* channel configuration */
 	struct tdm_ch_data *p_ch_data;	/* data storage space for channel */
+	wait_queue_head_t ch_wait_queue;/* waitQueue for RX Channel Data */
 };
 
 /* tdm_adapt_algorithm is for accessing the routines of device */
@@ -334,7 +334,7 @@ extern unsigned int tdm_port_close(void *);
 extern unsigned int tdm_port_ioctl(void *, unsigned int, unsigned long);
 extern unsigned int tdm_channel_read(void *, void *, void *, u16 *);
 extern unsigned int tdm_channel_write(void *, void * , void *, u16);
-extern unsigned int tdm_port_poll(void *, unsigned int);
+extern unsigned int tdm_ch_poll(void *, unsigned int);
 
 extern int tdm_channel_open(u16, u16, struct tdm_port *, void **);
 extern int tdm_channel_close(u16, u16, struct tdm_port *,
