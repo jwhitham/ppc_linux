@@ -52,6 +52,8 @@
 #define MII_M1145_RGMII_RX_DELAY	0x0080
 #define MII_M1145_RGMII_TX_DELAY	0x0002
 
+#define MII_M1145_PHY_EXT_ADDR_PAGE	0x16
+
 #define MII_M1111_PHY_LED_CONTROL	0x18
 #define MII_M1111_PHY_LED_DIRECT	0x4100
 #define MII_M1111_PHY_LED_COMBINE	0x411c
@@ -402,6 +404,16 @@ static int m88e1111_config_init(struct phy_device *phydev)
 		temp |= MII_M1111_HWCFG_FIBER_COPPER_AUTO;
 
 		err = phy_write(phydev, MII_M1111_PHY_EXT_SR, temp);
+		if (err < 0)
+			return err;
+
+		/* make sure copper is selected */
+		err = phy_read(phydev, MII_M1145_PHY_EXT_ADDR_PAGE);
+		if (err < 0)
+			return err;
+
+		err = phy_write(phydev, MII_M1145_PHY_EXT_ADDR_PAGE,
+				err & (~1));
 		if (err < 0)
 			return err;
 	}
