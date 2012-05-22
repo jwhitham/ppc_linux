@@ -239,6 +239,183 @@ itlb_miss_fault_bolted:
 	beq	tlb_miss_common_bolted
 	b	itlb_miss_kernel_bolted
 
+/*
+ * TLB miss handling for Freescale chips with hardware table walk
+ *
+ * Linear mapping is bolted: no virtual page table or nested TLB misses
+ * Indirect entries in TLB1, hardware loads resulting direct entries
+ *    into TLB0
+ * No HES or NV hint on TLB1, so we need to do software round-robin
+ * No tlbsrx. so we need a spinlock, and we have to deal
+ *    with MAS-damage caused by tlbsx
+ * 4K pages only
+ */
+
+	START_EXCEPTION(instruction_tlb_miss_fsl_htw)
+	tlb_prolog_bolted BOOKE_INTERRUPT_ITLB_MISS SPRN_SRR0
+
+	ld	r11,PACA_TLB_PER_CORE_PTR(r13)
+	srdi.	r15,r16,60		/* get region */
+	ori	r16,r16,1
+
+	TLB_MISS_STATS_SAVE_INFO_BOLTED
+	bne	tlb_miss_kernel_fsl_htw	/* user/kernel test */
+
+	b	tlb_miss_common_fsl_htw
+
+	START_EXCEPTION(data_tlb_miss_fsl_htw)
+	tlb_prolog_bolted BOOKE_INTERRUPT_DTLB_MISS SPRN_DEAR
+
+	ld	r11,PACA_TLB_PER_CORE_PTR(r13)
+	srdi.	r15,r16,60		/* get region */
+	rldicr	r16,r16,0,62
+
+	TLB_MISS_STATS_SAVE_INFO_BOLTED
+	bne	tlb_miss_kernel_fsl_htw	/* user vs kernel check */
+
+/*
+ * This is the guts of the TLB miss handler for fsl htw.
+ * We are entered with:
+ *
+ * r16 = page of faulting address (low bit 0 if data, 1 if instruction)
+ * r15 = crap (free to use)
+ * r14 = page table base
+ * r13 = PACA
+ * r11 = tlb_per_core ptr
+ * r10 = crap (free to use)
+ */
+tlb_miss_common_fsl_htw:
+	/*
+	 * Search if we already have an indirect entry for that virtual
+	 * address, and if we do, bail out.
+	 *
+	 * MAS6:IND should be already set based on MAS4
+	 */
+	mtocrf	0x01,r11
+	addi	r10,r11,PACA_TLB_LOCK-1 /* -1 to compensate for low bit set */
+	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
+2:	lbarx	r15,0,r10
+	cmpdi	r15,0
+	bne	3f
+	li	r15,1
+	stbcx.	r15,0,r10
+	bne	2b
+	.subsection 1
+3:	lbz	r15,0(r10)
+	cmpdi	r15,0
+	bne	3b
+	b	2b
+	.previous
+1:
+
+	mfspr	r15,SPRN_MAS2
+
+	tlbsx	0,r16
+	mfspr	r10,SPRN_MAS1
+	andis.	r10,r10,MAS1_VALID@h
+	bne	tlb_miss_done_fsl_htw
+
+	/* Undo MAS-damage from the tlbsx */
+	mfspr	r10,SPRN_MAS1
+	oris	r10,r10,MAS1_VALID@h
+//	ori	r10,r10,MAS1_IND
+	mtspr	SPRN_MAS1,r10
+	mtspr	SPRN_MAS2,r15
+
+	/* Now, we need to walk the page tables. First check if we are in
+	 * range.
+	 */
+	rldicl.	r10,r16,64-PGTABLE_EADDR_SIZE,PGTABLE_EADDR_SIZE+4
+	bne-	tlb_miss_fault_fsl_htw
+
+	rldicl	r15,r16,64-PGDIR_SHIFT+3,64-PGD_INDEX_SIZE-3
+	cmpldi	cr0,r14,0
+	clrrdi	r15,r15,3
+	beq-	tlb_miss_fault_fsl_htw /* No PGDIR, bail */
+	ldx	r14,r14,r15		/* grab pgd entry */
+
+	rldicl	r15,r16,64-PUD_SHIFT+3,64-PUD_INDEX_SIZE-3
+	clrrdi	r15,r15,3
+	cmpdi	cr0,r14,0
+	bge	tlb_miss_fault_fsl_htw	/* Bad pgd entry or hugepage; bail */
+	ldx	r14,r14,r15		/* grab pud entry */
+
+	rldicl	r15,r16,64-PMD_SHIFT+3,64-PMD_INDEX_SIZE-3
+	clrrdi	r15,r15,3
+	cmpdi	cr0,r14,0
+	bge	tlb_miss_fault_fsl_htw
+	ldx	r14,r14,r15		/* Grab pmd entry */
+
+	/* Now we build the MAS for a 2M indirect page:
+	 *
+	 * MAS 0   :	ESEL needs to be filled by software round-robin
+	 * MAS 1   :	Almost fully setup
+	 *               - PID already updated by caller if necessary
+	 *               - TSIZE for now is base ind page size always
+	 * MAS 2   :	Use defaults
+	 * MAS 3+7 :	Needs to be done
+	 */
+
+
+	mfspr	r10,SPRN_MAS0
+	rldicr	r15,r11,0,62
+	lwz	r15,0(r15)
+
+	ori	r14,r14,(BOOK3E_PAGESZ_4K << MAS3_SPSIZE_SHIFT)
+	mtspr	SPRN_MAS7_MAS3,r14
+
+	/* Not MAS0_ESEL_MASK because source is smaller */
+	rlwimi	r10,r15,24,0x00ff0000	/* insert esel_next into MAS0 */
+	addis	r15,r15,0x0100		/* increment esel_next */
+	mtspr	SPRN_MAS0,r10
+	rlwinm	r14,r15,8,0xff		/* extract next */
+	rlwinm	r10,r15,16,0xff		/* extract last */
+	cmpw	r10,r14
+	rlwinm	r10,r15,24,0xff		/* extract first */
+	iseleq	r14,r10,r14		/* if next == last use first */
+	stb	r14,PACA_TLB_ESEL_NEXT-1(r11)
+
+	tlbwe
+
+tlb_miss_done_fsl_htw:
+	.macro	tlb_unlock_fsl_htw
+	mtocrf	0x01,r11
+	addi	r10,r11,PACA_TLB_LOCK-1
+	li	r15,0
+	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
+	isync
+	stb	r15,0(r10)
+1:
+	.endm
+
+	tlb_unlock_fsl_htw
+	TLB_MISS_STATS_X(MMSTAT_TLB_MISS_NORM_OK)
+	tlb_epilog_bolted
+	rfi
+
+tlb_miss_kernel_fsl_htw:
+	mfspr	r10,SPRN_MAS1
+	ld	r14,PACA_KERNELPGD(r13)
+	cmpldi	cr0,r15,8		/* Check for vmalloc region */
+	rlwinm	r10,r10,0,16,1		/* Clear TID */
+	mtspr	SPRN_MAS1,r10
+	beq+	tlb_miss_common_fsl_htw
+
+tlb_miss_fault_fsl_htw:
+	tlb_unlock_fsl_htw
+	/* We need to check if it was an instruction miss */
+	andi.	r16,r16,1
+	bne	itlb_miss_fault_fsl_htw
+dtlb_miss_fault_fsl_htw:
+	TLB_MISS_STATS_D(MMSTAT_TLB_MISS_NORM_FAULT)
+	tlb_epilog_bolted
+	b	exc_data_storage_book3e
+itlb_miss_fault_fsl_htw:
+	TLB_MISS_STATS_I(MMSTAT_TLB_MISS_NORM_FAULT)
+	tlb_epilog_bolted
+	b	exc_instruction_storage_book3e
+
+
 /**********************************************************************
  *                                                                    *
  * TLB miss handling for Book3E with TLB reservation and HES support  *

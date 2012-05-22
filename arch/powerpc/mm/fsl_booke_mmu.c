@@ -52,6 +52,7 @@
 #include <asm/smp.h>
 #include <asm/machdep.h>
 #include <asm/setup.h>
+#include <asm/paca.h>
 
 #include "mmu_decl.h"
 
@@ -191,6 +192,13 @@ unsigned long map_mem_in_cams(unsigned long ram, int max_cam_idx)
 		phys += cam_sz;
 	}
 	tlbcam_index = i;
+
+#ifdef CONFIG_PPC64
+	get_paca()->tlb_per_core.esel_next = i;
+	get_paca()->tlb_per_core.esel_max =
+		mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY;
+	get_paca()->tlb_per_core.esel_first = i;
+#endif
 
 	return amount_mapped;
 }

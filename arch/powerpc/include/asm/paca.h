@@ -108,6 +108,25 @@ struct paca_struct {
 	/* Keep pgd in the same cacheline as the start of extlb */
 	pgd_t *pgd __attribute__((aligned(0x80))); /* Current PGD */
 	pgd_t *kernel_pgd;		/* Kernel PGD */
+
+	/* If you adjust the contents of this struct, update the TLB miss asm */
+	struct tlb_per_core {
+		/* For software way selection, as on Freescale TLB1 */
+		u8 esel_next, esel_max, esel_first;
+
+		/* Per-core spinlock for e6500 TLB handlers (no tlbsrx.) */
+		u8 lock;
+	} tlb_per_core __attribute__((aligned(4)));
+
+	/*
+	 * Points to the tlb_per_core of the first thread on this core.
+	 * The low bit is set if there is more than one thread per core
+	 * (a bit gross, but avoids an extra load in the TLB miss handler,
+	 * or atomic instructions where none are needed).
+	 */
+#define TLB_PER_CORE_HAS_LOCK 1
+	uintptr_t tlb_per_core_ptr;
+
 	/* We can have up to 3 levels of reentrancy in the TLB miss handler */
 	u64 extlb[3][EX_TLB_SIZE / sizeof(u64)];
 	u64 exmc[8];		/* used for machine checks */

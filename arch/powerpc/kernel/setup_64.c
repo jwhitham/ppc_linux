@@ -103,6 +103,30 @@ int ucache_bsize;
 
 static char *smt_enabled_cmdline;
 
+#ifdef CONFIG_PPC_BOOK3E
+static void setup_tlb_per_core(void)
+{
+	int cpu;
+
+	for_each_possible_cpu(cpu) {
+		int first = cpu_first_thread_sibling(cpu);
+
+		paca[cpu].tlb_per_core_ptr =
+			(uintptr_t)&paca[first].tlb_per_core;
+
+		/* If we have threads but no tlbsrx., use a per-core lock */
+		if (smt_enabled_at_boot >= 2 &&
+		    !mmu_has_feature(MMU_FTR_USE_TLBRSRV))
+			paca[cpu].tlb_per_core_ptr |= TLB_PER_CORE_HAS_LOCK;
+	}
+}
+#else
+static void setup_tlb_per_core(void)
+{
+}
+#endif
+
+
 /* Look for ibm,smt-enabled OF option */
 static void check_smt_enabled(void)
 {
@@ -143,6 +167,8 @@ static void check_smt_enabled(void)
 			of_node_put(dn);
 		}
 	}
+
+	setup_tlb_per_core();
 }
 
 /* Look for smt-enabled= cmdline option */
