@@ -400,13 +400,19 @@ void netpoll_send_udp(struct netpoll *np, const char *msg, int len)
 	udph->source = htons(np->local_port);
 	udph->dest = htons(np->remote_port);
 	udph->len = htons(udp_len);
-	udph->check = 0;
-	udph->check = csum_tcpudp_magic(np->local_ip,
+
+	/* Only querying the IPv4 csumming capabilities */
+	if (np->dev->features & NETIF_F_IP_CSUM)
+		skb->ip_summed = CHECKSUM_PARTIAL;
+	else {
+		skb->ip_summed = CHECKSUM_NONE;
+		udph->check = csum_tcpudp_magic(np->local_ip,
 					np->remote_ip,
 					udp_len, IPPROTO_UDP,
 					csum_partial(udph, udp_len, 0));
-	if (udph->check == 0)
-		udph->check = CSUM_MANGLED_0;
+		if (udph->check == 0)
+			udph->check = CSUM_MANGLED_0;
+	}
 
 	skb_push(skb, sizeof(*iph));
 	skb_reset_network_header(skb);
