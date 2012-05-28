@@ -28,7 +28,7 @@ extern u32 epapr_ev_idle_start[];
 
 bool epapr_paravirt_enabled;
 
-static int __init epapr_paravirt_init(void)
+int __init epapr_paravirt_init(void)
 {
 	struct device_node *hyper_node;
 	const u32 *insts;
@@ -58,4 +58,3 @@ static int __init epapr_paravirt_init(void)
 	return 0;
 }
 
-early_initcall(epapr_paravirt_init);

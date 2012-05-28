@@ -38,6 +38,7 @@
 #include <asm/serial.h>
 #include <asm/udbg.h>
 #include <asm/mmu_context.h>
+#include <asm/epapr_hcalls.h>
 
 #include "setup.h"
 
@@ -327,4 +328,5 @@ void __init setup_arch(char **cmdline_p)
 	/* Initialize the MMU context management stuff */
 	mmu_context_init();
 
+	epapr_paravirt_init();
 }
