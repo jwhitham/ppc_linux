@@ -409,6 +409,10 @@ tlb_miss_common_fsl_htw:
 	bge	tlb_miss_fault_fsl_htw
 	ldx	r14,r14,r15		/* Grab pmd entry */
 
+	mfspr	r10,SPRN_MAS0
+	cmpdi	cr0,r14,0
+	bge	tlb_miss_fault_fsl_htw
+
 	/* Now we build the MAS for a 2M indirect page:
 	 *
 	 * MAS 0   :	ESEL needs to be filled by software round-robin
@@ -420,7 +424,6 @@ tlb_miss_common_fsl_htw:
 	 */
 
 
-	mfspr	r10,SPRN_MAS0
 	rldicr	r16,r11,0,62
 	lwz	r15,0(r16)
 
