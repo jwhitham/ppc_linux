@@ -421,8 +421,8 @@ tlb_miss_common_fsl_htw:
 
 
 	mfspr	r10,SPRN_MAS0
-	rldicr	r15,r11,0,62
-	lwz	r15,0(r15)
+	rldicr	r16,r11,0,62
+	lwz	r15,0(r16)
 
 	ori	r14,r14,(BOOK3E_PAGESZ_4K << MAS3_SPSIZE_SHIFT)
 	mtspr	SPRN_MAS7_MAS3,r14
@@ -436,7 +436,7 @@ tlb_miss_common_fsl_htw:
 	cmpw	r10,r14
 	rlwinm	r10,r15,24,0xff		/* extract first */
 	iseleq	r14,r10,r14		/* if next == last use first */
-	stb	r14,PACA_TLB_ESEL_NEXT-1(r11)
+	stb	r14,PACA_TLB_ESEL_NEXT(r16)
 
 	tlbwe
 
