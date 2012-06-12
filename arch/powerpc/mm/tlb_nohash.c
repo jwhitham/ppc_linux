@@ -27,8 +27,6 @@
  *
  */
 
-//#define CONFIG_PPC_FSL_BUGGY_HW_TABLEWALK
-
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/mm.h>
@@ -467,7 +465,7 @@ static void setup_page_sizes(void)
 		tlb1ps = mfspr(SPRN_TLB1PS);
 		eptcfg = mfspr(SPRN_EPTCFG);
 
-#ifndef CONFIG_PPC_FSL_BUGGY_HW_TABLEWALK
+#ifndef CONFIG_PPC_E6500_REV1_BUGS
 		if ((tlb1cfg & TLBnCFG_IND) && (tlb0cfg & TLBnCFG_PT))
 			book3e_htw_mode = PPC_HTW_FSL;
 
