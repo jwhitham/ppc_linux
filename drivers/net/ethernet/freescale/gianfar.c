@@ -84,6 +84,8 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
+#include <linux/inetdevice.h>
+#include <sysdev/fsl_soc.h>
 #include <linux/net_tstamp.h>
 
 #include <asm/io.h>
@@ -150,6 +152,17 @@ static void gfar_clear_exact_match(struct net_device *dev);
 static void gfar_set_mac_for_addr(struct net_device *dev, int num,
 				  const u8 *addr);
 static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
+static void gfar_schedule_rx_cleanup(struct gfar_priv_grp *grp);
+
+#ifdef CONFIG_PM
+static void gfar_halt_rx(struct net_device *dev);
+static void gfar_rx_start(struct net_device *dev);
+static void gfar_enable_filer(struct net_device *dev);
+static void gfar_disable_filer(struct net_device *dev);
+static void gfar_config_filer_table(struct net_device *dev);
+static void gfar_restore_filer_table(struct net_device *dev);
+static int gfar_get_ip(struct net_device *dev);
+#endif
 
 LIST_HEAD(gfar_recycle_queues);
 
@@ -839,8 +852,17 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 	else
 		priv->interface = PHY_INTERFACE_MODE_MII;
 
-	if (of_get_property(np, "fsl,magic-packet", NULL))
+	priv->wol_opts = 0;
+	priv->wol_supported = 0;
+	if (of_get_property(np, "fsl,magic-packet", NULL)) {
 		priv->device_flags |= FSL_GIANFAR_DEV_HAS_MAGIC_PACKET;
+		priv->wol_supported |= GIANFAR_WOL_MAGIC;
+	}
+
+	if (of_get_property(np, "fsl,wake-on-filer", NULL)) {
+		priv->wol_supported |= GIANFAR_WOL_ARP;
+		priv->wol_supported |= GIANFAR_WOL_UCAST;
+	}
 
 	priv->phy_node = of_parse_phandle(np, "phy-handle", 0);
 
@@ -1311,9 +1333,9 @@ static int gfar_probe(struct platform_device *ofdev)
 		goto register_fail;
 	}
 
-	device_init_wakeup(&dev->dev,
-			   priv->device_flags &
-			   FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
+	if (priv->wol_supported) {
+		device_set_wakeup_capable(&ofdev->dev, true);
+	}
 
 	/* fill out IRQ number and name fields */
 	for (i = 0; i < priv->num_grps; i++) {
@@ -1383,58 +1405,45 @@ static int gfar_remove(struct platform_device *ofdev)
 }
 
 #ifdef CONFIG_PM
-
 static int gfar_suspend(struct device *dev)
 {
 	struct gfar_private *priv = dev_get_drvdata(dev);
 	struct net_device *ndev = priv->ndev;
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
-	unsigned long flags;
+	int retval;
 	u32 tempval;
 
-	int magic_packet = priv->wol_en &&
-			   (priv->device_flags &
-			    FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
-
-	netif_device_detach(ndev);
-
-	if (netif_running(ndev)) {
-
-		local_irq_save(flags);
-		lock_tx_qs(priv);
-		lock_rx_qs(priv);
-
-		gfar_halt_nodisable(ndev);
-
-		/* Disable Tx, and Rx if wake-on-LAN is disabled. */
-		tempval = gfar_read(&regs->maccfg1);
-
-		tempval &= ~MACCFG1_TX_EN;
-
-		if (!magic_packet)
-			tempval &= ~MACCFG1_RX_EN;
-
-		gfar_write(&regs->maccfg1, tempval);
-
-		unlock_rx_qs(priv);
-		unlock_tx_qs(priv);
-		local_irq_restore(flags);
-
-		disable_napi(priv);
-
-		if (magic_packet) {
-			/* Enable interrupt on Magic Packet */
-			gfar_write(&regs->imask, IMASK_MAG);
-
-			/* Enable Magic Packet mode */
-			tempval = gfar_read(&regs->maccfg2);
-			tempval |= MACCFG2_MPEN;
-			gfar_write(&regs->maccfg2, tempval);
-		} else {
-			phy_stop(priv->phydev);
-		}
+	if (!priv->wol_opts) {
+		/* Wake-On-Lan is disabled */
+		if (!netif_running(ndev))
+			return 0;
+		gfar_close(ndev);
+		return 0;
 	}
 
+	retval = mpc85xx_pmc_set_wake(dev, true);
+	if (retval)
+		return retval;
+
+	netif_device_detach(ndev);
+	disable_napi(priv);
+	gfar_halt(ndev);
+
+	if (priv->wol_opts & GIANFAR_WOL_MAGIC) {
+		/* Enable Magic Packet mode */
+		tempval = gfar_read(&regs->maccfg2);
+		tempval |= MACCFG2_MPEN;
+		gfar_write(&regs->maccfg2, tempval);
+	}
+
+	if (priv->wol_opts & (GIANFAR_WOL_ARP | GIANFAR_WOL_UCAST)) {
+		mpc85xx_pmc_set_lossless_ethernet(1);
+		gfar_disable_filer(ndev);
+		gfar_config_filer_table(ndev);
+		gfar_enable_filer(ndev);
+	}
+
+	gfar_rx_start(ndev);
 	return 0;
 }
 
@@ -1443,42 +1452,168 @@ static int gfar_resume(struct device *dev)
 	struct gfar_private *priv = dev_get_drvdata(dev);
 	struct net_device *ndev = priv->ndev;
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
-	unsigned long flags;
-	u32 tempval;
-	int magic_packet = priv->wol_en &&
-			   (priv->device_flags &
-			    FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
+	u32 tempval, i;
 
-	if (!netif_running(ndev)) {
-		netif_device_attach(ndev);
+	if (!priv->wol_opts) {
+		/* Wake-On-Lan is disabled */
+		if (!netif_running(ndev))
+			return 0;
+		gfar_enet_open(ndev);
 		return 0;
 	}
 
-	if (!magic_packet && priv->phydev)
-		phy_start(priv->phydev);
+	mpc85xx_pmc_set_wake(dev, false);
 
-	/* Disable Magic Packet mode, in case something
-	 * else woke us up.
-	 */
-	local_irq_save(flags);
-	lock_tx_qs(priv);
-	lock_rx_qs(priv);
+	gfar_halt_rx(ndev);
 
-	tempval = gfar_read(&regs->maccfg2);
-	tempval &= ~MACCFG2_MPEN;
-	gfar_write(&regs->maccfg2, tempval);
+	if (priv->wol_opts & GIANFAR_WOL_MAGIC) {
+		/* Disable Magic Packet mode */
+		tempval = gfar_read(&regs->maccfg2);
+		tempval &= ~MACCFG2_MPEN;
+		gfar_write(&regs->maccfg2, tempval);
+	}
+
+	if (priv->wol_opts & (GIANFAR_WOL_ARP | GIANFAR_WOL_UCAST)) {
+		mpc85xx_pmc_set_lossless_ethernet(0);
+		gfar_disable_filer(ndev);
+		gfar_restore_filer_table(ndev);
+	}
 
 	gfar_start(ndev);
-
-	unlock_rx_qs(priv);
-	unlock_tx_qs(priv);
-	local_irq_restore(flags);
-
+	enable_napi(priv);
 	netif_device_attach(ndev);
 
-	enable_napi(priv);
-
+	if (priv->wol_opts & (GIANFAR_WOL_ARP | GIANFAR_WOL_UCAST)) {
+		/* send requests to process the received packets */
+		for (i = 0; i < priv->num_grps; i++)
+			gfar_schedule_rx_cleanup(&priv->gfargrp[i]);
+	}
 	return 0;
+}
+
+static void gfar_enable_filer(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 temp;
+
+	temp = gfar_read(&regs->rctrl);
+	temp &= ~(RCTRL_FSQEN | RCTRL_PRSDEP_MASK);
+	temp |= RCTRL_FILREN | RCTRL_PRSDEP_L2L3;
+	gfar_write(&regs->rctrl, temp);
+}
+
+static void gfar_disable_filer(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 temp;
+
+	temp = gfar_read(&regs->rctrl);
+	temp &= ~RCTRL_FILREN;
+	gfar_write(&regs->rctrl, temp);
+}
+
+static int gfar_get_ip(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct in_device *in_dev;
+	int ret = -ENOENT;
+
+	in_dev = in_dev_get(dev);
+	if (!in_dev)
+		return ret;
+
+	/* Get the primary IP address */
+	for_primary_ifa(in_dev) {
+		priv->ip_addr = ifa->ifa_address;
+		ret = 0;
+		break;
+	} endfor_ifa(in_dev);
+
+	in_dev_put(in_dev);
+	return ret;
+}
+
+static void gfar_restore_filer_table(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	u32 rqfcr, rqfpr;
+	int i;
+
+	for (i = 0; i <= MAX_FILER_IDX; i++) {
+		rqfcr = priv->ftp_rqfcr[i];
+		rqfpr = priv->ftp_rqfpr[i];
+		gfar_write_filer(priv, i, rqfcr, rqfpr);
+	}
+}
+
+static void gfar_config_filer_table(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	u32 dest_mac_addr;
+	u32 rqfcr, rqfpr;
+	unsigned int index;
+	u8 rqfcr_queue;
+
+	if (gfar_get_ip(dev)) {
+		netif_err(priv, wol, dev, "WOL: get the ip address error\n");
+		return;
+	}
+
+	/* init filer table */
+	rqfcr = RQFCR_RJE | RQFCR_CMP_MATCH;
+	rqfpr = 0x0;
+	for (index = 0; index <= MAX_FILER_IDX; index++)
+		gfar_write_filer(priv, index, rqfcr, rqfpr);
+
+	index = 0;
+	/* select a rx queue in group 0 */
+	rqfcr_queue = (u8)find_first_bit(&priv->gfargrp[0].napi_rx->rx_bit_map,
+							priv->num_rx_queues);
+	if (priv->wol_opts & GIANFAR_WOL_ARP) {
+		/* ARP request filer, filling the packet to the last queue */
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+					RQFCR_CMP_EXACT | RQFCR_PID_MASK;
+		rqfpr = RQFPR_ARQ;
+		gfar_write_filer(priv, index++, rqfcr, rqfpr);
+
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+					RQFCR_CMP_EXACT | RQFCR_PID_PARSE;
+		rqfpr = RQFPR_ARQ;
+		gfar_write_filer(priv, index++, rqfcr, rqfpr);
+
+		/*
+		 * DEST_IP address in ARP packet,
+		 * filling it to the last queue.
+		 */
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+					RQFCR_CMP_EXACT | RQFCR_PID_MASK;
+		rqfpr = FPR_FILER_MASK;
+		gfar_write_filer(priv, index++, rqfcr, rqfpr);
+
+		rqfcr = (rqfcr_queue << 10) | RQFCR_GPI |
+					RQFCR_CMP_EXACT | RQFCR_PID_DIA;
+		rqfpr = priv->ip_addr;
+		gfar_write_filer(priv, index++, rqfcr, rqfpr);
+	}
+
+	if (priv->wol_opts & GIANFAR_WOL_UCAST) {
+		/* Unicast packet, filling it to the last queue */
+		dest_mac_addr = (dev->dev_addr[0] << 16) |
+				(dev->dev_addr[1] << 8) | dev->dev_addr[2];
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+					RQFCR_CMP_EXACT | RQFCR_PID_DAH;
+		rqfpr = dest_mac_addr;
+		gfar_write_filer(priv, index++, rqfcr, rqfpr);
+
+		dest_mac_addr = (dev->dev_addr[3] << 16) |
+				(dev->dev_addr[4] << 8) | dev->dev_addr[5];
+		rqfcr = (rqfcr_queue << 10) | RQFCR_GPI |
+					RQFCR_CMP_EXACT | RQFCR_PID_DAL;
+		rqfpr = dest_mac_addr;
+		gfar_write_filer(priv, index++, rqfcr, rqfpr);
+	}
 }
 
 static int gfar_restore(struct device *dev)
@@ -1731,6 +1866,48 @@ static int __gfar_is_rx_idle(struct gfar_private *priv)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+/* Halt the receive queues */
+static void gfar_halt_rx(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 tempval;
+	int i = 0;
+
+	for (i = 0; i < priv->num_grps; i++) {
+		regs = priv->gfargrp[i].regs;
+		/* Mask all interrupts */
+		gfar_write(&regs->imask, IMASK_INIT_CLEAR);
+
+		/* Clear all interrupts */
+		gfar_write(&regs->ievent, IEVENT_INIT_CLEAR);
+	}
+
+	regs = priv->gfargrp[0].regs;
+	/* Stop the DMA, and wait for it to stop */
+	tempval = gfar_read(&regs->dmactrl);
+	if ((tempval & DMACTRL_GRS) != DMACTRL_GRS) {
+		int ret;
+
+		tempval |= DMACTRL_GRS;
+		gfar_write(&regs->dmactrl, tempval);
+
+		do {
+			ret = spin_event_timeout(((gfar_read(&regs->ievent) &
+				IEVENT_GRSC) == IEVENT_GRSC), 1000000, 0);
+			if (!ret && !(gfar_read(&regs->ievent) & IEVENT_GRSC))
+				ret = __gfar_is_rx_idle(priv);
+		} while (!ret);
+	}
+
+	/* Disable Rx in MACCFG1  */
+	tempval = gfar_read(&regs->maccfg1);
+	tempval &= ~MACCFG1_RX_EN;
+	gfar_write(&regs->maccfg1, tempval);
+}
+#endif
+
 /* Halt the receive and transmit queues */
 static void gfar_halt_nodisable(struct net_device *dev)
 {
@@ -1963,6 +2140,40 @@ void gfar_start(struct net_device *dev)
 	dev->trans_start = jiffies; /* prevent tx timeout */
 }
 
+#ifdef CONFIG_PM
+void gfar_rx_start(struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 tempval;
+	int i = 0;
+
+	/* Enable Rx in MACCFG1 */
+	tempval = gfar_read(&regs->maccfg1);
+	tempval |= MACCFG1_RX_EN;
+	gfar_write(&regs->maccfg1, tempval);
+
+	/* Initialize DMACTRL to have WWR and WOP */
+	tempval = gfar_read(&regs->dmactrl);
+	tempval |= DMACTRL_INIT_SETTINGS;
+	gfar_write(&regs->dmactrl, tempval);
+
+	/* Make sure we aren't stopped */
+	tempval = gfar_read(&regs->dmactrl);
+	tempval &= ~DMACTRL_GRS;
+	gfar_write(&regs->dmactrl, tempval);
+
+	for (i = 0; i < priv->num_grps; i++) {
+		regs = priv->gfargrp[i].regs;
+		/* Clear RHLT, so that the DMA starts polling now */
+		gfar_write(&regs->rstat, priv->gfargrp[i].napi_rx->rstat);
+
+		/* Unmask the interrupts we look for */
+		gfar_write(&regs->imask, IMASK_FGPI | IMASK_MAG);
+	}
+}
+#endif
+
 static void gfar_configure_tx_coalescing(struct gfar_private *priv,
 					 unsigned long tx_mask)
 {
@@ -2035,7 +2246,8 @@ static int register_grp_irqs(struct gfar_priv_grp *grp)
 		/* Install our interrupt handlers for Error,
 		 * Transmit, and Receive
 		 */
-		err = request_irq(gfar_irq(grp, ER)->irq, gfar_error, 0,
+		err = request_irq(gfar_irq(grp, ER)->irq, gfar_error,
+				  IRQF_NO_SUSPEND,
 				  gfar_irq(grp, ER)->name, grp);
 		if (err < 0) {
 			netif_err(priv, intr, dev, "Can't get IRQ %d\n",
@@ -2043,14 +2255,16 @@ static int register_grp_irqs(struct gfar_priv_grp *grp)
 
 			goto err_irq_fail;
 		}
-		err = request_irq(gfar_irq(grp, TX)->irq, gfar_transmit, 0,
+		err = request_irq(gfar_irq(grp, TX)->irq, gfar_transmit,
+				  IRQF_NO_SUSPEND,
 				  gfar_irq(grp, TX)->name, grp);
 		if (err < 0) {
 			netif_err(priv, intr, dev, "Can't get IRQ %d\n",
 				  gfar_irq(grp, TX)->irq);
 			goto tx_irq_fail;
 		}
-		err = request_irq(gfar_irq(grp, RX)->irq, gfar_receive, 0,
+		err = request_irq(gfar_irq(grp, RX)->irq, gfar_receive,
+				  IRQF_NO_SUSPEND,
 				  gfar_irq(grp, RX)->name, grp);
 		if (err < 0) {
 			netif_err(priv, intr, dev, "Can't get IRQ %d\n",
@@ -2058,7 +2272,8 @@ static int register_grp_irqs(struct gfar_priv_grp *grp)
 			goto rx_irq_fail;
 		}
 	} else {
-		err = request_irq(gfar_irq(grp, TX)->irq, gfar_interrupt, 0,
+		err = request_irq(gfar_irq(grp, TX)->irq, gfar_interrupt,
+				  IRQF_NO_SUSPEND,
 				  gfar_irq(grp, TX)->name, grp);
 		if (err < 0) {
 			netif_err(priv, intr, dev, "Can't get IRQ %d\n",
@@ -2150,7 +2365,7 @@ static int gfar_enet_open(struct net_device *dev)
 
 	netif_tx_start_all_queues(dev);
 
-	device_set_wakeup_enable(&dev->dev, priv->wol_en);
+	device_set_wakeup_enable(&priv->ofdev->dev, (bool)!!priv->wol_opts);
 
 	return err;
 }
@@ -2963,6 +3178,17 @@ static void gfar_schedule_rx_cleanup(struct gfar_priv_grp *grp)
 
 irqreturn_t gfar_receive(int irq, void *grp_id)
 {
+	struct gfar_priv_grp *gfargrp = grp_id;
+	struct gfar __iomem *regs = gfargrp->regs;
+	u32 ievent;
+
+	ievent = gfar_read(&regs->ievent);
+
+	if (unlikely((ievent & IEVENT_FGPI) == IEVENT_FGPI)) {
+		gfar_write(&regs->ievent, ievent & IEVENT_RX_MASK);
+		return IRQ_HANDLED;
+	}
+
 	gfar_schedule_rx_cleanup((struct gfar_priv_grp *)grp_id);
 	return IRQ_HANDLED;
 }

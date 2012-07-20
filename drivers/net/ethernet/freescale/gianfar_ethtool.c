@@ -30,6 +30,7 @@
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 #include <linux/mm.h>
+#include <linux/platform_device.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -599,32 +600,50 @@ static void gfar_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 
-	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) {
-		wol->supported = WAKE_MAGIC;
-		wol->wolopts = priv->wol_en ? WAKE_MAGIC : 0;
-	} else {
-		wol->supported = wol->wolopts = 0;
-	}
+	wol->supported = 0;
+	wol->wolopts = 0;
+
+	if (!priv->wol_supported || !device_can_wakeup(&priv->ofdev->dev))
+		return;
+
+	if (priv->wol_supported & GIANFAR_WOL_MAGIC)
+		wol->supported |= WAKE_MAGIC;
+
+	if (priv->wol_supported & GIANFAR_WOL_ARP)
+		wol->supported |= WAKE_ARP;
+
+	if (priv->wol_supported & GIANFAR_WOL_UCAST)
+		wol->supported |= WAKE_UCAST;
+
+	if (priv->wol_opts & GIANFAR_WOL_MAGIC)
+		wol->wolopts |= WAKE_MAGIC;
+
+	if (priv->wol_opts & GIANFAR_WOL_ARP)
+		wol->wolopts |= WAKE_ARP;
+
+	if (priv->wol_opts & GIANFAR_WOL_UCAST)
+		wol->wolopts |= WAKE_UCAST;
 }
 
 static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
-	unsigned long flags;
 
-	if (!(priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) &&
-	    wol->wolopts != 0)
-		return -EINVAL;
+	if (!priv->wol_supported || !device_can_wakeup(&priv->ofdev->dev) ||
+		(wol->wolopts & ~(WAKE_MAGIC | WAKE_ARP | WAKE_UCAST)))
+		return -EOPNOTSUPP;
 
-	if (wol->wolopts & ~WAKE_MAGIC)
-		return -EINVAL;
+	priv->wol_opts = 0;
 
-	device_set_wakeup_enable(&dev->dev, wol->wolopts & WAKE_MAGIC);
-
-	spin_lock_irqsave(&priv->bflock, flags);
-	priv->wol_en =  !!device_may_wakeup(&dev->dev);
-	spin_unlock_irqrestore(&priv->bflock, flags);
-
+	if (wol->wolopts & WAKE_MAGIC) {
+		priv->wol_opts |= GIANFAR_WOL_MAGIC;
+	} else {
+		if (wol->wolopts & WAKE_ARP)
+			priv->wol_opts |= GIANFAR_WOL_ARP;
+		if (wol->wolopts & WAKE_UCAST)
+			priv->wol_opts |= GIANFAR_WOL_UCAST;
+	}
+	device_set_wakeup_enable(&priv->ofdev->dev, (bool)!!priv->wol_opts);
 	return 0;
 }
 #endif
