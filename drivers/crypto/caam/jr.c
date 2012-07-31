@@ -43,23 +43,24 @@ static irqreturn_t caam_jr_interrupt(int irq, void *st_dev)
 	wr_reg32(&jrp->rregs->jrintstatus, irqstate);
 
 	preempt_disable();
-	tasklet_schedule(&jrp->irqtask);
+	napi_schedule(per_cpu_ptr(jrp->irqtask, smp_processor_id()));
 	preempt_enable();
 
 	return IRQ_HANDLED;
 }
 
 /* Deferred service handler, run as interrupt-fired tasklet */
-static void caam_jr_dequeue(unsigned long devarg)
+static int caam_jr_dequeue(struct napi_struct *napi, int budget)
 {
 	int hw_idx, sw_idx, i, head, tail;
-	struct device *dev = (struct device *)devarg;
+	struct device *dev = &napi->dev->dev;
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	void (*usercall)(struct device *dev, u32 *desc, u32 status, void *arg);
 	u32 *userdesc, userstatus;
 	void *userarg;
+	int cleaned = 0;
 
-	while (rd_reg32(&jrp->rregs->outring_used)) {
+	while (rd_reg32(&jrp->rregs->outring_used) && cleaned < budget) {
 
 		head = ACCESS_ONCE(jrp->head);
 
@@ -119,10 +120,16 @@ static void caam_jr_dequeue(unsigned long devarg)
 
 		/* Finally, execute user's callback */
 		usercall(dev, userdesc, userstatus, userarg);
+		cleaned++;
 	}
 
-	/* reenable / unmask IRQs */
-	clrbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
+	if (cleaned < budget) {
+		napi_complete(per_cpu_ptr(jrp->irqtask, smp_processor_id()));
+		/* reenable / unmask IRQs */
+		clrbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
+	}
+
+	return cleaned;
 }
 
 /**
@@ -322,7 +329,28 @@ static int caam_jr_init(struct device *dev)
 
 	jrp = dev_get_drvdata(dev);
 
-	tasklet_init(&jrp->irqtask, caam_jr_dequeue, (unsigned long)dev);
+	/* Connect job ring interrupt handler. */
+	jrp->irqtask = alloc_percpu(struct napi_struct);
+	if (!jrp->irqtask) {
+		dev_err(dev, "can't allocate percpu irqtask memory\n");
+		return -ENOMEM;
+	}
+
+	jrp->net_dev = alloc_percpu(struct net_device);
+	if (!jrp->net_dev) {
+		dev_err(dev, "can't allocate percpu net_dev memory\n");
+		free_percpu(jrp->irqtask);
+		return -ENOMEM;
+	}
+
+	for_each_possible_cpu(i) {
+		(per_cpu_ptr(jrp->net_dev, i))->dev = *dev;
+		INIT_LIST_HEAD(&per_cpu_ptr(jrp->net_dev, i)->napi_list);
+		netif_napi_add(per_cpu_ptr(jrp->net_dev, i),
+				per_cpu_ptr(jrp->irqtask, i),
+				caam_jr_dequeue, CAAM_NAPI_WEIGHT);
+		napi_enable(per_cpu_ptr(jrp->irqtask, i));
+	}
 
 	/* Connect job ring interrupt handler. */
 	error = request_irq(jrp->irq, caam_jr_interrupt, IRQF_SHARED,
@@ -390,11 +418,17 @@ int caam_jr_shutdown(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	dma_addr_t inpbusaddr, outbusaddr;
-	int ret;
+	int i, ret;
 
 	ret = caam_reset_hw_jr(dev);
 
-	tasklet_kill(&jrp->irqtask);
+	for_each_possible_cpu(i) {
+		napi_disable(per_cpu_ptr(jrp->irqtask, i));
+		netif_napi_del(per_cpu_ptr(jrp->irqtask, i));
+	}
+
+	free_percpu(jrp->irqtask);
+	free_percpu(jrp->net_dev);
 
 	/* Release interrupt */
 	free_irq(jrp->irq, dev);
