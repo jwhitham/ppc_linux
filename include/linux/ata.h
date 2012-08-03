@@ -80,6 +80,7 @@ enum {
 	ATA_ID_SATA_CAPABILITY	= 76,
 	ATA_ID_SATA_CAPABILITY_2	= 77,
 	ATA_ID_FEATURE_SUPP	= 78,
+	ATA_ID_FEATURE_ENABLE	= 79,
 	ATA_ID_MAJOR_VER	= 80,
 	ATA_ID_COMMAND_SET_1	= 82,
 	ATA_ID_COMMAND_SET_2	= 83,
@@ -582,6 +583,8 @@ static inline int ata_is_data(u8 prot)
 	((((id)[ATA_ID_SATA_CAPABILITY] != 0x0000) && \
 	  ((id)[ATA_ID_SATA_CAPABILITY] != 0xffff)) && \
 	 ((id)[ATA_ID_FEATURE_SUPP] & (1 << 2)))
+#define ata_id_enabled_fpdma_aa(id)	\
+	  ((id)[ATA_ID_FEATURE_ENABLE] & (1 << 2))
 #define ata_id_iordy_disable(id) ((id)[ATA_ID_CAPABILITY] & (1 << 10))
 #define ata_id_has_iordy(id) ((id)[ATA_ID_CAPABILITY] & (1 << 11))
 #define ata_id_u32(id,n)	\
