@@ -327,7 +327,8 @@ extern int tdm_register_driver(struct tdm_driver *);
 extern void tdm_del_driver(struct tdm_driver *);
 extern void tdm_unregister_driver(struct tdm_driver *);
 extern void init_config_adapter(struct tdm_adapter *);
-
+extern int tdm_adap_enable(struct tdm_driver *drv);
+extern int tdm_adap_disable(struct tdm_driver *drv);
 extern unsigned int tdm_port_open(struct tdm_driver *, void **);
 extern unsigned int tdm_port_close(void *);
 extern unsigned int tdm_port_ioctl(void *, unsigned int, unsigned long);

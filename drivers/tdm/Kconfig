@@ -22,14 +22,7 @@ config TDM_DEBUG_CORE
 	  messages to the system log.  Select this if you are having a
 	  problem with TDM support and want to see more of what is going on.
 
-config TDM_TEST
-        tristate "TDM test Module"
-	default n
-	---help---
-	  This TDM test module is a small test module which
-	  registers with the TDM core(framework) and sets up
-	  a TDM Voice path between diff channels of a slic.
-
+source drivers/tdm/test/Kconfig
 source drivers/tdm/device/Kconfig
 source drivers/tdm/line_ctrl/Kconfig
 endif # TDM
