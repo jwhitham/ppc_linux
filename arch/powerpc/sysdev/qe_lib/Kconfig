@@ -11,7 +11,7 @@ config UCC_SLOW
 
 config UCC_FAST
 	bool
-	default y if UCC_GETH
+	default y if UCC_GETH || FSL_UCC_TDM
 	help
 	  This option provides qe_lib support to UCC fast
 	  protocols: HDLC, Ethernet, ATM, transparent

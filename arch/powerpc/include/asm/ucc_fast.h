@@ -1,7 +1,7 @@
 /*
  * Internal header file for UCC FAST unit routines.
  *
- * Copyright (C) 2006 Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright (C) 2006, 2012 Freescale Semiconductor, Inc. All rights reserved.
  *
  * Authors: 	Shlomi Gridish <gridish@freescale.com>
  * 		Li Yang <leoli@freescale.com>
@@ -27,12 +27,14 @@
 #define R_I	0x10000000	/* interrupt on reception */
 #define R_L	0x08000000	/* last */
 #define R_F	0x04000000	/* first */
+#define R_CM	0x02000000	/* CM */
 
 /* transmit BD's status */
 #define T_R	0x80000000	/* ready bit */
 #define T_W	0x20000000	/* wrap bit */
 #define T_I	0x10000000	/* interrupt on completion */
 #define T_L	0x08000000	/* last */
+#define T_CM	0x02000000	/* CM */
 
 /* Rx Data buffer must be 4 bytes aligned in most cases */
 #define UCC_FAST_RX_ALIGN			4
@@ -118,8 +120,11 @@ enum ucc_fast_transparent_tcrc {
 /* Fast UCC initialization structure */
 struct ucc_fast_info {
 	int ucc_num;
+	int tdm_num;
 	enum qe_clock rx_clock;
 	enum qe_clock tx_clock;
+	enum qe_clock rx_sync;
+	enum qe_clock tx_sync;
 	u32 regs;
 	int irq;
 	u32 uccm_mask;

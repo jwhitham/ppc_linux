@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006 Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright (C) 2006, 2012 Freescale Semiconductor, Inc. All rights reserved.
  *
  * Authors: 	Shlomi Gridish <gridish@freescale.com>
  * 		Li Yang <leoli@freescale.com>
@@ -75,6 +75,8 @@ enum qe_clock {
 	QE_CLK22,		/* Clock 22 */
 	QE_CLK23,		/* Clock 23 */
 	QE_CLK24,		/* Clock 24 */
+	QE_RSYNC_PIN,		/* RSYNC from pin */
+	QE_TSYNC_PIN,		/* TSYNC from pin */
 	QE_CLK_DUMMY
 };
 
@@ -635,6 +637,15 @@ struct ucc_slow_pram {
 #define UCC_BISYNC_UCCE_BSY	0x0004
 #define UCC_BISYNC_UCCE_TXB	0x0002
 #define UCC_BISYNC_UCCE_RXB	0x0001
+
+/* Transparent UCC Event Register (UCCE) */
+#define UCC_TRANS_UCCE_GRA	0x0080
+#define UCC_TRANS_UCCE_TXE	0x0010
+#define UCC_TRANS_UCCE_RXF	0x0008
+#define UCC_TRANS_UCCE_BSY	0x0004
+#define UCC_TRANS_UCCE_TXB	0x0002
+#define UCC_TRANS_UCCE_RXB	0x0001
+
 
 /* Gigabit Ethernet Fast UCC Event Register (UCCE) */
 #define UCC_GETH_UCCE_MPD       0x80000000

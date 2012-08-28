@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2006-2010 Freescale Semiconductor, Inc. All rights reserved.
+ * Copyright (C) 2006-2010, 2012 Freescale Semiconductor, Inc.
+ * All rights reserved.
  *
  * Authors: 	Shlomi Gridish <gridish@freescale.com>
  * 		Li Yang <leoli@freescale.com>
@@ -239,6 +240,12 @@ enum qe_clock qe_clock_source(const char *source)
 
 	if (strcasecmp(source, "none") == 0)
 		return QE_CLK_NONE;
+
+	if (strcasecmp(source, "tsync_pin") == 0)
+		return QE_TSYNC_PIN;
+
+	if (strcasecmp(source, "rsync_pin") == 0)
+		return QE_RSYNC_PIN;
 
 	if (strncasecmp(source, "brg", 3) == 0) {
 		i = simple_strtoul(source + 3, NULL, 10);
