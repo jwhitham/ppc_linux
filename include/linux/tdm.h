@@ -1,6 +1,6 @@
 /* include/linux/tdm.h
  *
- * Copyright (C) 2012 Freescale Semiconductor, Inc, All rights reserved.
+ * Copyright 2012 Freescale Semiconductor, Inc.
  *
  * tdm.h - definitions for the tdm-device framework interface
  *
@@ -61,6 +61,11 @@ static inline int ALIGN_SIZE(u64 size, u32 alignment)
 {
 	return (size + alignment - 1) & (~(alignment - 1));
 }
+
+int tdm_master_send(struct tdm_adapter *adap, void **buf, int count);
+int tdm_master_recv(struct tdm_adapter *adap, void **buf);
+int tdm_read_direct(struct tdm_adapter *adap, u8 *buf, u32 len);
+int tdm_write_direct(struct tdm_adapter *adap, u8 *buf, u32 len);
 
 /**
  * struct tdm_driver - represent an TDM device driver
@@ -221,6 +226,8 @@ struct tdm_channel {
 struct tdm_adapt_algorithm {
 	u32 (*tdm_read)(struct tdm_adapter *, u16 **);
 	u32 (*tdm_get_write_buf)(struct tdm_adapter *, u16 **);
+	int (*tdm_read_simple)(struct tdm_adapter *, u8 *, u32 len);
+	int (*tdm_write_simple)(struct tdm_adapter *, u8 *, u32 len);
 	u32 (*tdm_write)(struct tdm_adapter *, void * , unsigned int len);
 	int (*tdm_enable)(struct tdm_adapter *);
 	int (*tdm_disable)(struct tdm_adapter *);

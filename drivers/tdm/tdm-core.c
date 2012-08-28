@@ -1,6 +1,6 @@
 /* driver/tdm/tdm-core.c
  *
- * Copyright (C) 2012 Freescale Semiconductor, Inc, All rights reserved.
+ * Copyright 2012 Freescale Semiconductor, Inc.
  *
  * TDM core is the interface between TDM clients and TDM devices.
  * It is also intended to serve as an interface for line controld
@@ -358,6 +358,54 @@ module_exit(tdm_exit);
 
 
 /* Interface to the tdm device/adapter */
+
+/* tdm_read_direct - issue a TDM read
+ * @adap: Handle to TDM device
+ * @buf: Data that will be read from the TDM device
+ * @len: How many bytes to read
+ *
+ * Returns negative errno, or else 0.
+ */
+int tdm_read_direct(struct tdm_adapter *adap, u8 *buf, u32 len)
+{
+	int res;
+
+	if (adap->algo->tdm_read_simple)
+		res = adap->algo->tdm_read_simple(adap, buf, len);
+	else {
+		pr_err("TDM level read not supported\n");
+		return -EOPNOTSUPP;
+	}
+	/* If everything went ok (i.e. frame received), return #bytes
+	transmitted, else error code. */
+
+	return res;
+
+
+}
+EXPORT_SYMBOL(tdm_read_direct);
+
+/* tdm_write_direct - issue a TDM write
+ * @adap: Handle to TDM device
+ * @buf: Data that will be written to the TDM device
+ * @len: How many bytes to write
+ *
+ * Returns negative errno, or else 0.
+ */
+int tdm_write_direct(struct tdm_adapter *adap, u8 *buf, u32 len)
+{
+	int res;
+
+	if (adap->algo->tdm_write_simple)
+		res = adap->algo->tdm_write_simple(adap, buf, len);
+	else {
+		pr_err("TDM level write not supported\n");
+		return -EOPNOTSUPP;
+	}
+
+	return res;
+}
+EXPORT_SYMBOL(tdm_write_direct);
 
 /* tdm_adap_send - issue a TDM write
  * @adap: Handle to TDM device
