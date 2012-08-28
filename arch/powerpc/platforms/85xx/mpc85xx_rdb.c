@@ -90,6 +90,11 @@ static void __init mpc85xx_rdb_setup_arch(void)
 	struct device_node *np;
 #endif
 
+#if defined(CONFIG_QUICC_ENGINE) && defined(CONFIG_SPI_FSL_SPI)
+	struct device_node *qe_spi;
+#endif
+	struct ccsr_guts __iomem *guts;
+
 	if (ppc_md.progress)
 		ppc_md.progress("mpc85xx_rdb_setup_arch()", 0);
 
@@ -116,39 +121,66 @@ static void __init mpc85xx_rdb_setup_arch(void)
 
 		for_each_node_by_name(ucc, "ucc")
 			par_io_of_config(ucc);
-
+#ifdef CONFIG_SPI_FSL_SPI
+		for_each_node_by_name(qe_spi, "spi")
+			par_io_of_config(qe_spi);
+#endif	/* CONFIG_SPI_FSL_SPI */
 	}
+
+	np = of_find_node_by_name(NULL, "global-utilities");
+	if (np) {
+		guts = of_iomap(np, 0);
+		if (!guts)
+			pr_err("mpc85xx-rdb: could not map global "
+					"utilities register\n");
+		else {
 #if defined(CONFIG_UCC_GETH) || defined(CONFIG_SERIAL_QE)
-	if (machine_is(p1025_rdb)) {
-
-		struct ccsr_guts __iomem *guts;
-
-		np = of_find_node_by_name(NULL, "global-utilities");
-		if (np) {
-			guts = of_iomap(np, 0);
-			if (!guts) {
-
-				pr_err("mpc85xx-rdb: could not map global utilities register\n");
-
-			} else {
-			/* P1025 has pins muxed for QE and other functions. To
-			* enable QE UEC mode, we need to set bit QE0 for UCC1
-			* in Eth mode, QE0 and QE3 for UCC5 in Eth mode, QE9
-			* and QE12 for QE MII management singals in PMUXCR
-			* register.
-			*/
+			if (machine_is(p1025_rdb)) {
+				/*
+				 * P1025 has pins muxed for QE and other
+				 * functions. To enable QE UEC mode, we
+				 * need to set bit QE0 for UCC1 in Eth mode,
+				 * QE0 and QE3 for UCC5 in Eth mode, QE9
+				 * and QE12 for QE MII management singals
+				 * in PMUXCR register.
+				 */
 				setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(0) |
 						MPC85xx_PMUXCR_QE(3) |
 						MPC85xx_PMUXCR_QE(9) |
 						MPC85xx_PMUXCR_QE(12));
-				iounmap(guts);
 			}
-			of_node_put(np);
-		}
-
-	}
 #endif
 
+#ifdef CONFIG_FSL_UCC_TDM
+			if (machine_is(p1021_rdb_pc)) {
+
+				/* Clear QE12 for releasing the LBCTL */
+				clrbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(12));
+				/* TDMA */
+				setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(5) |
+						  MPC85xx_PMUXCR_QE(11));
+				/* TDMB */
+				setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(0) |
+						  MPC85xx_PMUXCR_QE(9));
+				/* TDMC */
+				setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(0));
+				/* TDMD */
+				setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(8) |
+						  MPC85xx_PMUXCR_QE(7));
+			}
+#endif	/* CONFIG_FSL_UCC_TDM */
+
+#ifdef CONFIG_SPI_FSL_SPI
+			clrbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(12));
+			/*QE-SPI*/
+			setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(6) |
+					  MPC85xx_PMUXCR_QE(9) |
+					  MPC85xx_PMUXCR_QE(10));
+#endif	/* CONFIG_SPI_FSL_SPI */
+			iounmap(guts);
+		}
+		of_node_put(np);
+	}
 qe_fail:
 #endif	/* CONFIG_QUICC_ENGINE */
 
