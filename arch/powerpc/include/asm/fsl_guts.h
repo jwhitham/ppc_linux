@@ -124,6 +124,7 @@ struct ccsr_rcpm {
 	u8	res0038[4];
 	__be32	cwdtdsr;	/* 0x003c - Core watchdog detect status register */
 	__be32	powmgtcsr;	/* 0x0040 - Power Mangement Control & Status Register */
+#define RCPM_POWMGTCSR_SLP	0x00020000
 	u8	res0044[12];
 	__be32	ippdexpcr;	/* 0x0050 - IP Powerdown Exception Control Register */
 	u8	res0054[16];
