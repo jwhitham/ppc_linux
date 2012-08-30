@@ -64,9 +64,6 @@ obj-$(CONFIG_FA_DUMP)		+= fadump.o
 ifeq ($(CONFIG_PPC32),y)
 obj-$(CONFIG_E500)		+= idle_e500.o
 endif
-ifneq ($(CONFIG_PPC_E500MC),y)
-obj-$(CONFIG_PPC_85xx)		+= l2cache_85xx.o
-endif
 obj-$(CONFIG_6xx)		+= idle_6xx.o l2cr_6xx.o cpu_setup_6xx.o
 obj-$(CONFIG_TAU)		+= tau_6xx.o
 obj-$(CONFIG_HIBERNATION)	+= swsusp.o suspend.o
@@ -90,6 +87,7 @@ extra-$(CONFIG_8xx)		:= head_8xx.o
 extra-y				+= vmlinux.lds
 
 obj-$(CONFIG_RELOCATABLE_PPC32)	+= reloc_32.o
+obj-$(CONFIG_FSL_SOC_BOOKE)		+= fsl_booke_cache.o
 
 obj-$(CONFIG_PPC32)		+= entry_32.o setup_32.o
 obj-$(CONFIG_PPC64)		+= dma-iommu.o iommu.o
