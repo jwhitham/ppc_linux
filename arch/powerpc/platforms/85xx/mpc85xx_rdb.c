@@ -121,6 +121,10 @@ static void __init mpc85xx_rdb_setup_arch(void)
 
 		for_each_node_by_name(ucc, "ucc")
 			par_io_of_config(ucc);
+
+		/* To P1025 QE/TDM, the name of ucc nodes is "tdm@xxxx" */
+		for_each_node_by_name(ucc, "tdm")
+			par_io_of_config(ucc);
 #ifdef CONFIG_SPI_FSL_SPI
 		for_each_node_by_name(qe_spi, "spi")
 			par_io_of_config(qe_spi);
@@ -152,7 +156,7 @@ static void __init mpc85xx_rdb_setup_arch(void)
 #endif
 
 #ifdef CONFIG_FSL_UCC_TDM
-			if (machine_is(p1021_rdb_pc)) {
+			if (machine_is(p1021_rdb_pc) || machine_is(p1025_rdb)) {
 
 				/* Clear QE12 for releasing the LBCTL */
 				clrbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(12));
@@ -171,11 +175,13 @@ static void __init mpc85xx_rdb_setup_arch(void)
 #endif	/* CONFIG_FSL_UCC_TDM */
 
 #ifdef CONFIG_SPI_FSL_SPI
+		if (of_find_compatible_node(NULL, NULL, "fsl,mpc8569-qe-spi")) {
 			clrbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(12));
 			/*QE-SPI*/
 			setbits32(&guts->pmuxcr, MPC85xx_PMUXCR_QE(6) |
 					  MPC85xx_PMUXCR_QE(9) |
 					  MPC85xx_PMUXCR_QE(10));
+		}
 #endif	/* CONFIG_SPI_FSL_SPI */
 			iounmap(guts);
 		}
