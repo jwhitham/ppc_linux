@@ -31,6 +31,7 @@ void *dma_direct_alloc_coherent(struct device *dev, size_t size,
 				struct dma_attrs *attrs)
 {
 	void *ret;
+	phys_addr_t top_ram_pfn = memblock_end_of_DRAM();
 #ifdef CONFIG_NOT_COHERENT_CACHE
 	ret = __dma_alloc_coherent(dev, size, dma_handle, flag);
 	if (ret == NULL)
@@ -41,8 +42,18 @@ void *dma_direct_alloc_coherent(struct device *dev, size_t size,
 	struct page *page;
 	int node = dev_to_node(dev);
 
+	/*
+	 * check for crappy device which has dma_mask < ZONE_DMA, and
+	 * we are not going to support it, just warn and fail.
+	 */
+	if (*dev->dma_mask < DMA_BIT_MASK(31)) {
+		dev_err(dev, "Unsupported dma_mask 0x%llx\n", *dev->dma_mask);
+		return NULL;
+	}
 	/* ignore region specifiers */
-	flag  &= ~(__GFP_HIGHMEM);
+	flag  &= ~(__GFP_HIGHMEM | __GFP_DMA);
+	if (*dev->dma_mask < top_ram_pfn - 1)
+		flag |= GFP_DMA;
 
 	page = alloc_pages_node(node, flag, get_order(size));
 	if (page == NULL)
