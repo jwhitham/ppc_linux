@@ -2062,6 +2062,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce5500",
 	},
+#ifndef CONFIG_PPC32
 	{	/* e6500 */
 		.pvr_mask		= 0xffff0000,
 		.pvr_value		= 0x80400000,
@@ -2077,12 +2078,11 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.oprofile_cpu_type	= "ppc/e6500",
 		.oprofile_type		= PPC_OPROFILE_FSL_EMB,
 		.cpu_setup		= __setup_cpu_e6500,
-#ifndef CONFIG_PPC32
 		.cpu_restore		= __restore_cpu_e6500,
-#endif
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce6500",
 	},
+#endif
 #ifdef CONFIG_PPC32
 	{	/* default match */
 		.pvr_mask		= 0x00000000,
