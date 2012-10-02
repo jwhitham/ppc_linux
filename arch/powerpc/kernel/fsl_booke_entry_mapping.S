@@ -60,6 +60,10 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	cmpw	r6,r9				/* Are we done? */
 	bne	1b				/* If not, repeat */
 
+#ifdef CONFIG_PPC_E500MC
+	/* Some chips can't handle tlbivax due to erratum A-004827 */
+	tlbilxlpid
+#else
 	/* Invalidate TLB0 */
 	li	r6,0x04
 	tlbivax 0,r6
@@ -68,6 +72,7 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	li	r6,0x0c
 	tlbivax 0,r6
 	TLBSYNC
+#endif
 
 /* 3. Setup a temp mapping and jump to it */
 	andi.	r5, r3, 0x1	/* Find an entry not used and is non-zero */
@@ -147,10 +152,15 @@ skpinv:	addi	r6,r6,1				/* Increment */
 	rlwinm	r6,r6,0,2,0	/* clear IPROT */
 	mtspr	SPRN_MAS1,r6
 	tlbwe
+#ifdef CONFIG_PPC_E500MC
+	/* Some chips can't handle tlbivax due to erratum A-004827 */
+	tlbilxlpid
+#else
 	/* Invalidate TLB1 */
 	li	r9,0x0c
 	tlbivax 0,r9
 	TLBSYNC
+#endif
 
 /* The mapping only needs to be cache-coherent on SMP */
 #ifdef CONFIG_SMP
@@ -229,7 +239,12 @@ next_tlb_setup:
 	rlwinm	r8,r8,0,2,0	/* clear IPROT */
 	mtspr	SPRN_MAS1,r8
 	tlbwe
+#ifdef CONFIG_PPC_E500MC
+	/* Some chips can't handle tlbivax due to erratum A-004827 */
+	tlbilxlpid
+#else
 	/* Invalidate TLB1 */
 	li	r9,0x0c
 	tlbivax 0,r9
 	TLBSYNC
+#endif
