@@ -1342,7 +1342,6 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 packet_dropped:
 skb_stolen:
-	net_dev->last_rx = jiffies;
 	return;
 
 drop_invalid_frame:
@@ -2097,8 +2096,6 @@ skb_copied:
 		percpu_priv->stats.rx_packets++;
 		percpu_priv->stats.rx_bytes += dpa_fd_length(fd);
 	}
-
-	net_dev->last_rx = jiffies;
 
 out:
 	if (fd->format == qm_fd_sg)
