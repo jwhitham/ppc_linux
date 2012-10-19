@@ -335,7 +335,6 @@ struct dpa_percpu_priv_s {
 	int skb_count;
 #endif
 	u32 in_interrupt;
-	u32 ingress_calls;
 	u32 tx_returned;
 	u32 tx_confirm;
 	/* fragmented (non-linear) skbuffs received from the stack */

@@ -2126,8 +2126,6 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 		return qman_cb_dqrr_stop;
 	}
 
-	prefetchw(&percpu_priv->ingress_calls);
-
 	/* Vale of plenty: make sure we didn't run out of buffers */
 	dpaa_eth_refill_bpools(percpu_priv);
 	_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
@@ -2990,7 +2988,7 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 			dpa_bp_count = *percpu_priv->dpa_bp_count;
 
 		total.in_interrupt += percpu_priv->in_interrupt;
-		total.ingress_calls += percpu_priv->stats.rx_packets;
+		total.stats.rx_packets += percpu_priv->stats.rx_packets;
 		total.stats.tx_packets += percpu_priv->stats.tx_packets;
 		total.tx_returned += percpu_priv->tx_returned;
 		total.tx_confirm += percpu_priv->tx_confirm;
@@ -3014,10 +3012,10 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 				percpu_priv->l4_hxs_errors,
 				dpa_bp_count);
 	}
-	seq_printf(file, "Total     %8u  %8u  %8lu  %8u  %8u  %8u  %8lu  %8lu" \
+	seq_printf(file, "Total     %8u  %8lu  %8lu  %8u  %8u  %8u  %8lu  %8lu"\
 				"     %8u    %8d\n",
 			total.in_interrupt,
-			total.ingress_calls,
+			total.stats.rx_packets,
 			total.stats.tx_packets,
 			total.tx_returned,
 			total.tx_confirm,
