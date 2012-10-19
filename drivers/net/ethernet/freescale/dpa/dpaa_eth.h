@@ -334,7 +334,6 @@ struct dpa_percpu_priv_s {
 	/* current number of skbs in the CPU's list */
 	int skb_count;
 #endif
-	u32 start_tx;
 	u32 in_interrupt;
 	u32 ingress_calls;
 	u32 tx_returned;
@@ -503,7 +502,6 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 {
 	int err, i;
 
-	prefetchw(&percpu->start_tx);
 	for (i = 0; i < 100000; i++) {
 		err = qman_enqueue(priv->egress_fqs[queue], fd, 0);
 		if (err != -EBUSY)
