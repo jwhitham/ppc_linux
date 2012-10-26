@@ -27,7 +27,7 @@
 #include <linux/fsl_qman.h>
 
 #define DEFAULT_PTP_RX_BUF_SZ		2048
-#define DEFAULT_PTP_TX_BUF_SZ		512
+#define DEFAULT_PTP_TX_BUF_SZ		1024
 
 /* 1588 private ioctl calls */
 #define PTP_ENBL_TXTS_IOCTL	SIOCDEVPRIVATE

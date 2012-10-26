@@ -72,10 +72,8 @@ static int dpa_ptp_insert(struct dpa_ptp_circ_buf *ptp_buf,
 	head = circ_buf->head;
 	tail = circ_buf->tail;
 
-	if (CIRC_SPACE(head, tail, size) <= 0) {
-		spin_unlock_irqrestore(&ptp_buf->ptp_lock, flags);
-		return 1;
-	}
+	if (CIRC_SPACE(head, tail, size) <= 0)
+		circ_buf->tail = (tail + 1) & (size - 1);
 
 	tmp = (struct dpa_ptp_data *)(circ_buf->buf) + head;
 	memcpy(tmp, data, sizeof(struct dpa_ptp_data));
@@ -119,7 +117,7 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	int size = ptp_buf->size;
 	int head, tail, idx;
 	unsigned long flags;
-	struct dpa_ptp_data *tmp;
+	struct dpa_ptp_data *tmp, *tmp2;
 	struct dpa_ptp_ident *tmp_ident;
 
 	spin_lock_irqsave(&ptp_buf->ptp_lock, flags);
@@ -127,7 +125,7 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	head = circ_buf->head;
 	tail = idx = circ_buf->tail;
 
-	if (CIRC_CNT_TO_END(head, tail, size) == 0) {
+	if (CIRC_CNT(head, tail, size) == 0) {
 		spin_unlock_irqrestore(&ptp_buf->ptp_lock, flags);
 		return 1;
 	}
@@ -141,7 +139,6 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	}
 
 	if (idx == head) {
-		circ_buf->tail = head;
 		spin_unlock_irqrestore(&ptp_buf->ptp_lock, flags);
 		return 1;
 	}
@@ -149,7 +146,15 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	ts->sec = tmp->ts.sec;
 	ts->nsec = tmp->ts.nsec;
 
-	circ_buf->tail = (idx + 1) & (size - 1);
+	if (idx != tail) {
+		while (CIRC_CNT(idx, tail, size) > 0) {
+			tmp = (struct dpa_ptp_data *)(circ_buf->buf) + idx;
+			idx = (idx - 1) & (size - 1);
+			tmp2 = (struct dpa_ptp_data *)(circ_buf->buf) + idx;
+			*tmp = *tmp2;
+		}
+	}
+	circ_buf->tail = (tail + 1) & (size - 1);
 
 	spin_unlock_irqrestore(&ptp_buf->ptp_lock, flags);
 
