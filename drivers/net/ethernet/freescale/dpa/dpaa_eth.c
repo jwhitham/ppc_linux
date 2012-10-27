@@ -2991,6 +2991,9 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 		"Current congestion state is: %s.\n",
 		priv->cgr_data.cgr_congested_count,
 		query_cgr.cgr.cs ? "congested" : "not congested");
+	/* Reset congestion stats (like QMan CGR API does) */
+	priv->cgr_data.congested_jiffies = 0;
+	priv->cgr_data.cgr_congested_count = 0;
 
 	/* Rx Errors demultiplexing */
 	seq_printf(file, "\nDPA RX Errors:\nCPU        dma err  phys err" \
