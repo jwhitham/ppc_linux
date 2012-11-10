@@ -13,6 +13,57 @@ static inline int mmu_get_tsize(int psize)
 	return mmu_psize_defs[psize].enc;
 }
 
+#if defined(CONFIG_PPC_FSL_BOOK3E) && defined(CONFIG_PPC64)
+#include <asm/paca.h>
+
+static inline void book3e_tlb_lock(void)
+{
+	struct paca_struct *paca = get_paca();
+	struct tlb_per_core *percore;
+	unsigned long tmp;
+
+	if (!(paca->tlb_per_core_ptr & 1))
+		return;
+
+	percore = (struct tlb_per_core *)(paca->tlb_per_core_ptr & ~1UL);
+
+	asm volatile("1: lbarx %0, 0, %1;"
+		     "cmpdi %0, 0;"
+		     "bne 2f;"
+		     "li %0, 1;"
+		     "stbcx. %0, 0, %1;"
+		     "bne 1b;"
+		     "b 3f;"
+		     "2: lbzx %0, 0, %1;"
+		     "cmpdi %0, 0;"
+		     "bne 2b;"
+		     "b 1b;"
+		     "3:" : "=&r" (tmp) : "r" (&percore->lock) : "memory");
+}
+
+static inline void book3e_tlb_unlock(void)
+{
+	struct paca_struct *paca = get_paca();
+	struct tlb_per_core *percore;
+
+	if (!(paca->tlb_per_core_ptr & 1))
+		return;
+
+	percore = (struct tlb_per_core *)(paca->tlb_per_core_ptr & ~1UL);
+
+	isync();
+	percore->lock = 0;
+}
+#else
+static inline void book3e_tlb_lock(void)
+{
+}
+
+static inline void book3e_tlb_unlock(void)
+{
+}
+#endif
+
 static inline int book3e_tlb_exists(unsigned long ea, unsigned long pid)
 {
 	int found = 0;
@@ -71,7 +122,10 @@ void book3e_hugetlb_preload(struct vm_area_struct *vma, unsigned long ea,
 	 */
 	local_irq_save(flags);
 
+	book3e_tlb_lock();
+
 	if (unlikely(book3e_tlb_exists(ea, mm->context.id))) {
+		book3e_tlb_unlock();
 		local_irq_restore(flags);
 		return;
 	}
@@ -109,6 +163,7 @@ void book3e_hugetlb_preload(struct vm_area_struct *vma, unsigned long ea,
 
 	asm volatile ("tlbwe");
 
+	book3e_tlb_unlock();
 	local_irq_restore(flags);
 }
 
