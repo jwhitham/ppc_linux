@@ -64,6 +64,45 @@ static inline void book3e_tlb_unlock(void)
 }
 #endif
 
+#ifdef CONFIG_PPC_FSL_BOOK3E
+#ifdef CONFIG_PPC64
+static inline int tlb1_next(void)
+{
+	struct paca_struct *paca = get_paca();
+	struct tlb_per_core *percore;
+	int this, next;
+
+	percore = (struct tlb_per_core *)(paca->tlb_per_core_ptr & ~1UL);
+
+	this = percore->esel_next;
+
+	next = this + 1;
+	if (next >= percore->esel_max)
+		next = percore->esel_first;
+
+	percore->esel_next = next;
+	return this;
+}
+#else
+static inline int tlb1_next(void)
+{
+	int index, ncams;
+
+	ncams = mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY;
+
+	index = __get_cpu_var(next_tlbcam_idx);
+
+	/* Just round-robin the entries and wrap when we hit the end */
+	if (unlikely(index == ncams - 1))
+		__get_cpu_var(next_tlbcam_idx) = tlbcam_index;
+	else
+		__get_cpu_var(next_tlbcam_idx)++;
+
+	return index;
+}
+#endif /* !PPC64 */
+#endif /* FSL */
+
 static inline int book3e_tlb_exists(unsigned long ea, unsigned long pid)
 {
 	int found = 0;
@@ -98,7 +137,7 @@ void book3e_hugetlb_preload(struct vm_area_struct *vma, unsigned long ea,
 	struct mm_struct *mm;
 
 #ifdef CONFIG_PPC_FSL_BOOK3E
-	int index, ncams;
+	int index;
 #endif
 
 	if (unlikely(is_kernel_addr(ea)))
@@ -131,18 +170,11 @@ void book3e_hugetlb_preload(struct vm_area_struct *vma, unsigned long ea,
 	}
 
 #ifdef CONFIG_PPC_FSL_BOOK3E
-	ncams = mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY;
-
 	/* We have to use the CAM(TLB1) on FSL parts for hugepages */
-	index = __get_cpu_var(next_tlbcam_idx);
+	index = tlb1_next();
 	mtspr(SPRN_MAS0, MAS0_ESEL(index) | MAS0_TLBSEL(1));
-
-	/* Just round-robin the entries and wrap when we hit the end */
-	if (unlikely(index == ncams - 1))
-		__get_cpu_var(next_tlbcam_idx) = tlbcam_index;
-	else
-		__get_cpu_var(next_tlbcam_idx)++;
 #endif
+
 	mas1 = MAS1_VALID | MAS1_TID(mm->context.id) | MAS1_TSIZE(tsize);
 	mas2 = ea & ~((1UL << shift) - 1);
 	mas2 |= (pte_val(pte) >> PTE_WIMGE_SHIFT) & MAS2_WIMGE_MASK;
