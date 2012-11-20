@@ -20,7 +20,8 @@
 #include <asm/cacheflush.h>
 #include <asm/fsl_guts.h>
 
-static struct ccsr_rcpm __iomem *rcpm_regs;
+struct ccsr_rcpm __iomem *rcpm1_regs;
+struct ccsr_rcpm_v2 __iomem *rcpm2_regs;
 
 static int rcpm_suspend_enter(suspend_state_t state)
 {
@@ -32,12 +33,12 @@ static int rcpm_suspend_enter(suspend_state_t state)
 		flush_dcache_L1();
 		flush_backside_L2_cache();
 
-		setbits32(&rcpm_regs->powmgtcsr, RCPM_POWMGTCSR_SLP);
+		setbits32(&rcpm1_regs->powmgtcsr, RCPM_POWMGTCSR_SLP);
 		/* At this point, the device is in sleep mode. */
 
 		/* Upon resume, wait for SLP bit to be clear. */
 		ret = spin_event_timeout(
-		  (in_be32(&rcpm_regs->powmgtcsr) & RCPM_POWMGTCSR_SLP) == 0,
+		  (in_be32(&rcpm1_regs->powmgtcsr) & RCPM_POWMGTCSR_SLP) == 0,
 		  10000, 10);
 		if (!ret) {
 			pr_err("%s: timeout waiting for SLP bit "
@@ -53,6 +54,41 @@ static int rcpm_suspend_enter(suspend_state_t state)
 	return ret;
 }
 
+static int rcpm_v2_suspend_enter(suspend_state_t state)
+{
+	int ret = 0;
+
+	switch (state) {
+	case PM_SUSPEND_STANDBY:
+
+		/* clear previous LPM20 status */
+		setbits32(&rcpm2_regs->powmgtcsr, RCPM_POWMGTCSR_P_LPM20_ST);
+		/* enter LPM20 status */
+		setbits32(&rcpm2_regs->powmgtcsr, RCPM_POWMGTCSR_LPM20_RQ);
+
+		/* At this point, the device is in LPM20 status. */
+
+		/* resume ... */
+		ret = spin_event_timeout(
+		      (in_be32(&rcpm2_regs->powmgtcsr) & RCPM_POWMGTCSR_LPM20_ST)
+		      == 0, 10000, 10);
+		if (!ret) {
+			pr_err("%s: timeout waiting for LPM20 bit to be cleared\n",
+				__func__);
+			ret = -EINVAL;
+		}
+
+		break;
+
+	default:
+		ret = -EINVAL;
+
+	}
+
+	return ret;
+
+}
+
 static int rcpm_suspend_valid(suspend_state_t state)
 {
 	if (state == PM_SUSPEND_STANDBY)
@@ -61,18 +97,27 @@ static int rcpm_suspend_valid(suspend_state_t state)
 		return 0;
 }
 
-static const struct platform_suspend_ops rcpm_suspend_ops = {
+static struct platform_suspend_ops rcpm_suspend_ops = {
 	.valid = rcpm_suspend_valid,
-	.enter = rcpm_suspend_enter,
 };
 
 static int rcpm_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 
-	rcpm_regs = of_iomap(np, 0);
-	if (!rcpm_regs)
-		return -ENOMEM;
+	if (of_device_is_compatible(np, "fsl,qoriq-rcpm-2.0")) {
+		rcpm2_regs = of_iomap(np, 0);
+		if (!rcpm2_regs)
+			return -ENOMEM;
+
+		rcpm_suspend_ops.enter = rcpm_v2_suspend_enter;
+	} else {
+		rcpm1_regs= of_iomap(np, 0);
+		if (!rcpm1_regs)
+			return -ENOMEM;
+
+		rcpm_suspend_ops.enter = rcpm_suspend_enter;
+	}
 
 	suspend_set_ops(&rcpm_suspend_ops);
 
@@ -82,6 +127,7 @@ static int rcpm_probe(struct platform_device *pdev)
 
 static const struct of_device_id rcpm_ids[] = {
 	{ .compatible = "fsl,qoriq-rcpm-1.0", },
+	{ .compatible = "fsl,qoriq-rcpm-2.0", },
 	{ },
 };
 
