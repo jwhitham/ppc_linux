@@ -65,13 +65,22 @@ _GLOBAL(flush_dcache_L1)
 
 	blr
 
+#define PVR_E6500	0x8040
+
 /* Flush L1 d-cache, invalidate and disable d-cache and i-cache */
 _GLOBAL(__flush_disable_L1)
+/* L1 Data Cache of e6500 contains no modified data, no flush is required */
+	mfspr	r3, SPRN_PVR
+	rlwinm	r4, r3, 16, 0xffff
+	lis	r5, 0
+	ori	r5, r5, PVR_E6500@l
+	cmpw	r4, r5
+	beq	2f
 	mflr	r10
 	bl	flush_dcache_L1	/* Flush L1 d-cache */
 	mtlr	r10
 
-	msync
+2:	msync
 	mfspr	r4, SPRN_L1CSR0	/* Invalidate and disable d-cache */
 	li	r5, 2
 	rlwimi	r4, r5, 0, 3
