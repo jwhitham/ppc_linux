@@ -33,6 +33,13 @@ enum powerpc_pmc_type {
 	PPC_PMC_G4 = 3,
 };
 
+enum powerpc_l2cache_type {
+	PPC_L2_CACHE_DEFAULT = 0,
+	PPC_L2_CACHE_CORE    = 1, /* L2 cache used exclusively by one core */
+	PPC_L2_CACHE_CLUSTER = 2, /* L2 cache shared by a core cluster */
+	PPC_L2_CACHE_SOC     = 3, /* L2 cache shared by all cores */
+};
+
 struct pt_regs;
 
 extern int machine_check_generic(struct pt_regs *regs);
@@ -57,6 +64,9 @@ struct cpu_spec {
 	/* cache line sizes */
 	unsigned int	icache_bsize;
 	unsigned int	dcache_bsize;
+
+	/* L2 cache type */
+	enum powerpc_l2cache_type l2cache_type;
 
 	/* number of performance monitor counters */
 	unsigned int	num_pmcs;

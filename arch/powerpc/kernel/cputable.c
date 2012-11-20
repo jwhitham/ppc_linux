@@ -2004,6 +2004,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_setup		= __setup_cpu_e500v1,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppc8540",
+		.l2cache_type		= PPC_L2_CACHE_SOC,
 	},
 	{	/* e500v2 */
 		.pvr_mask		= 0xffff0000,
@@ -2023,6 +2024,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_setup		= __setup_cpu_e500v2,
 		.machine_check		= machine_check_e500,
 		.platform		= "ppc8548",
+		.l2cache_type		= PPC_L2_CACHE_SOC,
 	},
 	{	/* e500mc */
 		.pvr_mask		= 0xffff0000,
@@ -2040,6 +2042,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_setup		= __setup_cpu_e500mc,
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce500mc",
+		.l2cache_type		= PPC_L2_CACHE_CORE,
 	},
 #endif /* CONFIG_PPC32 */
 	{	/* e5500 */
@@ -2061,6 +2064,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 #endif
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce5500",
+		.l2cache_type		= PPC_L2_CACHE_CORE,
 	},
 #ifndef CONFIG_PPC32
 	{	/* e6500 */
@@ -2081,6 +2085,7 @@ static struct cpu_spec __initdata cpu_specs[] = {
 		.cpu_restore		= __restore_cpu_e6500,
 		.machine_check		= machine_check_e500mc,
 		.platform		= "ppce6500",
+		.l2cache_type		= PPC_L2_CACHE_CLUSTER,
 	},
 #endif
 #ifdef CONFIG_PPC32
