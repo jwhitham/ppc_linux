@@ -60,6 +60,7 @@ extern void smp_generic_take_timebase(void);
 DECLARE_PER_CPU(unsigned int, cpu_pvr);
 
 #ifdef CONFIG_HOTPLUG_CPU
+void platform_cpu_die(unsigned int cpu);
 extern void migrate_irqs(void);
 int generic_cpu_disable(void);
 void generic_cpu_die(unsigned int cpu);

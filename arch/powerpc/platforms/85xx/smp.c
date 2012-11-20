@@ -41,7 +41,7 @@ struct epapr_spin_table {
 	u32	pir;
 };
 
-static struct ccsr_guts __iomem *guts;
+static void __iomem *guts_regs;
 static u64 timebase;
 static int tb_req;
 static int tb_valid;
@@ -61,9 +61,9 @@ static inline u32 get_phy_cpu_mask(void)
 	return mask;
 }
 
-static void mpc85xx_timebase_freeze(int freeze)
+static void __cpuinit mpc85xx_timebase_freeze(int freeze)
 {
-	struct ccsr_rcpm __iomem *rcpm = (typeof(rcpm))guts;
+	struct ccsr_rcpm __iomem *rcpm = guts_regs;
 	u32 mask = get_phy_cpu_mask();
 
 	if (freeze)
@@ -75,8 +75,9 @@ static void mpc85xx_timebase_freeze(int freeze)
 	in_be32(&rcpm->ctbenr);
 }
 #else
-static void mpc85xx_timebase_freeze(int freeze)
+static void __cpuinit mpc85xx_timebase_freeze(int freeze)
 {
+	struct ccsr_guts __iomem *guts = guts_regs;
 	u32 mask;
 
 	mask = CCSR_GUTS_DEVDISR_TB0 | CCSR_GUTS_DEVDISR_TB1;
@@ -85,11 +86,12 @@ static void mpc85xx_timebase_freeze(int freeze)
 	else
 		clrbits32(&guts->devdisr, mask);
 
+	/* read back to push the previous write */
 	in_be32(&guts->devdisr);
 }
 #endif
 
-static void mpc85xx_give_timebase(void)
+static void __cpuinit mpc85xx_give_timebase(void)
 {
 	unsigned long flags;
 
@@ -112,7 +114,7 @@ static void mpc85xx_give_timebase(void)
 	local_irq_restore(flags);
 }
 
-static void mpc85xx_take_timebase(void)
+static void __cpuinit mpc85xx_take_timebase(void)
 {
 	unsigned long flags;
 
@@ -130,6 +132,36 @@ static void mpc85xx_take_timebase(void)
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
+#ifdef CONFIG_PPC_E500MC
+static void __cpuinit smp_85xx_mach_cpu_die(void)
+{
+	unsigned int cpu = smp_processor_id();
+
+	local_irq_disable();
+	idle_task_exit();
+	mb();
+
+	mtspr(SPRN_TCR, 0);
+
+	__flush_disable_L1();
+	disable_backside_L2_cache();
+
+	generic_set_cpu_dead(cpu);
+
+	while (1)
+		;
+}
+
+void platform_cpu_die(unsigned int cpu)
+{
+	unsigned int hw_cpu = get_hard_smp_processor_id(cpu);
+	struct ccsr_rcpm __iomem *rcpm = guts_regs;
+
+	/* Core Nap Operation */
+	setbits32(&rcpm->cnapcr, 1 << hw_cpu);
+}
+#else
+/* for e500v1 and e500v2 */
 static void __cpuinit smp_85xx_mach_cpu_die(void)
 {
 	unsigned int cpu = smp_processor_id();
@@ -157,6 +189,7 @@ static void __cpuinit smp_85xx_mach_cpu_die(void)
 	while (1)
 		;
 }
+#endif /* CONFIG_PPC_E500MC */
 #endif
 
 static inline void flush_spin_table(void *spin_table)
@@ -181,6 +214,9 @@ static int __cpuinit smp_85xx_kick_cpu(int nr)
 	int hw_cpu = get_hard_smp_processor_id(nr);
 	int ioremappable;
 	int ret = 0;
+#ifdef CONFIG_PPC_E500MC
+	struct ccsr_rcpm __iomem *rcpm = guts_regs;
+#endif
 
 	WARN_ON(nr < 0 || nr >= NR_CPUS);
 	WARN_ON(hw_cpu < 0 || hw_cpu >= NR_CPUS);
@@ -240,6 +276,14 @@ static int __cpuinit smp_85xx_kick_cpu(int nr)
 		flush_spin_table(spin_table);
 		out_be32(&spin_table->addr_l, 0);
 		flush_spin_table(spin_table);
+
+#ifdef CONFIG_PPC_E500MC
+		/*
+		 * Due to an erratum of core warm reset, clear NAP bits
+		 * in the CNAPCR register by hand prior to reset.
+		 */
+		clrbits32(&rcpm->cnapcr, 1 << hw_cpu);
+#endif
 
 		/*
 		 * We don't set the BPTR register here since it already points
@@ -305,7 +349,7 @@ struct smp_ops_t smp_85xx_ops = {
 	.cpu_disable	= generic_cpu_disable,
 	.cpu_die	= generic_cpu_die,
 #endif
-#if defined(CONFIG_KEXEC) || defined(CONFIG_HOTPLUG_CPU)
+#ifdef CONFIG_KEXEC
 	.give_timebase	= smp_generic_give_timebase,
 	.take_timebase	= smp_generic_take_timebase,
 #endif
@@ -451,9 +495,9 @@ void __init mpc85xx_smp_init(void)
 
 	np = of_find_matching_node(NULL, mpc85xx_smp_guts_ids);
 	if (np) {
-		guts = of_iomap(np, 0);
+		guts_regs = of_iomap(np, 0);
 		of_node_put(np);
-		if (!guts) {
+		if (!guts_regs) {
 			pr_err("%s: Could not map guts node address\n",
 								__func__);
 			return;

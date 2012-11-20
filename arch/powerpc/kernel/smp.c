@@ -404,14 +404,28 @@ int generic_cpu_disable(void)
 	return 0;
 }
 
+/**
+ * platform_cpu_die() - do platform related operations on the boot cpu, after
+ * the cpu_state of the dying cpu is assigned to CPU_DEAD. Platform
+ * implementations can override this.
+ *
+ * @cpu:	the cpu to die
+ */
+void __attribute__ ((weak)) platform_cpu_die(unsigned int cpu)
+{
+	return;
+}
+
 void generic_cpu_die(unsigned int cpu)
 {
 	int i;
 
 	for (i = 0; i < 100; i++) {
 		smp_rmb();
-		if (per_cpu(cpu_state, cpu) == CPU_DEAD)
+		if (per_cpu(cpu_state, cpu) == CPU_DEAD) {
+			platform_cpu_die(cpu);
 			return;
+		}
 		msleep(100);
 	}
 	printk(KERN_ERR "CPU%d didn't die...\n", cpu);
