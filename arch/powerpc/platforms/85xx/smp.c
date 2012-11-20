@@ -260,10 +260,6 @@ static int __cpuinit smp_85xx_kick_cpu(int nr)
 		spin_table = phys_to_virt(*cpu_rel_addr);
 
 	local_irq_save(flags);
-#ifdef CONFIG_PPC32
-#ifdef CONFIG_HOTPLUG_CPU
-	/* Corresponding to generic_set_cpu_dead() */
-	generic_set_cpu_up(nr);
 
 	if (system_state == SYSTEM_RUNNING) {
 		/*
@@ -308,12 +304,19 @@ static int __cpuinit smp_85xx_kick_cpu(int nr)
 		/*  clear the acknowledge status */
 		__secondary_hold_acknowledge = -1;
 	}
-#endif
 	flush_spin_table(spin_table);
 	out_be32(&spin_table->pir, hw_cpu);
+#ifdef CONFIG_PPC32
 	out_be32(&spin_table->addr_l, __pa(__early_start));
+#else
+	out_be32(&spin_table->addr_h,
+		__pa(*(u64 *)generic_secondary_smp_init) >> 32);
+	out_be32(&spin_table->addr_l,
+		__pa(*(u64 *)generic_secondary_smp_init) & 0xffffffff);
+#endif
 	flush_spin_table(spin_table);
 
+#ifdef CONFIG_PPC32
 	/* Wait a bit for the CPU to ack. */
 	if (!spin_event_timeout(__secondary_hold_acknowledge == hw_cpu,
 					10000, 100)) {
@@ -322,18 +325,14 @@ static int __cpuinit smp_85xx_kick_cpu(int nr)
 		ret = -ENOENT;
 		goto out;
 	}
-out:
 #else
 	smp_generic_kick_cpu(nr);
-
-	flush_spin_table(spin_table);
-	out_be32(&spin_table->pir, hw_cpu);
-	out_be64((u64 *)(&spin_table->addr_h),
-	  __pa((u64)*((unsigned long long *)generic_secondary_smp_init)));
-	flush_spin_table(spin_table);
 #endif
+	/* Corresponding to generic_set_cpu_dead() */
+	generic_set_cpu_up(nr);
 	cur_booting_core = hw_cpu;
 
+out:
 	local_irq_restore(flags);
 
 	if (ioremappable)

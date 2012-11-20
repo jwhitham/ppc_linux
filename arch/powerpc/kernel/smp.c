@@ -424,6 +424,9 @@ void generic_cpu_die(unsigned int cpu)
 		smp_rmb();
 		if (per_cpu(cpu_state, cpu) == CPU_DEAD) {
 			platform_cpu_die(cpu);
+#ifdef CONFIG_PPC64
+			paca[cpu].cpu_start = 0;
+#endif
 			return;
 		}
 		msleep(100);

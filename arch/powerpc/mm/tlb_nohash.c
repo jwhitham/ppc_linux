@@ -676,8 +676,10 @@ static void __early_init_mmu(int boot_cpu)
 		num_cams = (mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY) / 4;
 		linear_map_top = map_mem_in_cams(linear_map_top, num_cams);
 
-		/* limit memory so we dont have linear faults */
-		memblock_enforce_memory_limit(linear_map_top);
+		if (boot_cpu) {
+			/* limit memory so we dont have linear faults */
+			memblock_enforce_memory_limit(linear_map_top);
+		}
 
 		if (book3e_htw_mode == PPC_HTW_NONE) {
 			patch_exception(0x1c0, exc_data_tlb_miss_bolted_book3e);
