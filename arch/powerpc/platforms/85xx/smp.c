@@ -95,6 +95,10 @@ static void __cpuinit mpc85xx_give_timebase(void)
 {
 	unsigned long flags;
 
+	/* only do time base sync when system is running */
+	if (system_state == SYSTEM_BOOTING)
+		return;
+
 	local_irq_save(flags);
 
 	while (!tb_req)
@@ -117,6 +121,9 @@ static void __cpuinit mpc85xx_give_timebase(void)
 static void __cpuinit mpc85xx_take_timebase(void)
 {
 	unsigned long flags;
+
+	if (system_state == SYSTEM_BOOTING)
+		return;
 
 	local_irq_save(flags);
 
