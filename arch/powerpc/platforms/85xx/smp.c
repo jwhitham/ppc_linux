@@ -46,6 +46,7 @@ static u64 timebase;
 static int tb_req;
 static int tb_valid;
 static u32 cur_booting_core;
+static bool rcpmv2;
 
 #ifdef CONFIG_PPC_E500MC
 /* get a physical mask of online cores and booting core */
@@ -54,26 +55,40 @@ static inline u32 get_phy_cpu_mask(void)
 	u32 mask;
 	int cpu;
 
-	mask = 1 << cur_booting_core;
-	for_each_online_cpu(cpu)
-		mask |= 1 << get_hard_smp_processor_id(cpu);
+	if (smt_capable()) {
+		/* two threads in one core share one time base */
+		mask = 1 << cpu_core_index_of_thread(cur_booting_core);
+		for_each_online_cpu(cpu)
+			mask |= 1 << cpu_core_index_of_thread(
+					get_hard_smp_processor_id(cpu));
+	} else {
+		mask = 1 << cur_booting_core;
+		for_each_online_cpu(cpu)
+			mask |= 1 << get_hard_smp_processor_id(cpu);
+	}
 
 	return mask;
 }
 
 static void __cpuinit mpc85xx_timebase_freeze(int freeze)
 {
-	struct ccsr_rcpm __iomem *rcpm = guts_regs;
+	u32 *addr;
 	u32 mask = get_phy_cpu_mask();
 
-	if (freeze)
-		clrbits32(&rcpm->ctbenr, mask);
+	if (rcpmv2)
+		addr = &((struct ccsr_rcpm_v2 *)guts_regs)->pctbenr;
 	else
-		setbits32(&rcpm->ctbenr, mask);
+		addr = &((struct ccsr_rcpm *)guts_regs)->ctbenr;
 
-	/* read back to push the previos write */
-	in_be32(&rcpm->ctbenr);
+	if (freeze)
+		clrbits32(addr, mask);
+	else
+		setbits32(addr, mask);
+
+	/* read back to push the previous write */
+	in_be32(addr);
 }
+
 #else
 static void __cpuinit mpc85xx_timebase_freeze(int freeze)
 {
@@ -97,6 +112,13 @@ static void __cpuinit mpc85xx_give_timebase(void)
 
 	/* only do time base sync when system is running */
 	if (system_state == SYSTEM_BOOTING)
+		return;
+	/*
+	 * If the booting thread is not the first thread of the core,
+	 * skip time base sync.
+	 */
+	if (smt_capable() &&
+		cur_booting_core != cpu_first_thread_sibling(cur_booting_core))
 		return;
 
 	local_irq_save(flags);
@@ -123,6 +145,10 @@ static void __cpuinit mpc85xx_take_timebase(void)
 	unsigned long flags;
 
 	if (system_state == SYSTEM_BOOTING)
+		return;
+
+	if (smt_capable() &&
+		cur_booting_core != cpu_first_thread_sibling(cur_booting_core))
 		return;
 
 	local_irq_save(flags);
@@ -475,6 +501,7 @@ static const struct of_device_id mpc85xx_smp_guts_ids[] = {
 	{ .compatible = "fsl,p1023-guts", },
 	{ .compatible = "fsl,p2020-guts", },
 	{ .compatible = "fsl,qoriq-rcpm-1.0", },
+	{ .compatible = "fsl,qoriq-rcpm-2", },
 	{},
 };
 
@@ -501,6 +528,9 @@ void __init mpc85xx_smp_init(void)
 
 	np = of_find_matching_node(NULL, mpc85xx_smp_guts_ids);
 	if (np) {
+		if (of_device_is_compatible(np, "fsl,qoriq-rcpm-2"))
+			rcpmv2 = true;
+
 		guts_regs = of_iomap(np, 0);
 		of_node_put(np);
 		if (!guts_regs) {
