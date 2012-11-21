@@ -319,6 +319,36 @@ ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_USE_TLBILX)
 1:	wrtee	r10
 	blr
 #elif defined(CONFIG_PPC_BOOK3E)
+
+.macro tlb_lock
+	ld	r7,PACA_TLB_PER_CORE_PTR(r13)
+	mtocrf	0x01,r7
+	addi	r8,r7,PACA_TLB_LOCK-1 /* -1 to compensate for low bit set */
+	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
+2:	lbarx	r9,0,r8
+	cmpdi	r9,0
+	bne	3f
+	li	r9,1
+	stbcx.	r9,0,r8
+	bne	2b
+	.subsection 1
+3:	lbz	r9,0(r8)
+	cmpdi	r9,0
+	bne	3b
+	b	2b
+	.previous
+1:
+.endm
+
+.macro tlb_unlock
+	mtocrf	0x01,r7
+	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
+	li	r9,0
+	isync
+	stb	r9,0(r8)
+1:
+.endm
+
 /*
  * New Book3E (>= 2.06) implementation
  *
@@ -329,8 +359,10 @@ _GLOBAL(_tlbil_pid)
 	slwi	r4,r3,MAS6_SPID_SHIFT
 	mfmsr	r10
 	wrteei	0
+	tlb_lock
 	mtspr	SPRN_MAS6,r4
 	PPC_TLBILX_PID(0,R0)
+	tlb_unlock
 	wrtee	r10
 	msync
 	isync
@@ -341,22 +373,30 @@ _GLOBAL(_tlbil_pid_noind)
 	mfmsr	r10
 	ori	r4,r4,MAS6_SIND
 	wrteei	0
+	tlb_lock
 	mtspr	SPRN_MAS6,r4
 	PPC_TLBILX_PID(0,R0)
+	tlb_unlock
 	wrtee	r10
 	msync
 	isync
 	blr
 
 _GLOBAL(_tlbil_all)
+	mfmsr	r10
+	wrteei	0
+	tlb_lock
 	PPC_TLBILX_ALL(0,R0)
 	msync
 	isync
+	tlb_unlock
+	wrtee	r10
 	blr
 
 _GLOBAL(_tlbil_va)
 	mfmsr	r10
 	wrteei	0
+	tlb_lock
 	cmpwi	cr0,r6,0
 	slwi	r4,r4,MAS6_SPID_SHIFT
 	rlwimi	r4,r5,MAS6_ISIZE_SHIFT,MAS6_ISIZE_MASK
@@ -366,6 +406,7 @@ _GLOBAL(_tlbil_va)
 	PPC_TLBILX_VA(0,R3)
 	msync
 	isync
+	tlb_unlock
 	wrtee	r10
 	blr
 
@@ -408,6 +449,10 @@ _GLOBAL(set_context)
  * Load TLBCAM[index] entry in to the L2 CAM MMU
  */
 _GLOBAL(loadcam_entry)
+	mfmsr	r10
+	wrteei	0
+	tlb_lock
+
 	LOAD_REG_ADDR(r4, TLBCAM)
 	mulli	r5,r3,TLBCAM_SIZE
 	add	r3,r5,r4
@@ -426,5 +471,8 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_BIG_PHYS)
 	isync
 	tlbwe
 	isync
+
+	tlb_unlock
+	wrtee	r10
 	blr
 #endif
