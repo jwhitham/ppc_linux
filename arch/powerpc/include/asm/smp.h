@@ -75,7 +75,7 @@ extern void uninhibit_secondary_onlining(void);
 #else /* HOTPLUG_CPU */
 static inline void inhibit_secondary_onlining(void) {}
 static inline void uninhibit_secondary_onlining(void) {}
-
+#define generic_set_cpu_up(cpu) do { } while (0)
 #endif
 
 #ifdef CONFIG_PPC64
