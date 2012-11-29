@@ -2139,6 +2139,47 @@ int qman_enqueue_orp(struct qman_fq *fq, const struct qm_fd *fd, u32 flags,
 }
 EXPORT_SYMBOL(qman_enqueue_orp);
 
+int qman_enqueue_precommit(struct qman_fq *fq, const struct qm_fd *fd,
+		u32 flags, qman_cb_precommit cb, void *cb_arg)
+{
+	struct qman_portal *p;
+	struct qm_eqcr_entry *eq;
+	unsigned long irqflags __maybe_unused;
+
+#ifdef CONFIG_FSL_DPA_CAN_WAIT
+	if (flags & QMAN_ENQUEUE_FLAG_WAIT)
+		eq = wait_eq_start(&p, &irqflags, fq, fd, flags);
+	else
+#endif
+	eq = try_eq_start(&p, &irqflags, fq, fd, flags);
+	if (!eq)
+		return -EBUSY;
+	/* invoke user supplied callback function before writing commit verb */
+	if (cb(cb_arg)) {
+		PORTAL_IRQ_UNLOCK(p, irqflags);
+		put_affine_portal();
+		return -EINVAL;
+	}
+	/* Note: QM_EQCR_VERB_INTERRUPT == QMAN_ENQUEUE_FLAG_WAIT_SYNC */
+	qm_eqcr_pvb_commit(&p->p, QM_EQCR_VERB_CMD_ENQUEUE |
+		(flags & (QM_EQCR_VERB_COLOUR_MASK | QM_EQCR_VERB_INTERRUPT)));
+	/* Factor the below out, it's used from qman_enqueue_orp() too */
+	PORTAL_IRQ_UNLOCK(p, irqflags);
+	put_affine_portal();
+#ifdef CONFIG_FSL_DPA_CAN_WAIT_SYNC
+	if (unlikely((flags & QMAN_ENQUEUE_FLAG_WAIT) &&
+			(flags & QMAN_ENQUEUE_FLAG_WAIT_SYNC))) {
+		if (flags & QMAN_ENQUEUE_FLAG_WAIT_INT)
+			wait_event_interruptible(affine_queue,
+					(p->eqci_owned != fq));
+		else
+			wait_event(affine_queue, (p->eqci_owned != fq));
+	}
+#endif
+	return 0;
+}
+EXPORT_SYMBOL(qman_enqueue_precommit);
+
 int qman_modify_cgr(struct qman_cgr *cgr, u32 flags,
 			struct qm_mcc_initcgr *opts)
 {
