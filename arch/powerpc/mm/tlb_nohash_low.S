@@ -247,6 +247,12 @@ END_FTR_SECTION_IFSET(CPU_FTR_476_DD2)
  * to have the larger code path before the _SECTION_ELSE
  */
 
+.macro tlb_lock
+.endm
+
+.macro tlb_unlock
+.endm
+
 /*
  * Flush MMU TLB on the local processor
  */
