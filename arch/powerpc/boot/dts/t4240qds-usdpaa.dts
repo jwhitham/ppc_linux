@@ -79,6 +79,12 @@
 	};
 
 	fsl,dpaa {
+		ethernet@4 {
+			compatible = "fsl,t4240-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,qman-frame-queues-rx = <0x58 1 0x59 1>;
+			fsl,qman-frame-queues-tx = <0x78 1 0x79 1>;
+		};
 		ethernet@6 {
 			compatible = "fsl,t4240-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
@@ -90,6 +96,12 @@
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
 			fsl,qman-frame-queues-rx = <0x5e 1 0x5f 1>;
 			fsl,qman-frame-queues-tx = <0x7e 1 0x7f 1>;
+		};
+		ethernet@12 {
+			compatible = "fsl,t4240-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,qman-frame-queues-rx = <0x68 1 0x69 1>;
+			fsl,qman-frame-queues-tx = <0x88 1 0x89 1>;
 		};
 		ethernet@14 {
 			compatible = "fsl,t4240-dpa-ethernet-init", "fsl,dpa-ethernet-init";
