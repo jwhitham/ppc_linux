@@ -217,9 +217,15 @@ config FSL_ERRATUM_A_006184_PERIOD
 	  since when idle we will always have just executed from the main
 	  kernel mapping, so it should not be absent from the L1 I-MMU.
 
+config PPC_DISABLE_THREADS
+	bool "Avoid the use of hardware threads"
+	help
+	  Define this if running e6500 rev1 to avoid bugs
+	  relating to hardware threads.
+
 config FSL_ERRATUM_A_006198
 	bool "Work around e6500 rev1 erratum A-006198"
-	depends on PPC_E500MC
+	depends on PPC_E500MC && !PPC_DISABLE_THREADS
 	help
 	  Define this if running e6500 rev1, to avoid a source
 	  of hangs due to CPU erratum A-006198.

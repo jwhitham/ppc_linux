@@ -1379,6 +1379,7 @@ BEGIN_FTR_SECTION
 	andi.	r3,r3,2
 	bne	1b
 
+#ifndef CONFIG_PPC_DISABLE_THREADS
 	/* Configure the MSR per the default */
 	LOAD_REG_IMMEDIATE(r3, MSR_KERNEL);
 	MTTMR(TMRN_IMSR1, 3);
@@ -1393,6 +1394,7 @@ BEGIN_FTR_SECTION
 	/* Release the other thread. It will spin until kick_cpu is called */
 	li	r3, 2
 	mtspr	SPRN_TENS, r3
+#endif
 END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 2:	blr
 
