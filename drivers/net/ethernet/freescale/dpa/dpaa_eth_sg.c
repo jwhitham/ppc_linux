@@ -510,7 +510,9 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	skb->protocol = eth_type_trans(skb, net_dev);
 
-	if (unlikely(dpa_check_rx_mtu(skb, net_dev->mtu))) {
+	/* IP Reassembled frames are allowed to be larger than MTU */
+	if (unlikely(dpa_check_rx_mtu(skb, net_dev->mtu) &&
+		!(fd_status & FM_FD_IPR))) {
 		percpu_priv->stats.rx_dropped++;
 		goto drop_bad_frame;
 	}
