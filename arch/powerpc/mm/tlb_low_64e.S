@@ -160,6 +160,13 @@ END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 
 	ldx	r14,r14,r15		/* grab pgd entry */
 BEGIN_FTR_SECTION
+	cmpdi	cr0,r16,0		/* Check for vmalloc region */
+	bge	1f
+	mfspr	r10,SPRN_MAS6
+	rlwinm	r15,r15,0,16,1		/* Clear SPID */
+	mtspr	SPRN_MAS6,r10
+1:
+
 	mfspr	r10,SPRN_MAS2
 	tlbsx	0,r16
 	mfspr	r15,SPRN_MAS1
@@ -169,6 +176,12 @@ BEGIN_FTR_SECTION
 	/* Undo MAS-damage from the tlbsx */
 	mfspr	r15,SPRN_MAS1
 	oris	r15,r15,MAS1_VALID@h
+
+	cmpdi	cr0,r16,0		/* Check for vmalloc region */
+	bge	1f
+	rlwinm	r15,r15,0,16,1		/* Clear TID */
+1:
+
 	mtspr	SPRN_MAS1,r15
 	mtspr	SPRN_MAS2,r10
 END_FTR_SECTION_IFSET(CPU_FTR_SMT)
