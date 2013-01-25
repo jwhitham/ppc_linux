@@ -614,10 +614,24 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 		initfq.fqd.dest.wq = dpa_fq->wq;
 
 		/* Put all egress queues in a congestion group of their own */
-		initfq.we_mask |= QM_INITFQ_WE_CGID;
 		if (dpa_fq->fq_type == FQ_TYPE_TX) {
+			initfq.we_mask |= QM_INITFQ_WE_CGID;
 			initfq.fqd.fq_ctrl |= QM_FQCTRL_CGE;
 			initfq.fqd.cgid = priv->cgr_data.cgr.cgrid;
+			/*
+			 * Set a fixed overhead accounting, in an attempt to
+			 * reduce the impact of fixed-size skb shells and the
+			 * driver's needed headroom on system memory. This is
+			 * especially the case when the egress traffic is
+			 * composed of small datagrams.
+			 * Unfortunately, QMan's OAL value is capped to an
+			 * insufficient value, but even that is better than
+			 * no overhead accounting at all.
+			 */
+			initfq.we_mask |= QM_INITFQ_WE_OAC;
+			initfq.fqd.oac_init.oac = QM_OAC_CG;
+			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
+				DPA_BP_HEAD, (size_t)FSL_QMAN_MAX_OAL);
 
 			/* Configure per-cpu Tx confirmation queue */
 			confq = _dpa_get_tx_conf_queue(priv, &dpa_fq->fq_base);

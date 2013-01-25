@@ -174,6 +174,13 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 #endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
 
 /*
+ * Largest value that the FQD's OAL field can hold.
+ * This is DPAA-1.x specific.
+ * TODO: This rather belongs in fsl_qman.h
+ */
+#define FSL_QMAN_MAX_OAL	127
+
+/*
  * Values for the L3R field of the FM Parse Results
  */
 /* L3 Type field: First IP Present IPv4 */
