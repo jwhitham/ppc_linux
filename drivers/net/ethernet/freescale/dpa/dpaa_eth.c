@@ -613,8 +613,15 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 		initfq.fqd.dest.channel	= dpa_fq->channel;
 		initfq.fqd.dest.wq = dpa_fq->wq;
 
-		/* Put all egress queues in a congestion group of their own */
-		if (dpa_fq->fq_type == FQ_TYPE_TX) {
+		/*
+		 * Put all egress queues in a congestion group of their own.
+		 * Sensu stricto, the Tx confirmation queues are Rx FQs,
+		 * rather than Tx - but they nonetheless account for the
+		 * memory footprint on behalf of egress traffic. We therefore
+		 * place them in the netdev's CGR, along with the Tx FQs.
+		 */
+		if (dpa_fq->fq_type == FQ_TYPE_TX ||
+				dpa_fq->fq_type == FQ_TYPE_TX_CONFIRM) {
 			initfq.we_mask |= QM_INITFQ_WE_CGID;
 			initfq.fqd.fq_ctrl |= QM_FQCTRL_CGE;
 			initfq.fqd.cgid = priv->cgr_data.cgr.cgrid;
@@ -632,8 +639,13 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 			initfq.fqd.oac_init.oac = QM_OAC_CG;
 			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
 				DPA_BP_HEAD, (size_t)FSL_QMAN_MAX_OAL);
+		}
 
-			/* Configure per-cpu Tx confirmation queue */
+		/*
+		 * Configure the Tx confirmation queue, now that we know
+		 * which Tx queue it pairs with.
+		 */
+		if (dpa_fq->fq_type == FQ_TYPE_TX) {
 			confq = _dpa_get_tx_conf_queue(priv, &dpa_fq->fq_base);
 			if (confq) {
 				initfq.we_mask |= QM_INITFQ_WE_CONTEXTA |
