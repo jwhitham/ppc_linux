@@ -802,9 +802,10 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	} else {
 		/*
 		 * Make sure we have enough headroom to accomodate private
-		 * data, parse results, etc
+		 * data, parse results, etc. Normally this shouldn't happen if
+		 * we're here via the standard kernel stack.
 		 */
-		if (skb_headroom(skb) < DPA_BP_HEAD) {
+		if (unlikely(skb_headroom(skb) < DPA_BP_HEAD)) {
 			struct sk_buff *skb_new;
 
 			skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);

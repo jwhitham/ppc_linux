@@ -146,6 +146,7 @@ struct dpaa_eth_hooks_s {
 
 void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
+/* The netdevice's needed_headroom */
 #define DPA_BP_HEAD (DPA_TX_PRIV_DATA_SIZE + DPA_PARSE_RESULTS_SIZE + \
 			DPA_HASH_RESULTS_SIZE)
 #define DPA_BP_SIZE(s)	(DPA_BP_HEAD + dpa_get_rx_extra_headroom() + (s))

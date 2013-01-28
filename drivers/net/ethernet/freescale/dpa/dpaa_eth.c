@@ -1843,7 +1843,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	/* Use the Tx queue of the current cpu */
 	queue_mapping = smp_processor_id();
 
-	if (skb_headroom(skb) < DPA_BP_HEAD) {
+	if (unlikely(skb_headroom(skb) < DPA_BP_HEAD)) {
 		struct sk_buff *skb_new;
 
 		skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);
