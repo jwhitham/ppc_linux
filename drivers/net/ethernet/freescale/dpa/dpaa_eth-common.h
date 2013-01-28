@@ -177,6 +177,7 @@ enum dpa_fq_type {
 	param.priv_data_size = priv_size; \
 	param.parse_results = true; \
 	param.hash_results = true; \
+	param.frag_enable = false; \
 	param.time_stamp = has_timer; \
 	fm_set_##type##_port_params(port, &param); \
 }
