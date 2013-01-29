@@ -354,6 +354,7 @@ struct dpa_priv_s {
 	uint16_t		 channel;	/* "fsl,qman-channel-id" */
 	struct list_head	 dpa_fq_list;
 	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
+	struct qman_fq		*conf_fqs[DPAA_ETH_TX_QUEUES];
 
 	struct mac_device	*mac_dev;
 

@@ -787,7 +787,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 	clear_fd(&fd);
 
-	queue_mapping = skb_get_queue_mapping(skb);
+	queue_mapping = smp_processor_id();
 
 
 #ifdef CONFIG_FSL_DPA_1588
