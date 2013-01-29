@@ -305,10 +305,10 @@ static int caam_probe(struct platform_device *pdev)
 	}
 
 	/*
-	 * RNG4 based SECs (v5+) need special initialization prior
+	 * RNG4 based SECs need special initialization prior
 	 * to executing any descriptors
 	 */
-	if (of_device_is_compatible(nprop, "fsl,sec-v5.0")) {
+	if (get_rng_vid(topregs) >= 4) {
 		kick_trng(pdev);
 		ret = instantiate_rng(ctrlpriv->jrdev[0]);
 		if (ret) {
