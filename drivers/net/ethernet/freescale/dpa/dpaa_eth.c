@@ -94,7 +94,7 @@
  *	  threshold was too low to be effective);
  *	- running out of memory if the CS threshold is set too high.
  */
-#define DPA_CS_THRESHOLD_1G	0x10000000
+#define DPA_CS_THRESHOLD_1G	0x06000000
 /* Set a congestion threshold for MAC-less devices, too. */
 #define DPA_CS_THRESHOLD_MACLESS	0x10000000
 
