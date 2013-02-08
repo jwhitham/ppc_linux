@@ -2674,6 +2674,11 @@ int dev_queue_xmit(struct sk_buff *skb)
 	skb_update_prio(skb);
 
 	txq = netdev_pick_tx(dev, skb);
+	if ((dev->features & NETIF_F_HW_QDISC) &&
+	    likely(!netif_tx_queue_stopped(txq))) {
+		rc = dev_hard_start_xmit(skb, dev, txq);
+		goto out;
+	}
 	q = rcu_dereference_bh(txq->qdisc);
 
 #ifdef CONFIG_NET_CLS_ACT
