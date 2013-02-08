@@ -8,14 +8,12 @@ include $(srctree)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 
 EXTRA_CFLAGS += -I$(NET_DPA)
 
-#Netcomm SW tree
-obj-$(CONFIG_FSL_FMAN) += ../fman/
 obj-$(CONFIG_FSL_DPA_1588) += dpaa_1588.o
 obj-$(CONFIG_DPAA_ETH_SG_SUPPORT) += fsl-dpa-sg.o
 obj-$(CONFIG_DPA_ETH) += fsl-mac.o fsl-dpa.o
 obj-$(CONFIG_DPA_OFFLINE_PORTS) += fsl-oh.o
 
-fsl-dpa-objs	:= dpa-ethtool.o dpaa_eth.o dpaa_eth_sysfs.o xgmac_mdio.o
+fsl-dpa-objs	:= dpa-ethtool.o dpaa_eth.o dpaa_eth_sysfs.o
 fsl-dpa-sg-objs	:= dpaa_eth_sg.o
 fsl-mac-objs	:= mac.o mac-api.o
 fsl-oh-objs	:= offline_port.o

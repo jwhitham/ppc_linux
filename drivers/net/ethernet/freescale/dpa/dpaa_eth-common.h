@@ -42,6 +42,26 @@
 
 #define __hot
 
+/*
+ * TODO Remove these altogether. They have been removed form kernel 3.8
+ * and are still here for compatibility while we're rebasing the code.
+ */
+#ifndef __devinit
+#define __devinit
+#endif
+#ifndef __devexit_p
+#define __devexit_p
+#endif
+#ifndef __devinitdata
+#define __devinitdata
+#endif
+#ifndef __devinitconst
+#define __devinitconst
+#endif
+#ifndef __devexit
+#define __devexit
+#endif
+
 #define cpu_printk(level, format, arg...) \
 	pr_##level("cpu%d: " format, smp_processor_id(), ##arg)
 

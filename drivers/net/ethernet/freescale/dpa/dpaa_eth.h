@@ -345,9 +345,6 @@ struct dpa_percpu_priv_s {
 	struct dpa_ern_cnt ern_cnt;
 };
 
-/* increment when adding new sysfs entries */
-#define DPA_MAX_NUM_OF_SYSFS_ATTRS 5
-
 struct dpa_priv_s {
 	struct dpa_bp *dpa_bp;
 	size_t bp_count;
@@ -390,8 +387,6 @@ struct dpa_priv_s {
 		 */
 		u32 cgr_congested_count;
 	} cgr_data;
-	/* sysfs entries, last value must be NULL */
-	struct device_attribute *sysfs_attrs[DPA_MAX_NUM_OF_SYSFS_ATTRS + 1];
 };
 
 extern const struct ethtool_ops dpa_ethtool_ops;
@@ -481,6 +476,9 @@ static inline int dpa_check_rx_mtu(struct sk_buff *skb, int mtu)
 }
 
 void fm_mac_dump_regs(struct mac_device *mac_dev);
+
+void dpaa_eth_sysfs_remove(struct device *dev);
+void dpaa_eth_sysfs_init(struct device *dev);
 
 /* Equivalent to a memset(0), but works faster */
 static inline void clear_fd(struct qm_fd *fd)

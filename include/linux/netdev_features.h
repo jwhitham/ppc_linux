@@ -57,6 +57,10 @@ enum {
 	NETIF_F_RXFCS_BIT,		/* Append FCS to skb pkt data */
 	NETIF_F_RXALL_BIT,		/* Receive errored frames too */
 
+	/* Freescale DPA support */
+	NETIF_F_HW_QDISC_BIT,		/* Supports hardware Qdisc */
+	NETIF_F_HW_ACCEL_MQ_BIT,	/* Hardware-accelerated multiqueue */
+
 	/*
 	 * Add your fresh new feature above and remember to update
 	 * netdev_features_strings[] in net/core/ethtool.c and maybe
@@ -102,6 +106,9 @@ enum {
 #define NETIF_F_VLAN_CHALLENGED	__NETIF_F(VLAN_CHALLENGED)
 #define NETIF_F_RXFCS		__NETIF_F(RXFCS)
 #define NETIF_F_RXALL		__NETIF_F(RXALL)
+/* Freescale DPA support */
+#define NETIF_F_HW_QDISC	__NETIF_F(HW_QDISC)
+#define NETIF_F_HW_ACCEL_MQ	__NETIF_F(HW_ACCEL_MQ)
 
 /* Features valid for ethtool to change */
 /* = all defined minus driver/device-class-related */

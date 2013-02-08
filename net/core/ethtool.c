@@ -88,6 +88,10 @@ static const char netdev_features_strings[NETDEV_FEATURE_COUNT][ETH_GSTRING_LEN]
 	[NETIF_F_LOOPBACK_BIT] =         "loopback",
 	[NETIF_F_RXFCS_BIT] =            "rx-fcs",
 	[NETIF_F_RXALL_BIT] =            "rx-all",
+
+	/* Freescale DPA support */
+	[NETIF_F_HW_QDISC_BIT] =         "hw-qdisc",
+	[NETIF_F_HW_ACCEL_MQ_BIT] =      "hw-accel-mq",
 };
 
 static int ethtool_get_features(struct net_device *dev, void __user *useraddr)
