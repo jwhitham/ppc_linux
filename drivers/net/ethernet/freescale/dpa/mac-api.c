@@ -61,19 +61,19 @@ struct mac_priv_s {
 };
 
 const char	*mac_driver_description __initconst = MAC_DESCRIPTION;
-const size_t	 mac_sizeof_priv[] __devinitconst = {
+const size_t	 mac_sizeof_priv[] = {
 	[DTSEC] = sizeof(struct mac_priv_s),
 	[XGMAC] = sizeof(struct mac_priv_s),
 	[MEMAC] = sizeof(struct mac_priv_s)
 };
 
-static const e_EnetMode _100[] __devinitconst =
+static const e_EnetMode _100[] =
 {
 	[PHY_INTERFACE_MODE_MII]	= e_ENET_MODE_MII_100,
 	[PHY_INTERFACE_MODE_RMII]	= e_ENET_MODE_RMII_100
 };
 
-static const e_EnetMode _1000[] __devinitconst =
+static const e_EnetMode _1000[] =
 {
 	[PHY_INTERFACE_MODE_GMII]	= e_ENET_MODE_GMII_1000,
 	[PHY_INTERFACE_MODE_SGMII]	= e_ENET_MODE_SGMII_1000,
@@ -85,7 +85,7 @@ static const e_EnetMode _1000[] __devinitconst =
 	[PHY_INTERFACE_MODE_RTBI]	= e_ENET_MODE_RTBI_1000
 };
 
-static e_EnetMode __devinit __cold __attribute__((nonnull))
+static e_EnetMode __cold __attribute__((nonnull))
 macdev2enetinterface(const struct mac_device *mac_dev)
 {
 	switch (mac_dev->max_speed) {
@@ -118,7 +118,7 @@ static void mac_exception(t_Handle _mac_dev, e_FmMacExceptions exception)
 		exception);
 }
 
-static int __devinit __cold init(struct mac_device *mac_dev)
+static int __cold init(struct mac_device *mac_dev)
 {
 	int					_errno;
 	t_Error				err;
@@ -243,7 +243,7 @@ _return:
 	return _errno;
 }
 
-static int __devinit __cold memac_init(struct mac_device *mac_dev)
+static int __cold memac_init(struct mac_device *mac_dev)
 {
 	int			_errno;
 	t_Error			err;
@@ -781,7 +781,7 @@ void fm_mac_dump_regs(struct mac_device *mac_dev)
 	FM_MAC_DumpRegs(mac_priv->mac);
 }
 
-static void __devinit __cold setup_dtsec(struct mac_device *mac_dev)
+static void __cold setup_dtsec(struct mac_device *mac_dev)
 {
 	mac_dev->init_phy	= dtsec_init_phy;
 	mac_dev->init		= init;
@@ -804,7 +804,7 @@ static void __devinit __cold setup_dtsec(struct mac_device *mac_dev)
 	mac_dev->fm_rtc_set_fiper	= fm_rtc_set_fiper;
 }
 
-static void __devinit __cold setup_xgmac(struct mac_device *mac_dev)
+static void __cold setup_xgmac(struct mac_device *mac_dev)
 {
 	mac_dev->init_phy	= xgmac_init_phy;
 	mac_dev->init		= init;
@@ -816,7 +816,7 @@ static void __devinit __cold setup_xgmac(struct mac_device *mac_dev)
 	mac_dev->uninit		= uninit;
 }
 
-static void __devinit __cold setup_memac(struct mac_device *mac_dev)
+static void __cold setup_memac(struct mac_device *mac_dev)
 {
 	mac_dev->init_phy	= memac_init_phy;
 	mac_dev->init		= memac_init;
@@ -836,7 +836,7 @@ static void __devinit __cold setup_memac(struct mac_device *mac_dev)
 	mac_dev->fm_rtc_set_fiper	= fm_rtc_set_fiper;
 }
 
-void (*const mac_setup[])(struct mac_device *mac_dev) __devinitconst = {
+void (*const mac_setup[])(struct mac_device *mac_dev) = {
 	[DTSEC] = setup_dtsec,
 	[XGMAC] = setup_xgmac,
 	[MEMAC] = setup_memac

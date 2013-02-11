@@ -53,7 +53,7 @@ MODULE_AUTHOR("Bogdan Hamciuc <bogdan.hamciuc@freescale.com>");
 MODULE_DESCRIPTION(OH_MOD_DESCRIPTION);
 
 
-static const struct of_device_id oh_port_match_table[] __devinitconst = {
+static const struct of_device_id oh_port_match_table[] = {
 	{
 		.compatible	= "fsl,dpa-oh"
 	},
@@ -74,11 +74,11 @@ static struct platform_driver oh_port_driver = {
 		.owner		= THIS_MODULE,
 	},
 	.probe		= oh_port_probe,
-	.remove		= __devexit_p(oh_port_remove)
+	.remove		= oh_port_remove
 };
 
 /* Allocation code for the OH port's PCD frame queues */
-static int __devinit __cold oh_alloc_pcd_fqids(struct device *dev,
+static int __cold oh_alloc_pcd_fqids(struct device *dev,
 	uint32_t num,
 	uint8_t alignment,
 	uint32_t *base_fqid)
@@ -89,7 +89,7 @@ static int __devinit __cold oh_alloc_pcd_fqids(struct device *dev,
 	return 0;
 }
 
-static int __devinit __cold oh_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
+static int __cold oh_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
 {
 	dev_crit(dev, "callback not implemented!\n");
 	BUG();
@@ -97,7 +97,7 @@ static int __devinit __cold oh_free_pcd_fqids(struct device *dev, uint32_t base_
 	return 0;
 }
 
-static int __devinit
+static int
 oh_port_probe(struct platform_device *_of_dev)
 {
 	struct device		*dpa_oh_dev;
@@ -286,7 +286,7 @@ return_kfree:
 	return _errno;
 }
 
-static int __devexit __cold oh_port_remove(struct platform_device *_of_dev)
+static int __cold oh_port_remove(struct platform_device *_of_dev)
 {
 	int _errno = 0;
 	struct dpa_oh_config_s *oh_config;

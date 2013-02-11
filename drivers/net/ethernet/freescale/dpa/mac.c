@@ -54,7 +54,7 @@
 	| SUPPORTED_Autoneg \
 	| SUPPORTED_MII)
 
-static const char phy_str[][11] __devinitconst =
+static const char phy_str[][11] =
 {
 	[PHY_INTERFACE_MODE_MII]	= "mii",
 	[PHY_INTERFACE_MODE_GMII]	= "gmii",
@@ -69,7 +69,7 @@ static const char phy_str[][11] __devinitconst =
 	[PHY_INTERFACE_MODE_XGMII]	= "xgmii"
 };
 
-static phy_interface_t __devinit __pure __attribute__((nonnull)) str2phy(const char *str)
+static phy_interface_t __pure __attribute__((nonnull)) str2phy(const char *str)
 {
 	int i;
 
@@ -80,7 +80,7 @@ static phy_interface_t __devinit __pure __attribute__((nonnull)) str2phy(const c
 	return PHY_INTERFACE_MODE_MII;
 }
 
-static const uint16_t phy2speed[] __devinitconst =
+static const uint16_t phy2speed[] =
 {
 	[PHY_INTERFACE_MODE_MII]	= SPEED_100,
 	[PHY_INTERFACE_MODE_GMII]	= SPEED_1000,
@@ -95,7 +95,7 @@ static const uint16_t phy2speed[] __devinitconst =
 	[PHY_INTERFACE_MODE_XGMII]	= SPEED_10000
 };
 
-static struct mac_device * __devinit __cold
+static struct mac_device * __cold
 alloc_macdev(struct device *dev, size_t sizeof_priv, void (*setup)(struct mac_device *mac_dev))
 {
 	struct mac_device	*mac_dev;
@@ -112,14 +112,14 @@ alloc_macdev(struct device *dev, size_t sizeof_priv, void (*setup)(struct mac_de
 	return mac_dev;
 }
 
-static int __devexit __cold free_macdev(struct mac_device *mac_dev)
+static int __cold free_macdev(struct mac_device *mac_dev)
 {
 	dev_set_drvdata(mac_dev->dev, NULL);
 
 	return mac_dev->uninit(mac_dev);
 }
 
-static const struct of_device_id mac_match[] __devinitconst = {
+static const struct of_device_id mac_match[] = {
 	[DTSEC] = {
 		.compatible	= "fsl,fman-1g-mac"
 	},
@@ -133,7 +133,7 @@ static const struct of_device_id mac_match[] __devinitconst = {
 };
 MODULE_DEVICE_TABLE(of, mac_match);
 
-static int __devinit __cold mac_probe(struct platform_device *_of_dev)
+static int __cold mac_probe(struct platform_device *_of_dev)
 {
 	int			 _errno, i, lenp;
 	struct device		*dev;
@@ -370,7 +370,7 @@ _return:
 	return _errno;
 }
 
-static int __devexit __cold mac_remove(struct platform_device *of_dev)
+static int __cold mac_remove(struct platform_device *of_dev)
 {
 	int			 i, _errno;
 	struct device		*dev;
@@ -396,7 +396,7 @@ static struct platform_driver mac_driver = {
 		.owner		= THIS_MODULE,
 	},
 	.probe		= mac_probe,
-	.remove		= __devexit_p(mac_remove)
+	.remove		= mac_remove
 };
 
 static int __init __cold mac_load(void)
