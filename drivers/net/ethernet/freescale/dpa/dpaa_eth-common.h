@@ -63,7 +63,7 @@
 #endif
 
 #define cpu_printk(level, format, arg...) \
-	pr_##level("cpu%d: " format, smp_processor_id(), ##arg)
+	pr_##level("cpu%d: " format, raw_smp_processor_id(), ##arg)
 
 #define cpu_pr_emerg(format, arg...)	\
 	cpu_printk(emerg, format, ##arg)
