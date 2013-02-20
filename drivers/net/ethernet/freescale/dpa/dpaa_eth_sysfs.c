@@ -85,6 +85,11 @@ static ssize_t dpaa_eth_show_fqids(struct device *dev,
 		case FQ_TYPE_TX:
 			str = "Tx";
 			break;
+#ifdef CONFIG_DPA_TX_RECYCLE
+		case FQ_TYPE_TX_RECYCLE:
+			str = "Tx(recycling)";
+			break;
+#endif
 		default:
 			str = "Unknown";
 		}

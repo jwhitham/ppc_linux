@@ -361,6 +361,9 @@ struct dpa_priv_s {
 	struct list_head	 dpa_fq_list;
 	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
 	struct qman_fq		*conf_fqs[DPAA_ETH_TX_QUEUES];
+#ifdef CONFIG_DPA_TX_RECYCLE
+	struct qman_fq		*recycle_fqs[DPAA_ETH_TX_QUEUES];
+#endif
 
 	struct mac_device	*mac_dev;
 
@@ -500,9 +503,21 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 			struct qm_fd *fd)
 {
 	int err, i;
+	struct qman_fq *egress_fq;
+
+#ifdef CONFIG_DPA_TX_RECYCLE
+	/* Choose egress fq based on whether we want
+	 * to recycle the frame or not */
+	if (fd->cmd & FM_FD_CMD_FCO)
+		egress_fq = priv->recycle_fqs[queue];
+	else
+		egress_fq = priv->egress_fqs[queue];
+#else
+	egress_fq = priv->egress_fqs[queue];
+#endif
 
 	for (i = 0; i < 100000; i++) {
-		err = qman_enqueue(priv->egress_fqs[queue], fd, 0);
+		err = qman_enqueue(egress_fq, fd, 0);
 		if (err != -EBUSY)
 			break;
 	}
@@ -554,6 +569,9 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 		break;
 	case FQ_TYPE_RX_DEFAULT:
 	case FQ_TYPE_TX:
+#ifdef CONFIG_DPA_TX_RECYCLE
+	case FQ_TYPE_TX_RECYCLE:
+#endif
 	case FQ_TYPE_RX_PCD:
 		fq->wq = 3;
 		break;

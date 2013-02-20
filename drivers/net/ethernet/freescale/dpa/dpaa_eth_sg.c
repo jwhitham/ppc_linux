@@ -767,10 +767,6 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		return NETDEV_TX_OK;
 	}
 
-#if (DPAA_VERSION >= 11)
-	fd.cmd &= ~FM_FD_CMD_FCO;
-#endif
-
 	if (unlikely(dpa_xmit(priv, percpu_priv, queue_mapping, &fd) < 0))
 		goto xmit_failed;
 

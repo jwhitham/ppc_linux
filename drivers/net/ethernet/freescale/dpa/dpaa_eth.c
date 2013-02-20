@@ -657,6 +657,28 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 			}
 		}
 
+#ifdef CONFIG_DPA_TX_RECYCLE
+		/*
+		 * Configure the Tx queues for recycled frames, such that the
+		 * buffers are released by FMan and no confirmation is sent
+		 */
+		if (dpa_fq->fq_type == FQ_TYPE_TX_RECYCLE) {
+			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA |
+					  QM_INITFQ_WE_CONTEXTB;
+			/*
+			 * ContextA: OVFQ=1 (use ContextB FQID for confirmation)
+			 *           OVOM=1 (use contextA2 bits instead of ICAD)
+			 *           A2V=1 (contextA A2 field is valid)
+			 *           B0V=1 (contextB field is valid)
+			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
+			 * ContextB: Confirmation FQID = 0
+			 */
+			initfq.fqd.context_a.hi = 0x96000000;
+			initfq.fqd.context_a.lo = 0x80000000;
+			initfq.fqd.context_b = 0;
+		}
+#endif
+
 		/* Initialization common to all ingress queues */
 		if (dpa_fq->flags & QMAN_FQ_FLAG_NO_ENQUEUE) {
 			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
@@ -1892,10 +1914,6 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		percpu_priv->stats.tx_errors++;
 		goto fd_create_failed;
 	}
-
-#if (DPAA_VERSION >= 11)
-	fd.cmd &= ~FM_FD_CMD_FCO;
-#endif
 
 	if (fd.cmd & FM_FD_CMD_FCO) {
 		/* This skb is recycleable, and the fd generated from it
@@ -3229,10 +3247,17 @@ static const struct fqid_cell tx_confirm_fqids[] __devinitconst = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
 
+#ifdef CONFIG_DPA_TX_RECYCLE
+static const struct fqid_cell tx_recycle_fqids[] = {
+	{0, DPAA_ETH_TX_QUEUES}
+};
+#endif
+
 static int __devinit
 dpa_fq_probe(struct platform_device *_of_dev, struct list_head *list,
 		struct dpa_fq **defq, struct dpa_fq **errq,
-		struct dpa_fq **fqs, struct dpa_fq **txconfq, int ptype)
+		struct dpa_fq **fqs, struct dpa_fq **txconfq,
+		struct dpa_fq **txrecycle, int ptype)
 {
 	struct device *dev = &_of_dev->dev;
 	struct device_node *np = dev->of_node;
@@ -3262,6 +3287,30 @@ dpa_fq_probe(struct platform_device *_of_dev, struct list_head *list,
 			list_add_tail(&dpa_fq[j].list, list);
 		}
 	}
+
+#ifdef CONFIG_DPA_TX_RECYCLE
+	/* per-core tx queues for recycleable frames (FManv3 only) */
+	if (txrecycle) {
+		fqids = tx_recycle_fqids;
+		dpa_fq = devm_kzalloc(dev, sizeof(*dpa_fq) * fqids[0].count,
+					GFP_KERNEL);
+		if (dpa_fq == NULL) {
+			dpaa_eth_err(dev, "devm_kzalloc() failed\n");
+			return -ENOMEM;
+		}
+
+		*txrecycle = dpa_fq;
+		for (j = 0; j < fqids[0].count; j++)
+			dpa_fq[j].fq_type = FQ_TYPE_TX_RECYCLE;
+
+		for (j = 0; j < fqids[0].count; j++) {
+			dpa_fq[j].fqid = fqids[0].start ?
+				fqids[0].start + j : 0;
+			_dpa_assign_wq(dpa_fq + j);
+			list_add_tail(&dpa_fq[j].list, list);
+		}
+	}
+#endif
 
 	fqids = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
 	if (fqids == NULL) {
@@ -3373,6 +3422,29 @@ static void dpa_setup_egress(struct dpa_priv_s *priv,
 		ptr = ptr->next;
 	}
 }
+
+#ifdef CONFIG_DPA_TX_RECYCLE
+static void dpa_setup_recycle_queues(struct dpa_priv_s *priv, struct dpa_fq *fq,
+				     struct fm_port *port)
+{
+	int i = 0;
+	struct list_head *ptr = &fq->list;
+
+	for (i = 0; i < DPAA_ETH_TX_QUEUES; i++) {
+		struct dpa_fq *iter = list_entry(ptr, struct dpa_fq, list);
+
+		iter->fq_base = private_egress_fq;
+		iter->net_dev = priv->net_dev;
+
+		priv->recycle_fqs[i] = &iter->fq_base;
+
+		iter->flags = QMAN_FQ_FLAG_TO_DCPORTAL;
+		iter->channel = fm_get_tx_port_channel(port);
+
+		ptr = ptr->next;
+	}
+}
+#endif
 
 static void dpa_setup_conf_queues(struct dpa_priv_s *priv, struct dpa_fq *fq)
 {
@@ -3498,7 +3570,7 @@ static void dpa_rx_fq_init(struct dpa_priv_s *priv, struct list_head *head,
 static void dpa_tx_fq_init(struct dpa_priv_s *priv, struct list_head *head,
 			struct dpa_fq *defq, struct dpa_fq *errq,
 			struct dpa_fq *fqs, struct dpa_fq *confqs,
-			struct fm_port *port)
+			struct dpa_fq *recyclefqs, struct fm_port *port)
 {
 	if (fqs)
 		dpa_setup_egress(priv, head, fqs, port);
@@ -3519,6 +3591,11 @@ static void dpa_tx_fq_init(struct dpa_priv_s *priv, struct list_head *head,
 		dpa_setup_ingress(priv, errq, &tx_private_errq);
 		if (confqs)
 			dpa_setup_conf_queues(priv, confqs);
+#ifdef CONFIG_DPA_TX_RECYCLE
+		if (recyclefqs)
+			dpa_setup_recycle_queues(priv, recyclefqs, port);
+#endif
+
 	}
 }
 
@@ -3744,6 +3821,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	struct dpa_fq *rxextra = NULL;
 	struct dpa_fq *txfqs = NULL;
 	struct dpa_fq *txconf = NULL;
+	struct dpa_fq *txrecycle = NULL;
 	struct fm_port *rxport = NULL;
 	struct fm_port *txport = NULL;
 	bool has_timer = FALSE;
@@ -3813,20 +3891,26 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 
 	if (rxport)
 		err = dpa_fq_probe(_of_dev, &rxfqlist, &rxdefault, &rxerror,
-				&rxextra, NULL, RX);
+				&rxextra, NULL, NULL, RX);
 	else
 		err = dpa_fq_probe(_of_dev, &rxfqlist, NULL, NULL,
-				&rxextra, NULL, RX);
+				&rxextra, NULL, NULL, RX);
 
 	if (err < 0)
 		goto rx_fq_probe_failed;
 
 	if (txport)
+#ifdef CONFIG_DPA_TX_RECYCLE
 		err = dpa_fq_probe(_of_dev, &txfqlist, &txdefault, &txerror,
-				&txfqs, (is_shared ? NULL : &txconf), TX);
+				&txfqs, (is_shared ? NULL : &txconf),
+				(is_shared ? NULL : &txrecycle), TX);
+#else
+		err = dpa_fq_probe(_of_dev, &txfqlist, &txdefault, &txerror,
+				&txfqs, (is_shared ? NULL : &txconf), NULL, TX);
+#endif
 	else
 		err = dpa_fq_probe(_of_dev, &txfqlist, NULL, NULL, &txfqs,
-				NULL, TX);
+				NULL, NULL, TX);
 
 	if (err < 0)
 		goto tx_fq_probe_failed;
@@ -3872,7 +3956,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 
 		dpa_rx_fq_init(priv, &rxfqlist, rxdefault, rxerror, rxextra);
 		dpa_tx_fq_init(priv, &txfqlist, txdefault, txerror, txfqs,
-				txconf, txport);
+				txconf, txrecycle, txport);
 
 		/*
 		 * Create a congestion group for this netdev, with
