@@ -3448,7 +3448,6 @@ static void dpa_setup_recycle_queues(struct dpa_priv_s *priv, struct dpa_fq *fq,
 
 static void dpa_setup_conf_queues(struct dpa_priv_s *priv, struct dpa_fq *fq)
 {
-	const cpumask_t *affine_cpus = qman_affine_cpus();
 	struct list_head *ptr = &fq->list;
 	int i;
 
@@ -3460,9 +3459,7 @@ static void dpa_setup_conf_queues(struct dpa_priv_s *priv, struct dpa_fq *fq)
 		struct dpa_fq *iter = list_entry(ptr, struct dpa_fq, list);
 
 		dpa_setup_ingress(priv, iter, &tx_private_defq);
-		/* If cpu not online, just leave the default pool channel */
-		if (cpumask_test_cpu(i, affine_cpus))
-			iter->channel = qman_affine_channel(i);
+		/* Leave the confirmation queue in the default pool channel */
 		priv->conf_fqs[i] = &iter->fq_base;
 
 		ptr = ptr->next;
