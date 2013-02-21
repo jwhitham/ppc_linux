@@ -95,8 +95,6 @@
  *	- running out of memory if the CS threshold is set too high.
  */
 #define DPA_CS_THRESHOLD_1G	0x06000000
-/* Set a congestion threshold for MAC-less devices, too. */
-#define DPA_CS_THRESHOLD_MACLESS	0x10000000
 
 /* S/G table requires at least 256 bytes */
 #define SGT_BUFFER_SIZE		DPA_BP_SIZE(256)
@@ -3823,9 +3821,7 @@ static int dpaa_eth_cgr_init(struct dpa_priv_s *priv)
 	 * lower than its max, e.g. if a dTSEC later negotiates a 100Mbps link.
 	 * In such cases, we ought to reconfigure the threshold, too.
 	 */
-	if (!priv->mac_dev)
-		cs_th = DPA_CS_THRESHOLD_MACLESS;
-	else if (priv->mac_dev->if_support & SUPPORTED_10000baseT_Full)
+	if (priv->mac_dev->if_support & SUPPORTED_10000baseT_Full)
 		cs_th = DPA_CS_THRESHOLD_10G;
 	else
 		cs_th = DPA_CS_THRESHOLD_1G;
@@ -4013,11 +4009,14 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		 * dynamically-allocated CGR ID.
 		 * Must be executed after probing the MAC, but before
 		 * assigning the egress FQs to the CGRs.
+		 * Don't create a congestion group for MAC-less interfaces.
 		 */
-		err = dpaa_eth_cgr_init(priv);
-		if (err < 0) {
-			dpaa_eth_err(dev, "Error initializing CGR\n");
-			goto cgr_init_failed;
+		if (priv->mac_dev) {
+			err = dpaa_eth_cgr_init(priv);
+			if (err < 0) {
+				dpaa_eth_err(dev, "Error initializing CGR\n");
+				goto cgr_init_failed;
+			}
 		}
 
 		/* Add the FQs to the interface, and make them active */
