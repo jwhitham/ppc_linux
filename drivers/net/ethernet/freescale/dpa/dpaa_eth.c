@@ -96,6 +96,9 @@
  */
 #define DPA_CS_THRESHOLD_1G	0x06000000
 
+/* Size in bytes of the FQ taildrop threshold */
+#define DPA_FQ_TD		0x200000
+
 /* S/G table requires at least 256 bytes */
 #define SGT_BUFFER_SIZE		DPA_BP_SIZE(256)
 
@@ -637,6 +640,22 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 			initfq.fqd.oac_init.oac = QM_OAC_CG;
 			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
 				DPA_BP_HEAD, (size_t)FSL_QMAN_MAX_OAL);
+		}
+
+		/*
+		 * For MAC-less devices we only get here for RX frame queues
+		 * initialization, which are the TX queues of the other
+		 * partition.
+		 * It is safe to rely on one partition to set the FQ taildrop
+		 * threshold for the TX queues of the other partition
+		 * because the ERN notifications will be received by the
+		 * partition doing qman_enqueue.
+		 */
+		if (!priv->mac_dev) {
+			initfq.we_mask |= QM_INITFQ_WE_TDTHRESH;
+			qm_fqd_taildrop_set(&initfq.fqd.td,
+					DPA_FQ_TD, 1);
+			initfq.fqd.fq_ctrl = QM_FQCTRL_TDE;
 		}
 
 		/*
