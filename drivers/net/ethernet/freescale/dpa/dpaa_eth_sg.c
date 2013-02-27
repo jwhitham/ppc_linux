@@ -50,7 +50,7 @@ static inline void dpa_bp_removed_one_page(struct dpa_bp *dpa_bp,
 {
 	int *count_ptr;
 
-	count_ptr = per_cpu_ptr(dpa_bp->percpu_count, smp_processor_id());
+	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	(*count_ptr)--;
 
 	dma_unmap_single(dpa_bp->dev, dma_addr, dpa_bp->size,
@@ -65,7 +65,7 @@ static void dpa_bp_add_page(struct dpa_bp *dpa_bp, unsigned long vaddr)
 	dma_addr_t addr;
 	int offset;
 
-	count_ptr = per_cpu_ptr(dpa_bp->percpu_count, smp_processor_id());
+	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 
 	/* Make sure we don't map beyond end of page */
 	offset = vaddr & (PAGE_SIZE - 1);
@@ -709,11 +709,14 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct dpa_priv_s	*priv;
 	struct qm_fd		 fd;
 	struct dpa_percpu_priv_s *percpu_priv;
+	struct net_device_stats *percpu_stats;
 	int queue_mapping;
 	int err;
 
 	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	/* Non-migratable context, safe to use __this_cpu_ptr */
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_stats = &percpu_priv->stats;
 
 	clear_fd(&fd);
 
@@ -727,7 +730,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 	if (skb_is_nonlinear(skb)) {
 		/* Just create a S/G fd based on the skb */
-		err = skb_to_sg_fd(priv, percpu_priv, skb, &fd);
+		err = skb_to_sg_fd(priv, NULL, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
 	} else {
 		/*

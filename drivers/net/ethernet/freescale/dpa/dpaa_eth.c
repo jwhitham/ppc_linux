@@ -2153,7 +2153,8 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	if (unlikely(dpaa_eth_napi_schedule(percpu_priv))) {
 		percpu_priv->in_interrupt++;
@@ -2203,7 +2204,8 @@ ingress_tx_default_dqrr(struct qman_portal		*portal,
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	/* Non-migratable context, safe to use __this_cpu_ptr */
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	if (dpaa_eth_napi_schedule(percpu_priv)) {
 		percpu_priv->in_interrupt++;
@@ -2327,7 +2329,7 @@ static void shared_ern(struct qman_portal	*portal,
 
 	net_dev = dpa_fq->net_dev;
 	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	percpu_priv = per_cpu_ptr(priv->percpu_priv,  smp_processor_id());
 
 	dpa_fd_release(net_dev, &msg->ern.fd);
 
@@ -2348,7 +2350,8 @@ static void egress_ern(struct qman_portal	*portal,
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	/* Non-migratable context, safe to use __this_cpu_ptr */
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	percpu_priv->stats.tx_dropped++;
 	percpu_priv->stats.tx_fifo_errors++;
