@@ -1655,7 +1655,7 @@ static int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 		goto l3_l4_csum_failed;
 	}
 
-	err = dpa_xmit(priv, percpu_priv, queue_mapping, &fd);
+	err = dpa_xmit(priv, &percpu_priv->stats, queue_mapping, &fd);
 
 l3_l4_csum_failed:
 bpools_too_small_error:
@@ -1865,6 +1865,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct dpa_priv_s	*priv;
 	struct qm_fd		 fd;
 	struct dpa_percpu_priv_s *percpu_priv;
+	struct net_device_stats *percpu_stats;
 	int queue_mapping;
 	int err;
 
@@ -1876,6 +1877,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 	priv = netdev_priv(net_dev);
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	percpu_stats = &percpu_priv->stats;
 
 	clear_fd(&fd);
 	queue_mapping = dpa_get_queue_mapping(skb);
@@ -1885,7 +1887,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 		skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);
 		if (unlikely(!skb_new)) {
-			percpu_priv->stats.tx_errors++;
+			percpu_stats->tx_errors++;
 			kfree_skb(skb);
 			goto done;
 		}
@@ -1922,13 +1924,13 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		 * it's more efficient to unshare it and then use the new skb */
 		skb = skb_unshare(skb, GFP_ATOMIC);
 		if (unlikely(!skb)) {
-			percpu_priv->stats.tx_errors++;
+			percpu_stats->tx_errors++;
 			goto done;
 		}
 		err = skb_to_contig_fd(priv, percpu_priv, skb, &fd);
 	}
 	if (unlikely(err < 0)) {
-		percpu_priv->stats.tx_errors++;
+		percpu_stats->tx_errors++;
 		goto fd_create_failed;
 	}
 
@@ -1941,7 +1943,8 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		percpu_priv->tx_returned++;
 	}
 
-	if (unlikely(dpa_xmit(priv, percpu_priv, queue_mapping, &fd) < 0))
+	if (unlikely(dpa_xmit(priv, percpu_stats, queue_mapping,
+		&fd) < 0))
 		goto xmit_failed;
 
 	net_dev->trans_start = jiffies;

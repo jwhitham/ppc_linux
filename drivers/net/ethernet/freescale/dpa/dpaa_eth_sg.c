@@ -443,6 +443,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	dma_addr_t addr = qm_fd_addr(fd);
 	u32 fd_status = fd->status;
 	unsigned int skb_len;
+	struct net_device_stats *percpu_stats = &percpu_priv->stats;
 	int use_gro = net_dev->features & NETIF_F_GRO;
 
 	if (unlikely(fd_status & FM_FD_STAT_ERRORS) != 0) {
@@ -450,7 +451,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 			cpu_netdev_warn(net_dev, "FD status = 0x%08x\n",
 					fd_status & FM_FD_STAT_ERRORS);
 
-		percpu_priv->stats.rx_errors++;
+		percpu_stats->rx_errors++;
 		goto _release_frame;
 	}
 
@@ -465,7 +466,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 			if (netif_msg_rx_err(priv) && net_ratelimit())
 				cpu_netdev_err(net_dev,
 						"Could not alloc skb\n");
-			percpu_priv->stats.rx_dropped++;
+			percpu_stats->rx_dropped++;
 			goto _release_frame;
 		}
 	}
@@ -492,13 +493,13 @@ void __hot _dpa_rx(struct net_device *net_dev,
 			 * counters to track this event.
 			 */
 			percpu_priv->l4_hxs_errors++;
-			percpu_priv->stats.rx_dropped++;
+			percpu_stats->rx_dropped++;
 			goto drop_bad_frame;
 		}
 	} else if (fd->format == qm_fd_sg) {
 		if (unlikely(sg_fd_to_skb(priv, fd, skb, &use_gro))) {
 			percpu_priv->l4_hxs_errors++;
-			percpu_priv->stats.rx_dropped++;
+			percpu_stats->rx_dropped++;
 			goto drop_bad_frame;
 		}
 	} else
@@ -510,7 +511,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	/* IP Reassembled frames are allowed to be larger than MTU */
 	if (unlikely(dpa_check_rx_mtu(skb, net_dev->mtu) &&
 		!(fd_status & FM_FD_IPR))) {
-		percpu_priv->stats.rx_dropped++;
+		percpu_stats->rx_dropped++;
 		goto drop_bad_frame;
 	}
 
@@ -521,16 +522,16 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 		gro_result = napi_gro_receive(&percpu_priv->napi, skb);
 		if (unlikely(gro_result == GRO_DROP)) {
-			percpu_priv->stats.rx_dropped++;
+			percpu_stats->rx_dropped++;
 			goto packet_dropped;
 		}
 	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP)) {
-		percpu_priv->stats.rx_dropped++;
+		percpu_stats->rx_dropped++;
 		goto packet_dropped;
 	}
 
-	percpu_priv->stats.rx_packets++;
-	percpu_priv->stats.rx_bytes += skb_len;
+	percpu_stats->rx_packets++;
+	percpu_stats->rx_bytes += skb_len;
 
 packet_dropped:
 	return;
@@ -591,7 +592,6 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 }
 
 static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
-			      struct dpa_percpu_priv_s *percpu_priv,
 			      struct sk_buff *skb, struct qm_fd *fd)
 {
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
@@ -730,7 +730,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 	if (skb_is_nonlinear(skb)) {
 		/* Just create a S/G fd based on the skb */
-		err = skb_to_sg_fd(priv, NULL, skb, &fd);
+		err = skb_to_sg_fd(priv, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
 	} else {
 		/*
@@ -744,7 +744,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 			skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);
 			if (unlikely(!skb_new)) {
 				dev_kfree_skb(skb);
-				percpu_priv->stats.tx_errors++;
+				percpu_stats->tx_errors++;
 				return NETDEV_TX_OK;
 			}
 			dev_kfree_skb(skb);
@@ -757,7 +757,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		 */
 		skb = skb_unshare(skb, GFP_ATOMIC);
 		if (unlikely(!skb)) {
-			percpu_priv->stats.tx_errors++;
+			percpu_stats->tx_errors++;
 			return NETDEV_TX_OK;
 		}
 
@@ -765,12 +765,12 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		err = skb_to_contig_fd(priv, skb, &fd);
 	}
 	if (unlikely(err < 0)) {
-		percpu_priv->stats.tx_errors++;
+		percpu_stats->tx_errors++;
 		dev_kfree_skb(skb);
 		return NETDEV_TX_OK;
 	}
 
-	if (unlikely(dpa_xmit(priv, percpu_priv, queue_mapping, &fd) < 0))
+	if (unlikely(dpa_xmit(priv, percpu_stats, queue_mapping, &fd) < 0))
 		goto xmit_failed;
 
 	net_dev->trans_start = jiffies;

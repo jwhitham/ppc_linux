@@ -499,7 +499,7 @@ static inline void clear_fd(struct qm_fd *fd)
 }
 
 static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
-			struct dpa_percpu_priv_s *percpu, int queue,
+			struct net_device_stats *percpu_stats, int queue,
 			struct qm_fd *fd)
 {
 	int err, i;
@@ -524,13 +524,13 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 
 	if (unlikely(err < 0)) {
 		/* TODO differentiate b/w -EBUSY (EQCR full) and other codes? */
-		percpu->stats.tx_errors++;
-		percpu->stats.tx_fifo_errors++;
+		percpu_stats->tx_errors++;
+		percpu_stats->tx_fifo_errors++;
 		return err;
 	}
 
-	percpu->stats.tx_packets++;
-	percpu->stats.tx_bytes += dpa_fd_length(fd);
+	percpu_stats->tx_packets++;
+	percpu_stats->tx_bytes += dpa_fd_length(fd);
 
 	return 0;
 }
