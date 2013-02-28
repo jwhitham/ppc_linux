@@ -2984,6 +2984,9 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 	int r;
 	int cpu;
 
+	r = kvm_irqfd_init();
+	if (r)
+		goto out_irqfd;
 	r = kvm_arch_init(opaque);
 	if (r)
 		goto out_fail;
@@ -3064,6 +3067,8 @@ out_free_0a:
 out_free_0:
 	kvm_arch_exit();
 out_fail:
+	kvm_irqfd_exit();
+out_irqfd:
 	return r;
 }
 EXPORT_SYMBOL_GPL(kvm_init);
@@ -3080,6 +3085,7 @@ void kvm_exit(void)
 	on_each_cpu(hardware_disable_nolock, NULL, 1);
 	kvm_arch_hardware_unsetup();
 	kvm_arch_exit();
+	kvm_irqfd_exit();
 	free_cpumask_var(cpus_hardware_enabled);
 }
 EXPORT_SYMBOL_GPL(kvm_exit);
