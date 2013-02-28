@@ -2490,7 +2490,9 @@ static const struct qman_fq tx_unit_test_fq __devinitconst = {
 };
 
 static struct __devinitdata dpa_fq unit_fq;
-
+#ifdef CONFIG_DPA_TX_RECYCLE
+static struct dpa_fq unit_recycle_fq;
+#endif
 static bool __devinitdata tx_unit_test_ran; /* Starts as false */
 
 static int __devinit dpa_tx_unit_test(struct net_device *net_dev)
@@ -2505,6 +2507,9 @@ static int __devinit dpa_tx_unit_test(struct net_device *net_dev)
 	int err = 0;
 	int tests_failed = 0;
 	const cpumask_t *cpus = qman_affine_cpus();
+#ifdef CONFIG_DPA_TX_RECYCLE
+	struct qman_fq *oldrecycleq;
+#endif
 
 	if (!alloc_cpumask_var(&old_cpumask, GFP_KERNEL)) {
 		pr_err("UNIT test cpumask allocation failed\n");
@@ -2539,10 +2544,37 @@ static int __devinit dpa_tx_unit_test(struct net_device *net_dev)
 		goto fq_init_fail;
 	}
 
-	pr_err("TX Unit Test using FQ %d\n", qman_fq_fqid(&unit_fq.fq_base));
-
 	/* Replace queue 0 with this queue */
 	priv->egress_fqs[smp_processor_id()] = &unit_fq.fq_base;
+
+#ifdef CONFIG_DPA_TX_RECYCLE
+	oldrecycleq = priv->recycle_fqs[smp_processor_id()];
+	unit_recycle_fq.net_dev = net_dev;
+	unit_recycle_fq.fq_base = tx_unit_test_fq;
+
+	err = qman_create_fq(0, QMAN_FQ_FLAG_DYNAMIC_FQID,
+			&unit_recycle_fq.fq_base);
+
+	if (err < 0) {
+		pr_err("UNIT test Recycle FQ create failed: %d\n", err);
+		goto recycle_fq_create_fail;
+	}
+
+	err = qman_init_fq(&unit_recycle_fq.fq_base,
+			QMAN_INITFQ_FLAG_SCHED | QMAN_INITFQ_FLAG_LOCAL, NULL);
+	if (err < 0) {
+		pr_err("UNIT test Recycle FQ init failed: %d\n", err);
+		goto recycle_fq_init_fail;
+	}
+
+	priv->recycle_fqs[smp_processor_id()] = &unit_recycle_fq.fq_base;
+
+	pr_err("TX Unit Test using FQ: %d - Recycle FQ: %d\n",
+		qman_fq_fqid(&unit_fq.fq_base),
+		qman_fq_fqid(&unit_recycle_fq.fq_base));
+#else
+	pr_err("TX Unit Test using FQ %d\n", qman_fq_fqid(&unit_fq.fq_base));
+#endif
 
 	/* Try packet sizes from 64-bytes to just above the maximum */
 	for (size = 64; size <= 9600 + 128; size += 64) {
@@ -2585,8 +2617,13 @@ static int __devinit dpa_tx_unit_test(struct net_device *net_dev)
 			ret = spin_event_timeout(qman_poll_dqrr(1) != 0,
 					100000, 1);
 
-			if (!ret)
+			if (!ret) {
 				pr_err("TX Packet never arrived\n");
+				/*
+				 * Count the test as failed.
+				 */
+				tests_failed++;
+			}
 
 			/* Was it good? */
 			if (tx_unit_test_passed == false) {
@@ -2607,6 +2644,22 @@ end_test:
 	err = qman_oos_fq(&unit_fq.fq_base);
 	if (unlikely(err < 0))
 		pr_err("Could not OOS TX Unit Test FQ (%d)\n", err);
+
+#ifdef CONFIG_DPA_TX_RECYCLE
+	err = qman_retire_fq(&unit_recycle_fq.fq_base, NULL);
+	if (unlikely(err < 0))
+		pr_err("Could not retire Recycle TX Unit Test FQ (%d)\n", err);
+
+	err = qman_oos_fq(&unit_recycle_fq.fq_base);
+	if (unlikely(err < 0))
+		pr_err("Could not OOS Recycle TX Unit Test FQ (%d)\n", err);
+
+recycle_fq_init_fail:
+	qman_destroy_fq(&unit_recycle_fq.fq_base, 0);
+
+recycle_fq_create_fail:
+	priv->recycle_fqs[smp_processor_id()] = oldrecycleq;
+#endif
 
 fq_init_fail:
 	qman_destroy_fq(&unit_fq.fq_base, 0);
