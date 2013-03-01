@@ -426,7 +426,8 @@ int __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 				     unsigned int *hdr_size __maybe_unused);
 
 #ifdef CONFIG_DPAA_ETH_SG_SUPPORT
-void dpa_bp_add_8_pages(struct dpa_bp *dpa_bp, int cpu_id);
+void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu_id);
+int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp);
 
 void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count);
 #endif

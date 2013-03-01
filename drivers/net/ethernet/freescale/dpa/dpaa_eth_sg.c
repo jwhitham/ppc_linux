@@ -88,50 +88,61 @@ static void dpa_bp_add_page(struct dpa_bp *dpa_bp, unsigned long vaddr)
 	(*count_ptr)++;
 }
 
-void dpa_bp_add_8_pages(struct dpa_bp *dpa_bp, int cpu_id)
+int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp)
 {
 	struct bm_buffer bmb[8];
 	unsigned long new_page;
-	int *count_ptr;
 	dma_addr_t addr;
 	int i;
-
-	count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu_id);
+	struct device *dev = dpa_bp->dev;
 
 	for (i = 0; i < 8; i++) {
 		new_page = __get_free_page(GFP_ATOMIC);
-		if (unlikely(!new_page)) {
-			dpaa_eth_err(dpa_bp->dev, "__get_free_page() failed\n");
-			bm_buffer_set64(&bmb[i], 0);
-			break;
+		if (likely(new_page)) {
+			addr = dma_map_single(dev, (void *)new_page,
+					dpa_bp->size, DMA_BIDIRECTIONAL);
+			if (likely(!dma_mapping_error(dev, addr))) {
+				bm_buffer_set64(&bmb[i], addr);
+				continue;
+			} else
+				free_page(new_page);
 		}
 
-		addr = dma_map_single(dpa_bp->dev, (void *)new_page,
-				dpa_bp->size, DMA_BIDIRECTIONAL);
-		if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
-			dpaa_eth_err(dpa_bp->dev, "DMA mapping failed");
-			free_page(new_page);
-			break;
-		}
-
-		bm_buffer_set64(&bmb[i], addr);
+		/* Something went wrong */
+		goto bail_out;
 	}
 
+release_bufs:
+	/*
+	 * Release the buffers. In case bman is busy, keep trying
+	 * until successful. bman_release() is guaranteed to succeed
+	 * in a reasonable amount of time
+	 */
+	while (unlikely(bman_release(dpa_bp->pool, bmb, i, 0)))
+		cpu_relax();
+
+	return i;
+
+bail_out:
+	dev_err(dpa_bp->dev, "dpa_bp_add_8_pages() failed\n");
+	bm_buffer_set64(&bmb[i], 0);
 	/*
 	 * Avoid releasing a completely null buffer; bman_release() requires
 	 * at least one buffer.
 	 */
-	if (likely(i)) {
-		/*
-		 * Release the buffers. In case bman is busy, keep trying
-		 * until successful. bman_release() is guaranteed to succeed
-		 * in a reasonable amount of time
-		 */
-		while (bman_release(dpa_bp->pool, bmb, i, 0))
-			cpu_relax();
+	if (likely(i))
+		goto release_bufs;
 
-		*count_ptr += i;
-	}
+	return 0;
+}
+
+/*
+ * Cold path wrapper over _dpa_bp_add_8_pages().
+ */
+void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu)
+{
+	int *count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu);
+	*count_ptr += _dpa_bp_add_8_pages(dpa_bp);
 }
 
 void dpa_list_add_skb(struct dpa_percpu_priv_s *cpu_priv,

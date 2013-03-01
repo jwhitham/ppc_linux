@@ -253,7 +253,7 @@ copy_to_unmapped_area(dma_addr_t phys_start, void *src, size_t buf_size)
 }
 
 #ifndef CONFIG_DPAA_ETH_SG_SUPPORT
-static void dpa_bp_add_8(struct dpa_bp *dpa_bp)
+static void dpa_bp_add_8(const struct dpa_bp *dpa_bp)
 {
 	struct bm_buffer bmb[8];
 	struct sk_buff **skbh;
@@ -375,28 +375,25 @@ static void dpaa_eth_seed_pool(struct dpa_bp *bp)
  */
 static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
-	int count = *percpu_priv->dpa_bp_count;
+	int *countptr = percpu_priv->dpa_bp_count;
+	int count = *countptr;
+	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
 
 #ifndef CONFIG_DPAA_ETH_SG_SUPPORT
 	if (unlikely(count < REFILL_THRESHOLD)) {
 		int i;
 
 		for (i = count; i < DEFAULT_COUNT; i += 8)
-			dpa_bp_add_8(percpu_priv->dpa_bp);
+			dpa_bp_add_8(dpa_bp);
 	}
 #else
-	if (unlikely(count < REFILL_THRESHOLD)) {
-		int i, cpu;
-
-		/* Add pages to the buffer pool */
-		cpu = smp_processor_id();
-		for (i = count; i < DEFAULT_COUNT; i += 8)
-			dpa_bp_add_8_pages(percpu_priv->dpa_bp, cpu);
-	}
+	/* Add pages to the buffer pool */
+	while (count < DEFAULT_COUNT)
+		count += _dpa_bp_add_8_pages(dpa_bp);
+	*countptr = count;
 
 	/* Add skbs to the percpu skb list, reuse var count */
 	count = percpu_priv->skb_count;
-
 	if (unlikely(count < DEFAULT_SKB_COUNT / 4))
 		dpa_list_add_skbs(percpu_priv,
 				  DEFAULT_SKB_COUNT - count);
