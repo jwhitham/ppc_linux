@@ -102,6 +102,9 @@ void cpu_idle(void)
 		ppc64_runlatch_on();
 		rcu_idle_exit();
 		tick_nohz_idle_exit();
+#ifdef CONFIG_FSL_ERRATUM_A_006184
+		mtspr(SPRN_TSR, TSR_ENW);
+#endif
 		if (cpu_should_die()) {
 			sched_preempt_enable_no_resched();
 			cpu_die();
