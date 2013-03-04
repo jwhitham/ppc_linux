@@ -101,6 +101,13 @@
 
 #include "gianfar.h"
 
+#ifdef CONFIG_AS_FASTPATH
+devfp_hook_t	devfp_rx_hook;
+EXPORT_SYMBOL(devfp_rx_hook);
+
+devfp_hook_t	devfp_tx_hook;
+EXPORT_SYMBOL(devfp_tx_hook);
+#endif
 #define TX_TIMEOUT      (1*HZ)
 
 const char gfar_driver_version[] = "1.3";
@@ -2212,6 +2219,11 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	unsigned long flags;
 	unsigned int nr_frags, nr_txbds, length, fcb_length = GMAC_FCB_LEN;
 
+#ifdef CONFIG_AS_FASTPATH
+	if (devfp_tx_hook && (skb->pkt_type != PACKET_FASTROUTE))
+		if (devfp_tx_hook(skb, dev) == AS_FP_STOLEN)
+			return 0;
+#endif
 	/* TOE=1 frames larger than 2500 bytes may see excess delays
 	 * before start of transmission.
 	 */
@@ -3003,6 +3015,25 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	if (dev->features & NETIF_F_RXCSUM)
 		gfar_rx_checksum(skb, fcb);
 
+#ifdef CONFIG_AS_FASTPATH
+	if (devfp_rx_hook) {
+
+		/* Drop the packet silently if IP Checksum is not correct */
+		if ((fcb->flags & RXFCB_CIP) && (fcb->flags & RXFCB_EIP)) {
+			dev_kfree_skb_any(skb);
+			return;
+		}
+
+		if (dev->features & NETIF_F_HW_VLAN_RX &&
+					fcb->flags & RXFCB_VLN)
+			__vlan_hwaccel_put_tag(skb, fcb->vlctl);
+
+		skb->dev = dev;
+
+		if (devfp_rx_hook(skb, dev) == AS_FP_STOLEN)
+			return;
+	}
+#endif
 	/* Tell the skb what kind of packet this is */
 	skb->protocol = eth_type_trans(skb, dev);
 
