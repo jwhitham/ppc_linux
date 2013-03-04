@@ -131,3 +131,6 @@ drop:
 	kfree_skb(skb);
 	return NET_RX_DROP;
 }
+#ifdef CONFIG_AS_FASTPATH
+EXPORT_SYMBOL(ip_forward);
+#endif
