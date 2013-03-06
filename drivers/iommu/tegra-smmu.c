@@ -753,7 +753,7 @@ static size_t smmu_iommu_unmap(struct iommu_domain *domain, unsigned long iova,
 }
 
 static phys_addr_t smmu_iommu_iova_to_phys(struct iommu_domain *domain,
-					   unsigned long iova)
+					   u64 iova)
 {
 	struct smmu_as *as = domain->priv;
 	unsigned long *pte;
