@@ -230,6 +230,31 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 		host->quirks &= ~SDHCI_QUIRK_NO_BUSY_IRQ;
 }
 
+/* Return: 1 - the card is present; 0 - card is absent */
+static int esdhc_of_get_cd(struct sdhci_host *host)
+{
+	u32 present;
+	u32 sysctl;
+
+	if (host->flags & SDHCI_DEVICE_DEAD)
+		return 0;
+
+	sysctl = sdhci_be32bs_readl(host, SDHCI_CLOCK_CONTROL);
+
+	/* Enable the controller clock to update the present state */
+	sdhci_be32bs_writel(host, sysctl | SDHCI_CLOCK_INT_EN,
+			SDHCI_CLOCK_CONTROL);
+
+	/* Detect the card present or absent */
+	present = sdhci_be32bs_readl(host, SDHCI_PRESENT_STATE);
+	present &= (SDHCI_CARD_PRESENT | SDHCI_CARD_CDPL);
+
+	/* Resave the previous to System control register */
+	sdhci_be32bs_writel(host, sysctl, SDHCI_CLOCK_CONTROL);
+
+	return !!present;
+}
+
 static struct sdhci_ops sdhci_esdhc_ops = {
 	.read_l = esdhc_readl,
 	.read_w = esdhc_readw,
@@ -242,6 +267,7 @@ static struct sdhci_ops sdhci_esdhc_ops = {
 	.get_max_clock = esdhc_of_get_max_clock,
 	.get_min_clock = esdhc_of_get_min_clock,
 	.platform_init = esdhc_of_platform_init,
+	.get_cd = esdhc_of_get_cd,
 #ifdef CONFIG_PM
 	.platform_suspend = esdhc_of_suspend,
 	.platform_resume = esdhc_of_resume,
