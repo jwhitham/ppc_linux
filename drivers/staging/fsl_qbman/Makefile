@@ -22,4 +22,4 @@ obj-$(CONFIG_FSL_QMAN_DEBUGFS)	+= qman_debugfs_interface.o
 qman_debugfs_interface-y	 = qman_debugfs.o
 
 # USDPAA
-obj-$(CONFIG_FSL_DPA_UIO)	+= dpa_uio.o
+obj-$(CONFIG_FSL_USDPAA)	+= fsl_usdpaa.o fsl_usdpaa_irq.o

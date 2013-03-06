@@ -103,12 +103,16 @@ struct qman_portal {
 	struct list_head cgr_cbs;
 	/* list lock */
 	spinlock_t cgr_lock;
+
 	/* 2-element array. ccgrs[0] is mask, ccgrs[1] is snapshot. */
 	struct qman_ccgrs *ccgrs[QMAN_CEETM_MAX];
 	/* 256-element array, each is a linked-list of CCSCN handlers. */
 	struct list_head ccgr_cbs[QMAN_CEETM_MAX];
 	/* list lock */
 	spinlock_t ccgr_lock;
+
+	/* track if memory was allocated by the driver */
+	u8 alloced;
 };
 
 #ifdef CONFIG_FSL_DPA_PORTAL_SHARE
@@ -336,29 +340,37 @@ loop:
 		if (!msg)
 			return 0;
 	}
-	if ((msg->verb & QM_MR_VERB_TYPE_MASK) != QM_MR_VERB_FQRNI)
+	if ((msg->verb & QM_MR_VERB_TYPE_MASK) != QM_MR_VERB_FQRNI) {
 		/* We aren't draining anything but FQRNIs */
+		pr_err("QMan found verb 0x%x in MR\n", msg->verb);
 		return -1;
+	}
 	qm_mr_next(p);
 	qm_mr_cci_consume(p, 1);
 	goto loop;
 }
 
-struct qman_portal *qman_create_affine_portal(
+
+
+
+struct qman_portal *qman_create_portal(
+			struct qman_portal *portal,
 			const struct qm_portal_config *config,
 			const struct qman_cgrs *cgrs)
 {
-	struct qman_portal *portal = get_raw_affine_portal();
-	struct qm_portal *__p = &portal->p;
+	struct qm_portal *__p;
 	char buf[16];
 	int ret;
 	u32 isdr;
 
-	/* A criteria for calling this function (from qman_driver.c) is that
-	 * we're already affine to the cpu and won't schedule onto another cpu.
-	 * This means we can put_affine_portal() and yet continue to use
-	 * "portal", which in turn means aspects of this routine can sleep. */
-	put_affine_portal();
+	if (!portal) {
+		portal = kmalloc(sizeof(*portal), GFP_KERNEL);
+		portal->alloced = 1;
+	} else
+		portal->alloced = 0;
+
+	__p = &portal->p;
+
 	/* prep the low-level portal struct with the mapped addresses from the
 	 * config, everything that follows depends on it and "config" is more
 	 * for (de)reference... */
@@ -456,6 +468,7 @@ struct qman_portal *qman_create_affine_portal(
 		pr_err("irq_set_affinity() failed\n");
 		goto fail_affinity;
 	}
+
 	/* Need EQCR to be empty before continuing */
 	isdr ^= QM_PIRQ_EQCI;
 	qm_isr_disable_write(__p, isdr);
@@ -468,21 +481,20 @@ struct qman_portal *qman_create_affine_portal(
 	qm_isr_disable_write(__p, isdr);
 	if (qm_dqrr_current(__p) != NULL) {
 		pr_err("Qman DQRR unclean\n");
-		goto fail_dqrr_mr_empty;
+		qm_dqrr_cdc_consume_n(__p, 0xffff);
 	}
 	if (qm_mr_current(__p) != NULL) {
 		/* special handling, drain just in case it's a few FQRNIs */
 		if (drain_mr_fqrni(__p)) {
-			pr_err("Qman MR unclean\n");
+			const struct qm_mr_entry *e = qm_mr_current(__p);
+			pr_err("Qman MR unclean, MR VERB 0x%x, "
+			       "rc 0x%x\n, addr 0x%x",
+			       e->verb, e->ern.rc, e->ern.fd.addr_lo);
 			goto fail_dqrr_mr_empty;
 		}
 	}
 	/* Success */
 	portal->config = config;
-	spin_lock(&affine_mask_lock);
-	cpumask_set_cpu(config->public_cfg.cpu, &affine_mask);
-	affine_channels[config->public_cfg.cpu] = config->public_cfg.channel;
-	spin_unlock(&affine_mask_lock);
 	qm_isr_disable_write(__p, 0);
 	qm_isr_uninhibit(__p);
 	/* Write a sane SDQCR */
@@ -517,6 +529,32 @@ fail_eqcr:
 	return NULL;
 }
 
+
+
+struct qman_portal *qman_create_affine_portal(
+			const struct qm_portal_config *config,
+			const struct qman_cgrs *cgrs)
+{
+	struct qman_portal *res;
+	struct qman_portal *portal = get_raw_affine_portal();
+	/* A criteria for calling this function (from qman_driver.c) is that
+	 * we're already affine to the cpu and won't schedule onto another cpu.
+	 * This means we can put_affine_portal() and yet continue to use
+	 * "portal", which in turn means aspects of this routine can sleep. */
+	put_affine_portal();
+
+	res = qman_create_portal(portal, config, cgrs);
+	if (res) {
+		spin_lock(&affine_mask_lock);
+		cpumask_set_cpu(config->public_cfg.cpu, &affine_mask);
+		affine_channels[config->public_cfg.cpu] =
+			config->public_cfg.channel;
+		spin_unlock(&affine_mask_lock);
+	}
+	return res;
+}
+
+
 /* These checks are BUG_ON()s because the driver is already supposed to avoid
  * these cases. */
 struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect)
@@ -540,13 +578,54 @@ struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect)
 #endif
 }
 
+
+
+void qman_destroy_portal(struct qman_portal *qm)
+{
+	const struct qm_portal_config *pcfg;
+	int i;
+
+	/* Stop dequeues on the portal */
+	qm_dqrr_sdqcr_set(&qm->p, 0);
+
+
+	/* NB we do this to "quiesce" EQCR. If we add enqueue-completions or
+	 * something related to QM_PIRQ_EQCI, this may need fixing.
+	 * Also, due to the prefetching model used for CI updates in the enqueue
+	 * path, this update will only invalidate the CI cacheline *after*
+	 * working on it, so we need to call this twice to ensure a full update
+	 * irrespective of where the enqueue processing was at when the teardown
+	 * began. */
+	qm_eqcr_cce_update(&qm->p);
+	qm_eqcr_cce_update(&qm->p);
+	pcfg = qm->config;
+
+	free_irq(pcfg->public_cfg.irq, qm);
+
+	kfree(qm->cgrs);
+	if (num_ceetms)
+		for (i = 0; i < num_ceetms; i++)
+			kfree(qm->ccgrs[i]);
+	qm_isr_finish(&qm->p);
+	qm_mc_finish(&qm->p);
+	qm_mr_finish(&qm->p);
+	qm_dqrr_finish(&qm->p);
+	qm_eqcr_finish(&qm->p);
+
+	platform_device_del(qm->pdev);
+	platform_device_put(qm->pdev);
+
+	qm->config = NULL;
+	if (qm->alloced)
+		kfree(qm);
+}
+
 const struct qm_portal_config *qman_destroy_affine_portal(void)
 {
 	/* We don't want to redirect if we're a slave, use "raw" */
 	struct qman_portal *qm = get_raw_affine_portal();
 	const struct qm_portal_config *pcfg;
 	int cpu;
-	int i;
 #ifdef CONFIG_FSL_DPA_PORTAL_SHARE
 	if (qm->sharing_redirect) {
 		qm->sharing_redirect = NULL;
@@ -557,26 +636,9 @@ const struct qm_portal_config *qman_destroy_affine_portal(void)
 #endif
 	pcfg = qm->config;
 	cpu = pcfg->public_cfg.cpu;
-	/* NB we do this to "quiesce" EQCR. If we add enqueue-completions or
-	 * something related to QM_PIRQ_EQCI, this may need fixing.
-	 * Also, due to the prefetching model used for CI updates in the enqueue
-	 * path, this update will only invalidate the CI cacheline *after*
-	 * working on it, so we need to call this twice to ensure a full update
-	 * irrespective of where the enqueue processing was at when the teardown
-	 * began. */
-	qm_eqcr_cce_update(&qm->p);
-	qm_eqcr_cce_update(&qm->p);
-	free_irq(pcfg->public_cfg.irq, qm);
-	kfree(qm->cgrs);
-	if (num_ceetms)
-		for (i = 0; i < num_ceetms; i++)
-			kfree(qm->ccgrs[i]);
-	qm_isr_finish(&qm->p);
-	qm_mc_finish(&qm->p);
-	qm_mr_finish(&qm->p);
-	qm_dqrr_finish(&qm->p);
-	qm_eqcr_finish(&qm->p);
-	qm->config = NULL;
+
+	qman_destroy_portal(qm);
+
 	spin_lock(&affine_mask_lock);
 	cpumask_clear_cpu(cpu, &affine_mask);
 	spin_unlock(&affine_mask_lock);
@@ -1243,6 +1305,7 @@ EXPORT_SYMBOL(qman_create_fq);
 
 void qman_destroy_fq(struct qman_fq *fq, u32 flags __maybe_unused)
 {
+
 	/* We don't need to lock the FQ as it is a pre-condition that the FQ be
 	 * quiesced. Instead, run some checks. */
 	switch (fq->state) {
@@ -4429,3 +4492,16 @@ int qman_get_wpm(int *wpm_enable)
 	return qm_get_wpm(wpm_enable);
 }
 EXPORT_SYMBOL(qman_get_wpm);
+
+int qman_shutdown_fq(u32 fqid)
+{
+	struct qman_portal *p;
+	unsigned long irqflags __maybe_unused;
+	int ret;
+	p = get_affine_portal();
+	PORTAL_IRQ_LOCK(p, irqflags);
+	ret = qm_shutdown_fq(&p->p, fqid);
+	PORTAL_IRQ_UNLOCK(p, irqflags);
+	put_affine_portal();
+	return ret;
+}

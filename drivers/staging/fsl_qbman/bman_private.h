@@ -68,10 +68,20 @@ int bman_init_ccsr(struct device_node *node);
 #endif
 
 /* Hooks from bman_driver.c in to bman_high.c */
+struct bman_portal *bman_create_portal(
+				       struct bman_portal *portal,
+				       const struct bm_portal_config *config);
 struct bman_portal *bman_create_affine_portal(
 			const struct bm_portal_config *config);
 struct bman_portal *bman_create_affine_slave(struct bman_portal *redirect);
+void bman_destroy_portal(struct bman_portal *bm);
+
 const struct bm_portal_config *bman_destroy_affine_portal(void);
+
+/* Hooks from fsl_usdpaa.c to bman_driver.c */
+struct bm_portal_config *bm_get_unused_portal(void);
+void bm_put_unused_portal(struct bm_portal_config *pcfg);
+void bm_set_liodns(struct bm_portal_config *pcfg);
 
 /* Pool logic in the portal driver, during initialisation, needs to know if
  * there's access to CCSR or not (if not, it'll cripple the pool allocator). */

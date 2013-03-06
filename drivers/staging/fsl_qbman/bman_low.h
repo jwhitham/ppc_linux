@@ -36,20 +36,20 @@
 /***************************/
 
 /* Cache-inhibited register offsets */
-#define REG_RCR_PI_CINH		0x0000
-#define REG_RCR_CI_CINH		0x0004
-#define REG_RCR_ITR		0x0008
-#define REG_CFG			0x0100
-#define REG_SCN(n)		(0x0200 + ((n) << 2))
-#define REG_ISR			0x0e00
+#define BM_REG_RCR_PI_CINH	0x0000
+#define BM_REG_RCR_CI_CINH	0x0004
+#define BM_REG_RCR_ITR		0x0008
+#define BM_REG_CFG		0x0100
+#define BM_REG_SCN(n)		(0x0200 + ((n) << 2))
+#define BM_REG_ISR		0x0e00
 
 /* Cache-enabled register offsets */
-#define CL_CR			0x0000
-#define CL_RR0			0x0100
-#define CL_RR1			0x0140
-#define CL_RCR			0x1000
-#define CL_RCR_PI_CENA		0x3000
-#define CL_RCR_CI_CENA		0x3100
+#define BM_CL_CR		0x0000
+#define BM_CL_RR0		0x0100
+#define BM_CL_RR1		0x0140
+#define BM_CL_RCR		0x1000
+#define BM_CL_RCR_PI_CENA	0x3000
+#define BM_CL_RCR_CI_CENA	0x3100
 
 /* BTW, the drivers (and h/w programming model) already obtain the required
  * synchronisation for portal accesses via lwsync(), hwsync(), and
@@ -61,8 +61,8 @@
 /* Cache-inhibited register access. */
 #define __bm_in(bm, o)		__raw_readl((bm)->addr_ci + (o))
 #define __bm_out(bm, o, val)	__raw_writel((val), (bm)->addr_ci + (o))
-#define bm_in(reg)		__bm_in(&portal->addr, REG_##reg)
-#define bm_out(reg, val)	__bm_out(&portal->addr, REG_##reg, val)
+#define bm_in(reg)		__bm_in(&portal->addr, BM_REG_##reg)
+#define bm_out(reg, val)	__bm_out(&portal->addr, BM_REG_##reg, val)
 
 /* Cache-enabled (index) register access */
 #define __bm_cl_touch_ro(bm, o) dcbt_ro((bm)->addr_ce + (o))
@@ -75,16 +75,17 @@
 		dcbf(__tmpclout); \
 	} while (0)
 #define __bm_cl_invalidate(bm, o) dcbi((bm)->addr_ce + (o))
-#define bm_cl_touch_ro(reg)	__bm_cl_touch_ro(&portal->addr, CL_##reg##_CENA)
-#define bm_cl_touch_rw(reg)	__bm_cl_touch_rw(&portal->addr, CL_##reg##_CENA)
-#define bm_cl_in(reg)		__bm_cl_in(&portal->addr, CL_##reg##_CENA)
-#define bm_cl_out(reg, val)	__bm_cl_out(&portal->addr, CL_##reg##_CENA, val)
-#define bm_cl_invalidate(reg) __bm_cl_invalidate(&portal->addr, CL_##reg##_CENA)
+#define bm_cl_touch_ro(reg) __bm_cl_touch_ro(&portal->addr, BM_CL_##reg##_CENA)
+#define bm_cl_touch_rw(reg) __bm_cl_touch_rw(&portal->addr, BM_CL_##reg##_CENA)
+#define bm_cl_in(reg)	    __bm_cl_in(&portal->addr, BM_CL_##reg##_CENA)
+#define bm_cl_out(reg, val) __bm_cl_out(&portal->addr, BM_CL_##reg##_CENA, val)
+#define bm_cl_invalidate(reg)\
+	__bm_cl_invalidate(&portal->addr, BM_CL_##reg##_CENA)
 
 /* Cyclic helper for rings. FIXME: once we are able to do fine-grain perf
  * analysis, look at using the "extra" bit in the ring index registers to avoid
  * cyclic issues. */
-static inline u8 cyc_diff(u8 ringsize, u8 first, u8 last)
+static inline u8 bm_cyc_diff(u8 ringsize, u8 first, u8 last)
 {
 	/* 'first' is included, 'last' is excluded */
 	if (first <= last)
@@ -192,12 +193,13 @@ static inline int bm_rcr_init(struct bm_portal *portal, enum bm_rcr_pmode pmode,
 	u32 cfg;
 	u8 pi;
 
-	rcr->ring = portal->addr.addr_ce + CL_RCR;
+	rcr->ring = portal->addr.addr_ce + BM_CL_RCR;
 	rcr->ci = bm_in(RCR_CI_CINH) & (BM_RCR_SIZE - 1);
 	pi = bm_in(RCR_PI_CINH) & (BM_RCR_SIZE - 1);
 	rcr->cursor = rcr->ring + pi;
 	rcr->vbit = (bm_in(RCR_PI_CINH) & BM_RCR_SIZE) ?  BM_RCR_VERB_VBIT : 0;
-	rcr->available = BM_RCR_SIZE - 1 - cyc_diff(BM_RCR_SIZE, rcr->ci, pi);
+	rcr->available = BM_RCR_SIZE - 1
+		- bm_cyc_diff(BM_RCR_SIZE, rcr->ci, pi);
 	rcr->ithresh = bm_in(RCR_ITR);
 #ifdef CONFIG_FSL_DPA_CHECKING
 	rcr->busy = 0;
@@ -322,7 +324,7 @@ static inline u8 bm_rcr_cci_update(struct bm_portal *portal)
 	u8 diff, old_ci = rcr->ci;
 	DPA_ASSERT(rcr->cmode == bm_rcr_cci);
 	rcr->ci = bm_in(RCR_CI_CINH) & (BM_RCR_SIZE - 1);
-	diff = cyc_diff(BM_RCR_SIZE, old_ci, rcr->ci);
+	diff = bm_cyc_diff(BM_RCR_SIZE, old_ci, rcr->ci);
 	rcr->available += diff;
 	return diff;
 }
@@ -341,7 +343,7 @@ static inline u8 bm_rcr_cce_update(struct bm_portal *portal)
 	DPA_ASSERT(rcr->cmode == bm_rcr_cce);
 	rcr->ci = bm_cl_in(RCR_CI) & (BM_RCR_SIZE - 1);
 	bm_cl_invalidate(RCR_CI);
-	diff = cyc_diff(BM_RCR_SIZE, old_ci, rcr->ci);
+	diff = bm_cyc_diff(BM_RCR_SIZE, old_ci, rcr->ci);
 	rcr->available += diff;
 	return diff;
 }
@@ -378,8 +380,8 @@ static inline u8 bm_rcr_get_fill(struct bm_portal *portal)
 static inline int bm_mc_init(struct bm_portal *portal)
 {
 	register struct bm_mc *mc = &portal->mc;
-	mc->cr = portal->addr.addr_ce + CL_CR;
-	mc->rr = portal->addr.addr_ce + CL_RR0;
+	mc->cr = portal->addr.addr_ce + BM_CL_CR;
+	mc->rr = portal->addr.addr_ce + BM_CL_RR0;
 	mc->rridx = (__raw_readb(&mc->cr->__dont_write_directly__verb) &
 			BM_MCC_VERB_VBIT) ?  0 : 1;
 	mc->vbit = mc->rridx ? BM_MCC_VERB_VBIT : 0;
@@ -466,7 +468,7 @@ static inline void bm_isr_finish(__always_unused struct bm_portal *portal)
 {
 }
 
-#define SCN_REG(bpid) REG_SCN((bpid) / 32)
+#define SCN_REG(bpid) BM_REG_SCN((bpid) / 32)
 #define SCN_BIT(bpid) (0x80000000 >> (bpid & 31))
 static inline void bm_isr_bscn_mask(struct bm_portal *portal, u8 bpid,
 					int enable)
@@ -484,11 +486,38 @@ static inline void bm_isr_bscn_mask(struct bm_portal *portal, u8 bpid,
 
 static inline u32 __bm_isr_read(struct bm_portal *portal, enum bm_isr_reg n)
 {
-	return __bm_in(&portal->addr, REG_ISR + (n << 2));
+	return __bm_in(&portal->addr, BM_REG_ISR + (n << 2));
 }
 
 static inline void __bm_isr_write(struct bm_portal *portal, enum bm_isr_reg n,
 					u32 val)
 {
-	__bm_out(&portal->addr, REG_ISR + (n << 2), val);
+	__bm_out(&portal->addr, BM_REG_ISR + (n << 2), val);
+}
+
+/* Buffer Pool Cleanup */
+static inline int bm_shutdown_pool(struct bm_portal *p, u32 bpid)
+{
+	struct bm_mc_command *bm_cmd;
+	struct bm_mc_result *bm_res;
+
+	int aq_count = 0;
+	bool stop = false;
+	while (!stop) {
+		/* Aquire buffers until empty */
+		bm_cmd = bm_mc_start(p);
+		bm_cmd->acquire.bpid = bpid;
+		bm_mc_commit(p, BM_MCC_VERB_CMD_ACQUIRE |  1);
+		while (!(bm_res = bm_mc_result(p)))
+			cpu_relax();
+		if (!(bm_res->verb & BM_MCR_VERB_ACQUIRE_BUFCOUNT)) {
+			/* Pool is empty */
+			/* TBD : Should we do a few extra iterations in
+			   case some other some blocks keep buffers 'on deck',
+			   which may also be problematic */
+			stop = true;
+		} else
+			++aq_count;
+	};
+	return 0;
 }

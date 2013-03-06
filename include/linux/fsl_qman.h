@@ -2089,6 +2089,22 @@ static inline void qman_release_fqid(u32 fqid)
 	qman_release_fqid_range(fqid, 1);
 }
 
+void qman_seed_fqid_range(u32 fqid, unsigned int count);
+
+
+int qman_shutdown_fq(u32 fqid);
+
+/**
+ * qman_reserve_fqid_range - Reserve the specified range of frame queue IDs
+ * @fqid: the base FQID of the range to deallocate
+ * @count: the number of FQIDs in the range
+ */
+int qman_reserve_fqid_range(u32 fqid, unsigned int count);
+static inline int qman_reserve_fqid(u32 fqid)
+{
+	return qman_reserve_fqid_range(fqid, 1);
+}
+
 	/* Pool-channel management */
 	/* ----------------------- */
 /**
@@ -2121,6 +2137,18 @@ static inline void qman_release_pool(u32 id)
 	qman_release_pool_range(id, 1);
 }
 
+/**
+ * qman_reserve_pool_range - Reserve the specified range of pool-channel IDs
+ * @id: the base pool-channel ID of the range to reserve
+ * @count: the number of pool-channel IDs in the range
+ */
+int qman_reserve_pool_range(u32 id, unsigned int count);
+static inline int qman_reserve_pool(u32 id)
+{
+	return qman_reserve_pool_range(id, 1);
+}
+
+void qman_seed_pool_range(u32 id, unsigned int count);
 
 	/* CGR management */
 	/* -------------- */
@@ -2220,6 +2248,20 @@ static inline void qman_release_cgrid(u32 id)
 {
 	qman_release_cgrid_range(id, 1);
 }
+
+/**
+ * qman_reserve_cgrid_range - Reserve the specified range of CGR ID
+ * @id: the base CGR ID of the range to reserve
+ * @count: the number of CGR IDs in the range
+ */
+int qman_reserve_cgrid_range(u32 id, unsigned int count);
+static inline int qman_reserve_cgrid(u32 id)
+{
+	return qman_reserve_cgrid_range(id, 1);
+}
+
+void qman_seed_cgrid_range(u32 id, unsigned int count);
+
 
 	/* Helpers */
 	/* ------- */
@@ -2431,6 +2473,15 @@ static inline void qman_release_ceetm0_channelid(u32 channelid)
 	qman_release_ceetm0_channel_range(channelid, 1);
 }
 
+int qman_reserve_ceetm0_channel_range(u32 channelid, u32 count);
+static inline int qman_reserve_ceetm0_channelid(u32 channelid)
+{
+	return qman_reserve_ceetm0_channel_range(channelid, 1);
+}
+
+void qman_seed_ceetm0_channel_range(u32 channelid, u32 count);
+
+
 int qman_alloc_ceetm1_channel_range(u32 *result, u32 count, u32 align,
 								int partial);
 static inline int qman_alloc_ceetm1_channel(u32 *result)
@@ -2443,6 +2494,14 @@ static inline void qman_release_ceetm1_channelid(u32 channelid)
 {
 	qman_release_ceetm1_channel_range(channelid, 1);
 }
+int qman_reserve_ceetm1_channel_range(u32 channelid, u32 count);
+static inline int qman_reserve_ceetm1_channelid(u32 channelid)
+{
+	return qman_reserve_ceetm1_channel_range(channelid, 1);
+}
+
+void qman_seed_ceetm1_channel_range(u32 channelid, u32 count);
+
 
 int qman_alloc_ceetm0_lfqid_range(u32 *result, u32 count, u32 align,
 								int partial);
@@ -2456,6 +2515,14 @@ static inline void qman_release_ceetm0_lfqid(u32 lfqid)
 {
 	qman_release_ceetm0_lfqid_range(lfqid, 1);
 }
+int qman_reserve_ceetm0_lfqid_range(u32 lfqid, u32 count);
+static inline int qman_reserve_ceetm0_lfqid(u32 lfqid)
+{
+	return qman_reserve_ceetm0_lfqid_range(lfqid, 1);
+}
+
+void qman_seed_ceetm0_lfqid_range(u32 lfqid, u32 count);
+
 
 int qman_alloc_ceetm1_lfqid_range(u32 *result, u32 count, u32 align,
 								int partial);
@@ -2469,6 +2536,15 @@ static inline void qman_release_ceetm1_lfqid(u32 lfqid)
 {
 	qman_release_ceetm1_lfqid_range(lfqid, 1);
 }
+int qman_reserve_ceetm1_lfqid_range(u32 lfqid, u32 count);
+static inline int qman_reserve_ceetm1_lfqid(u32 lfqid)
+{
+	return qman_reserve_ceetm1_lfqid_range(lfqid, 1);
+}
+
+void qman_seed_ceetm1_lfqid_range(u32 lfqid, u32 count);
+
+
 	/* ----------------------------- */
 	/* CEETM :: sub-portals          */
 	/* ----------------------------- */

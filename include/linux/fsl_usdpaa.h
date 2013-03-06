@@ -14,11 +14,17 @@ extern "C" {
 
 #include <linux/uaccess.h>
 #include <linux/ioctl.h>
+#include <linux/fsl_qman.h> /* For "enum qm_channel" */
+#include <linux/compat.h>
 
 #ifdef CONFIG_FSL_USDPAA
 
-/* Allocation of resource IDs uses a generic interface. This enum is used to
- * distinguish between the type of underlying object being manipulated. */
+/******************************/
+/* Allocation of resource IDs */
+/******************************/
+
+/* This enum is used to distinguish between the type of underlying object being
+ * manipulated. */
 enum usdpaa_id_type {
 	usdpaa_id_fqid,
 	usdpaa_id_bpid,
@@ -44,6 +50,25 @@ struct usdpaa_ioctl_id_release {
 	uint32_t base;
 	uint32_t num;
 };
+struct usdpaa_ioctl_id_reserve {
+	enum usdpaa_id_type id_type;
+	uint32_t base;
+	uint32_t num;
+};
+
+
+/* ioctl() commands */
+#define USDPAA_IOCTL_ID_ALLOC \
+	_IOWR(USDPAA_IOCTL_MAGIC, 0x01, struct usdpaa_ioctl_id_alloc)
+#define USDPAA_IOCTL_ID_RELEASE \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x02, struct usdpaa_ioctl_id_release)
+#define USDPAA_IOCTL_ID_RESERVE \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x0A, struct usdpaa_ioctl_id_reserve)
+
+/**********************/
+/* Mapping DMA memory */
+/**********************/
+
 /* Maximum length for a map name, including NULL-terminator */
 #define USDPAA_DMA_NAME_MAX 16
 /* Flags for requesting DMA maps. Maps are private+unnamed or sharable+named.
@@ -63,10 +88,11 @@ struct usdpaa_ioctl_id_release {
 #define USDPAA_DMA_FLAG_SHARE    0x01
 #define USDPAA_DMA_FLAG_CREATE   0x02
 #define USDPAA_DMA_FLAG_LAZY     0x04
+#define USDPAA_DMA_FLAG_RDONLY   0x08
 struct usdpaa_ioctl_dma_map {
-	/* If the map succeeds, pa_offset is returned and can be used in a
-	 * subsequent call to mmap(). */
-	uint64_t pa_offset;
+	/* Output parameters - virtual and physical addresses */
+	void *ptr;
+	uint64_t phys_addr;
 	/* Input parameter, the length of the region to be created (or if
 	 * mapping an existing region, this must match it). Must be a power-of-4
 	 * multiple of page size. */
@@ -85,20 +111,112 @@ struct usdpaa_ioctl_dma_map {
 	 * already existed. */
 	int did_create;
 };
-#define USDPAA_IOCTL_ID_ALLOC \
-	_IOWR(USDPAA_IOCTL_MAGIC, 0x01, struct usdpaa_ioctl_id_alloc)
-#define USDPAA_IOCTL_ID_RELEASE \
-	_IOW(USDPAA_IOCTL_MAGIC, 0x02, struct usdpaa_ioctl_id_release)
+
+#ifdef CONFIG_COMPAT
+struct usdpaa_ioctl_dma_map_compat {
+	/* Output parameters - virtual and physical addresses */
+	compat_uptr_t ptr;
+	uint64_t phys_addr;
+	/* Input parameter, the length of the region to be created (or if
+	 * mapping an existing region, this must match it). Must be a power-of-4
+	 * multiple of page size. */
+	uint64_t len;
+	/* Input parameter, the USDPAA_DMA_FLAG_* settings. */
+	uint32_t flags;
+	/* If _FLAG_SHARE is specified, the name of the region to be created (or
+	 * of the existing mapping to use). */
+	char name[USDPAA_DMA_NAME_MAX];
+	/* If this ioctl() creates the mapping, this is an input parameter
+	 * stating whether the region supports locking. If mapping an existing
+	 * region, this is a return value indicating the same thing. */
+	int has_locking;
+	/* In the case of a successful map with _CREATE and _LAZY, this return
+	 * value indicates whether we created the mapped region or whether it
+	 * already existed. */
+	int did_create;
+};
+
+#define USDPAA_IOCTL_DMA_MAP_COMPAT \
+	_IOWR(USDPAA_IOCTL_MAGIC, 0x03, struct usdpaa_ioctl_dma_map_compat)
+#endif
+
+
 #define USDPAA_IOCTL_DMA_MAP \
 	_IOWR(USDPAA_IOCTL_MAGIC, 0x03, struct usdpaa_ioctl_dma_map)
+/* munmap() does not remove the DMA map, just the user-space mapping to it.
+ * This ioctl will do both (though you can munmap() before calling the ioctl
+ * too). */
+#define USDPAA_IOCTL_DMA_UNMAP \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x04, unsigned char)
 /* We implement a cross-process locking scheme per DMA map. Call this ioctl()
  * with a mmap()'d address, and the process will (interruptible) sleep if the
  * lock is already held by another process. Process destruction will
  * automatically clean up any held locks. */
 #define USDPAA_IOCTL_DMA_LOCK \
-	_IOW(USDPAA_IOCTL_MAGIC, 0x04, unsigned char)
-#define USDPAA_IOCTL_DMA_UNLOCK \
 	_IOW(USDPAA_IOCTL_MAGIC, 0x05, unsigned char)
+#define USDPAA_IOCTL_DMA_UNLOCK \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x06, unsigned char)
+
+/***************************************/
+/* Mapping and using QMan/BMan portals */
+/***************************************/
+enum usdpaa_portal_type {
+	 usdpaa_portal_qman,
+	 usdpaa_portal_bman,
+};
+
+struct usdpaa_ioctl_portal_map {
+	/* Input parameter, is a qman or bman portal required. */
+	enum usdpaa_portal_type type;
+	/* Return value if the map succeeds, this gives the mapped
+	 * cache-inhibited (cinh) and cache-enabled (cena) addresses. */
+	struct usdpaa_portal_map {
+		void *cinh;
+		void *cena;
+	} addr;
+	/* Qman-specific return values */
+	uint16_t channel;
+	uint32_t pools;
+	uint32_t irq;
+};
+
+#ifdef CONFIG_COMPAT
+struct compat_usdpaa_ioctl_portal_map {
+	/* Input parameter, is a qman or bman portal required. */
+	enum usdpaa_portal_type type;
+	/* Return value if the map succeeds, this gives the mapped
+	 * cache-inhibited (cinh) and cache-enabled (cena) addresses. */
+	struct usdpaa_portal_map_compat {
+		compat_uptr_t cinh;
+		compat_uptr_t cena;
+	} addr;
+	/* Qman-specific return values */
+	uint16_t channel;
+	uint32_t pools;
+	uint32_t irq;
+};
+#define USDPAA_IOCTL_PORTAL_MAP_COMPAT \
+	_IOWR(USDPAA_IOCTL_MAGIC, 0x07, struct compat_usdpaa_ioctl_portal_map)
+#define USDPAA_IOCTL_PORTAL_UNMAP_COMPAT \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x08, struct usdpaa_portal_map_compat)
+#endif
+
+#define USDPAA_IOCTL_PORTAL_MAP \
+	_IOWR(USDPAA_IOCTL_MAGIC, 0x07, struct usdpaa_ioctl_portal_map)
+#define USDPAA_IOCTL_PORTAL_UNMAP \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x08, struct usdpaa_portal_map)
+
+#define USDPAA_IOCTL_PORTAL_IRQ_MAP \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x09, uint32_t)
+
+/* ioctl to query the amount of DMA memory used in the system */
+struct usdpaa_ioctl_dma_used {
+	uint64_t free_bytes;
+	uint64_t total_bytes;
+};
+#define USDPAA_IOCTL_DMA_USED \
+	_IOR(USDPAA_IOCTL_MAGIC, 0x0B, struct usdpaa_ioctl_dma_used)
+
 
 #ifdef __KERNEL__
 
@@ -120,31 +238,41 @@ int usdpaa_test_fault(unsigned long pfn, u64 *phys_addr, u64 *size);
  * both the FQID and BPID allocators. The fsl_usdpaa driver also uses this
  * interface for tracking per-process allocations handed out to user-space. */
 struct dpa_alloc {
-	struct list_head list;
+	struct list_head free;
 	spinlock_t lock;
+	struct list_head used;
 };
 #define DECLARE_DPA_ALLOC(name) \
 	struct dpa_alloc name = { \
-		.list = { \
-			.prev = &name.list, \
-			.next = &name.list \
+		.free = { \
+			.prev = &name.free, \
+			.next = &name.free \
 		}, \
-		.lock = __SPIN_LOCK_UNLOCKED(name.lock) \
+		.lock = __SPIN_LOCK_UNLOCKED(name.lock), \
+		.used = { \
+			 .prev = &name.used, \
+			 .next = &name.used \
+		 } \
 	}
 static inline void dpa_alloc_init(struct dpa_alloc *alloc)
 {
-	INIT_LIST_HEAD(&alloc->list);
+	INIT_LIST_HEAD(&alloc->free);
+	INIT_LIST_HEAD(&alloc->used);
 	spin_lock_init(&alloc->lock);
 }
 int dpa_alloc_new(struct dpa_alloc *alloc, u32 *result, u32 count, u32 align,
 		  int partial);
 void dpa_alloc_free(struct dpa_alloc *alloc, u32 base_id, u32 count);
+void dpa_alloc_seed(struct dpa_alloc *alloc, u32 fqid, u32 count);
+
 /* Like 'new' but specifies the desired range, returns -ENOMEM if the entire
  * desired range is not available, or 0 for success. */
 int dpa_alloc_reserve(struct dpa_alloc *alloc, u32 base_id, u32 count);
 /* Pops and returns contiguous ranges from the allocator. Returns -ENOMEM when
  * 'alloc' is empty. */
 int dpa_alloc_pop(struct dpa_alloc *alloc, u32 *result, u32 *count);
+/* Returns 1 if the specified id is alloced, 0 otherwise */
+int dpa_alloc_check(struct dpa_alloc *list, u32 id);
 #endif /* __KERNEL__ */
 
 #ifdef __cplusplus

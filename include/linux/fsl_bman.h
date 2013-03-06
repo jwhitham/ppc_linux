@@ -403,6 +403,10 @@ static inline void bman_release_bpid(u32 bpid)
 	bman_release_bpid_range(bpid, 1);
 }
 
+void bman_seed_bpid_range(u32 bpid, unsigned int count);
+
+
+int bman_shutdown_pool(u32 bpid);
 
 	/* Pool management */
 	/* --------------- */

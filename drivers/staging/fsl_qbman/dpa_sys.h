@@ -69,33 +69,6 @@
 /* When copying aligned words or shorts, try to avoid memcpy() */
 #define CONFIG_TRY_BETTER_MEMCPY
 
-/* Handle portals destined for USDPAA (user-space).
- *
- * The UIO handling is mostly in dpa_uio.c which is common to qman and bman, but
- * there are some specifics to each case, and they have independent data
- * structures. The "pcfg"s for qman and bman portals are maintained in lists in
- * their respective drivers, and they're detached from those lists when they are
- * to be registered as UIO devices, so we have dpa_uio.c store them in a
- * mixed-type list, and use this vtable of callbacks to let the qman+bman
- * drivers container_of() the list item to their respective object wrappers and
- * implement whatever logic distinguishes them.
- */
-struct dpa_uio_vtable {
-	/* This callback should fill in 'name', 'mem', and 'irq'. The rest will
-	 * be filled in by dpa_uio.c */
-	int (*init_uio)(const struct list_head *pcfg, struct uio_info *info);
-	/* Free up whatever object contains 'pcfg' */
-	void (*destroy)(const struct list_head *pcfg, struct uio_info *info);
-	/* Called when the portal is opened (Qman uses this for rerouting
-	 * stashing to the current cpu) */
-	int (*on_open)(struct list_head *pcfg);
-	void (*on_close)(const struct list_head *pcfg);
-	/* Called when an interrupt fires - must disable interrupts */
-	void (*on_interrupt)(const struct list_head *pcfg);
-};
-int __init dpa_uio_register(struct list_head *new_pcfg,
-			    const struct dpa_uio_vtable *vtable);
-
 /* For 2-element tables related to cache-inhibited and cache-enabled mappings */
 #define DPA_PORTAL_CE 0
 #define DPA_PORTAL_CI 1
