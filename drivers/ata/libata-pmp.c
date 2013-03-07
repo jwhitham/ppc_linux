@@ -146,6 +146,13 @@ int sata_pmp_scr_read(struct ata_link *link, int reg, u32 *r_val)
 	if (reg > SATA_PMP_PSCR_CONTROL)
 		return -EINVAL;
 
+	/* For some PMP card, we need delay some time */
+	if (link->flags & ATA_LFLAG_DELAY) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		/* sleep 50 msecond */
+		schedule_timeout(msecs_to_jiffies(50));
+	}
+
 	err_mask = sata_pmp_read(link, reg, r_val);
 	if (err_mask) {
 		ata_link_warn(link, "failed to read SCR %d (Emask=0x%x)\n",
@@ -455,6 +462,11 @@ static void sata_pmp_quirks(struct ata_port *ap)
 			link->flags |= ATA_LFLAG_NO_LPM |
 				       ATA_LFLAG_NO_SRST |
 				       ATA_LFLAG_ASSUME_ATA;
+		}
+	} else if (vendor == 0x197b && devid == 0x0325) {
+		/* For jmicron JMB393 card, need some time to ready the PMP */
+		ata_for_each_link(link, ap, EDGE) {
+			link->flags |= ATA_LFLAG_DELAY;
 		}
 	}
 }
