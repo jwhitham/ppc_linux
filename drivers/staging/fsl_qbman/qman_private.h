@@ -98,10 +98,6 @@ static inline void qman_cgrs_xor(struct qman_cgrs *dest,
 		*(_d++) = *(_a++) ^ *(_b++);
 }
 
-#define qman_cgrs_for_each_1(cgr, cgrs) \
-	for ((cgr) = -1; (cgr) = qman_cgrs_next((cgrs), (cgr)),\
-					(cgr) < __CGR_NUM;)
-
 /* used by CCSR and portal interrupt code */
 enum qm_isr_reg {
 	qm_isr_status = 0,

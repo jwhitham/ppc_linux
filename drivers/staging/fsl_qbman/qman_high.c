@@ -99,8 +99,8 @@ struct qman_portal {
 	char irqname[MAX_IRQNAME];
 	/* 2-element array. cgrs[0] is mask, cgrs[1] is snapshot. */
 	struct qman_cgrs *cgrs;
-	/* 256-element array, each is a linked-list of CSCN handlers. */
-	struct list_head cgr_cbs[256];
+	/* linked-list of CSCN handlers. */
+	struct list_head cgr_cbs;
 	/* list lock */
 	spinlock_t cgr_lock;
 };
@@ -390,8 +390,7 @@ struct qman_portal *qman_create_affine_portal(
 	else
 		/* if the given mask is NULL, assume all CGRs can be seen */
 		qman_cgrs_fill(&portal->cgrs[0]);
-	for (ret = 0; ret < __CGR_NUM; ret++)
-		INIT_LIST_HEAD(&portal->cgr_cbs[ret]);
+	INIT_LIST_HEAD(&portal->cgr_cbs);
 	spin_lock_init(&portal->cgr_lock);
 	portal->bits = 0;
 	portal->slowpoll = 0;
@@ -605,7 +604,6 @@ static u32 __poll_portal_slow(struct qman_portal *p, u32 is)
 		struct qman_cgrs rr, c;
 		struct qm_mc_result *mcr;
 		struct qman_cgr *cgr;
-		int i;
 		unsigned long irqflags __maybe_unused;
 
 		spin_lock_irqsave(&p->cgr_lock, irqflags);
@@ -627,11 +625,9 @@ static u32 __poll_portal_slow(struct qman_portal *p, u32 is)
 		/* update snapshot */
 		qman_cgrs_cp(&p->cgrs[1], &rr);
 		/* Invoke callback */
-		qman_cgrs_for_each_1(i, &c)
-			list_for_each_entry(cgr, &p->cgr_cbs[i], node) {
-				if (cgr->cb)
-					cgr->cb(p, cgr, qman_cgrs_get(&rr, i));
-			}
+		list_for_each_entry(cgr, &p->cgr_cbs, node)
+			if (cgr->cb && qman_cgrs_get(&c, cgr->cgrid))
+				cgr->cb(p, cgr, qman_cgrs_get(&rr, cgr->cgrid));
 		spin_unlock_irqrestore(&p->cgr_lock, irqflags);
 	}
 
@@ -2063,9 +2059,8 @@ int qman_create_cgr(struct qman_cgr *cgr, u32 flags,
 	cgr->chan = p->config->public_cfg.channel;
 	spin_lock_irqsave(&p->cgr_lock, irqflags);
 
-	/* if no opts specified and I'm not the first for this portal, just add
-	 * to the list */
-	if ((opts == NULL) && !list_empty(&p->cgr_cbs[cgr->cgrid]))
+	/* if no opts specified, just add it to the list */
+	if (!opts)
 		goto add_list;
 
 	ret = qman_query_cgr(cgr, &cgr_state);
@@ -2090,7 +2085,7 @@ int qman_create_cgr(struct qman_cgr *cgr, u32 flags,
 	if (ret)
 		goto release_lock;
 add_list:
-	list_add(&cgr->node, &p->cgr_cbs[cgr->cgrid]);
+	list_add(&cgr->node, &p->cgr_cbs);
 
 	/* Determine if newly added object requires its callback to be called */
 	ret = qman_query_cgr(cgr, &cgr_state);
@@ -2156,6 +2151,7 @@ int qman_delete_cgr(struct qman_cgr *cgr)
 	struct qm_mcr_querycgr cgr_state;
 	struct qm_mcc_initcgr local_opts;
 	int ret = 0;
+	struct qman_cgr *i;
 	struct qman_portal *p = get_affine_portal();
 
 	if (cgr->chan != p->config->public_cfg.channel) {
@@ -2168,13 +2164,17 @@ int qman_delete_cgr(struct qman_cgr *cgr)
 	memset(&local_opts, 0, sizeof(struct qm_mcc_initcgr));
 	spin_lock_irqsave(&p->cgr_lock, irqflags);
 	list_del(&cgr->node);
-	/* If last in list, CSCN_TARG must be set accordingly */
-	if (!list_empty(&p->cgr_cbs[cgr->cgrid]))
-		goto release_lock;
+	/*
+	 * If there are no other CGR objects for this CGRID in the list, update
+	 * CSCN_TARG accordingly
+	 */
+	list_for_each_entry(i, &p->cgr_cbs, node)
+		if ((i->cgrid == cgr->cgrid) && i->cb)
+			goto release_lock;
 	ret = qman_query_cgr(cgr, &cgr_state);
 	if (ret)  {
 		/* add back to the list */
-		list_add(&cgr->node, &p->cgr_cbs[cgr->cgrid]);
+		list_add(&cgr->node, &p->cgr_cbs);
 		goto release_lock;
 	}
 	/* Overwrite TARG */
@@ -2188,7 +2188,7 @@ int qman_delete_cgr(struct qman_cgr *cgr)
 	ret = qman_modify_cgr(cgr, 0, &local_opts);
 	if (ret)
 		/* add back to the list */
-		list_add(&cgr->node, &p->cgr_cbs[cgr->cgrid]);
+		list_add(&cgr->node, &p->cgr_cbs);
 release_lock:
 	spin_unlock_irqrestore(&p->cgr_lock, irqflags);
 put_portal:
