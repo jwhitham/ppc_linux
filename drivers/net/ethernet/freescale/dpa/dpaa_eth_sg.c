@@ -725,8 +725,9 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct qm_fd		 fd;
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct net_device_stats *percpu_stats;
-	int queue_mapping;
-	int err;
+	int err = 0;
+	const int queue_mapping = dpa_get_queue_mapping(skb);
+	const bool nonlinear = skb_is_nonlinear(skb);
 
 	priv = netdev_priv(net_dev);
 	/* Non-migratable context, safe to use __this_cpu_ptr */
@@ -735,15 +736,19 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 	clear_fd(&fd);
 
-	queue_mapping = dpa_get_queue_mapping(skb);
-
-
 #ifdef CONFIG_FSL_DPA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
 		fd.cmd |= FM_FD_CMD_UPD;
 #endif
 
-	if (skb_is_nonlinear(skb)) {
+	/*
+	 * MAX_SKB_FRAGS is larger than our DPA_SGT_MAX_ENTRIES; make sure
+	 * we don't feed FMan with more fragments than it supports.
+	 * Btw, we're using the first sgt entry to store the linear part of
+	 * the skb, so we're one extra frag short.
+	 */
+	if (nonlinear &&
+		likely(skb_shinfo(skb)->nr_frags < DPA_SGT_MAX_ENTRIES)) {
 		/* Just create a S/G fd based on the skb */
 		err = skb_to_sg_fd(priv, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
@@ -770,20 +775,30 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		 * We're going to store the skb backpointer at the beginning
 		 * of the data buffer, so we need a privately owned skb
 		 */
-		skb = skb_unshare(skb, GFP_ATOMIC);
-		if (unlikely(!skb)) {
-			percpu_stats->tx_errors++;
-			return NETDEV_TX_OK;
+
+		/* Code borrowed from skb_unshare(). */
+		if (skb_cloned(skb)) {
+			struct sk_buff *nskb = skb_copy(skb, GFP_ATOMIC);
+			kfree_skb(skb);
+			skb = nskb;
+			/* skb_copy() has now linearized the skbuff. */
+		} else if (unlikely(nonlinear)) {
+			/*
+			 * We are here because the egress skb contains
+			 * more fragments than we support. In this case,
+			 * we have no choice but to linearize it ourselves.
+			 */
+			err = __skb_linearize(skb);
 		}
+		if (unlikely(!skb || err < 0))
+			/* Common out-of-memory error path */
+			goto enomem;
 
 		/* Finally, create a contig FD from this skb */
 		err = skb_to_contig_fd(priv, skb, &fd);
 	}
-	if (unlikely(err < 0)) {
-		percpu_stats->tx_errors++;
-		dev_kfree_skb(skb);
-		return NETDEV_TX_OK;
-	}
+	if (unlikely(err < 0))
+		goto skb_to_fd_failed;
 
 	if (unlikely(dpa_xmit(priv, percpu_stats, queue_mapping, &fd) < 0))
 		goto xmit_failed;
@@ -794,8 +809,10 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 xmit_failed:
 	_dpa_cleanup_tx_fd(priv, &fd);
+skb_to_fd_failed:
+enomem:
+	percpu_stats->tx_errors++;
 	dev_kfree_skb(skb);
-
 	return NETDEV_TX_OK;
 }
 
