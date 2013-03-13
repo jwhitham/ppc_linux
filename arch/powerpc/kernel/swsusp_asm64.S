@@ -46,10 +46,29 @@
 #define SL_r29		0xe8
 #define SL_r30		0xf0
 #define SL_r31		0xf8
-#define SL_SIZE		SL_r31+8
+#define SL_SPRG0	0x100
+#define SL_SPRG1	0x108
+#define SL_SPRG2	0x110
+#define SL_SPRG3	0x118
+#define SL_SPRG4	0x120
+#define SL_SPRG5	0x128
+#define SL_SPRG6	0x130
+#define SL_SPRG7	0x138
+#define SL_TCR		0x140
+#define SL_SIZE		SL_TCR+8
 
 /* these macros rely on the save area being
  * pointed to by r11 */
+
+#define SAVE_SPR(register)		\
+	mfspr	r0,SPRN_##register	;\
+	std	r0,SL_##register(r11)
+#define RESTORE_SPR(register)		\
+	ld	r0,SL_##register(r11)	;\
+	mtspr	SPRN_##register,r0
+#define RESTORE_SPRG(n)			\
+	ld	r0,SL_SPRG##n(r11)	;\
+	mtsprg	n,r0
 #define SAVE_SPECIAL(special)		\
 	mf##special	r0		;\
 	std	r0, SL_##special(r11)
@@ -103,8 +122,21 @@ _GLOBAL(swsusp_arch_suspend)
 	SAVE_REGISTER(r30)
 	SAVE_REGISTER(r31)
 	SAVE_SPECIAL(MSR)
-	SAVE_SPECIAL(SDR1)
 	SAVE_SPECIAL(XER)
+#ifdef CONFIG_PPC_BOOK3S_64
+	SAVE_SPECIAL(SDR1)
+#else
+	SAVE_SPR(TCR)
+	/* Save SPRGs */
+	SAVE_SPR(SPRG0)
+	SAVE_SPR(SPRG1)
+	SAVE_SPR(SPRG2)
+	SAVE_SPR(SPRG3)
+	SAVE_SPR(SPRG4)
+	SAVE_SPR(SPRG5)
+	SAVE_SPR(SPRG6)
+	SAVE_SPR(SPRG7)
+#endif
 
 	/* we push the stack up 128 bytes but don't store the
 	 * stack pointer on the stack like a real stackframe */
@@ -151,6 +183,7 @@ copy_page_loop:
 	bne+	copyloop
 nothing_to_copy:
 
+#ifdef CONFIG_PPC_BOOK3S_64
 	/* flush caches */
 	lis	r3, 0x10
 	mtctr	r3
@@ -167,6 +200,7 @@ nothing_to_copy:
 	sync
 
 	tlbia
+#endif
 
 	ld	r11,swsusp_save_area_ptr@toc(r2)
 
@@ -208,16 +242,42 @@ nothing_to_copy:
 	RESTORE_REGISTER(r29)
 	RESTORE_REGISTER(r30)
 	RESTORE_REGISTER(r31)
+
+#ifdef CONFIG_PPC_BOOK3S_64
 	/* can't use RESTORE_SPECIAL(MSR) */
 	ld	r0, SL_MSR(r11)
 	mtmsrd	r0, 0
 	RESTORE_SPECIAL(SDR1)
+#else
+	/* Save SPRGs */
+	RESTORE_SPRG(0)
+	RESTORE_SPRG(1)
+	RESTORE_SPRG(2)
+	RESTORE_SPRG(3)
+	RESTORE_SPRG(4)
+	RESTORE_SPRG(5)
+	RESTORE_SPRG(6)
+	RESTORE_SPRG(7)
+
+	RESTORE_SPECIAL(MSR)
+
+	/* Restore TCR and clear any pending bits in TSR. */
+	RESTORE_SPR(TCR)
+	lis	r0, (TSR_ENW | TSR_WIS | TSR_DIS | TSR_FIS)@h
+	mtspr	SPRN_TSR,r0
+
+	/* Kick decrementer */
+	li	r0,1
+	mtdec	r0
+#endif
 	RESTORE_SPECIAL(XER)
 
 	sync
 
 	addi	r1,r1,-128
+#ifdef CONFIG_PPC_BOOK3S_64
 	bl	slb_flush_and_rebolt
+#endif
 	bl	do_after_copyback
 	addi	r1,r1,128
 
