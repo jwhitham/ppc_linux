@@ -34,6 +34,15 @@ config FSL_DPA_PORTAL_SHARE
 	bool
 	default y
 
+config FSL_DPA_UIO
+	tristate "export USDPAA portals via UIO"
+	depends on UIO
+	default y
+	---help---
+	  Any portals unused by the kernel are exported as UIO devices for
+	  use by USDPAA (User Space DataPath Acceleration Architecture)
+	  applications.
+
 config FSL_BMAN
 	bool "Freescale Buffer Manager (BMan) support"
 	default y

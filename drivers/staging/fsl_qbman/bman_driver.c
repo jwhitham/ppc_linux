@@ -186,6 +186,13 @@ err:
 	return NULL;
 }
 
+static void destroy_pcfg(struct bm_portal_config *pcfg)
+{
+	iounmap(pcfg->addr_virt[DPA_PORTAL_CI]);
+	iounmap(pcfg->addr_virt[DPA_PORTAL_CE]);
+	kfree(pcfg);
+}
+
 static struct bm_portal_config *get_pcfg(struct list_head *list)
 {
 	struct bm_portal_config *pcfg;
@@ -195,6 +202,59 @@ static struct bm_portal_config *get_pcfg(struct list_head *list)
 	list_del(&pcfg->list);
 	return pcfg;
 }
+
+/* UIO handling callbacks */
+#define BMAN_UIO_PREAMBLE() \
+	const struct bm_portal_config *pcfg = \
+		container_of(__p, struct bm_portal_config, list)
+static int bman_uio_cb_init(const struct list_head *__p, struct uio_info *info)
+{
+	BMAN_UIO_PREAMBLE();
+	/* big enough for "bman-uio-xx" */
+	char *name = kzalloc(16, GFP_KERNEL);
+	if (!name)
+		return -ENOMEM;
+	sprintf(name, "bman-uio-%x", pcfg->public_cfg.index);
+	info->name = name;
+	info->mem[DPA_PORTAL_CE].name = "cena";
+	info->mem[DPA_PORTAL_CE].addr = pcfg->addr_phys[DPA_PORTAL_CE].start;
+	info->mem[DPA_PORTAL_CE].size =
+		resource_size(&pcfg->addr_phys[DPA_PORTAL_CE]);
+	info->mem[DPA_PORTAL_CE].memtype = UIO_MEM_PHYS;
+	info->mem[DPA_PORTAL_CI].name = "cinh";
+	info->mem[DPA_PORTAL_CI].addr = pcfg->addr_phys[DPA_PORTAL_CI].start;
+	info->mem[DPA_PORTAL_CI].size =
+		resource_size(&pcfg->addr_phys[DPA_PORTAL_CI]);
+	info->mem[DPA_PORTAL_CI].memtype = UIO_MEM_PHYS;
+	info->irq = pcfg->public_cfg.irq;
+	return 0;
+}
+static void bman_uio_cb_destroy(const struct list_head *__p,
+				struct uio_info *info)
+{
+	BMAN_UIO_PREAMBLE();
+	kfree(info->name);
+	/* We own this struct but had passed it to the dpa_uio layer as a const
+	 * so that we don't accidentally meddle with it in the dpa_uio code.
+	 * Here it's passed back to us for final clean it up, so de-constify. */
+	destroy_pcfg((struct bm_portal_config *)pcfg);
+}
+static void bman_uio_cb_interrupt(const struct list_head *__p)
+{
+	BMAN_UIO_PREAMBLE();
+	/* This is the only manipulation of a portal register that isn't in the
+	 * regular kernel portal driver (_high.c/_low.h). It is also the only
+	 * time the kernel touches a register on a portal that is otherwise
+	 * being driven by a user-space driver. So rather than messing up
+	 * encapsulation for one trivial call, I am hard-coding the offset to
+	 * the inhibit register and writing it directly from here. */
+	out_be32(pcfg->addr_virt[DPA_PORTAL_CI] + 0xe0c, ~(u32)0);
+}
+static const struct dpa_uio_vtable bman_uio = {
+	.init_uio = bman_uio_cb_init,
+	.destroy = bman_uio_cb_destroy,
+	.on_interrupt = bman_uio_cb_interrupt
+};
 
 static struct bman_portal *init_pcfg(struct bm_portal_config *pcfg)
 {
@@ -277,6 +337,7 @@ __setup("bportals=", parse_bportals);
  * 5. Shared portals are initialised on their respective cpus.
  * 6. Each remaining cpu is initialised to slave to one of the shared portals,
  *    which are selected in a round-robin fashion.
+ * Any portal configs left unused are exported as UIO devices.
  */
 static __init int bman_init(void)
 {
@@ -386,6 +447,19 @@ static __init int bman_init(void)
 		for_each_cpu(cpu, &slave_cpus)
 			init_slave(cpu);
 	pr_info("Bman portals initialised\n");
+#ifdef CONFIG_FSL_DPA_UIO
+	/* Export any left over portals as UIO devices */
+	do {
+		pcfg = get_pcfg(&unused_pcfgs);
+		if (!pcfg)
+			break;
+		ret = dpa_uio_register(&pcfg->list, &bman_uio);
+		if (ret) {
+			pr_err("Failure registering BMan UIO portal\n");
+			destroy_pcfg(pcfg);
+		}
+	} while (1);
+#endif
 	/* Initialise BPID allocation ranges */
 	for_each_compatible_node(dn, NULL, "fsl,bpid-range") {
 		ret = fsl_bpid_range_init(dn);

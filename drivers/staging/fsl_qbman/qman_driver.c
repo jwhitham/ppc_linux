@@ -414,6 +414,14 @@ err:
 	return NULL;
 }
 
+/* Destroy a previously-parsed portal config. */
+static void destroy_pcfg(struct qm_portal_config *pcfg)
+{
+	iounmap(pcfg->addr_virt[DPA_PORTAL_CI]);
+	iounmap(pcfg->addr_virt[DPA_PORTAL_CE]);
+	kfree(pcfg);
+}
+
 static struct qm_portal_config *get_pcfg(struct list_head *list)
 {
 	struct qm_portal_config *pcfg;
@@ -447,6 +455,74 @@ static void portal_set_cpu(const struct qm_portal_config *pcfg, int cpu)
 #endif
 		pr_warning("Failed to set QMan portal's stash request queue\n");
 }
+
+/* UIO handling callbacks */
+#define QMAN_UIO_PREAMBLE() \
+	const struct qm_portal_config *pcfg = \
+		container_of(__p, struct qm_portal_config, list)
+static int qman_uio_cb_init(const struct list_head *__p, struct uio_info *info)
+{
+	QMAN_UIO_PREAMBLE();
+	/* big enough for "qman-uio-xx" */
+	char *name = kzalloc(16, GFP_KERNEL);
+	if (!name)
+		return -ENOMEM;
+	sprintf(name, "qman-uio-%x", pcfg->public_cfg.index);
+	info->name = name;
+	info->mem[DPA_PORTAL_CE].name = "cena";
+	info->mem[DPA_PORTAL_CE].addr = pcfg->addr_phys[DPA_PORTAL_CE].start;
+	info->mem[DPA_PORTAL_CE].size =
+		resource_size(&pcfg->addr_phys[DPA_PORTAL_CE]);
+	info->mem[DPA_PORTAL_CE].memtype = UIO_MEM_PHYS;
+	info->mem[DPA_PORTAL_CI].name = "cinh";
+	info->mem[DPA_PORTAL_CI].addr = pcfg->addr_phys[DPA_PORTAL_CI].start;
+	info->mem[DPA_PORTAL_CI].size =
+		resource_size(&pcfg->addr_phys[DPA_PORTAL_CI]);
+	info->mem[DPA_PORTAL_CI].memtype = UIO_MEM_PHYS;
+	info->irq = pcfg->public_cfg.irq;
+	return 0;
+}
+static void qman_uio_cb_destroy(const struct list_head *__p,
+				struct uio_info *info)
+{
+	QMAN_UIO_PREAMBLE();
+	kfree(info->name);
+	/* We own this struct but had passed it to the dpa_uio layer as a const
+	 * so that we don't accidentally meddle with it in the dpa_uio code.
+	 * Here it's passed back to us for final clean it up, so de-constify. */
+	destroy_pcfg((struct qm_portal_config *)pcfg);
+}
+static int qman_uio_cb_open(const struct list_head *__p)
+{
+	QMAN_UIO_PREAMBLE();
+	/* Bind stashing LIODNs to the CPU we are currently executing on, and
+	 * set the portal to use the stashing request queue corresonding to the
+	 * cpu as well. The user-space driver assumption is that the pthread has
+	 * to already be affine to one cpu only before opening a portal. If that
+	 * check is circumvented, the only risk is a performance degradation -
+	 * stashing will go to whatever cpu they happened to be running on when
+	 * opening the device file, and if that isn't the cpu they subsequently
+	 * bind to and do their polling on, tough. */
+	portal_set_cpu(pcfg, hard_smp_processor_id());
+	return 0;
+}
+static void qman_uio_cb_interrupt(const struct list_head *__p)
+{
+	QMAN_UIO_PREAMBLE();
+	/* This is the only manipulation of a portal register that isn't in the
+	 * regular kernel portal driver (_high.c/_low.h). It is also the only
+	 * time the kernel touches a register on a portal that is otherwise
+	 * being driven by a user-space driver. So rather than messing up
+	 * encapsulation for one trivial call, I am hard-coding the offset to
+	 * the inhibit register and writing it directly from here. */
+	out_be32(pcfg->addr_virt[DPA_PORTAL_CI] + 0xe0c, ~(u32)0);
+}
+static const struct dpa_uio_vtable qman_uio = {
+	.init_uio = qman_uio_cb_init,
+	.destroy = qman_uio_cb_destroy,
+	.on_open = qman_uio_cb_open,
+	.on_interrupt = qman_uio_cb_interrupt
+};
 
 static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
 {
@@ -625,6 +701,19 @@ static __init int qman_init(void)
 		for_each_cpu(cpu, &slave_cpus)
 			init_slave(cpu);
 	pr_info("Qman portals initialised\n");
+#ifdef CONFIG_FSL_DPA_UIO
+	/* Export any left over portals as UIO devices */
+	do {
+		pcfg = get_pcfg(&unused_pcfgs);
+		if (!pcfg)
+			break;
+		ret = dpa_uio_register(&pcfg->list, &qman_uio);
+		if (ret) {
+			pr_err("Failure registering QMan UIO portal\n");
+			destroy_pcfg(pcfg);
+		}
+	} while (1);
+#endif
 	/* Initialise FQID allocation ranges */
 	for_each_compatible_node(dn, NULL, "fsl,fqid-range") {
 		ret = fsl_fqid_range_init(dn);
