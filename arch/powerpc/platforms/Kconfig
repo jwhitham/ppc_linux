@@ -87,6 +87,18 @@ config MPIC
 	bool
 	default n
 
+config MPIC_TIMER
+	bool "MPIC Global Timer"
+	depends on MPIC && FSL_SOC
+	default n
+	help
+	  The MPIC global timer is a hardware timer inside the
+	  Freescale PIC comply to Open-PIC standard. When the
+	  timer is timeout of the specified interval, the hardware
+	  timer generates an interrupt. The driver currently is
+	  only tested on fsl chip, but it can potentially support
+	  other global timers complying to Open-PIC standard.
+
 config PPC_EPAPR_HV_PIC
 	bool
 	default n
