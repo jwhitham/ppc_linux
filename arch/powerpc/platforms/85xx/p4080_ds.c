@@ -79,6 +79,7 @@ define_machine(p4080_ds) {
 	.calibrate_decr		= generic_calibrate_decr,
 	.progress		= udbg_progress,
 	.power_save		= e500_idle,
+        .init_early             = corenet_ds_init_early,
 };
 
 machine_arch_initcall(p4080_ds, corenet_ds_publish_devices);

@@ -222,6 +222,7 @@ config P2041_RDB
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+        select HAS_FSL_QBMAN
 	help
 	  This option enables support for the P2041 RDB board
 
@@ -235,6 +236,7 @@ config P3041_DS
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+        select HAS_FSL_QBMAN
 	help
 	  This option enables support for the P3041 DS board
 
@@ -248,6 +250,7 @@ config P4080_DS
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+        select HAS_FSL_QBMAN
 	help
 	  This option enables support for the P4080 DS board
 
@@ -264,6 +267,7 @@ config P5020_DS
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+        select HAS_FSL_QBMAN
 	help
 	  This option enables support for the P5020 DS board
 
@@ -278,6 +282,7 @@ config P5040_DS
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+        select HAS_FSL_QBMAN
 	help
 	  This option enables support for the P5040 DS board
 
