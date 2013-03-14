@@ -7,6 +7,8 @@ SD or MMC device.
 The following attributes are read/write.
 
 	force_ro		Enforce read-only access even if write protect switch is off.
+	bouncesz		Support dynamic adjustment of bounce buffer size at runtime,
+				from 4096 to 4194304, integer multiple of 512 bytes only.
 
 SD and MMC Device Attributes
 ============================

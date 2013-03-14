@@ -22,6 +22,10 @@
 
 #define MMC_QUEUE_BOUNCESZ	65536
 
+#ifdef CONFIG_MMC_BLOCK_BOUNCE
+unsigned mmc_queue_bouncesz = MMC_QUEUE_BOUNCESZ;
+#endif
+
 #define MMC_QUEUE_SUSPENDED	(1 << 0)
 
 /*
@@ -191,7 +195,7 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 	if (host->max_segs == 1) {
 		unsigned int bouncesz;
 
-		bouncesz = MMC_QUEUE_BOUNCESZ;
+		bouncesz = mmc_queue_bouncesz;
 
 		if (bouncesz > host->max_req_size)
 			bouncesz = host->max_req_size;
@@ -333,6 +337,102 @@ void mmc_cleanup_queue(struct mmc_queue *mq)
 	mq->card = NULL;
 }
 EXPORT_SYMBOL(mmc_cleanup_queue);
+
+/**
+ * mmc_reinit_bounce_queue - re-initialise a bounce buffer.
+ * @mq: mmc queue
+ * @card: mmc card to attach this queue
+ * @bouncesz: the bounce size that need re-initializing
+ *
+ * Initialise a MMC card request queue.
+ */
+#ifdef CONFIG_MMC_BLOCK_BOUNCE
+int mmc_reinit_bounce_queue(struct mmc_queue *mq, struct mmc_card *card,
+		   unsigned int bouncesz)
+{
+	struct mmc_host *host = card->host;
+	struct mmc_queue_req *mqrq_cur = &mq->mqrq[0];
+	struct mmc_queue_req *mqrq_prev = &mq->mqrq[1];
+	int ret;
+	struct scatterlist *curr_bounce_sg, *prev_bounce_sg;
+	char *curr_bounce_buf, *prev_bounce_buf;
+
+	mmc_claim_host(card->host);
+
+	bouncesz = min(bouncesz, host->max_req_size);
+	bouncesz = min(bouncesz, host->max_seg_size);
+	bouncesz = min(bouncesz, host->max_blk_count * 512);
+
+	/* store current using addr of bounce_buf and bounce_sg */
+	curr_bounce_sg = mqrq_cur->bounce_sg;
+	prev_bounce_sg = mqrq_prev->bounce_sg;
+	curr_bounce_buf = mqrq_cur->bounce_buf;
+	prev_bounce_buf = mqrq_prev->bounce_buf;
+
+	if (host->max_segs != 1)
+		goto restore_queue;
+
+	/* realloc bounce queue use given bounce size */
+	mqrq_cur->bounce_buf = kmalloc(bouncesz, GFP_KERNEL);
+	if (!mqrq_cur->bounce_buf) {
+		printk(KERN_WARNING "%s: unable to "
+			"allocate bounce cur buffer\n",
+			mmc_card_name(card));
+		ret = -ENOMEM;
+		goto restore_queue;
+	}
+
+	mqrq_prev->bounce_buf = kmalloc(bouncesz, GFP_KERNEL);
+	if (!mqrq_prev->bounce_buf) {
+		printk(KERN_WARNING "%s: unable to "
+			"allocate bounce prev buffer\n",
+			mmc_card_name(card));
+		kfree(mqrq_cur->bounce_buf);
+		mqrq_cur->bounce_buf = NULL;
+		ret = -ENOMEM;
+		goto restore_queue;
+	}
+
+	mqrq_cur->bounce_sg =
+		mmc_alloc_sg(bouncesz / 512, &ret);
+	if (ret)
+		goto cleanup_queue;
+
+	mqrq_prev->bounce_sg =
+		mmc_alloc_sg(bouncesz / 512, &ret);
+	if (ret)
+		goto cleanup_queue;
+
+	blk_queue_max_hw_sectors(mq->queue, bouncesz / 512);
+	blk_queue_max_segments(mq->queue, bouncesz / 512);
+	blk_queue_max_segment_size(mq->queue, bouncesz);
+	mmc_queue_bouncesz = bouncesz;
+
+	kfree(curr_bounce_sg);
+	kfree(prev_bounce_sg);
+	kfree(curr_bounce_buf);
+	kfree(prev_bounce_buf);
+
+	mmc_release_host(card->host);
+	return 0;
+
+cleanup_queue:
+	/* cleanup bounce queue first */
+	kfree(mqrq_cur->sg);
+	kfree(mqrq_cur->bounce_buf);
+	kfree(mqrq_prev->sg);
+	kfree(mqrq_prev->bounce_buf);
+
+restore_queue:
+	mqrq_cur->bounce_buf = curr_bounce_buf;
+	mqrq_prev->bounce_buf = prev_bounce_buf;
+	mqrq_cur->bounce_sg = curr_bounce_sg;
+	mqrq_prev->bounce_sg = prev_bounce_sg;
+
+	mmc_release_host(card->host);
+	return ret;
+}
+#endif
 
 /**
  * mmc_queue_suspend - suspend a MMC request queue
