@@ -11,6 +11,7 @@ obj-y += common.o
 
 obj-$(CONFIG_BSC9131_RDB) += bsc913x_rdb.o
 obj-$(CONFIG_BSC9132_QDS) += bsc913x_qds.o
+obj-$(CONFIG_C293_PCIE)   += c293pcie.o
 obj-$(CONFIG_MPC8540_ADS) += mpc85xx_ads.o
 obj-$(CONFIG_MPC8560_ADS) += mpc85xx_ads.o
 obj-$(CONFIG_MPC85xx_CDS) += mpc85xx_cds.o
