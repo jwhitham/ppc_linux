@@ -717,6 +717,7 @@
 #define MMUBE1_VBE4		0x00000002
 #define MMUBE1_VBE5		0x00000001
 
+#define TMRN_TMCFG0	0x010	/* Thread Management Configuration Register 0 */
 #define TMRN_TPRI0	0x0C0	/* Thread Priority Register 0 */
 #define TMRN_TPRI1	0x0C1	/* Thread Priority Register 1 */
 #define TMRN_TPRI2	0x0C2	/* Thread Priority Register 2 */

@@ -1363,6 +1363,11 @@ _STATIC(init_core_book3e)
 
 _GLOBAL(fsl_enable_threads)
 BEGIN_FTR_SECTION
+	MFTMR(TMRN_TMCFG0, 3)
+	andi. r3,r3,0x3f
+	cmpi 0,r3,2
+	blt 2f
+
 	/* Disable the other thread */
 	li	r3,2
 	mtspr	SPRN_TENC,r3
@@ -1386,8 +1391,7 @@ BEGIN_FTR_SECTION
 	li	r3, 2
 	mtspr	SPRN_TENS, r3
 END_FTR_SECTION_IFSET(CPU_FTR_SMT)
-
-	blr
+2:	blr
 
 _STATIC(init_thread_book3e)
 	lis	r3,(SPRN_EPCR_ICM | SPRN_EPCR_GICM)@h
