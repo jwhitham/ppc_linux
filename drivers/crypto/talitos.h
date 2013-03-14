@@ -31,6 +31,7 @@
 #define TALITOS_NAPI_WEIGHT	12
 #define TALITOS_TIMEOUT 100000
 #define TALITOS_MAX_DATA_LEN 65535
+#define TALITOS_MAX_DESCRIPTOR_NR 256
 
 #define DESC_TYPE(desc_hdr) ((be32_to_cpu(desc_hdr) >> 3) & 0x1f)
 #define PRIMARY_EU(desc_hdr) ((be32_to_cpu(desc_hdr) >> 28) & 0xf)
@@ -133,7 +134,57 @@ struct talitos_private {
 
 	/* hwrng device */
 	struct hwrng rng;
+
+#ifdef CONFIG_CRYPTO_DEV_TALITOS_RAIDXOR
+	/* XOR Device */
+	struct dma_device dma_dev_common;
+#endif
 };
+
+#ifdef CONFIG_CRYPTO_DEV_TALITOS_RAIDXOR
+/**
+ * talitos_xor_chan - context management for the async_tx channel
+ * @completed_cookie: the last completed cookie
+ * @desc_lock: lock for tx queue
+ * @total_desc: number of descriptors allocated
+ * @submit_q: queue of submitted descriptors
+ * @pending_q: queue of pending descriptors
+ * @in_progress_q: queue of descriptors in progress
+ * @free_desc: queue of unused descriptors
+ * @dev: talitos device implementing this channel
+ * @common: the corresponding xor channel in async_tx
+ */
+struct talitos_xor_chan {
+	dma_cookie_t completed_cookie;
+	spinlock_t desc_lock;
+	unsigned int total_desc;
+	struct list_head submit_q;
+	struct list_head pending_q;
+	struct list_head in_progress_q;
+	struct list_head free_desc;
+	struct device *dev;
+	struct dma_chan common;
+};
+
+/**
+ * talitos_xor_desc - software xor descriptor
+ * @async_tx: the referring async_tx descriptor
+ * @node:
+ * @hwdesc: h/w descriptor
+ * @unmap_src_cnt: number of xor sources
+ * @unmap_len: transaction byte count
+ * @idx: index of xor sources
+ */
+struct talitos_xor_desc {
+	struct dma_async_tx_descriptor async_tx;
+	struct list_head tx_list;
+	struct list_head node;
+	struct talitos_desc hwdesc;
+	unsigned int unmap_src_cnt;
+	unsigned int unmap_len;
+	unsigned int idx;
+};
+#endif
 
 extern int talitos_submit(struct device *dev, int ch, struct talitos_desc *desc,
 			  void (*callback)(struct device *dev,
@@ -286,6 +337,7 @@ extern int talitos_submit(struct device *dev, int ch, struct talitos_desc *desc,
 /* primary execution unit mode (MODE0) and derivatives */
 #define	DESC_HDR_MODE0_ENCRYPT		cpu_to_be32(0x00100000)
 #define	DESC_HDR_MODE0_AESU_CBC		cpu_to_be32(0x00200000)
+#define	DESC_HDR_MODE0_AESU_XOR         cpu_to_be32(0x0c600000)
 #define	DESC_HDR_MODE0_DEU_CBC		cpu_to_be32(0x00400000)
 #define	DESC_HDR_MODE0_DEU_3DES		cpu_to_be32(0x00200000)
 #define	DESC_HDR_MODE0_MDEU_CONT	cpu_to_be32(0x08000000)
@@ -346,6 +398,7 @@ extern int talitos_submit(struct device *dev, int ch, struct talitos_desc *desc,
 #define DESC_HDR_TYPE_IPSEC_ESP			cpu_to_be32(1 << 3)
 #define DESC_HDR_TYPE_COMMON_NONSNOOP_NO_AFEU	cpu_to_be32(2 << 3)
 #define DESC_HDR_TYPE_HMAC_SNOOP_NO_AFEU	cpu_to_be32(4 << 3)
+#define DESC_HDR_TYPE_RAID_XOR                  cpu_to_be32(21 << 3)
 
 /* link table extent field bits */
 #define DESC_PTR_LNKTBL_JUMP			0x80

@@ -222,6 +222,15 @@ config CRYPTO_DEV_TALITOS
 	  To compile this driver as a module, choose M here: the module
 	  will be called talitos.
 
+config CRYPTO_DEV_TALITOS_RAIDXOR
+	bool "Talitos RAID5 XOR Calculation Offload"
+	default y
+	select DMA_ENGINE
+	depends on CRYPTO_DEV_TALITOS
+	help
+	  Say 'Y' here to use the Freescale Security Engine (SEC) to
+	  offload RAID XOR parity Calculation
+
 config CRYPTO_DEV_IXP4XX
 	tristate "Driver for IXP4xx crypto hardware acceleration"
 	depends on ARCH_IXP4XX && IXP4XX_QMGR && IXP4XX_NPE
