@@ -2104,7 +2104,9 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 skb_copied:
 	skb->protocol = eth_type_trans(skb, net_dev);
 
-	if (unlikely(dpa_check_rx_mtu(skb, net_dev->mtu))) {
+	/* IP Reassembled frames are allowed to be larger than MTU */
+	if (unlikely(dpa_check_rx_mtu(skb, net_dev->mtu) &&
+		!(fd->status & FM_FD_IPR))) {
 		percpu_priv->stats.rx_dropped++;
 		dev_kfree_skb_any(skb);
 		goto out;
