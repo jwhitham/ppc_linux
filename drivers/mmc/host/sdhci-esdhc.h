@@ -48,6 +48,7 @@ static inline void esdhc_set_clock(struct sdhci_host *host, unsigned int clock)
 	int pre_div = 2;
 	int div = 1;
 	u32 temp;
+	u32 actual_clk;
 
 	if (clock == 0)
 		goto out;
@@ -66,6 +67,7 @@ static inline void esdhc_set_clock(struct sdhci_host *host, unsigned int clock)
 	dev_dbg(mmc_dev(host->mmc), "desired SD clock: %d, actual: %d\n",
 		clock, host->max_clk / pre_div / div);
 
+	actual_clk = host->max_clk / pre_div / div;
 	pre_div >>= 1;
 	div--;
 
@@ -75,6 +77,11 @@ static inline void esdhc_set_clock(struct sdhci_host *host, unsigned int clock)
 		| (pre_div << ESDHC_PREDIV_SHIFT));
 	sdhci_writel(host, temp, ESDHC_SYSTEM_CONTROL);
 	mdelay(1);
+
+	if (host->quirks & SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK) {
+		host->timeout_clk = actual_clk / 1000;
+		host->mmc->max_discard_to = (1 << 27) / host->timeout_clk;
+	}
 out:
 	host->clock = clock;
 }
