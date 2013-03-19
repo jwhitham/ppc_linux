@@ -59,9 +59,6 @@
 #define __devexit
 #endif
 
-#define cpu_printk(level, format, arg...) \
-	pr_##level("cpu%d: " format, raw_smp_processor_id(), ##arg)
-
 /* Simple enum of FQ types - used for array indexing */
 enum {RX, TX};
 
