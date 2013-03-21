@@ -360,9 +360,107 @@
 	};
 
 	clockgen: global-utilities@e1000 {
-		compatible = "fsl,p4080-clockgen", "fsl,qoriq-clockgen-1.0";
+		compatible = "fsl,p4080-clockgen", "fsl,qoriq-clockgen-1.0",
+				   "fixed-clock";
 		reg = <0xe1000 0x1000>;
 		clock-frequency = <0>;
+		clock-output-names = "sysclk";
+		#clock-cells = <0>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+		pll0: pll0@800 {
+			#clock-cells = <1>;
+			reg = <0x800>;
+			compatible = "fsl,core-pll-clock";
+			clocks = <&clockgen>;
+			clock-output-names = "pll0", "pll0-div2";
+		};
+		pll1: pll1@820 {
+			#clock-cells = <1>;
+			reg = <0x820>;
+			compatible = "fsl,core-pll-clock";
+			clocks = <&clockgen>;
+			clock-output-names = "pll1", "pll1-div2";
+		};
+		pll2: pll2@840 {
+			#clock-cells = <1>;
+			reg = <0x840>;
+			compatible = "fsl,core-pll-clock";
+			clocks = <&clockgen>;
+			clock-output-names = "pll2", "pll2-div2";
+		};
+		pll3: pll2@860 {
+			#clock-cells = <1>;
+			reg = <0x860>;
+			compatible = "fsl,core-pll-clock";
+			clocks = <&clockgen>;
+			clock-output-names = "pll3", "pll3-div2";
+		};
+		mux0: mux0@0 {
+			#clock-cells = <0>;
+			reg = <0x0>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll0 0>, <&pll0 1>, <&pll1 0>, <&pll1 1>;
+			clock-names = "pll0_0", "pll0_1", "pll1_0", "pll1_1";
+			clock-output-names = "cmux0";
+		};
+		mux1: mux1@20 {
+			#clock-cells = <0>;
+			reg = <0x20>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll0 0>, <&pll0 1>, <&pll1 0>, <&pll1 1>;
+			clock-names = "pll0_0", "pll0_1", "pll1_0", "pll1_1";
+			clock-output-names = "cmux1";
+		};
+		mux2: mux2@40 {
+			#clock-cells = <0>;
+			reg = <0x40>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll0 0>, <&pll0 1>, <&pll1 0>, <&pll1 1>;
+			clock-names = "pll0_0", "pll0_1", "pll1_0", "pll1_1";
+			clock-output-names = "cmux2";
+		};
+		mux3: mux3@60 {
+			#clock-cells = <0>;
+			reg = <0x60>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll0 0>, <&pll0 1>, <&pll1 0>, <&pll1 1>;
+			clock-names = "pll0_0", "pll0_1", "pll1_0", "pll1_1";
+			clock-output-names = "cmux3";
+		};
+		mux4: mux4@80 {
+			#clock-cells = <0>;
+			reg = <0x80>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll2 0>, <&pll2 1>, <&pll3 0>, <&pll3 1>;
+			clock-names = "pll2_0", "pll2_1", "pll3_0", "pll3_1";
+			clock-output-names = "cmux4";
+		};
+		mux5: mux5@a0 {
+			#clock-cells = <0>;
+			reg = <0xa0>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll2 0>, <&pll2 1>, <&pll3 0>, <&pll3 1>;
+			clock-names = "pll2_0", "pll2_1", "pll3_0", "pll3_1";
+			clock-output-names = "cmux5";
+		};
+		mux6: mux6@c0 {
+			#clock-cells = <0>;
+			reg = <0xc0>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll2 0>, <&pll2 1>, <&pll3 0>, <&pll3 1>;
+			clock-names = "pll2_0", "pll2_1", "pll3_0", "pll3_1";
+			clock-output-names = "cmux6";
+		};
+		mux7: mux7@e0 {
+			#clock-cells = <0>;
+			reg = <0xe0>;
+			compatible = "fsl,core-mux-clock";
+			clocks = <&pll2 0>, <&pll2 1>, <&pll3 0>, <&pll3 1>;
+			clock-names = "pll2_0", "pll2_1", "pll3_0", "pll3_1";
+			clock-output-names = "cmux7";
+		};
 	};
 
 	rcpm: global-utilities@e2000 {
