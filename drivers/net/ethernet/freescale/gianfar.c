@@ -552,10 +552,10 @@ static void free_gfar_dev(struct gfar_private *priv)
 {
 	int i, j;
 
-	for (i = 0; i < priv->num_grps; i++)
+	for (i = 0; i < MAXGROUPS; i++)
 		for (j = 0; j < GFAR_NUM_IRQS; j++) {
-			kfree(priv->gfargrp[i].irqinfo[j]);
-			priv->gfargrp[i].irqinfo[j] = NULL;
+			kfree(priv->irqinfo[i][j]);
+			priv->irqinfo[i][j] = NULL;
 		}
 
 	free_netdev(priv->ndev);
@@ -585,16 +585,20 @@ static int gfar_parse_group(struct device_node *np,
 	int i;
 
 	for (i = 0; i < GFAR_NUM_IRQS; i++) {
-		grp->irqinfo[i] = kzalloc(sizeof(struct gfar_irqinfo),
-					  GFP_KERNEL);
-		if (!grp->irqinfo[i])
+		struct gfar_irqinfo *irqinfo = NULL;
+
+		irqinfo = kzalloc(sizeof(*irqinfo), GFP_KERNEL);
+		if (!irqinfo)
 			return -ENOMEM;
+		priv->irqinfo[priv->num_grps][i] = irqinfo;
 	}
 
 	grp->regs = of_iomap(np, 0);
 	if (!grp->regs)
 		return -ENOMEM;
 
+	grp->grp_id = priv->num_grps;
+	grp->priv = priv;
 	gfar_irq(grp, TX)->irq = irq_of_parse_and_map(np, 0);
 
 	/* If we aren't the FEC we have multiple interrupts */
@@ -607,8 +611,6 @@ static int gfar_parse_group(struct device_node *np,
 			return -EINVAL;
 	}
 
-	grp->grp_id = priv->num_grps;
-	grp->priv = priv;
 	spin_lock_init(&grp->grplock);
 	if (priv->mode == MQ_MG_MODE) {
 		queue_mask = (u32 *)of_get_property(np, "fsl,rx-bit-map", NULL);

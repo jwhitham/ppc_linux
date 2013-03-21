@@ -1171,12 +1171,10 @@ struct gfar_priv_grp {
 	unsigned int tstat;
 	unsigned long num_tx_queues;
 	unsigned long tx_bit_map;
-
-	struct gfar_irqinfo *irqinfo[GFAR_NUM_IRQS];
 };
 
 #define gfar_irq(grp, ID) \
-	((grp)->irqinfo[GFAR_##ID])
+	((grp)->priv->irqinfo[(grp)->grp_id][GFAR_##ID])
 
 enum gfar_errata {
 	GFAR_ERRATA_74		= 0x01,
@@ -1251,6 +1249,8 @@ struct gfar_private {
 	int oldspeed;
 	int oldduplex;
 	int oldlink;
+
+	struct gfar_irqinfo *irqinfo[MAXGROUPS][GFAR_NUM_IRQS];
 
 	/* Bitfield update lock */
 	spinlock_t bflock;
