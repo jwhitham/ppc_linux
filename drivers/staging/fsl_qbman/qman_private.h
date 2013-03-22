@@ -98,6 +98,70 @@ static inline void qman_cgrs_xor(struct qman_cgrs *dest,
 		*(_d++) = *(_a++) ^ *(_b++);
 }
 
+	/* ----------------------- */
+	/* CEETM Congestion Groups */
+	/* ----------------------- */
+/* This wrapper represents a bit-array for the state of the 512 Qman CEETM
+ * congestion groups.
+ */
+struct qman_ccgrs {
+	struct __qm_mcr_querycongestion q[2];
+};
+static inline void qman_ccgrs_init(struct qman_ccgrs *c)
+{
+	memset(c, 0, sizeof(*c));
+}
+static inline void qman_ccgrs_fill(struct qman_ccgrs *c)
+{
+	memset(c, 0xff, sizeof(*c));
+}
+static inline int qman_ccgrs_get(struct qman_ccgrs *c, int num)
+{
+	if (num < __CGR_NUM)
+		return QM_MCR_QUERYCONGESTION(&c->q[0], num);
+	else
+		return QM_MCR_QUERYCONGESTION(&c->q[1], (num - __CGR_NUM));
+}
+static inline int qman_ccgrs_next(struct qman_ccgrs *c, int num)
+{
+	while ((++num < __CGR_NUM) && !qman_ccgrs_get(c, num))
+		;
+	return num;
+}
+static inline void qman_ccgrs_cp(struct qman_ccgrs *dest,
+					const struct qman_ccgrs *src)
+{
+	memcpy(dest, src, sizeof(*dest));
+}
+static inline void qman_ccgrs_and(struct qman_ccgrs *dest,
+			const struct qman_ccgrs *a, const struct qman_ccgrs *b)
+{
+	int ret, i;
+	u32 *_d;
+	const u32 *_a, *_b;
+	for (i = 0; i < 2; i++) {
+		_d = dest->q[i].__state;
+		_a = a->q[i].__state;
+		_b = b->q[i].__state;
+		for (ret = 0; ret < 8; ret++)
+			*(_d++) = *(_a++) & *(_b++);
+	}
+}
+static inline void qman_ccgrs_xor(struct qman_ccgrs *dest,
+			const struct qman_ccgrs *a, const struct qman_ccgrs *b)
+{
+	int ret, i;
+	u32 *_d;
+	const u32 *_a, *_b;
+	for (i = 0; i < 2; i++) {
+		_d = dest->q[i].__state;
+		_a = a->q[i].__state;
+		_b = b->q[i].__state;
+		for (ret = 0; ret < 8; ret++)
+			*(_d++) = *(_a++) ^ *(_b++);
+	}
+}
+
 /* used by CCSR and portal interrupt code */
 enum qm_isr_reg {
 	qm_isr_status = 0,
@@ -288,6 +352,7 @@ int qman_setup_fq_lookup_table(size_t num_entries);
 
 /* CEETM related */
 #define QMAN_CEETM_MAX	2
+extern u8 num_ceetms;
 extern struct qm_ceetm qman_ceetms[QMAN_CEETM_MAX];
 int qman_sp_enable_ceetm_mode(enum qm_dc_portal portal, u16 sub_portal);
 int qman_sp_disable_ceetm_mode(enum qm_dc_portal portal, u16 sub_portal);

@@ -57,6 +57,7 @@ enum qm_dc_portal {
 };
 
 /* Portal processing (interrupt) sources */
+#define QM_PIRQ_CCSCI	0x00200000	/* CEETM Congestion State Change */
 #define QM_PIRQ_CSCI	0x00100000	/* Congestion State Change */
 #define QM_PIRQ_EQCI	0x00080000	/* Enqueue Command Committed */
 #define QM_PIRQ_EQRI	0x00040000	/* EQCR Ring (below threshold) */
@@ -65,7 +66,7 @@ enum qm_dc_portal {
 /* This mask contains all the interrupt sources that need handling except DQRI,
  * ie. that if present should trigger slow-path processing. */
 #define QM_PIRQ_SLOW	(QM_PIRQ_CSCI | QM_PIRQ_EQCI | QM_PIRQ_EQRI | \
-			QM_PIRQ_MRI)
+			QM_PIRQ_MRI | QM_PIRQ_CCSCI)
 
 /* --- Clock speed --- */
 /* A qman driver instance may or may not know the current qman clock speed.
@@ -1243,7 +1244,7 @@ struct qm_mcr_ceetm_ccgr_query {
 			u64 i_cnt:40;
 			u8 __reserved4[3];
 			u64 a_cnt:40;
-			u64 cscn_targ_swp[2];
+			u32 cscn_targ_swp[4];
 		} __packed cm_query;
 		struct {
 			u8 dnc;
@@ -1262,7 +1263,7 @@ struct qm_mcr_ceetm_ccgr_query {
 		} __packed dn_query;
 		struct {
 			u8 __reserved2[24];
-			u16 ccg_state[16];
+			struct  __qm_mcr_querycongestion state;
 		} __packed congestion_state;
 
 	};
@@ -1685,7 +1686,7 @@ int qman_poll_dqrr(unsigned int limit);
 u32 qman_poll_slow(void);
 
 /**
- * qman_poll - legacey wrapper for qman_poll_dqrr() and qman_poll_slow()
+ * qman_poll - legacy wrapper for qman_poll_dqrr() and qman_poll_slow()
  *
  * Dispatcher logic on a cpu can use this to trigger any maintenance of the
  * affine portal. There are two classes of portal processing in question;
@@ -2346,6 +2347,7 @@ typedef void (*qman_cb_ccgr)(struct qm_ceetm_ccg *ccg, void *cb_ctx,
 struct qm_ceetm_ccg {
 	struct qm_ceetm_channel *parent;
 	struct list_head node;
+	struct list_head cb_node;
 	qman_cb_ccgr cb;
 	void *cb_ctx;
 	unsigned int idx;
@@ -3063,17 +3065,17 @@ struct qm_ceetm_ccg_params {
 	/* Boolean fields together in a single bitfield struct */
 	struct {
 		/* Whether to count bytes or frames. 1==frames */
-		int mode:1;
+		u8 mode:1;
 		/* En/disable tail-drop. 1==enable */
-		int td_en:1;
+		u8 td_en:1;
 		/* Tail-drop on congestion-state or threshold. 1=threshold */
-		int td_mode:1;
+		u8 td_mode:1;
 		/* Generate congestion state change notifications. 1==enable */
-		int cscn_en:1;
+		u8 cscn_en:1;
 		/* Enable WRED rejections (per colour). 1==enable */
-		int wr_en_g:1;
-		int wr_en_y:1;
-		int wr_en_r:1;
+		u8 wr_en_g:1;
+		u8 wr_en_y:1;
+		u8 wr_en_r:1;
 	} __packed;
 	/* Tail-drop threshold. See qm_cgr_thres_[gs]et64(). */
 	struct qm_cgr_cs_thres td_thres;

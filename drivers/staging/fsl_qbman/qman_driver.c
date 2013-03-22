@@ -47,6 +47,8 @@ u16 qman_portal_max;
 
 u32 qman_clk;
 struct qm_ceetm qman_ceetms[QMAN_CEETM_MAX];
+/* the qman ceetm instances on the given SoC */
+u8 num_ceetms;
 
 /* size of the fqd region in bytes */
 #ifdef CONFIG_FSL_QMAN_FQ_LOOKUP
@@ -596,7 +598,7 @@ static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
 		/* Determine what should be interrupt-vs-poll driven */
 #ifdef CONFIG_FSL_DPA_PIRQ_SLOW
 		irq_sources |= QM_PIRQ_EQCI | QM_PIRQ_EQRI | QM_PIRQ_MRI |
-			       QM_PIRQ_CSCI;
+			       QM_PIRQ_CSCI | QM_PIRQ_CCSCI;
 #endif
 #ifdef CONFIG_FSL_DPA_PIRQ_FAST
 		irq_sources |= QM_PIRQ_DQRI;
@@ -795,8 +797,10 @@ static __init int qman_init(void)
 	}
 
 	/* Parse CEETM */
+	num_ceetms = 0;
 	for_each_compatible_node(dn, NULL, "fsl,qman-ceetm") {
 		ret = fsl_ceetm_init(dn);
+		num_ceetms++;
 		if (ret)
 			return ret;
 	}
