@@ -131,6 +131,15 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 	/* Prevent SDHCI core from writing reserved bits (e.g. HISPD). */
 	if (reg == SDHCI_HOST_CONTROL)
 		val &= ~ESDHC_HOST_CONTROL_RES;
+
+	/* If we have this quirk just use reset cmd and reset data to
+	 * instead of reset all.
+	 */
+	if ((reg == SDHCI_SOFTWARE_RESET) &&
+			(host->quirks2 & SDHCI_QUIRK2_BROKEN_RESET_ALL) &&
+			(val & SDHCI_RESET_ALL))
+		val = SDHCI_RESET_CMD | SDHCI_RESET_DATA;
+
 	sdhci_be32bs_writeb(host, val, reg);
 }
 
@@ -217,6 +226,19 @@ static void esdhc_of_resume(struct sdhci_host *host)
 }
 #endif
 
+static u32 clock;
+static void esdhc_of_platform_reset_enter(struct sdhci_host *host, u8 mask)
+{
+	if (host->quirks2 & SDHCI_QUIRK2_BROKEN_RESET_ALL)
+		clock = host->clock;
+}
+
+static void esdhc_of_platform_reset_exit(struct sdhci_host *host, u8 mask)
+{
+	if (host->quirks2 & SDHCI_QUIRK2_BROKEN_RESET_ALL)
+		host->clock = clock;
+}
+
 static void esdhc_of_platform_init(struct sdhci_host *host)
 {
 	u32 vvn;
@@ -266,6 +288,8 @@ static struct sdhci_ops sdhci_esdhc_ops = {
 	.enable_dma = esdhc_of_enable_dma,
 	.get_max_clock = esdhc_of_get_max_clock,
 	.get_min_clock = esdhc_of_get_min_clock,
+	.platform_reset_enter = esdhc_of_platform_reset_enter,
+	.platform_reset_exit = esdhc_of_platform_reset_exit,
 	.platform_init = esdhc_of_platform_init,
 	.get_cd = esdhc_of_get_cd,
 #ifdef CONFIG_PM

@@ -94,6 +94,8 @@ struct sdhci_host {
 #define SDHCI_QUIRK2_HOST_NO_CMD23			(1<<1)
 /* The system physically doesn't support 1.8v, even if the host does */
 #define SDHCI_QUIRK2_NO_1_8_V				(1<<2)
+/* Controller can't perform reset all successfully */
+#define SDHCI_QUIRK2_BROKEN_RESET_ALL			(1<<3)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */

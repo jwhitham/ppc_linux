@@ -90,6 +90,15 @@ void sdhci_get_of_property(struct platform_device *pdev)
 		    of_device_is_compatible(np, "fsl,mpc8536-esdhc"))
 			host->quirks |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
 
+		if (of_device_is_compatible(np, "fsl,t4240-esdhc"))
+			host->quirks2 |= SDHCI_QUIRK2_BROKEN_RESET_ALL;
+
+		if (of_device_is_compatible(np, "fsl,p4860-rev1-esdhc") ||
+		    of_device_is_compatible(np, "fsl,p1010-esdhc") ||
+		    of_device_is_compatible(np, "fsl,p2041-esdhc") ||
+		    of_device_is_compatible(np, "fsl,p3041-esdhc"))
+			host->quirks2 |= SDHCI_QUIRK2_BROKEN_RESET_ALL;
+
 		clk = of_get_property(np, "clock-frequency", &size);
 		if (clk && size == sizeof(*clk) && *clk)
 			pltfm_host->clock = be32_to_cpup(clk);
@@ -142,8 +151,10 @@ struct sdhci_host *sdhci_pltfm_init(struct platform_device *pdev,
 		host->ops = pdata->ops;
 	else
 		host->ops = &sdhci_pltfm_ops;
-	if (pdata)
+	if (pdata) {
 		host->quirks = pdata->quirks;
+		host->quirks2 = pdata->quirks2;
+	}
 	host->irq = platform_get_irq(pdev, 0);
 
 	if (!request_mem_region(iomem->start, resource_size(iomem),
