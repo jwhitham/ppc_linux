@@ -1,7 +1,7 @@
 /*
- * B4860 Silicon/SoC Device Tree Source (post include)
+ * QorIQ RMan device tree stub [ controller @ offset 0x1e0000 ]
  *
- * Copyright 2012 Freescale Semiconductor Inc.
+ * Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,68 +32,32 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-&soc {
+rman: rman@1e0000 {
+	compatible = "fsl,rman";
 	#address-cells = <1>;
 	#size-cells = <1>;
-	device_type = "soc";
-	compatible = "simple-bus";
+	ranges = <0x0 0x1e0000 0x20000>;
+	reg = <0x1e0000 0x20000>;
+	interrupts = <16 2 1 11>; /* err_irq */
 
-	soc-sram-error {
-		compatible = "fsl,soc-sram-error";
-		interrupts = <16 2 1 29>;
+	inbound-block@0 {
+		compatible = "fsl,rman-inbound-block";
+		reg = <0x0 0x800>;
 	};
-
-	corenet-law@0 {
-		compatible = "fsl,corenet-law";
-		reg = <0x0 0x1000>;
-		fsl,num-laws = <32>;
+	global-cfg@b00 {
+		compatible = "fsl,rman-global-cfg";
+		reg = <0xb00 0x500>;
 	};
-
-	ddr1: memory-controller@8000 {
-		compatible = "fsl,qoriq-memory-controller-v4.5", "fsl,qoriq-memory-controller";
-		reg = <0x8000 0x1000>;
-		interrupts = <16 2 1 23>;
+	inbound-block@1000 {
+		compatible = "fsl,rman-inbound-block";
+		reg = <0x1000 0x800>;
 	};
-
-	ddr2: memory-controller@9000 {
-		compatible = "fsl,qoriq-memory-controller-v4.5","fsl,qoriq-memory-controller";
-		reg = <0x9000 0x1000>;
-		interrupts = <16 2 1 22>;
+	inbound-block@2000 {
+		compatible = "fsl,rman-inbound-block";
+		reg = <0x2000 0x800>;
 	};
-
-	cpc: l3-cache-controller@10000 {
-		compatible = "fsl,p5020-l3-cache-controller", "fsl,p4080-l3-cache-controller", "cache";
-		reg = <0x10000 0x1000
-		       0x11000 0x1000>;
-		interrupts = <16 2 1 27
-			      16 2 1 26>;
-	};
-
-	corenet-cf@18000 {
-		compatible = "fsl,corenet-cf";
-		reg = <0x18000 0x1000>;
-		interrupts = <16 2 1 31>;
-		fsl,ccf-num-csdids = <32>;
-		fsl,ccf-num-snoopids = <32>;
-	};
-
-	iommu@20000 {
-		compatible = "fsl,pamu-v1.0", "fsl,pamu";
-		reg = <0x20000 0x4000>;
-		interrupts = <
-			24 2 0 0
-			16 2 1 30>;
-	};
-
-/include/ "qoriq-mpic.dtsi"
-
-/include/ "qoriq-i2c-0.dtsi"
-/include/ "qoriq-i2c-1.dtsi"
-/include/ "qoriq-duart-0.dtsi"
-/include/ "qoriq-duart-1.dtsi"
-
-/include/ "qoriq-rman-0.dtsi"
-	rman: rman@1e0000 {
-		fsl,qman-channels-id = <0x820 0x821>;
+	inbound-block@3000 {
+		compatible = "fsl,rman-inbound-block";
+		reg = <0x3000 0x800>;
 	};
 };
