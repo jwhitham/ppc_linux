@@ -339,13 +339,6 @@ struct dpa_percpu_priv_s {
 	u32 tx_confirm;
 	/* fragmented (non-linear) skbuffs received from the stack */
 	u32 tx_frag_skbuffs;
-	/*
-	 * Frames identified as L4 packets (by FMan's Hardware Parser, but for
-	 * which the parsing failed due to some error condition. If we come
-	 * across such frames, we drop them instead of passing them up the
-	 * stack, which means the L4 stats in the stack won't increment.
-	 */
-	u32 l4_hxs_errors;
 	struct net_device_stats	 stats;
 	struct dpa_rx_errors rx_errors;
 	struct dpa_ern_cnt ern_cnt;
@@ -419,7 +412,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev);
 struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				   const struct qm_fd *fd);
 
-int __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
+void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 				     const struct qm_fd *fd,
 				     struct sk_buff *skb,
 				     int *use_gro,

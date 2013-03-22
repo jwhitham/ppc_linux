@@ -1205,52 +1205,28 @@ static void _dpa_tx_error(struct net_device		*net_dev,
  * the integrity of the frame, its checksum, the length of the parsed headers
  * and whether the frame is suitable for GRO.
  *
+ * Assumes no parser errors, since any error frame is dropped before this
+ * function is called.
+ *
  * @skb		will have its ip_summed field overwritten;
  * @use_gro	will only be written with 0, if the frame is definitely not
  *		GRO-able; otherwise, it will be left unchanged;
  * @hdr_size	will be written with a safe value, at least the size of the
  *		headers' length.
- *
- * Returns 0 if the frame contained no detectable error (including if the FMan
- * Parser has not in fact been running), and a non-zero value if the Parser
- * has run but encountered an error.
  */
-int __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
+void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 	const struct qm_fd *fd,
 	struct sk_buff *skb,
 	int *use_gro,
 	unsigned int *hdr_size __maybe_unused)
 {
-	if (likely(fm_l4_hxs_has_run(parse_results))) {
+	if (fd->status & FM_FD_STAT_L4CV) {
 		/*
-		 * Was there any parsing error? Note: this includes the check
-		 * for a valid L4 checksum.
+		 * The parser has run and performed L4 checksum validation.
+		 * We know there were no parser errors (and implicitly no
+		 * L4 csum error), otherwise we wouldn't be here.
 		 */
-		if (unlikely(fm_l4_hxs_error(parse_results)))
-			/* Leave it to the caller to handle the frame. */
-			return parse_results->l4r;
-
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
-		/*
-		 * If the HXS Parser has successfully run, we can reduce the
-		 * number of bytes we'll memcopy into skb->data.
-		 */
-		*hdr_size = parse_results->nxthdr_off;
-#endif
-		/*
-		 * We know the frame is valid. But has the L4 checksum actually
-		 * been validated? (The L4CV bit is only set if the frame is
-		 * TCP or UDP-with-non-zero-csum.)
-		 */
-		if (fd->status & FM_FD_STAT_L4CV)
-			skb->ip_summed = CHECKSUM_UNNECESSARY;
-		else
-			/*
-			 * If it turns out to be a 0-csum UDP, the stack will
-			 * figure it out itself later, sparing us an extra
-			 * check here on the fastpath of every incoming frame.
-			 */
-			skb->ip_summed = CHECKSUM_NONE;
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
 		/*
 		 * Don't go through GRO for certain types of traffic that
@@ -1263,27 +1239,38 @@ int __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 		 */
 		if (!fm_l4_frame_is_tcp(parse_results))
 			*use_gro = 0;
-	} else {
-		/* Inform the stack that we haven't done any csum validation. */
-		skb->ip_summed = CHECKSUM_NONE;
+
 #ifdef CONFIG_DPAA_ETH_SG_SUPPORT
 		/*
-		 * Also, since the Parser hasn't run, we don't know the size of
-		 * the headers, so we fall back to a safe default.
+		 * If the L4 HXS Parser has successfully run, we can reduce the
+		 * number of bytes we'll memcopy into skb->data.
 		 */
+		*hdr_size = parse_results->nxthdr_off;
+#endif
+		return;
+	}
+
+	/*
+	 * We're here because either the parser didn't run or the L4 checksum
+	 * was not verified. This may include the case of a UDP frame with
+	 * checksum zero or an L4 proto other than TCP/UDP
+	 */
+	skb->ip_summed = CHECKSUM_NONE;
+#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+	/*
+	 * Even if checksum was not verified, it's still possible L4 parser
+	 * has run, in which case we know the headers size.
+	 * Otherwise we fall back to a safe default.
+	 */
+	if (fm_l4_hxs_has_run(parse_results))
+		*hdr_size = parse_results->nxthdr_off;
+	else
 		*hdr_size = min((ssize_t)DPA_COPIED_HEADERS_SIZE,
 				dpa_fd_length(fd));
 #endif
-		/*
-		 * Bypass GRO for unknown traffic or if no PCDs are applied.
-		 * It's unlikely that a GRO handler is installed for this proto
-		 * or, if it is, user does not seem to care about performance
-		 * (otherwise, PCDs would have been in place).
-		 */
-		*use_gro = 0;
-	}
 
-	return 0;
+	/* Bypass GRO for unknown traffic or if no PCDs are applied */
+	*use_gro = 0;
 }
 
 #ifndef CONFIG_DPAA_ETH_SG_SUPPORT
@@ -1357,13 +1344,9 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	/* Validate the skb csum and figure out whether GRO is appropriate */
 	parse_result = (t_FmPrsResult *)((u8 *)skbh + DPA_RX_PRIV_DATA_SIZE);
-	ret = _dpa_process_parse_results(parse_result, fd, skb, &use_gro,
+	_dpa_process_parse_results(parse_result, fd, skb, &use_gro,
 					 &hdr_size_unused);
-	if (unlikely(ret)) {
-		percpu_priv->l4_hxs_errors++;
-		percpu_priv->stats.rx_dropped++;
-		goto drop_invalid_frame;
-	}
+
 	if (use_gro) {
 		gro_result_t gro_result;
 
@@ -1384,7 +1367,6 @@ packet_dropped:
 skb_stolen:
 	return;
 
-drop_invalid_frame:
 drop_large_frame:
 	dev_kfree_skb(skb);
 	return;
@@ -3071,7 +3053,7 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 	/* "Standard" counters */
 	seq_printf(file, "\nDPA counters for %s:\n"
 		"CPU           irqs        rx        tx   recycle" \
-		"   confirm     tx sg    tx err    rx err   l4 hxs drp    bp count\n",
+		"   confirm     tx sg    tx err    rx err   bp count\n",
 		priv->net_dev->name);
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
@@ -3089,11 +3071,10 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 		total.tx_frag_skbuffs += percpu_priv->tx_frag_skbuffs;
 		total.stats.tx_errors += percpu_priv->stats.tx_errors;
 		total.stats.rx_errors += percpu_priv->stats.rx_errors;
-		total.l4_hxs_errors += percpu_priv->l4_hxs_errors;
 		count_total += dpa_bp_count;
 
 		seq_printf(file, "     %hu/%hu  %8u  %8lu  %8lu  %8u  %8u" \
-				"  %8u  %8lu  %8lu     %8u    %8d\n",
+				"  %8u  %8lu  %8lu     %8d\n",
 				get_hard_smp_processor_id(i), i,
 				percpu_priv->in_interrupt,
 				percpu_priv->stats.rx_packets,
@@ -3103,11 +3084,10 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 				percpu_priv->tx_frag_skbuffs,
 				percpu_priv->stats.tx_errors,
 				percpu_priv->stats.rx_errors,
-				percpu_priv->l4_hxs_errors,
 				dpa_bp_count);
 	}
 	seq_printf(file, "Total     %8u  %8lu  %8lu  %8u  %8u  %8u  %8lu  %8lu"\
-				"     %8u    %8d\n",
+				"     %8d\n",
 			total.in_interrupt,
 			total.stats.rx_packets,
 			total.stats.tx_packets,
@@ -3116,7 +3096,6 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 			total.tx_frag_skbuffs,
 			total.stats.tx_errors,
 			total.stats.rx_errors,
-			total.l4_hxs_errors,
 			count_total);
 
 	/* Congestion stats */

@@ -282,11 +282,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
  *
  * If the entire frame fits in the skb linear buffer, the page holding the
  * received data is recycled as it is no longer required.
- *
- * Return 0 if the ingress skb was properly constructed, non-zero if an error
- * was encountered and the frame should be dropped.
  */
-static int __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
+static void __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	const struct qm_fd *fd, struct sk_buff *skb, int *use_gro)
 {
 	unsigned int copy_size = DPA_COPIED_HEADERS_SIZE;
@@ -297,7 +294,6 @@ static int __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
 	unsigned char *tailptr;
 	const t_FmPrsResult *parse_results;
-	int ret;
 
 	vaddr = phys_to_virt(addr);
 
@@ -306,13 +302,9 @@ static int __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 		dpa_ptp_store_rxstamp(priv->net_dev, skb, fd);
 #endif
 
-	/* Peek at the parse results for frame validation. */
+	/* Peek at the parse results for csum validation and headers size */
 	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
-	ret = _dpa_process_parse_results(parse_results, fd, skb, use_gro,
-		&copy_size);
-	if (unlikely(ret))
-		/* This is definitely a bad frame, don't go further. */
-		return ret;
+	_dpa_process_parse_results(parse_results, fd, skb, use_gro, &copy_size);
 
 	tailptr = skb_put(skb, copy_size);
 
@@ -339,8 +331,6 @@ static int __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 		/* recycle the page */
 		dpa_bp_add_page(dpa_bp, (unsigned long)vaddr);
 	}
-
-	return 0;
 }
 
 
@@ -351,7 +341,7 @@ static int __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
  *
  * The page holding the S/G Table is recycled here.
  */
-static int __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
+static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			       const struct qm_fd *fd, struct sk_buff *skb,
 			       int *use_gro)
 {
@@ -363,7 +353,7 @@ static int __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	struct page *page;
 	int frag_offset, frag_len;
 	int page_offset;
-	int i, ret;
+	int i;
 	unsigned int copy_size = DPA_COPIED_HEADERS_SIZE;
 	const t_FmPrsResult *parse_results;
 
@@ -373,12 +363,8 @@ static int __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	 * in the buffer containing the sgt.
 	 */
 	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
-	/* Validate the frame before anything else. */
-	ret = _dpa_process_parse_results(parse_results, fd, skb, use_gro,
-		&copy_size);
-	if (unlikely(ret))
-		/* Bad frame, stop processing now. */
-		return ret;
+	/* Inspect the parse results before anything else. */
+	_dpa_process_parse_results(parse_results, fd, skb, use_gro, &copy_size);
 
 	/*
 	 * Iterate through the SGT entries and add the data buffers as
@@ -443,8 +429,6 @@ static int __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(IS_ERR(dpa_bp));
 	dpa_bp_add_page(dpa_bp, (unsigned long)vaddr);
-
-	return 0;
 }
 
 void __hot _dpa_rx(struct net_device *net_dev,
@@ -499,25 +483,11 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	/* prefetch the first 64 bytes of the frame or the SGT start */
 	prefetch(phys_to_virt(addr) + dpa_fd_offset(fd));
 
-	if (likely(fd->format == qm_fd_contig)) {
-		if (unlikely(contig_fd_to_skb(priv, fd, skb, &use_gro))) {
-			/*
-			 * There was a L4 HXS error - e.g. the L4 csum was
-			 * invalid - so drop the frame early instead of passing
-			 * it on to the stack. We'll increment our private
-			 * counters to track this event.
-			 */
-			percpu_priv->l4_hxs_errors++;
-			percpu_stats->rx_dropped++;
-			goto drop_bad_frame;
-		}
-	} else if (fd->format == qm_fd_sg) {
-		if (unlikely(sg_fd_to_skb(priv, fd, skb, &use_gro))) {
-			percpu_priv->l4_hxs_errors++;
-			percpu_stats->rx_dropped++;
-			goto drop_bad_frame;
-		}
-	} else
+	if (likely(fd->format == qm_fd_contig))
+		contig_fd_to_skb(priv, fd, skb, &use_gro);
+	else if (fd->format == qm_fd_sg)
+		sg_fd_to_skb(priv, fd, skb, &use_gro);
+	else
 		/* The only FD types that we may receive are contig and S/G */
 		BUG();
 
