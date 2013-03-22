@@ -32,6 +32,12 @@ config BSC9131_RDB
 	  StarCore SC3850 DSP
 	  Manufacturer : Freescale Semiconductor, Inc
 
+config BSC9132_QDS
+	bool "Freescale BSC9132QDS"
+	select DEFAULT_UIMAGE
+	help
+	  This option enables support for the BSC9132 QDS board
+
 config MPC8540_ADS
 	bool "Freescale MPC8540 ADS"
 	select DEFAULT_UIMAGE
