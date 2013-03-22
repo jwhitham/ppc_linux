@@ -870,7 +870,7 @@ struct qm_mcc_ceetm_statistics_query_write {
 	u8 __reserved2[13];
 	u64 frm_cnt:40;
 	u16 __reserved3[2];
-	u64 byte_cnt:40;
+	u64 byte_cnt:48;
 	u8 __reserved[32];
 } __packed;
 
@@ -1278,10 +1278,10 @@ struct qm_mcr_ceetm_cq_peek_pop_xsfdrread {
 } __packed;
 
 struct qm_mcr_ceetm_statistics_query {
-	u8 __reserved1[15];
+	u8 __reserved1[17];
 	u64 frm_cnt:40;
 	u8 __reserved2[2];
-	u64 byte_cnt:40;
+	u64 byte_cnt:48;
 	u8 __reserved3[32];
 } __packed;
 
@@ -2910,7 +2910,7 @@ int qman_ceetm_get_queue_weight(struct qm_ceetm_cq *cq,
  *
  * Returns zero for success or -EINVAL if the given weight code is illegal.
  */
-int qman_ceetm_wbfs2ratio(unsigned int weight_code,
+int qman_ceetm_wbfs2ratio(struct qm_ceetm_weight_code *weight_code,
 			   u32 *numerator,
 			   u32 *denominator);
 /**
@@ -2926,7 +2926,7 @@ int qman_ceetm_wbfs2ratio(unsigned int weight_code,
  */
 int qman_ceetm_ratio2wbfs(u32 numerator,
 			   u32 denominator,
-			   unsigned int *weight_code,
+			   struct qm_ceetm_weight_code *weight_code,
 			   int rounding);
 
 #define QMAN_CEETM_FLAG_CLEAR_STATISTICS_COUNTER	0x1

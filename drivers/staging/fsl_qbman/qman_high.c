@@ -2921,7 +2921,7 @@ int qman_ceetm_sp_release(struct qm_ceetm_sp *sp)
 		}
 	}
 	/* Disable CEETM mode of this sub-portal */
-	qman_sp_disable_ceetm_mode(sp->idx, sp->dcp_idx);
+	qman_sp_disable_ceetm_mode(sp->dcp_idx, sp->idx);
 
 	return 0;
 }
@@ -3568,11 +3568,11 @@ int qman_ceetm_channel_set_group(struct qm_ceetm_channel *channel, int group_b,
 	struct qm_mcr_ceetm_class_scheduler_query query_result;
 	int i;
 
-	if (!prio_a | (prio_a > 7)) {
+	if (!prio_a || (prio_a > 7)) {
 		pr_err("The priority of group A is out of range\n");
 		return -EINVAL;
 	}
-	if (!prio_a || (prio_b > 7)) {
+	if ((group_b && !prio_b) || (prio_b > 7)) {
 		pr_err("The priority of group B is out of range\n");
 		return -EINVAL;
 	}
@@ -3704,11 +3704,6 @@ int qman_ceetm_cq_claim_A(struct qm_ceetm_cq **cq,
 		pr_err("This grouped class queue id is out of range\n");
 		return -EINVAL;
 	}
-	p = kmalloc(sizeof(*p), GFP_KERNEL);
-	if (!p) {
-		pr_err("Can't allocate memory for CQ#%d!\n", idx);
-		return -ENOMEM;
-	}
 
 	list_for_each_entry(p, &channel->class_queues, node) {
 		if (p->idx == idx) {
@@ -3716,6 +3711,13 @@ int qman_ceetm_cq_claim_A(struct qm_ceetm_cq **cq,
 			return -EINVAL;
 		}
 	}
+
+	p = kmalloc(sizeof(*p), GFP_KERNEL);
+	if (!p) {
+		pr_err("Can't allocate memory for CQ#%d!\n", idx);
+		return -ENOMEM;
+	}
+
 	list_add_tail(&p->node, &channel->class_queues);
 	p->idx = idx;
 	p->is_claimed = 1;
@@ -3774,18 +3776,19 @@ int qman_ceetm_cq_claim_B(struct qm_ceetm_cq **cq,
 		return -EINVAL;
 	}
 
-	p = kmalloc(sizeof(*p), GFP_KERNEL);
-	if (!p) {
-		pr_err("Can't allocate memory for CQ#%d!\n", idx);
-		return -ENOMEM;
-	}
-
 	list_for_each_entry(p, &channel->class_queues, node) {
 		if (p->idx == idx) {
 			pr_err("The CQ#%d has been claimed!\n", idx);
 			return -EINVAL;
 		}
 	}
+
+	p = kmalloc(sizeof(*p), GFP_KERNEL);
+	if (!p) {
+		pr_err("Can't allocate memory for CQ#%d!\n", idx);
+		return -ENOMEM;
+	}
+
 	list_add_tail(&p->node, &channel->class_queues);
 	p->idx = idx;
 	p->is_claimed = 1;
@@ -3848,6 +3851,11 @@ int qman_ceetm_set_queue_weight(struct qm_ceetm_cq *cq,
 	struct qm_mcr_ceetm_class_scheduler_query query_result;
 	int i;
 
+	if (cq->idx < 8) {
+		pr_err("Can not set weight for ungrouped class queue\n");
+		return -EINVAL;
+	}
+
 	if (qman_ceetm_query_class_scheduler(cq->parent, &query_result)) {
 		pr_err("Can't query channel#%d's scheduler!\n",
 						cq->parent->idx);
@@ -3861,7 +3869,8 @@ int qman_ceetm_set_queue_weight(struct qm_ceetm_cq *cq,
 	config_opts.gpc = query_result.gpc;
 	for (i = 0; i < 8; i++)
 		config_opts.w[i] = query_result.w[i];
-	config_opts.w[cq->idx] = (weight_code->y << 3) | weight_code->x;
+	config_opts.w[cq->idx - 8] = ((weight_code->y << 3) |
+						(weight_code->x & 0x7));
 	return qman_ceetm_configure_class_scheduler(&config_opts);
 }
 EXPORT_SYMBOL(qman_ceetm_set_queue_weight);
@@ -3871,13 +3880,19 @@ int qman_ceetm_get_queue_weight(struct qm_ceetm_cq *cq,
 {
 	struct qm_mcr_ceetm_class_scheduler_query query_result;
 
+	if (cq->idx < 8) {
+		pr_err("Can not get weight for ungrouped class queue\n");
+		return -EINVAL;
+	}
+
 	if (qman_ceetm_query_class_scheduler(cq->parent,
 						&query_result)) {
 		pr_err("Can't get the weight code for CQ#%d!\n", cq->idx);
 		return -EINVAL;
 	}
-	weight_code->y = (query_result.w[cq->idx] >> 3) & 0x1F;
-	weight_code->x = query_result.w[cq->idx] & 0x3;
+	weight_code->y = query_result.w[cq->idx - 8] >> 3;
+	weight_code->x = query_result.w[cq->idx - 8] & 0x7;
+
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_get_queue_weight);
@@ -3886,9 +3901,6 @@ EXPORT_SYMBOL(qman_ceetm_get_queue_weight);
  *	effective weight = 2^x / (1 - (y/64))
  *			 = 2^(x+6) / (64 - y)
  */
-#define QM_WBFS_MAKECODE(x, y) (((y) << 3) | ((x & 0x7)))
-#define QM_WBFS_CODE_X(c) ((c) & 0x7)
-#define QM_WBFS_CODE_Y(c) ((c) >> 3)
 static void reduce_fraction(u32 *n, u32 *d)
 {
 	u32 factor = 2;
@@ -3917,12 +3929,12 @@ static void reduce_fraction(u32 *n, u32 *d)
 	}
 }
 
-int qman_ceetm_wbfs2ratio(unsigned int weight_code,
+int qman_ceetm_wbfs2ratio(struct qm_ceetm_weight_code *weight_code,
 				u32 *numerator,
 				u32 *denominator)
 {
-	*numerator = (u32) 1 << (QM_WBFS_CODE_X(weight_code) + 6);
-	*denominator = 64 - QM_WBFS_CODE_Y(weight_code);
+	*numerator = (u32) 1 << (weight_code->x + 6);
+	*denominator = 64 - weight_code->y;
 	reduce_fraction(numerator, denominator);
 	return 0;
 }
@@ -3937,7 +3949,7 @@ EXPORT_SYMBOL(qman_ceetm_wbfs2ratio);
  */
 int qman_ceetm_ratio2wbfs(u32 numerator,
 				u32 denominator,
-				unsigned int *weight_code,
+				struct qm_ceetm_weight_code *weight_code,
 				int rounding)
 {
 	unsigned int y, x = 0;
@@ -3954,7 +3966,8 @@ int qman_ceetm_ratio2wbfs(u32 numerator,
 	y = 64 - ROUNDING(denominator << (x + 6), numerator, -rounding);
 	if (y >= 32)
 		return -ERANGE;
-	*weight_code = QM_WBFS_MAKECODE(x, y);
+	weight_code->x = x;
+	weight_code->y = y;
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_ratio2wbfs);
