@@ -727,6 +727,49 @@ END_FTR_SECTION_IFCLR(CPU_FTR_601)
 #define N_SLINE	68
 #define N_SO	100
 
+.macro fsl_erratum_a006198_mtmsr newmsr scratch1 scratch2
+#ifdef CONFIG_FSL_ERRATUM_A_006198
+	mflr	\scratch2
+	LOAD_REG_IMMEDIATE(\scratch1, 237f)
+	mtlr	\scratch1
+	LOAD_REG_IMMEDIATE(\scratch1, .fsl_erratum_a006198_return)
+	mtspr	SPRN_MCSRR1, \newmsr
+	mtspr	SPRN_MCSRR0, \scratch1
+	rfmci
+237:	mtmsr	\newmsr
+	mtlr	\scratch2
+#else
+	mtmsr	\newmsr
+#endif
+.endm
+
+.macro fsl_erratum_a006198_wrteei0 scratch1 scratch2
+#ifdef CONFIG_FSL_ERRATUM_A_006198
+	mflr	\scratch2
+	LOAD_REG_IMMEDIATE(\scratch1, 237f)
+	mtlr	\scratch1
+	LOAD_REG_IMMEDIATE(\scratch1, .fsl_erratum_a006198_return)
+	mtspr	SPRN_MCSRR0, \scratch1
+	mfmsr	\scratch1
+	rlwinm	\scratch1, \scratch1, 0, ~MSR_EE
+	mtspr	SPRN_MCSRR1, \scratch1
+	rfmci
+237:	mtmsr	\scratch1
+	mtlr	\scratch2
+#else
+	wrteei	0
+#endif
+.endm
+
+.macro fsl_erratum_a006198_restore_srr scratch
+#ifdef CONFIG_FSL_ERRATUM_A_006198
+	LOAD_REG_IMMEDIATE(\scratch, .fsl_erratum_a006198_return)
+	mtspr	SPRN_MCSRR0, \scratch
+	lis	\scratch, MSR_CM@h
+	mtspr	SPRN_MCSRR1, \scratch
+#endif
+.endm
+
 #endif /*  __ASSEMBLY__ */
 
 #endif /* _ASM_POWERPC_PPC_ASM_H */

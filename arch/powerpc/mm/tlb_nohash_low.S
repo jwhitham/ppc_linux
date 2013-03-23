@@ -358,12 +358,12 @@ ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_USE_TLBILX)
 _GLOBAL(_tlbil_pid)
 	slwi	r4,r3,MAS6_SPID_SHIFT
 	mfmsr	r10
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r0 r7
 	tlb_lock
 	mtspr	SPRN_MAS6,r4
 	PPC_TLBILX_PID(0,R0)
 	tlb_unlock
-	wrtee	r10
+	fsl_erratum_a006198_mtmsr r10 r0 r7
 	msync
 	isync
 	blr
@@ -372,30 +372,30 @@ _GLOBAL(_tlbil_pid_noind)
 	slwi	r4,r3,MAS6_SPID_SHIFT
 	mfmsr	r10
 	ori	r4,r4,MAS6_SIND
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r0 r7
 	tlb_lock
 	mtspr	SPRN_MAS6,r4
 	PPC_TLBILX_PID(0,R0)
 	tlb_unlock
-	wrtee	r10
+	fsl_erratum_a006198_mtmsr r10 r0 r7
 	msync
 	isync
 	blr
 
 _GLOBAL(_tlbil_all)
 	mfmsr	r10
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r0 r7
 	tlb_lock
 	PPC_TLBILX_ALL(0,R0)
 	msync
 	isync
 	tlb_unlock
-	wrtee	r10
+	fsl_erratum_a006198_mtmsr r10 r0 r7
 	blr
 
 _GLOBAL(_tlbil_va)
 	mfmsr	r10
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r0 r7
 	tlb_lock
 	cmpwi	cr0,r6,0
 	slwi	r4,r4,MAS6_SPID_SHIFT
@@ -407,12 +407,12 @@ _GLOBAL(_tlbil_va)
 	msync
 	isync
 	tlb_unlock
-	wrtee	r10
+	fsl_erratum_a006198_mtmsr r10 r0 r7
 	blr
 
 _GLOBAL(_tlbivax_bcast)
 	mfmsr	r10
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r0 r7
 	cmpwi	cr0,r6,0
 	slwi	r4,r4,MAS6_SPID_SHIFT
 	rlwimi	r4,r5,MAS6_ISIZE_SHIFT,MAS6_ISIZE_MASK
@@ -423,7 +423,7 @@ _GLOBAL(_tlbivax_bcast)
 	eieio
 	tlbsync
 	sync
-	wrtee	r10
+	fsl_erratum_a006198_mtmsr r10 r0 r7
 	blr
 
 _GLOBAL(set_context)
@@ -450,7 +450,7 @@ _GLOBAL(set_context)
  */
 _GLOBAL(loadcam_entry)
 	mfmsr	r10
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r0 r7
 	tlb_lock
 
 	LOAD_REG_ADDR(r4, TLBCAM)
@@ -473,6 +473,6 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_BIG_PHYS)
 	isync
 
 	tlb_unlock
-	wrtee	r10
+	fsl_erratum_a006198_mtmsr r10 r0 r7
 	blr
 #endif

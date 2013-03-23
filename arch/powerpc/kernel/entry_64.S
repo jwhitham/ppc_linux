@@ -194,7 +194,7 @@ syscall_exit:
 	 * and so that we don't get interrupted after loading SRR0/1.
 	 */
 #ifdef CONFIG_PPC_BOOK3E
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r10 r9
 #else
 	ld	r10,PACAKMSR(r13)
 	/*
@@ -576,7 +576,7 @@ _GLOBAL(ret_from_except_lite)
 	 * from the interrupt.
 	 */
 #ifdef CONFIG_PPC_BOOK3E
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r10 r9
 #else
 	ld	r10,PACAKMSR(r13) /* Get kernel MSR without EE */
 	mtmsrd	r10,1		  /* Update machine state */
@@ -672,7 +672,7 @@ resume_kernel:
 	 * interrupted after loading SRR0/1.
 	 */
 #ifdef CONFIG_PPC_BOOK3E
-	wrteei	0
+	fsl_erratum_a006198_wrteei0 r10 r5
 #else
 	ld	r10,PACAKMSR(r13) /* Get kernel MSR without EE */
 	mtmsrd	r10,1		  /* Update machine state */

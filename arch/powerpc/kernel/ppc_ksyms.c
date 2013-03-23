@@ -196,3 +196,8 @@ EXPORT_SYMBOL_GPL(mmu_psize_defs);
 #ifdef CONFIG_EPAPR_PARAVIRT
 EXPORT_SYMBOL(epapr_hypercall_start);
 #endif
+
+#ifdef CONFIG_FSL_ERRATUM_A_006198
+void fsl_erratum_a006198_return(void);
+EXPORT_SYMBOL(fsl_erratum_a006198_return);
+#endif
