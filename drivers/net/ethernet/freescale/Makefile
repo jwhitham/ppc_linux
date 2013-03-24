@@ -12,6 +12,7 @@ obj-$(CONFIG_FS_ENET) += fs_enet/
 obj-$(CONFIG_FSL_PQ_MDIO) += fsl_pq_mdio.o
 obj-$(CONFIG_FSL_XGMAC_MDIO) += xgmac_mdio.o
 obj-$(CONFIG_GIANFAR) += gianfar_driver.o
+obj-$(if $(CONFIG_FSL_FMAN),y) += fman/
 obj-$(CONFIG_PTP_1588_CLOCK_GIANFAR) += gianfar_ptp.o
 gianfar_driver-objs := gianfar.o \
 		gianfar_ethtool.o \

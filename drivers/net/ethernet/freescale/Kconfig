@@ -94,6 +94,9 @@ config GIANFAR
 	  This driver supports the Gigabit TSEC on the MPC83xx, MPC85xx,
 	  and MPC86xx family of chips, and the FEC on the 8540.
 
+source "drivers/net/ethernet/freescale/fman/Kconfig"
+source "drivers/net/ethernet/freescale/dpa/Kconfig"
+
 config FEC_PTP
 	bool "PTP Hardware Clock (PHC)"
 	depends on FEC && ARCH_MXC && !SOC_IMX25 && !SOC_IMX27 && !SOC_IMX35 && !SOC_IMX5
