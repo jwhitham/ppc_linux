@@ -3682,8 +3682,10 @@ static int dpa_netdev_init(struct device_node *dpa_node,
 		net_dev->mem_end = priv->mac_dev->res->end;
 
 		mac_addr = priv->mac_dev->addr;
-		net_dev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
-		net_dev->vlan_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
+		net_dev->features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
+			NETIF_F_LLTX);
+		net_dev->vlan_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
+			NETIF_F_LLTX);
 
 		/*
 		 * Advertise S/G and HIGHDMA support for MAC-ful,
