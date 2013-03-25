@@ -14,6 +14,8 @@
 #include <linux/hash.h>
 #include <linux/hw_random.h>
 #include <linux/of_platform.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/spinlock.h>
