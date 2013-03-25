@@ -73,7 +73,11 @@
 #define ARRAY2_SIZE(arr)	(ARRAY_SIZE(arr) * ARRAY_SIZE((arr)[0]))
 
 /* DPAA platforms benefit from hardware-assisted queue management */
+#ifdef CONFIG_AS_FASTPATH
 #define DPA_NETIF_FEATURES	(NETIF_F_HW_QDISC | NETIF_F_HW_ACCEL_MQ)
+#else
+#define DPA_NETIF_FEATURES	NETIF_F_HW_ACCEL_MQ
+#endif
 
 #define DEFAULT_COUNT		128
 #define REFILL_THRESHOLD	80
