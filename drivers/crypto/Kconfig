@@ -226,6 +226,7 @@ config CRYPTO_DEV_TALITOS_RAIDXOR
 	bool "Talitos RAID5 XOR Calculation Offload"
 	default y
 	select DMA_ENGINE
+	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
 	depends on CRYPTO_DEV_TALITOS
 	help
 	  Say 'Y' here to use the Freescale Security Engine (SEC) to
