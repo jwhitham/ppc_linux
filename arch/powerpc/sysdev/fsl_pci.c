@@ -129,7 +129,7 @@ static int setup_one_atmu(struct ccsr_pci __iomem *pci,
 		flags |= 0x10000000; /* enable relaxed ordering */
 
 	for (i = 0; size > 0; i++) {
-		unsigned int bits = min(__ilog2(size),
+		unsigned int bits = min(__ilog2_u64(size),
 					__ffs(pci_addr | phys_addr));
 
 		if (index + i >= 5)
@@ -238,7 +238,7 @@ static void setup_pci_atmu(struct pci_controller *hose,
 			out_be32(&pci->pow[j].powbar, (hose->io_base_phys >> 12));
 			/* Enable, IO R/W */
 			out_be32(&pci->pow[j].powar, 0x80088000
-				| (__ilog2(hose->io_resource.end
+				| (__ilog2_u64(hose->io_resource.end
 				- hose->io_resource.start + 1) - 1));
 		}
 	}
