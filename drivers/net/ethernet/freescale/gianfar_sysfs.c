@@ -319,6 +319,74 @@ static ssize_t gfar_set_fifo_starve_off(struct device *dev,
 static DEVICE_ATTR(fifo_starve_off, 0644, gfar_show_fifo_starve_off,
 		   gfar_set_fifo_starve_off);
 
+static ssize_t gfar_show_recycle(struct device *dev,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct gfar_private *priv = netdev_priv(to_net_dev(dev));
+	struct gfar_priv_recycle *rec = &priv->recycle;
+
+	pr_info("recycled skbs: %d\nreused skbs: %d\n",
+		atomic_read(&rec->recycle_cnt),
+		atomic_read(&rec->reuse_cnt));
+
+	return sprintf(buf, "%s\n", priv->ndev->name);
+}
+
+static DEVICE_ATTR(recycle, 0444, gfar_show_recycle, NULL);
+
+static ssize_t gfar_show_recycle_target(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct gfar_private *priv = netdev_priv(to_net_dev(dev));
+
+	return sprintf(buf, "%s\n", priv->recycle_ndev->name);
+}
+
+static ssize_t gfar_set_recycle_target(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct gfar_private *priv = netdev_priv(ndev);
+	struct gfar_private *priv_target;
+	int found = 0;
+
+	list_for_each_entry(priv_target, &gfar_recycle_queues, recycle_node) {
+		char *name = priv_target->ndev->name;
+		if ((strlen(name) == count - 1) &&
+			!strncmp(buf, name, count - 1)) {
+			found = 1;
+			break;
+		}
+	}
+
+	if (!found) {
+		pr_err("Invalid skb recycle target device!\n");
+		return count;
+	}
+
+	if (priv->recycle_target == &priv_target->recycle)
+		/* nothing to do */
+		return count;
+
+	if (ndev->flags & IFF_UP)
+		stop_gfar(ndev);
+
+	priv->recycle_target = &priv_target->recycle;
+	priv->recycle_ndev = priv_target->ndev;
+
+	if (ndev->flags & IFF_UP)
+		startup_gfar(ndev);
+
+	return count;
+}
+
+static DEVICE_ATTR(recycle_target, 0644, gfar_show_recycle_target,
+		   gfar_set_recycle_target);
+
+
 void gfar_init_sysfs(struct net_device *dev)
 {
 	struct gfar_private *priv = netdev_priv(dev);
@@ -336,6 +404,8 @@ void gfar_init_sysfs(struct net_device *dev)
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_threshold);
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_starve);
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_starve_off);
+	rc |= device_create_file(&dev->dev, &dev_attr_recycle);
+	rc |= device_create_file(&dev->dev, &dev_attr_recycle_target);
 	if (rc)
 		dev_err(&dev->dev, "Error creating gianfar sysfs files.\n");
 }

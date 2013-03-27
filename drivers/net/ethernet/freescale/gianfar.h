@@ -1040,6 +1040,14 @@ enum gfar_errata {
 	GFAR_ERRATA_12		= 0x08, /* a.k.a errata eTSEC49 */
 };
 
+struct gfar_priv_recycle {
+#define GFAR_RECYCLE_MAX	DEFAULT_RX_RING_SIZE
+	struct sk_buff_head recycle_q __aligned(SMP_CACHE_BYTES);
+	unsigned int buff_size;
+	atomic_t recycle_cnt;
+	atomic_t reuse_cnt;
+};
+
 /* Struct stolen almost completely (and shamelessly) from the FCC enet source
  * (Ok, that's not so true anymore, but there is a family resemblance)
  * The GFAR buffer descriptors track the ring buffers.  The rx_bd_base
@@ -1067,6 +1075,9 @@ struct gfar_private {
 	struct gfar_priv_tx_q *tx_queue[MAX_TX_QS];
 	struct gfar_priv_rx_q *rx_queue[MAX_RX_QS];
 	struct gfar_priv_grp gfargrp[MAXGROUPS];
+
+	struct gfar_priv_recycle recycle;
+	struct gfar_priv_recycle *recycle_target;
 
 	u32 device_flags;
 
@@ -1103,6 +1114,9 @@ struct gfar_private {
 		wol_en:1,
 		/* Enable priorty based Tx scheduling in Hw */
 		prio_sched_en:1;
+
+	struct net_device *recycle_ndev;
+	struct list_head recycle_node;
 
 	/* The total tx and rx ring size for the enabled queues */
 	unsigned int total_tx_ring_size;
@@ -1188,6 +1202,7 @@ extern void gfar_check_rx_parser_mode(struct gfar_private *priv);
 extern void gfar_vlan_mode(struct net_device *dev, netdev_features_t features);
 
 extern const struct ethtool_ops gfar_ethtool_ops;
+extern struct list_head gfar_recycle_queues;
 
 #define MAX_FILER_CACHE_IDX (2*(MAX_FILER_IDX))
 

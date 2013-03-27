@@ -110,7 +110,7 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev);
 static void gfar_reset_task(struct work_struct *work);
 static void gfar_timeout(struct net_device *dev);
 static int gfar_close(struct net_device *dev);
-struct sk_buff *gfar_new_skb(struct net_device *dev);
+static struct sk_buff *gfar_alloc_skb(struct net_device *dev);
 static void gfar_new_rxbdp(struct gfar_priv_rx_q *rx_queue, struct rxbd8 *bdp,
 			   struct sk_buff *skb);
 static int gfar_set_mac_address(struct net_device *dev);
@@ -142,6 +142,8 @@ static void gfar_clear_exact_match(struct net_device *dev);
 static void gfar_set_mac_for_addr(struct net_device *dev, int num,
 				  const u8 *addr);
 static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
+
+LIST_HEAD(gfar_recycle_queues);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
@@ -207,7 +209,7 @@ static int gfar_init_bds(struct net_device *ndev)
 				gfar_init_rxbdp(rx_queue, rxbdp,
 						rxbdp->bufPtr);
 			} else {
-				skb = gfar_new_skb(ndev);
+				skb = gfar_alloc_skb(ndev);
 				if (!skb) {
 					netdev_err(ndev, "Can't allocate RX buffers\n");
 					return -ENOMEM;
@@ -978,6 +980,19 @@ static void gfar_detect_errata(struct gfar_private *priv)
 			 priv->errata);
 }
 
+static void gfar_init_recycle(struct gfar_private *priv)
+{
+	struct gfar_priv_recycle *rec = &priv->recycle;
+
+	rec->buff_size = priv->rx_buffer_size + RXBUF_ALIGNMENT;
+	skb_queue_head_init(&rec->recycle_q);
+	/* recycle skbs to the own queue by default */
+	priv->recycle_target = &priv->recycle;
+	priv->recycle_ndev = priv->ndev;
+
+	list_add(&priv->recycle_node, &gfar_recycle_queues);
+}
+
 /* Set up the ethernet device structure, private data,
  * and anything else we need before we start
  */
@@ -1158,6 +1173,9 @@ static int gfar_probe(struct platform_device *ofdev)
 	gfar_write(&regs->tqueue, tqueue);
 
 	priv->rx_buffer_size = DEFAULT_RX_BUFFER_SIZE;
+
+	/* init buffer recycling fields */
+	gfar_init_recycle(priv);
 
 	/* Initializing some of the rx/tx queue level parameters */
 	for (i = 0; i < priv->num_tx_queues; i++) {
@@ -1755,6 +1773,13 @@ static void free_skb_rx_queue(struct gfar_priv_rx_q *rx_queue)
 	rx_queue->rx_skbuff = NULL;
 }
 
+static void free_skb_recycle_q(struct gfar_priv_recycle *rec)
+{
+	struct sk_buff *skb;
+	while ((skb = skb_dequeue(&rec->recycle_q)) != NULL)
+		dev_kfree_skb_any(skb);
+}
+
 /* If there are any tx skbs or rx skbs still around, free them.
  * Then free tx_skbuff and rx_skbuff
  */
@@ -1786,6 +1811,17 @@ static void free_skb_resources(struct gfar_private *priv)
 			  sizeof(struct rxbd8) * priv->total_rx_ring_size,
 			  priv->tx_queue[0]->tx_bd_base,
 			  priv->tx_queue[0]->tx_bd_dma_base);
+
+	/* purge the skb recycle queue */
+	free_skb_recycle_q(&priv->recycle);
+}
+
+static void gfar_reset_recycle(struct gfar_private *priv)
+{
+	struct gfar_priv_recycle *rec = &priv->recycle;
+
+	rec->buff_size = priv->rx_buffer_size + RXBUF_ALIGNMENT;
+	free_skb_recycle_q(rec);
 }
 
 void gfar_start(struct net_device *dev)
@@ -2415,6 +2451,7 @@ static int gfar_change_mtu(struct net_device *dev, int new_mtu)
 		stop_gfar(dev);
 
 	priv->rx_buffer_size = tempsize;
+	gfar_reset_recycle(priv);
 
 	dev->mtu = new_mtu;
 
@@ -2477,6 +2514,36 @@ static void gfar_align_skb(struct sk_buff *skb)
 	 */
 	skb_reserve(skb, RXBUF_ALIGNMENT -
 		    (((unsigned long) skb->data) & (RXBUF_ALIGNMENT - 1)));
+}
+
+static void gfar_recycle_skb(struct gfar_private *priv, struct sk_buff *skb)
+{
+	struct gfar_priv_recycle *rec_target = priv->recycle_target;
+	struct sk_buff_head *recycle_q;
+
+	if (unlikely(!rec_target))
+		goto free;
+
+	if (unlikely(!skb_is_recycleable(skb, rec_target->buff_size)))
+		goto free;
+
+	recycle_q = &rec_target->recycle_q;
+
+	if (unlikely(skb_queue_len(recycle_q) >= GFAR_RECYCLE_MAX))
+		goto free;
+
+	skb_recycle(skb);
+
+	gfar_align_skb(skb);
+
+	skb_queue_head(recycle_q, skb);
+
+	atomic_inc(&rec_target->recycle_cnt);
+
+	return;
+
+free:
+	dev_kfree_skb(skb);
 }
 
 /* Interrupt Handler for Transmit complete */
@@ -2558,7 +2625,7 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 
 		bytes_sent += skb->len;
 
-		dev_kfree_skb_any(skb);
+		gfar_recycle_skb(priv, skb);
 
 		tx_queue->tx_skbuff[skb_dirtytx] = NULL;
 
@@ -2633,9 +2700,27 @@ static struct sk_buff *gfar_alloc_skb(struct net_device *dev)
 	return skb;
 }
 
-struct sk_buff *gfar_new_skb(struct net_device *dev)
+static struct sk_buff *gfar_new_skb(struct gfar_private *priv)
 {
-	return gfar_alloc_skb(dev);
+	struct sk_buff *skb = NULL;
+	struct gfar_priv_recycle *rec = &priv->recycle;
+	struct sk_buff_head *recycle_q;
+
+	recycle_q = &rec->recycle_q;
+
+	skb = skb_dequeue(recycle_q);
+
+	if (unlikely(!skb))
+		goto alloc;
+
+	atomic_inc(&rec->reuse_cnt);
+
+	return skb;
+
+alloc:
+	skb = gfar_alloc_skb(priv->ndev);
+
+	return skb;
 }
 
 static inline void count_errors(unsigned short status, struct net_device *dev)
@@ -2769,7 +2854,7 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 		rmb();
 
 		/* Add another skb for the future */
-		newskb = gfar_new_skb(dev);
+		newskb = gfar_new_skb(priv);
 
 		skb = rx_queue->rx_skbuff[rx_queue->skb_currx];
 
