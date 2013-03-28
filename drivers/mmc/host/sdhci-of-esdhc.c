@@ -260,6 +260,8 @@ static int esdhc_of_get_cd(struct sdhci_host *host)
 
 	if (host->flags & SDHCI_DEVICE_DEAD)
 		return 0;
+	if (host->quirks2 & SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD)
+		return -ENOSYS;
 
 	sysctl = sdhci_be32bs_readl(host, SDHCI_CLOCK_CONTROL);
 

@@ -102,6 +102,7 @@ struct sdhci_host {
  * circuit has capability to support 3.3V
  */
 #define SDHCI_QUIRK2_CIRCUIT_SUPPORT_VS33		(1<<5)
+#define SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD		(1<<6)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
