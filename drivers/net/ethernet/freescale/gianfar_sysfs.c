@@ -340,8 +340,9 @@ static ssize_t gfar_show_recycle_target(struct device *dev,
 					char *buf)
 {
 	struct gfar_private *priv = netdev_priv(to_net_dev(dev));
+	char *name = gfar_skb_recycling_en ? priv->recycle_ndev->name : "";
 
-	return sprintf(buf, "%s\n", priv->recycle_ndev->name);
+	return sprintf(buf, "%s\n", name);
 }
 
 static ssize_t gfar_set_recycle_target(struct device *dev,
@@ -352,6 +353,9 @@ static ssize_t gfar_set_recycle_target(struct device *dev,
 	struct gfar_private *priv = netdev_priv(ndev);
 	struct gfar_private *priv_target;
 	int found = 0;
+
+	if (!gfar_skb_recycling_en)
+		return count;
 
 	list_for_each_entry(priv_target, &gfar_recycle_queues, recycle_node) {
 		char *name = priv_target->ndev->name;

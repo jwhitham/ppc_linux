@@ -1203,6 +1203,7 @@ extern void gfar_vlan_mode(struct net_device *dev, netdev_features_t features);
 
 extern const struct ethtool_ops gfar_ethtool_ops;
 extern struct list_head gfar_recycle_queues;
+extern bool gfar_skb_recycling_en;
 
 #define MAX_FILER_CACHE_IDX (2*(MAX_FILER_IDX))
 

@@ -145,6 +145,12 @@ static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 
 LIST_HEAD(gfar_recycle_queues);
 
+bool gfar_skb_recycling_en = true;
+module_param(gfar_skb_recycling_en, bool, 0444);
+MODULE_PARM_DESC(gfar_skb_recycling_en,
+	"Enable buffer recycling.");
+
+
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
 MODULE_LICENSE("GPL");
@@ -987,8 +993,13 @@ static void gfar_init_recycle(struct gfar_private *priv)
 	rec->buff_size = priv->rx_buffer_size + RXBUF_ALIGNMENT;
 	skb_queue_head_init(&rec->recycle_q);
 	/* recycle skbs to the own queue by default */
-	priv->recycle_target = &priv->recycle;
-	priv->recycle_ndev = priv->ndev;
+	if (gfar_skb_recycling_en) {
+		priv->recycle_target = &priv->recycle;
+		priv->recycle_ndev = priv->ndev;
+	} else {
+		priv->recycle_target = NULL;
+		priv->recycle_ndev = NULL;
+	}
 
 	list_add(&priv->recycle_node, &gfar_recycle_queues);
 }
