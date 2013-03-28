@@ -53,6 +53,19 @@ static struct paace *ppaact;
 static struct paace *spaact;
 static struct ome *omt;
 
+/*
+ * Table for matching compatible strings, for device tree
+ * guts node, for QorIQ SOCs.
+ * "fsl,qoriq-device-config-2.0" corresponds to T4 & B4
+ * SOCs. For the older SOCs "fsl,qoriq-device-config-1.0"
+ * string would be used.
+*/
+static const struct of_device_id guts_device_ids[] = {
+	{ .compatible = "fsl,qoriq-device-config-1.0", },
+	{ .compatible = "fsl,qoriq-device-config-2.0", },
+	{}
+};
+
 /* maximum subwindows permitted per liodn */
 static u32 max_subwindow_count;
 
@@ -739,7 +752,6 @@ static void __init setup_liodns(void)
 	}
 }
 
-/* TBD: PAMU access violation interrupt handler */
 irqreturn_t pamu_av_isr(int irq, void *arg)
 {
 	struct pamu_isr_data *data = arg;
@@ -935,10 +947,11 @@ error:
 }
 
 /*
- * Table of SVRs and the corresponding PORT_ID values.
+ * Table of SVRs and the corresponding PORT_ID values. Port ID corresponds to a
+ * bit map of snoopers for a given range of memory mapped by a LAW.
  *
- * All future CoreNet-enabled SOCs will have this erratum fixed, so this table
- * should never need to be updated.  SVRs are guaranteed to be unique, so
+ * All future CoreNet-enabled SOCs will have this erratum(A-004510) fixed, so this
+ * table should never need to be updated.  SVRs are guaranteed to be unique, so
  * there is no worry that a future SOC will inadvertently have one of these
  * values.
  */
@@ -970,7 +983,7 @@ static int __init fsl_pamu_probe(struct platform_device *pdev)
 	u32 pamubypenr, pamu_counter;
 	unsigned long pamu_reg_off;
 	unsigned long pamu_reg_base;
-	struct pamu_isr_data *data;
+	struct pamu_isr_data *data = NULL;
 	struct device_node *guts_node;
 	u64 size;
 	struct page *p;
@@ -1004,8 +1017,9 @@ static int __init fsl_pamu_probe(struct platform_device *pdev)
 
 	data = kzalloc(sizeof(struct pamu_isr_data), GFP_KERNEL);
 	if (!data) {
-		iounmap(pamu_regs);
-		return -ENOMEM;
+		dev_err(&pdev->dev, "PAMU isr data memory allocation failed\n");
+		ret = -ENOMEM;
+		goto error;
 	}
 	data->pamu_reg_base = pamu_regs;
 	data->count = size / PAMU_OFFSET;
@@ -1018,8 +1032,7 @@ static int __init fsl_pamu_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	guts_node = of_find_compatible_node(NULL, NULL,
-			"fsl,qoriq-device-config-1.0");
+	guts_node = of_find_matching_node(NULL, guts_device_ids);
 	if (!guts_node) {
 		dev_err(&pdev->dev, "could not find GUTS node %s\n",
 			pdev->dev.of_node->full_name);
@@ -1141,6 +1154,11 @@ error_genpool:
 error:
 	if (irq != NO_IRQ)
 		free_irq(irq, data);
+
+	if (data) {
+		memset(data, 0, sizeof(struct pamu_isr_data));
+		kfree(data);
+	}
 
 	if (pamu_regs)
 		iounmap(pamu_regs);

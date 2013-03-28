@@ -49,7 +49,7 @@ static struct kmem_cache *fsl_pamu_domain_cache;
 static struct kmem_cache *iommu_devinfo_cache;
 static DEFINE_SPINLOCK(device_domain_lock);
 
-int __init iommu_init_mempool(void)
+static int __init iommu_init_mempool(void)
 {
 
 	fsl_pamu_domain_cache = kmem_cache_create("fsl_pamu_domain",
@@ -77,7 +77,7 @@ int __init iommu_init_mempool(void)
 	return 0;
 }
 
-static phys_addr_t get_phys_addr(struct fsl_dma_domain *dma_domain, u64 iova)
+static phys_addr_t get_phys_addr(struct fsl_dma_domain *dma_domain, dma_addr_t iova)
 {
 	u32 win_cnt = dma_domain->win_cnt;
 	struct dma_window *win_ptr =
@@ -93,7 +93,7 @@ static phys_addr_t get_phys_addr(struct fsl_dma_domain *dma_domain, u64 iova)
 
 	if (win_cnt > 1) {
 		u64 subwin_size;
-		u64 subwin_iova;
+		dma_addr_t subwin_iova;
 		u32 wnd;
 
 		subwin_size = dma_domain->geom_size >> ilog2(win_cnt);
@@ -274,10 +274,13 @@ static int pamu_set_liodn(int liodn, struct device *dev,
 		subwin_size = window_size >> ilog2(win_cnt);
 		for (i = 0; i < win_cnt; i++) {
 			spin_lock(&iommu_lock);
-			ret = pamu_config_spaace(liodn, win_cnt, i, subwin_size,
-						 omi_index, 0,
-						 dma_domain->snoop_id,
-						 dma_domain->stash_id, 0, 0);
+			ret = pamu_disable_spaace(liodn, i);
+			if (!ret)
+				ret = pamu_config_spaace(liodn, win_cnt, i,
+							 subwin_size, omi_index,
+							 0, dma_domain->snoop_id,
+							 dma_domain->stash_id,
+							 0, 0);
 			spin_unlock(&iommu_lock);
 			if (ret) {
 				pr_err("PAMU SPAACE configuration failed for liodn %d\n", liodn);
@@ -289,7 +292,7 @@ static int pamu_set_liodn(int liodn, struct device *dev,
 	return ret;
 }
 
-static int check_size(u64 size, unsigned long iova)
+static int check_size(u64 size, dma_addr_t iova)
 {
 	/*
 	 * Size must be a power of two and at least be equal
@@ -401,7 +404,7 @@ static void attach_device(struct fsl_dma_domain *dma_domain, int liodn, struct d
 }
 
 static phys_addr_t fsl_pamu_iova_to_phys(struct iommu_domain *domain,
-					    u64 iova)
+					    dma_addr_t iova)
 {
 	struct fsl_dma_domain *dma_domain = domain->priv;
 
@@ -844,7 +847,7 @@ static int configure_domain_dma_state(struct fsl_dma_domain *dma_domain, bool en
 	return 0;
 }
 
-int fsl_pamu_set_domain_attr(struct iommu_domain *domain,
+static int fsl_pamu_set_domain_attr(struct iommu_domain *domain,
 				 enum iommu_attr attr_type, void *data)
 {
 	struct fsl_dma_domain *dma_domain = domain->priv;
@@ -870,7 +873,7 @@ int fsl_pamu_set_domain_attr(struct iommu_domain *domain,
 	return ret;
 }
 
-int fsl_pamu_get_domain_attr(struct iommu_domain *domain,
+static int fsl_pamu_get_domain_attr(struct iommu_domain *domain,
 				 enum iommu_attr attr_type, void *data)
 {
 	struct fsl_dma_domain *dma_domain = domain->priv;
