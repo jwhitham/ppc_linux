@@ -311,13 +311,26 @@ void qman_get_ip_revision(struct device_node *dn)
 			ip_rev = QMAN_REV30;
 			qman_portal_max = 25;
 		} else if (of_device_is_compatible(dn,
-						"fsl,qman-portal-3.0.2")) {
-			ip_rev = QMAN_REV30;
-			qman_portal_max = 10;
+						"fsl,qman-portal-3.1.0")) {
+			ip_rev = QMAN_REV31;
+			qman_portal_max = 50;
 		} else if (of_device_is_compatible(dn,
-						"fsl,qman-portal-3.0.3")) {
-			ip_rev = QMAN_REV30;
+						"fsl,qman-portal-3.1.1")) {
+			ip_rev = QMAN_REV31;
+			qman_portal_max = 25;
+		} else if (of_device_is_compatible(dn,
+						"fsl,qman-portal-3.1.2")) {
+			ip_rev = QMAN_REV31;
 			qman_portal_max = 18;
+		} else if (of_device_is_compatible(dn,
+						"fsl,qman-portal-3.1.3")) {
+			ip_rev = QMAN_REV31;
+			qman_portal_max = 10;
+		} else {
+			pr_warn("unknown QMan version in portal node,"
+				"default to rev1.1\n");
+			ip_rev = QMAN_REV11;
+			qman_portal_max = 10;
 		}
 
 		if (!qman_ip_rev) {

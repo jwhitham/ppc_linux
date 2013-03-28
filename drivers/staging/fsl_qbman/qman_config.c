@@ -646,6 +646,8 @@ static int __init fsl_qman_init(struct device_node *node)
 			qman_ip_rev = QMAN_REV20;
 		else if ((major == 3) && (minor == 0))
 			qman_ip_rev = QMAN_REV30;
+		else if ((major == 3) && (minor == 1))
+			qman_ip_rev = QMAN_REV31;
 		else {
 			pr_warning("unknown Qman version, default to rev1.1\n");
 			qman_ip_rev = QMAN_REV11;
