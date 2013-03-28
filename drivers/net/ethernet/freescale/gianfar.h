@@ -932,7 +932,7 @@ struct tx_q_stats {
  */
 struct gfar_priv_tx_q {
 	/* cacheline 1 */
-	spinlock_t txlock __attribute__ ((aligned (SMP_CACHE_BYTES)));
+	spinlock_t txlock __aligned(SMP_CACHE_BYTES);
 	struct	txbd8 *tx_bd_base;
 	struct	txbd8 *cur_tx;
 	unsigned int num_txbdfree;
@@ -976,7 +976,7 @@ struct rx_q_stats {
  */
 
 struct gfar_priv_rx_q {
-	spinlock_t rxlock __attribute__ ((aligned (SMP_CACHE_BYTES)));
+	spinlock_t rxlock __aligned(SMP_CACHE_BYTES);
 	struct	sk_buff ** rx_skbuff;
 	dma_addr_t rx_bd_dma_base;
 	struct	rxbd8 *rx_bd_base;
@@ -1014,7 +1014,7 @@ struct gfar_irqinfo {
  */
 
 struct gfar_priv_grp {
-	spinlock_t grplock __attribute__ ((aligned (SMP_CACHE_BYTES)));
+	spinlock_t grplock __aligned(SMP_CACHE_BYTES);
 	struct	napi_struct napi;
 	struct gfar_private *priv;
 	struct gfar __iomem *regs;
