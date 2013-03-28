@@ -161,16 +161,27 @@
 /include/ "pq3-mpic.dtsi"
 /include/ "pq3-mpic-timer-B.dtsi"
 
+	ptp_timer: ptimer@b0e00 {
+		compatible = "fsl,gianfar-ptp-timer";
+		reg = <0xb0e00 0xb0>;
+		fsl,ts-to-buffer;
+		fsl,tmr-prsc = <0x2>;
+		fsl,clock-source-select = <1>;
+	};
+
 /include/ "pq3-etsec2-0.dtsi"
 	enet0: enet0_grp2: ethernet@b0000 {
+		ptimer-handle = <&ptp_timer>;
 	};
 
 /include/ "pq3-etsec2-1.dtsi"
 	enet1: enet1_grp2: ethernet@b1000 {
+		ptimer-handle = <&ptp_timer>;
 	};
 
 /include/ "pq3-etsec2-2.dtsi"
 	enet2: enet2_grp2: ethernet@b2000 {
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	global-utilities@e0000 {

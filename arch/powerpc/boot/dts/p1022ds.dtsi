@@ -214,13 +214,23 @@
 		};
 	};
 
+	ptp_timer: ptimer@b0e00 {
+		compatible = "fsl,gianfar-ptp-timer";
+		reg = <0xb0e00 0xb0>;
+		fsl,ts-to-buffer;
+		fsl,tmr-prsc = <0x2>;
+		fsl,clock-source-select = <1>;
+	};
+
 	ethernet@b0000 {
 		phy-handle = <&phy0>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	ethernet@b1000 {
 		phy-handle = <&phy1>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 	};
 };

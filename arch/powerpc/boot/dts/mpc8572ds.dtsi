@@ -149,6 +149,7 @@
 		tbi-handle = <&tbi0>;
 		phy-handle = <&phy0>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	mdio@24520 {
@@ -201,10 +202,18 @@
 		fsl,max-adj = <499999999>;
 	};
 
+	ptp_timer: ptimer@24e00 {
+		compatible = "fsl,gianfar-ptp-timer";
+		reg = <0x24e00 0xb0>;
+		fsl,tmr-prsc = <0x2>;
+		fsl,clock-source-select = <1>;
+	};
+
 	enet1: ethernet@25000 {
 		tbi-handle = <&tbi1>;
 		phy-handle = <&phy1>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 
 	};
 
@@ -219,6 +228,7 @@
 		tbi-handle = <&tbi2>;
 		phy-handle = <&phy2>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 
 	};
 	mdio@26520 {
