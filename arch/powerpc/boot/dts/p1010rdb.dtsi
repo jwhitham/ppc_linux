@@ -1,7 +1,7 @@
 /*
  * P1010 RDB Device Tree Source stub (no addresses or top-level ranges)
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2011-2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -126,21 +126,9 @@
 
 &board_soc {
 	i2c@3000 {
-		eeprom@50 {
-			compatible = "st,24c256";
-			reg = <0x50>;
-		};
-
 		rtc@68 {
 			compatible = "pericom,pt7c4338";
 			reg = <0x68>;
-		};
-	};
-
-	i2c@3100 {
-		eeprom@52 {
-			compatible = "atmel,24c01";
-			reg = <0x52>;
 		};
 	};
 
@@ -150,7 +138,7 @@
 			#size-cells = <1>;
 			compatible = "spansion,s25sl12801";
 			reg = <0>;
-			spi-max-frequency = <40000000>;
+			spi-max-frequency = <50000000>;
 
 			partition@0 {
 				/* 1MB for u-boot Bootloader Image */
@@ -183,6 +171,12 @@
 				reg = <0x00980000 0x00680000>;
 				label = "SPI Flash JFFS2 RFS";
 			};
+		};
+
+		slic@0 {
+			compatible = "zarlink,le88266";
+			reg = <0>;
+			spi-max-frequency = <8000000>;
 		};
 	};
 
@@ -227,20 +221,31 @@
 		};
 	};
 
+	ptp_timer: ptimer@b0e00 {
+		compatible = "fsl,gianfar-ptp-timer";
+		reg = <0xb0e00 0xb0>;
+		fsl,ts-to-buffer;
+		fsl,tmr-prsc = <0x2>;
+		fsl,clock-source-select = <1>;
+	};
+
 	enet0: ethernet@b0000 {
 		phy-handle = <&phy0>;
 		phy-connection-type = "rgmii-id";
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	enet1: ethernet@b1000 {
 		phy-handle = <&phy1>;
 		tbi-handle = <&tbi0>;
 		phy-connection-type = "sgmii";
+		ptimer-handle = <&ptp_timer>;
 	};
 
 	enet2: ethernet@b2000 {
 		phy-handle = <&phy2>;
 		tbi-handle = <&tbi1>;
 		phy-connection-type = "sgmii";
+		ptimer-handle = <&ptp_timer>;
 	};
 };

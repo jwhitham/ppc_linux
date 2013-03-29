@@ -166,6 +166,128 @@
 					reg = <0x8>;
 					device_type = "tbi-phy";
 				};
+
+				/*
+				 * Virtual MDIO for the two on-board RGMII
+				 * ports.  The fsl,hydra-mdio-muxval property
+				 * is already correct.
+				 */
+				hydra_rg: hydra-rg {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-val = <0x08>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					status = "disabled";
+
+					phy_rgmii_0: ethernet-phy@0 {
+						reg = <0x0>;
+					};
+					phy_rgmii_1: ethernet-phy@1 {
+						reg = <0x1>;
+					};
+				};
+
+				/*
+				 * Virtual MDIO for the four-port SGMII cards.
+				 */
+
+				/* This for Slot 2 */
+				hydra_sg_slot2: hydra-sg-slot2 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-val = <0x28>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					status = "disabled";
+
+					phy_sgmii_slot2_1c: ethernet-phy@1c {
+						reg = <0x1c>;
+					};
+					phy_sgmii_slot2_1d: ethernet-phy@1d {
+						reg = <0x1d>;
+					};
+					phy_sgmii_slot2_1e: ethernet-phy@1e {
+						reg = <0x1e>;
+					};
+					phy_sgmii_slot2_1f: ethernet-phy@1f {
+						reg = <0x1f>;
+					};
+				};
+
+				/* This for Slot 3 */
+				hydra_sg_slot3: hydra-sg-slot3 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-val = <0x68>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					status = "disabled";
+
+					phy_sgmii_slot3_1c: ethernet-phy@1c {
+						reg = <0x1c>;
+					};
+					phy_sgmii_slot3_1d: ethernet-phy@1d {
+						reg = <0x1d>;
+					};
+					phy_sgmii_slot3_1e: ethernet-phy@1e {
+						reg = <0x1e>;
+					};
+					phy_sgmii_slot3_1f: ethernet-phy@1f {
+						reg = <0x1f>;
+					};
+				};
+
+				/* This for Slot 5 */
+				hydra_sg_slot5: hydra-sg-slot5 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-val = <0x38>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					status = "disabled";
+
+					phy_sgmii_slot5_1c: ethernet-phy@1c {
+						reg = <0x1c>;
+					};
+					phy_sgmii_slot5_1d: ethernet-phy@1d {
+						reg = <0x1d>;
+					};
+					phy_sgmii_slot5_1e: ethernet-phy@1e {
+						reg = <0x1e>;
+					};
+					phy_sgmii_slot5_1f: ethernet-phy@1f {
+						reg = <0x1f>;
+					};
+				};
+
+				/* This for Slot 6 */
+				hydra_sg_slot6: hydra-sg-slot6 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-val = <0x48>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					status = "disabled";
+
+					phy_sgmii_slot6_1c: ethernet-phy@1c {
+						reg = <0x1c>;
+					};
+					phy_sgmii_slot6_1d: ethernet-phy@1d {
+						reg = <0x1d>;
+					};
+					phy_sgmii_slot6_1e: ethernet-phy@1e {
+						reg = <0x1e>;
+					};
+					phy_sgmii_slot6_1f: ethernet-phy@1f {
+						reg = <0x1f>;
+					};
+				};
 			};
 
 			fm1dtsec2: ethernet@e2000 {
@@ -224,7 +346,44 @@
 				phy-connection-type = "xgmii";
 			};
 
+			/*
+			 * We only support one XAUI card, so the MDIO muxing
+			 * is set by U-Boot, and Linux never touches it.
+			 * Therefore, we don't need a virtual MDIO node.
+			 * However, the phy address depends on the slot, so
+			 * only one of the ethernet-phy nodes below will be
+			 * used.
+			 */
 			xmdio0: mdio@f1000 {
+				/* FM2 10GEC1 is always on slot 1 */
+				hydra_xg_slot1: hydra-xg-slot1 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-xmdio";
+					fsl,mdio-handle = <&xmdio0>;
+					fsl,hydra-mdio-mux-val = <0x00>;
+					fsl,hydra-mdio-mux-mask = <0x06>;
+					status = "disabled";
+
+					phy_xgmii_slot_1: ethernet-phy@0 {
+						reg = <4>;
+					};
+				};
+
+				/* FM1 10GEC1 is always on slot 2 */
+				hydra_xg_slot2: hydra-xg-slot2 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-xmdio";
+					fsl,mdio-handle = <&xmdio0>;
+					fsl,hydra-mdio-mux-val = <0x02>;
+					fsl,hydra-mdio-mux-mask = <0x06>;
+					status = "disabled";
+
+					phy_xgmii_slot_2: ethernet-phy@4 {
+						reg = <0>;
+					};
+				};
 			};
 
 		};

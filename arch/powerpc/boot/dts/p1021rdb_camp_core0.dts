@@ -1,18 +1,18 @@
 /*
- * B4860 Silicon/SoC Device Tree Source (pre include)
+ * P1021 RDB Core0 Device Tree Source in CAMP mode.
  *
- * Copyright 2012 Freescale Semiconductor Inc.
+ * Copyright 2011 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
+ *       notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of Freescale Semiconductor nor the
- *	 names of its contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
  *
  *
  * ALTERNATIVELY, this software may be distributed under the terms of the
@@ -30,67 +30,62 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * In CAMP mode, each core needs to have its own dts. Only mpic and L2 cache
+ * can be shared, all the other devices must be assigned to one core only.
+ * This dts file allows core0 to have memory, l2, serail0, i2c, spi, gpio,
+ * tdm, dma, usb, eth0, eth1, sdhc, crypto, global-util, message, pci0, pci1,
+ * msi.
+ *
+ * Please note to add "-b 0" for core0's dts compiling.
  */
 
-/dts-v1/;
+/include/ "p1021rdb.dts"
+
 / {
-	compatible = "fsl,B4860";
-	#address-cells = <2>;
-	#size-cells = <2>;
-	interrupt-parent = <&mpic>;
+	model = "fsl,P1021RDB";
+	compatible = "fsl,P1021RDB-PC";
 
 	aliases {
-		ccsr = &soc;
-		dcsr = &dcsr;
-
+		ethernet1 = &enet0;
+		ethernet2 = &enet1;
 		serial0 = &serial0;
-		serial1 = &serial1;
-		serial2 = &serial2;
-		serial3 = &serial3;
-
-		qman = &qman;
-		bman = &bman;
 		pci0 = &pci0;
-		dma0 = &dma0;
-		dma1 = &dma1;
-		sdhc = &sdhc;
-
-		fman0 = &fman0;
-		crypto = &crypto;
-		sec_jr0 = &sec_jr0;
-		sec_jr1 = &sec_jr1;
-		sec_jr2 = &sec_jr2;
-		sec_jr3 = &sec_jr3;
-		rtic_a = &rtic_a;
-		rtic_b = &rtic_b;
-		rtic_c = &rtic_c;
-		rtic_d = &rtic_d;
-		sec_mon = &sec_mon;
+		pci1 = &pci1;
 	};
 
 	cpus {
-		#address-cells = <1>;
-		#size-cells = <0>;
+		PowerPC,P1021@1 {
+			status = "disabled";
+		};
+	};
 
-		cpu0: PowerPC,e6500@0 {
-			device_type = "cpu";
-			reg = <0 1>;
-			next-level-cache = <&L2>;
+	memory {
+		device_type = "memory";
+	};
+
+	soc@ffe00000 {
+		serial1: serial@4600 {
+			status = "disabled";
 		};
-		cpu1: PowerPC,e6500@1 {
-			device_type = "cpu";
-			reg = <2 3>;
-			next-level-cache = <&L2>;
+
+		mdio@24000 {
+			phy1: ethernet-phy@1 {
+				status = "disabled";
+			};
 		};
-		cpu2: PowerPC,e6500@2 {
-			device_type = "cpu";
-			reg = <4 5>;
-			next-level-cache = <&L2>;
+
+		enet2: ethernet@b2000 {
+			status = "disabled";
 		};
-		cpu3: PowerPC,e6500@3 {
-			device_type = "cpu";
-			reg = <6 7>;
-			next-level-cache = <&L2>;
+
+		mpic: pic@40000 {
+			protected-sources = <
+			42		/* serial1 */
+			31 32 33	/* enet2-queue-group0 */
+			25 26 27	/* enet2-queue-group1 */
+			>;
+			pic-no-reset;
 		};
 	};
 };

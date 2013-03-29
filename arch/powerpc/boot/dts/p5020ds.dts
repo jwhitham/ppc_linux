@@ -144,6 +144,60 @@
 					reg = <0x8>;
 					device_type = "tbi-phy";
 				};
+
+				/*
+				 * Virtual MDIO for the two on-board RGMII
+				 * ports.  The fsl,hydra-mdio-muxval property
+				 * is already correct.
+				 */
+				hydra_mdio_rgmii: hydra-mdio-rgmii {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					fsl,hydra-mdio-muxval = <0x00>;
+					status = "disabled";
+
+					phy_rgmii_0: ethernet-phy@0 {
+						reg = <0x0>;
+					};
+					phy_rgmii_1: ethernet-phy@1 {
+						reg = <0x1>;
+					};
+				};
+
+				/*
+				 * Virtual MDIO for the four-port SGMII card.
+				 * The fsl,hydra-mdio-muxval property will be
+				 * fixed-up by U-Boot based on the slot that
+				 * the SGMII card is in.
+				 *
+				 * Note: we do not support DTSEC5 connected to
+				 * SGMII, so this is the only SGMII node.
+				 */
+				hydra_mdio_sgmii: hydra-mdio-sgmii {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					compatible = "fsl,hydra-mdio";
+					fsl,mdio-handle = <&mdio0>;
+					fsl,hydra-mdio-mux-mask = <0x70>;
+					fsl,hydra-mdio-muxval = <0x00>;
+					status = "disabled";
+
+					phy_sgmii_1c: ethernet-phy@1c {
+						reg = <0x1c>;
+					};
+					phy_sgmii_1d: ethernet-phy@1d {
+						reg = <0x1d>;
+					};
+					phy_sgmii_1e: ethernet-phy@1e {
+						reg = <0x1e>;
+					};
+					phy_sgmii_1f: ethernet-phy@1f {
+						reg = <0x1f>;
+					};
+				};
 			};
 
 			enet1: ethernet@e2000 {

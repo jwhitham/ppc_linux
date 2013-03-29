@@ -1,18 +1,18 @@
 /*
- * B4860DS Device Tree Source
+ * B4420DS Device Tree Source
  *
- * Copyright 2012 Freescale Semiconductor Inc.
+ * Copyright 2012 Freescale Semiconductor, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
+ *       notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of Freescale Semiconductor nor the
- *	 names of its contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
  *
  *
  * ALTERNATIVELY, this software may be distributed under the terms of the
@@ -20,23 +20,23 @@
  * Foundation, either version 2 of that License or (at your option) any
  * later version.
  *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This software is provided by Freescale Semiconductor "as is" and any
+ * express or implied warranties, including, but not limited to, the implied
+ * warranties of merchantability and fitness for a particular purpose are
+ * disclaimed. In no event shall Freescale Semiconductor be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential damages
+ * (including, but not limited to, procurement of substitute goods or services;
+ * loss of use, data, or profits; or business interruption) however caused and
+ * on any theory of liability, whether in contract, strict liability, or tort
+ * (including negligence or otherwise) arising in any way out of the use of
+ * this software, even if advised of the possibility of such damage.
  */
 
-/include/ "fsl/b4860si-pre.dtsi"
+/include/ "fsl/b4420si-pre.dtsi"
 
 / {
-	model = "fsl,B4860QDS";
-	compatible = "fsl,B4860QDS";
+	model = "fsl,B4420QDS";
+	compatible = "fsl,B4420QDS";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
@@ -46,20 +46,11 @@
 		ethernet1 = &fm1mac2;
 		ethernet2 = &fm1mac3;
 		ethernet3 = &fm1mac4;
-		ethernet4 = &fm1mac5;
-		ethernet5 = &fm1mac6;
-		ethernet8 = &fm1mac9;
-		ethernet9 = &fm1mac10;
 
 		phy_sgmii_10 = &phy_sgmii_10;
 		phy_sgmii_11 = &phy_sgmii_11;
 		phy_sgmii_1c = &phy_sgmii_1c;
 		phy_sgmii_1d = &phy_sgmii_1d;
-		phy_sgmii_1e = &phy_sgmii_1e;
-		phy_sgmii_1f = &phy_sgmii_1f;
-
-		phy_xaui_slot1 = &phy_xaui_slot1;
-		phy_xaui_slot2 = &phy_xaui_slot2;
 	};
 
 	ifc: localbus@ffe124000 {
@@ -111,7 +102,7 @@
 		};
 
 		board-control@3,0 {
-			compatible = "fsl,b4860qds-fpga", "fsl,fpga-qixis";
+			compatible = "fsl,b4420qds-fpga", "fsl,fpga-qixis";
 			reg = <3 0 0x300>;
 		};
 	};
@@ -146,6 +137,7 @@
 		};
 
 		sdhc@114000 {
+			/*Disabled as there is no sdhc connector on B4420QDS board*/
 			status = "disabled";
 		};
 
@@ -169,6 +161,7 @@
 			rtc@68 {
 				compatible = "dallas,ds3232";
 				reg = <0x68>;
+				interrupts = <0x1 0x1 0 0>;
 			};
 		};
 
@@ -194,22 +187,6 @@
 				phy-handle = <&phy_sgmii_1d>;
 				phy-connection-type = "sgmii";
 			};
-			fm1mac5: ethernet@e8000 {
-				phy-handle = <&phy_sgmii_1e>;
-				phy-connection-type = "sgmii";
-			};
-			fm1mac6: ethernet@ea000 {
-				phy-handle = <&phy_sgmii_1f>;
-				phy-connection-type = "sgmii";
-			};
-			fm1mac9: ethernet@f0000 { /* FM1@TGEC2 */
-				phy-handle = <&phy_xaui_slot1>;
-				phy-connection-type = "xgmii";
-			};
-			fm1mac10: ethernet@f2000 { /* FM1@TGEC1 */
-				phy-handle = <&phy_xaui_slot2>;
-				phy-connection-type = "xgmii";
-			};
 
 			mdio0: mdio@fc000 {
 				phy_sgmii_10: ethernet-phy@10 {
@@ -223,24 +200,6 @@
 				};
 				phy_sgmii_1d: ethernet-phy@1d {
 					reg = <0x1d>;
-				};
-				phy_sgmii_1e: ethernet-phy@1e {
-					reg = <0x1e>;
-				};
-				phy_sgmii_1f: ethernet-phy@1f {
-					reg = <0x1f>;
-				};
-			};
-
-			xmdio0: mdio@fd000 {
-				/* For 10g interfaces */
-				phy_xaui_slot1: xaui-phy@slot1 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x7>; /* default switch setting on slot1 of AMC2PEX */
-				};
-				phy_xaui_slot2: xaui-phy@slot2 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x6>; /* default switch setting on slot1 of AMC2PEX */
 				};
 			};
 		};
@@ -261,64 +220,26 @@
 		};
 	};
 
-	rio: rapidio@ffe0c0000 {
-		reg = <0xf 0xfe0c0000 0 0x11000>;
-
-		port1 {
-			ranges = <0 0 0xc 0x20000000 0 0x10000000>;
-		};
-		port2 {
-			ranges = <0 0 0xc 0x30000000 0 0x10000000>;
-		};
-	};
-
 	fsl,dpaa {
-		compatible = "fsl,b4860-dpaa", "fsl,dpaa";
+		compatible = "fsl,b4420-dpaa", "fsl,dpaa";
 		ethernet@0 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
+			compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&fm1mac1>;
 		};
 		ethernet@1 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
+			compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&fm1mac2>;
 		};
 		ethernet@2 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
+			compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&fm1mac3>;
 		};
 		ethernet@3 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
+			compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&fm1mac4>;
-		};
-		ethernet@4 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
-			fsl,fman-mac = <&fm1mac5>;
-		};
-		ethernet@5 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
-			fsl,fman-mac = <&fm1mac6>;
-		};
-		ethernet@8 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
-			fsl,fman-mac = <&fm1mac9>;
-		};
-		ethernet@9 {
-			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
-			fsl,fman-mac = <&fm1mac10>;
-		};
-	};
-
-	rio: rapidio@ffe0c0000 {
-		reg = <0xf 0xfe0c0000 0 0x11000>;
-
-		port1 {
-			ranges = <0 0 0xc 0x20000000 0 0x10000000>;
-		};
-		port2 {
-			ranges = <0 0 0xc 0x30000000 0 0x10000000>;
 		};
 	};
 };
 
-/include/ "fsl/b4860si-post.dtsi"
+/include/ "fsl/b4420si-post.dtsi"
 /include/ "fsl/qoriq-dpaa-res3.dtsi"
