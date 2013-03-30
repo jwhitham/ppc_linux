@@ -20,7 +20,7 @@
  * Foundation, either version 2 of that License or (at your option) any
  * later version.
  *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
  * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
@@ -298,6 +298,10 @@
 /include/ "qoriq-qman2-portals.dtsi"
 };
 
+&lportals {
+/include/ "interlaken-lac-portals.dtsi"
+};
+
 &soc {
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -487,6 +491,10 @@
 /include/ "qoriq-gpio-1.dtsi"
 /include/ "qoriq-gpio-2.dtsi"
 /include/ "qoriq-gpio-3.dtsi"
+/include/ "qoriq-rman-0.dtsi"
+	rman: rman@1e0000 {
+		fsl,qman-channels-id = <0x880 0x881>;
+	};
 /include/ "qoriq-usb2-mph-0.dtsi"
 		usb0: usb@210000 {
 			compatible = "fsl-usb2-mph-v2.4", "fsl-usb2-mph";
@@ -501,9 +509,146 @@
 		};
 /include/ "qoriq-sata2-0.dtsi"
 /include/ "qoriq-sata2-1.dtsi"
+/include/ "interlaken-lac.dtsi"
 /include/ "qoriq-sec5.0-0.dtsi"
+/include/ "qoriq-dce-0.dtsi"
+/include/ "qoriq-pme-0.dtsi"
 /include/ "qoriq-qman1.dtsi"
 /include/ "qoriq-bman1.dtsi"
+/include/ "qoriq-fman3-0.dtsi"
+/include/ "qoriq-fman3-0-1g-0.dtsi"
+/include/ "qoriq-fman3-0-1g-1.dtsi"
+/include/ "qoriq-fman3-0-1g-2.dtsi"
+/include/ "qoriq-fman3-0-1g-3.dtsi"
+/include/ "qoriq-fman3-0-1g-4.dtsi"
+/include/ "qoriq-fman3-0-1g-5.dtsi"
+/include/ "qoriq-fman3-0-10g-0.dtsi"
+/include/ "qoriq-fman3-0-10g-1.dtsi"
+	fman0: fman@400000 {
+		/* tx - 1g - 0 */
+		port@a8000 {
+			fsl,qman-channel-id = <0x802>;
+		};
+		/* tx - 1g - 1 */
+		port@a9000 {
+			fsl,qman-channel-id = <0x803>;
+		};
+		/* tx - 1g - 2 */
+		port@aa000 {
+			fsl,qman-channel-id = <0x804>;
+		};
+		/* tx - 1g - 3 */
+		port@ab000 {
+			fsl,qman-channel-id = <0x805>;
+		};
+		/* tx - 1g - 4 */
+		port@ac000 {
+			fsl,qman-channel-id = <0x806>;
+		};
+		/* tx - 1g - 5 */
+		port@ad000 {
+			fsl,qman-channel-id = <0x807>;
+		};
+		/* tx - 10g - 0 */
+		port@b0000 {
+			fsl,qman-channel-id = <0x800>;
+		};
+		/* tx - 10g - 1 */
+		port@b1000 {
+			fsl,qman-channel-id = <0x801>;
+		};
+		/* offline - 1 */
+		port@82000 {
+			fsl,qman-channel-id = <0x809>;
+		};
+		/* offline - 2 */
+		port@83000 {
+			fsl,qman-channel-id = <0x80a>;
+		};
+		/* offline - 3 */
+		port@84000 {
+			fsl,qman-channel-id = <0x80b>;
+		};
+		/* offline - 4 */
+		port@85000 {
+			fsl,qman-channel-id = <0x80c>;
+		};
+		/* offline - 5 */
+		port@86000 {
+			fsl,qman-channel-id = <0x80d>;
+		};
+		/* offline - 6 */
+		port@87000 {
+			fsl,qman-channel-id = <0x80e>;
+		};
+	};
+/include/ "qoriq-fman3-1.dtsi"
+/include/ "qoriq-fman3-1-1g-0.dtsi"
+/include/ "qoriq-fman3-1-1g-1.dtsi"
+/include/ "qoriq-fman3-1-1g-2.dtsi"
+/include/ "qoriq-fman3-1-1g-3.dtsi"
+/include/ "qoriq-fman3-1-1g-4.dtsi"
+/include/ "qoriq-fman3-1-1g-5.dtsi"
+/include/ "qoriq-fman3-1-10g-0.dtsi"
+/include/ "qoriq-fman3-1-10g-1.dtsi"
+	fman1: fman@500000 {
+		/* tx - 1g - 0 */
+		port@a8000 {
+			fsl,qman-channel-id = <0x822>;
+		};
+		/* tx - 1g - 1 */
+		port@a9000 {
+			fsl,qman-channel-id = <0x823>;
+		};
+		/* tx - 1g - 2 */
+		port@aa000 {
+			fsl,qman-channel-id = <0x824>;
+		};
+		/* tx - 1g - 3 */
+		port@ab000 {
+			fsl,qman-channel-id = <0x825>;
+		};
+		/* tx - 1g - 4 */
+		port@ac000 {
+			fsl,qman-channel-id = <0x826>;
+		};
+		/* tx - 1g - 5 */
+		port@ad000 {
+			fsl,qman-channel-id = <0x827>;
+		};
+		/* tx - 10g - 0 */
+		port@b0000 {
+			fsl,qman-channel-id = <0x820>;
+		};
+		/* tx - 10g - 1 */
+		port@b1000 {
+			fsl,qman-channel-id = <0x821>;
+		};
+		/* offline - 1 */
+		port@82000 {
+			fsl,qman-channel-id = <0x829>;
+		};
+		/* offline - 2 */
+		port@83000 {
+			fsl,qman-channel-id = <0x82a>;
+		};
+		/* offline - 3 */
+		port@84000 {
+			fsl,qman-channel-id = <0x82b>;
+		};
+		/* offline - 4 */
+		port@85000 {
+			fsl,qman-channel-id = <0x82c>;
+		};
+		/* offline - 5 */
+		port@86000 {
+			fsl,qman-channel-id = <0x82d>;
+		};
+		/* offline - 6 */
+		port@87000 {
+			fsl,qman-channel-id = <0x82e>;
+		};
+	};
 
 	L2_1: l2-cache-controller@c20000 {
 		compatible = "fsl,t4240-l2-cache-controller";
@@ -519,10 +664,5 @@
 		compatible = "fsl,t4240-l2-cache-controller";
 		reg = <0xca0000 0x40000>;
 		next-level-cache = <&cpc>;
-	};
-
-/include/ "qoriq-rman-0.dtsi"
-	rman: rman@1e0000 {
-		fsl,qman-channels-id = <0x880 0x881>;
 	};
 };

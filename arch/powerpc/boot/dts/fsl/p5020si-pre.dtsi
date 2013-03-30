@@ -74,8 +74,11 @@
 		rtic_d = &rtic_d;
 		sec_mon = &sec_mon;
 
+		rman = &rman;
+		pme = &pme;
 		qman = &qman;
 		bman = &bman;
+		fman0 = &fman0;
 
 		raideng = &raideng;
 		raideng_jr0 = &raideng_jr0;

@@ -74,8 +74,11 @@
 		rtic_d = &rtic_d;
 		sec_mon = &sec_mon;
 
+		rman = &rman;
+		pme = &pme;
 		qman = &qman;
 		bman = &bman;
+		fman0 = &fman0;
 	};
 
 	cpus {
