@@ -56,7 +56,7 @@ config ATMEL_PWM
 	depends on HAVE_CLK
 	help
 	  This option enables device driver support for the PWM channels
-	  on certain Atmel processors.  Pulse Width Modulation is used for
+	  on certain Atmel processors.	Pulse Width Modulation is used for
 	  purposes including software controlled power-efficient backlights
 	  on LCD displays, motor control, and waveform generation.
 
@@ -211,6 +211,23 @@ config ENCLOSURE_SERVICES
 	  driver (SCSI/ATA) which supports enclosures
 	  or a SCSI enclosure device (SES) to use these services.
 
+config FSL_USDPAA
+	bool "Freescale USDPAA process driver"
+	depends on FSL_DPA
+	default y
+	help
+	  This driver provides user-space access to kernel-managed
+	  resource interfaces for USDPAA applications, on the assumption
+	  that each process will open this device once. Specifically, this
+	  device exposes functionality that would be awkward if exposed
+	  via the portal devices - ie. this device exposes functionality
+	  that is inherently process-wide rather than portal-specific.
+	  This device is necessary for obtaining access to DMA memory and
+	  for allocation of Qman and Bman resources. In short, if you wish
+	  to use USDPAA applications, you need this.
+
+	  If unsure, say Y.
+
 config SGI_XP
 	tristate "Support communication between SGI SSIs"
 	depends on NET
@@ -346,14 +363,14 @@ config SENSORS_BH1780
 	  will be called bh1780gli.
 
 config SENSORS_BH1770
-         tristate "BH1770GLC / SFH7770 combined ALS - Proximity sensor"
-         depends on I2C
-         ---help---
-           Say Y here if you want to build a driver for BH1770GLC (ROHM) or
+	 tristate "BH1770GLC / SFH7770 combined ALS - Proximity sensor"
+	 depends on I2C
+	 ---help---
+	   Say Y here if you want to build a driver for BH1770GLC (ROHM) or
 	   SFH7770 (Osram) combined ambient light and proximity sensor chip.
 
-           To compile this driver as a module, choose M here: the
-           module will be called bh1770glc. If unsure, say N here.
+	   To compile this driver as a module, choose M here: the
+	   module will be called bh1770glc. If unsure, say N here.
 
 config SENSORS_APDS990X
 	 tristate "APDS990X combined als and proximity sensors"
