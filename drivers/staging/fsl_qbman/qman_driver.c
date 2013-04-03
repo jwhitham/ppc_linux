@@ -30,7 +30,8 @@
  */
 
 #include "qman_private.h"
-#ifdef CONFIG_FSL_PAMU
+//#ifdef CONFIG_FSL_PAMU
+#if 0
 #include <sysdev/fsl_pamu.h>
 #endif
 
@@ -432,7 +433,8 @@ static struct qm_portal_config *get_pcfg(struct list_head *list)
 	return pcfg;
 }
 
-#ifdef CONFIG_FSL_PAMU
+//#ifdef CONFIG_FSL_PAMU
+#if 0
 static void portal_set_liodns(const struct qm_portal_config *pcfg, int cpu)
 {
 	unsigned int index = 0;
