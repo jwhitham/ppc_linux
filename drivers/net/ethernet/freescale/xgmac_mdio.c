@@ -31,6 +31,10 @@ struct tgec_mdio_controller {
 	__be32	mdio_addr;	/* MDIO address */
 } __packed;
 
+/* Taken from memac_mdio.c */
+#define MDIO_STAT_ENC (1 << 6)
+#define MDIO_STAT_HOLD_15_CLK (7 << 2)
+
 #define MDIO_STAT_CLKDIV(x)	(((x>>1) & 0xff) << 8)
 #define MDIO_STAT_BSY		(1 << 0)
 #define MDIO_STAT_RD_ER		(1 << 1)
@@ -98,7 +102,7 @@ static int xgmac_mdio_write(struct mii_bus *bus, int phy_id, int regnum, u16 val
 	if (regnum & MII_ADDR_C45) {
 		/* Clause 45 (ie 10G) */
 		dev_addr = (regnum >> 16) & 0x1f;
-		mdiostat |= MDIO_STAT_ENC | MDIO_STAT_HOLD_15_CLK;
+		mdio_stat |= MDIO_STAT_ENC | MDIO_STAT_HOLD_15_CLK;
 	} else {
 		/* Clause 22 (ie 1G) */
 		dev_addr = regnum & 0x1f;
