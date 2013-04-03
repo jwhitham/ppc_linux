@@ -133,4 +133,9 @@ config UIO_FSL_SRIO
 	depends on RAPIDIO=n
 	default n
 
+config UIO_FSL_DMA
+	tristate "Freescale DMA support"
+	depends on FSL_DMA=n
+	default n
+
 endif
