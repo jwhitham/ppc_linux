@@ -3708,18 +3708,17 @@ static void dpa_setup_egress(struct dpa_priv_s *priv,
 				struct fm_port *port)
 {
 	struct list_head *ptr = &fq->list;
+	struct dpa_fq *iter;
 	int i = 0;
 
 	while (true) {
-		struct dpa_fq *iter = list_entry(ptr, struct dpa_fq, list);
+		iter = list_entry(ptr, struct dpa_fq, list);
 		if (priv->shared)
 			iter->fq_base = shared_egress_fq;
 		else
 			iter->fq_base = private_egress_fq;
 
 		iter->net_dev = priv->net_dev;
-		priv->egress_fqs[i++] = &iter->fq_base;
-
 		if (port) {
 			iter->flags = QMAN_FQ_FLAG_TO_DCPORTAL;
 			iter->channel = fm_get_tx_port_channel(port);
@@ -3730,6 +3729,17 @@ static void dpa_setup_egress(struct dpa_priv_s *priv,
 			break;
 
 		ptr = ptr->next;
+	}
+
+	/* Allocate frame queues to all available CPUs no matter the number of
+	 * queues specified in device tree.
+	 */
+	for (i = 0; i < DPAA_ETH_TX_QUEUES; i++) {
+		iter = list_entry(ptr, struct dpa_fq, list);
+		priv->egress_fqs[i] = &iter->fq_base;
+
+		if (list_is_last(ptr, head))
+			ptr = &fq->list;
 	}
 }
 
