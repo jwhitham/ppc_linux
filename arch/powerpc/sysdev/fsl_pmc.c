@@ -21,6 +21,7 @@
 #include <linux/device.h>
 #include <linux/of_platform.h>
 #include <linux/pm.h>
+#include <asm/switch_to.h>
 #include <asm/cacheflush.h>
 
 #include <sysdev/fsl_soc.h>
