@@ -520,8 +520,10 @@ static int gfar_sringparam(struct net_device *dev,
 	}
 
 	/* Change the size */
-	for (i = 0; i < priv->num_rx_queues; i++) {
+	for (i = 0; i < priv->num_rx_queues; i++)
 		priv->rx_queue[i]->rx_ring_size = rvals->rx_pending;
+
+	for (i = 0; i < priv->num_tx_queues; i++) {
 		priv->tx_queue[i]->tx_ring_size = rvals->tx_pending;
 		priv->tx_queue[i]->num_txbdfree =
 			priv->tx_queue[i]->tx_ring_size;
