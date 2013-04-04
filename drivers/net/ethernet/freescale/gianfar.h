@@ -467,6 +467,14 @@ extern const char gfar_driver_version[];
 #define RQFPR_PER		0x00000002
 #define RQFPR_EER		0x00000001
 
+/* RBIFX B[x]CTL field values */
+#define RBIFX_B_NONE		0x0
+#define RBIFX_B_BEFORE_L2	0x1
+#define RBIFX_B_AFTER_L2	0x2
+#define RBIFX_B_AFTER_L3	0x3
+/* BCTL field offset */
+#define RBIFX_BCTL_OFF		6
+
 /* TxBD status field bits */
 #define TXBD_READY		0x8000
 #define TXBD_PADCRC		0x4000

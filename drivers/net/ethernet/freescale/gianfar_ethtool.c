@@ -42,6 +42,7 @@
 #include <linux/phy.h>
 #include <linux/sort.h>
 #include <linux/if_vlan.h>
+#include <linux/in.h>
 
 #include "gianfar.h"
 
@@ -631,6 +632,7 @@ static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 static void ethflow_to_filer_rules (struct gfar_private *priv, u64 ethflow)
 {
 	u32 fcr = 0x0, fpr = FPR_FILER_MASK;
+	u32 class = upper_32_bits(ethflow);
 
 	if (ethflow & RXH_L2DA) {
 		fcr = RQFCR_PID_DAH |RQFCR_CMP_NOMATCH |
@@ -701,6 +703,45 @@ static void ethflow_to_filer_rules (struct gfar_private *priv, u64 ethflow)
 		gfar_write_filer(priv, priv->cur_filer_idx, fcr, fpr);
 		priv->cur_filer_idx = priv->cur_filer_idx - 1;
 	}
+
+	if (((class == AH_V4_FLOW) || (class == ESP_V4_FLOW)) &&
+	   (ethflow & RXH_AH_ESP_SPI)) {
+		struct gfar __iomem *regs = priv->gfargrp[0].regs;
+		u8 rbifx_bx, spi_off;
+		u32 rbifx;
+		int i;
+
+		fcr = RQFCR_PID_ARB | RQFCR_HASH | RQFCR_HASHTBL_0 |
+		      RQFCR_CMP_NOMATCH | RQFCR_AND;
+		priv->ftp_rqfpr[priv->cur_filer_idx] = fpr;
+		priv->ftp_rqfcr[priv->cur_filer_idx] = fcr;
+		gfar_write_filer(priv, priv->cur_filer_idx, fcr, fpr);
+		priv->cur_filer_idx = priv->cur_filer_idx - 1;
+
+		fcr = RQFCR_PID_L4P | RQFCR_CMP_EXACT | RQFCR_AND;
+		fpr = (class == AH_V4_FLOW) ? IPPROTO_AH : IPPROTO_ESP;
+		priv->ftp_rqfpr[priv->cur_filer_idx] = fpr;
+		priv->ftp_rqfcr[priv->cur_filer_idx] = fcr;
+		gfar_write_filer(priv, priv->cur_filer_idx, fcr, fpr);
+		priv->cur_filer_idx = priv->cur_filer_idx - 1;
+
+		/* SPI field to be extracted starting from offset 4 for AH,
+		 * or offset 0 for ESP, just after the L3 header
+		 */
+		spi_off = (class == AH_V4_FLOW) ? 4 : 0;
+		/* configure RBIFX's B0 field */
+		rbifx_bx = RBIFX_B_AFTER_L3 << RBIFX_BCTL_OFF;
+		rbifx_bx |= spi_off;
+		rbifx = rbifx_bx;
+		/* configure the next 3 bytes (B1, B2, B3) */
+		for (i = 1; i < 4; i++) {
+			rbifx_bx++; /* next SPI byte offset */
+			rbifx <<= 8;
+			rbifx |= rbifx_bx;
+		}
+
+		gfar_write(&regs->rbifx, rbifx);
+	}
 }
 
 static int gfar_ethflow_to_filer_table(struct gfar_private *priv, u64 ethflow,
@@ -736,6 +777,11 @@ static int gfar_ethflow_to_filer_table(struct gfar_private *priv, u64 ethflow,
 		break;
 	case UDP_V6_FLOW:
 		cmp_rqfpr = RQFPR_IPV6 |RQFPR_UDP;
+		break;
+	case AH_V4_FLOW:
+	case ESP_V4_FLOW:
+		cmp_rqfpr = RQFPR_IPV4;
+		ethflow |= (class << 32);
 		break;
 	default:
 		pr_err("Right now this class is not supported\n");
