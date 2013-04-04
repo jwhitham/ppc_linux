@@ -33,6 +33,9 @@
  */
 
 /dts-v1/;
+
+/include/ "e6500_power_isa.dtsi"
+
 / {
 	compatible = "fsl,T4240";
 	#address-cells = <2>;
@@ -78,7 +81,6 @@
 		pci1 = &pci1;
 		pci2 = &pci2;
 		pci3 = &pci3;
-		rman = &rman;
 		dma0 = &dma0;
 		dma1 = &dma1;
 		sdhc = &sdhc;

@@ -39,18 +39,6 @@
 	interrupts = <25 2 0 0>;
 };
 
-&lportals {
-/include/ "interlaken-lac-portals.dtsi"
-};
-
-&bportals {
-/include/ "qoriq-bman2-portals.dtsi"
-};
-
-&qportals {
-/include/ "qoriq-qman2-portals.dtsi"
-};
-
 /* controller at 0x240000 */
 &pci0 {
 	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0";
@@ -58,7 +46,6 @@
 	#size-cells = <2>;
 	#address-cells = <3>;
 	bus-range = <0x0 0xff>;
-	clock-frequency = <33333333>;
 	interrupts = <20 2 0 0>;
 	pcie@0 {
 		#interrupt-cells = <1>;
@@ -84,7 +71,6 @@
 	#size-cells = <2>;
 	#address-cells = <3>;
 	bus-range = <0 0xff>;
-	clock-frequency = <33333333>;
 	interrupts = <21 2 0 0>;
 	pcie@0 {
 		#interrupt-cells = <1>;
@@ -110,7 +96,6 @@
 	#size-cells = <2>;
 	#address-cells = <3>;
 	bus-range = <0x0 0xff>;
-	clock-frequency = <33333333>;
 	interrupts = <22 2 0 0>;
 	pcie@0 {
 		#interrupt-cells = <1>;
@@ -136,7 +121,6 @@
 	#size-cells = <2>;
 	#address-cells = <3>;
 	bus-range = <0x0 0xff>;
-	clock-frequency = <33333333>;
 	interrupts = <23 2 0 0>;
 	pcie@0 {
 		#interrupt-cells = <1>;
@@ -357,11 +341,13 @@
 	};
 
 	cpc: l3-cache-controller@10000 {
-		compatible = "fsl,p5020-l3-cache-controller", "fsl,p4080-l3-cache-controller", "cache";
+		compatible = "fsl,t4240-l3-cache-controller", "cache";
 		reg = <0x10000 0x1000
-		       0x11000 0x1000>;
+		       0x11000 0x1000
+		       0x12000 0x1000>;
 		interrupts = <16 2 1 27
-			      16 2 1 26>;
+			      16 2 1 26
+			      16 2 1 25>;
 	};
 
 	corenet-cf@18000 {
@@ -469,11 +455,19 @@
 		};
 	};
 
-/include/ "interlaken-lac.dtsi"
-
 	rcpm: global-utilities@e2000 {
 		compatible = "fsl,t4240-rcpm", "fsl,qoriq-rcpm-2";
 		reg = <0xe2000 0x1000>;
+	};
+
+	sfp: sfp@e8000 {
+		compatible = "fsl,t4240-sfp";
+		reg	   = <0xe8000 0x1000>;
+	};
+
+	serdes: serdes@ea000 {
+		compatible = "fsl,t4240-serdes";
+		reg	   = <0xea000 0x4000>;
 	};
 
 /include/ "qoriq-dma-0.dtsi"
@@ -656,12 +650,6 @@
 		};
 	};
 
-
-	/*
-	 * Temporarily define cluster 1/2/3's L2 cache nodes in order to pass
-	 * next-level-cache info to uboot to do L3 cache fixup. This can be
-	 * removed once u-boot can create cpu node with cache info.
-	 */
 	L2_1: l2-cache-controller@c20000 {
 		compatible = "fsl,t4240-l2-cache-controller";
 		reg = <0xc20000 0x40000>;
@@ -676,172 +664,5 @@
 		compatible = "fsl,t4240-l2-cache-controller";
 		reg = <0xca0000 0x40000>;
 		next-level-cache = <&cpc>;
-	};
-
-/include/ "qoriq-qman1.dtsi"
-/include/ "qoriq-bman1.dtsi"
-
-/include/ "qoriq-rman-0.dtsi"
-	rman: rman@1e0000 {
-		fsl,qman-channels-id = <0x880 0x881>;
-	};
-
-/include/ "qoriq-usb2-mph-0.dtsi"
-		usb0: usb@210000 {
-			compatible = "fsl-usb2-mph-v2.4", "fsl-usb2-mph";
-			phy_type = "utmi";
-			port0;
-		};
-/include/ "qoriq-usb2-dr-0.dtsi"
-		usb1: usb@211000 {
-			compatible = "fsl-usb2-dr-v2.4", "fsl-usb2-dr";
-			dr_mode = "host";
-			phy_type = "utmi";
-		};
-/include/ "qoriq-sata2-0.dtsi"
-	sata0: sata@220000 {
-		compatible = "fsl,t4240-rev1.0-sata", "fsl,pq-sata-v2";
-	};
-/include/ "qoriq-sata2-1.dtsi"
-	sata1: sata@221000 {
-		compatible = "fsl,t4240-rev1.0-sata", "fsl,pq-sata-v2";
-	};
-/include/ "qoriq-dce-0.dtsi"
-/include/ "qoriq-pme-0.dtsi"
-
-/include/ "qoriq-fman3-0.dtsi"
-/include/ "qoriq-fman3-0-1g-0.dtsi"
-/include/ "qoriq-fman3-0-1g-1.dtsi"
-/include/ "qoriq-fman3-0-1g-2.dtsi"
-/include/ "qoriq-fman3-0-1g-3.dtsi"
-/include/ "qoriq-fman3-0-1g-4.dtsi"
-/include/ "qoriq-fman3-0-1g-5.dtsi"
-/include/ "qoriq-fman3-0-10g-0.dtsi"
-/include/ "qoriq-fman3-0-10g-1.dtsi"
-	fman0: fman@400000 {
-		/* tx - 1g - 0 */
-		port@a8000 {
-			fsl,qman-channel-id = <0x802>;
-		};
-		/* tx - 1g - 1 */
-		port@a9000 {
-			fsl,qman-channel-id = <0x803>;
-		};
-		/* tx - 1g - 2 */
-		port@aa000 {
-			fsl,qman-channel-id = <0x804>;
-		};
-		/* tx - 1g - 3 */
-		port@ab000 {
-			fsl,qman-channel-id = <0x805>;
-		};
-		/* tx - 1g - 4 */
-		port@ac000 {
-			fsl,qman-channel-id = <0x806>;
-		};
-		/* tx - 1g - 5 */
-		port@ad000 {
-			fsl,qman-channel-id = <0x807>;
-		};
-		/* tx - 10g - 0 */
-		port@b0000 {
-			fsl,qman-channel-id = <0x800>;
-		};
-		/* tx - 10g - 1 */
-		port@b1000 {
-			fsl,qman-channel-id = <0x801>;
-		};
-		/* offline - 1 */
-		port@82000 {
-			fsl,qman-channel-id = <0x809>;
-		};
-		/* offline - 2 */
-		port@83000 {
-			fsl,qman-channel-id = <0x80a>;
-		};
-		/* offline - 3 */
-		port@84000 {
-			fsl,qman-channel-id = <0x80b>;
-		};
-		/* offline - 4 */
-		port@85000 {
-			fsl,qman-channel-id = <0x80c>;
-		};
-		/* offline - 5 */
-		port@86000 {
-			fsl,qman-channel-id = <0x80d>;
-		};
-		/* offline - 6 */
-		port@87000 {
-			fsl,qman-channel-id = <0x80e>;
-		};
-	};
-
-/include/ "qoriq-fman3-1.dtsi"
-/include/ "qoriq-fman3-1-1g-0.dtsi"
-/include/ "qoriq-fman3-1-1g-1.dtsi"
-/include/ "qoriq-fman3-1-1g-2.dtsi"
-/include/ "qoriq-fman3-1-1g-3.dtsi"
-/include/ "qoriq-fman3-1-1g-4.dtsi"
-/include/ "qoriq-fman3-1-1g-5.dtsi"
-/include/ "qoriq-fman3-1-10g-0.dtsi"
-/include/ "qoriq-fman3-1-10g-1.dtsi"
-	fman1: fman@500000 {
-		/* tx - 1g - 0 */
-		port@a8000 {
-			fsl,qman-channel-id = <0x822>;
-		};
-		/* tx - 1g - 1 */
-		port@a9000 {
-			fsl,qman-channel-id = <0x823>;
-		};
-		/* tx - 1g - 2 */
-		port@aa000 {
-			fsl,qman-channel-id = <0x824>;
-		};
-		/* tx - 1g - 3 */
-		port@ab000 {
-			fsl,qman-channel-id = <0x825>;
-		};
-		/* tx - 1g - 4 */
-		port@ac000 {
-			fsl,qman-channel-id = <0x826>;
-		};
-		/* tx - 1g - 5 */
-		port@ad000 {
-			fsl,qman-channel-id = <0x827>;
-		};
-		/* tx - 10g - 0 */
-		port@b0000 {
-			fsl,qman-channel-id = <0x820>;
-		};
-		/* tx - 10g - 1 */
-		port@b1000 {
-			fsl,qman-channel-id = <0x821>;
-		};
-		/* offline - 1 */
-		port@82000 {
-			fsl,qman-channel-id = <0x829>;
-		};
-		/* offline - 2 */
-		port@83000 {
-			fsl,qman-channel-id = <0x82a>;
-		};
-		/* offline - 3 */
-		port@84000 {
-			fsl,qman-channel-id = <0x82b>;
-		};
-		/* offline - 4 */
-		port@85000 {
-			fsl,qman-channel-id = <0x82c>;
-		};
-		/* offline - 5 */
-		port@86000 {
-			fsl,qman-channel-id = <0x82d>;
-		};
-		/* offline - 6 */
-		port@87000 {
-			fsl,qman-channel-id = <0x82e>;
-		};
 	};
 };

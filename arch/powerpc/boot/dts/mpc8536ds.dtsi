@@ -190,19 +190,10 @@
 		phy_type = "ulpi";
 	};
 
-	ptp_timer: ptimer@24e00 {
-		compatible = "fsl,gianfar-ptp-timer";
-		reg = <0x24e00 0xb0>;
-		fsl,ts-to-buffer;
-		fsl,tmr-prsc = <0x2>;
-		fsl,clock-source-select = <1>;
-	};
-
 	enet0: ethernet@24000 {
 		tbi-handle = <&tbi0>;
 		phy-handle = <&phy1>;
 		phy-connection-type = "rgmii-id";
-		ptimer-handle = <&ptp_timer>;
 	};
 
 	mdio@24520 {
@@ -234,7 +225,6 @@
 		tbi-handle = <&tbi1>;
 		phy-handle = <&phy0>;
 		phy-connection-type = "rgmii-id";
-		ptimer-handle = <&ptp_timer>;
 	};
 
 	mdio@26520 {
