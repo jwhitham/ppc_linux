@@ -222,9 +222,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	dma_addr_t addr = qm_fd_addr(fd);
 	struct sk_buff **skbh;
 	struct sk_buff *skb = NULL;
-	enum dma_data_direction dma_dir;
+	const enum dma_data_direction dma_dir = DMA_TO_DEVICE;
 
-	dma_dir = (fd->cmd & FM_FD_CMD_FCO) ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, dma_dir);
 
 	/* retrieve skb back pointer */
@@ -608,9 +607,8 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	unsigned long sgt_page, sg0_page;
 	void *buffer_start;
 	skb_frag_t *frag;
-	int i, j, nr_frags;
-	enum dma_data_direction dma_dir;
-	bool can_recycle = false;
+	int i, j;
+	const enum dma_data_direction dma_dir = DMA_TO_DEVICE;
 
 	fd->format = qm_fd_sg;
 
@@ -641,31 +639,6 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	 * we really use? Might improve perf...
 	 */
 	memset(sgt, 0, DPA_SGT_MAX_ENTRIES * sizeof(*sgt));
-
-	/*
-	 * Decide whether the skb is recycleable. We will need this information
-	 * upfront to decide what DMA mapping direction we want to use.
-	 */
-	nr_frags =  skb_shinfo(skb)->nr_frags;
-	if (!skb_cloned(skb) && !skb_shared(skb) &&
-	   (*percpu_priv->dpa_bp_count + nr_frags + 2 < dpa_bp->target_count)) {
-		can_recycle = true;
-		/*
-		 * We want each fragment to have at least dpa_bp->size bytes.
-		 * If even one fragment is smaller, the entire FD becomes
-		 * unrecycleable.
-		 * Same holds if the fragments are allocated from highmem.
-		 */
-		for (i = 0; i < nr_frags; i++) {
-			skb_frag_t *crt_frag = &skb_shinfo(skb)->frags[i];
-			if ((crt_frag->size < dpa_bp->size) ||
-			    PageHighMem(crt_frag->page.p)) {
-				can_recycle = false;
-				break;
-			}
-		}
-	}
-	dma_dir = can_recycle ? DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
 
 	/*
 	 * Populate the first SGT entry
@@ -751,12 +724,6 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	fd->addr_hi = upper_32_bits(addr);
 	fd->addr_lo = lower_32_bits(addr);
 
-	if (can_recycle) {
-		/* all pages are going to be recycled */
-		fd->cmd |= FM_FD_CMD_FCO;
-		fd->bpid = dpa_bp->bpid;
-	}
-
 	return 0;
 
 sgt_map_failed:
@@ -841,27 +808,6 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	fd.cmd &= ~FM_FD_CMD_FCO;
 #endif
 
-	if (fd.cmd & FM_FD_CMD_FCO) {
-		/*
-		 * Need to free the skb, but without releasing
-		 * the page fragments, so increment the pages usage count
-		 */
-		int i;
-
-		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
-			get_page(skb_shinfo(skb)->frags[i].page.p);
-
-		/*
-		 * We release back to the pool a number of pages equal to
-		 * the number of skb fragments + one page for the linear
-		 * portion of the skb + one page for the S/G table
-		 */
-		*percpu_priv->dpa_bp_count += skb_shinfo(skb)->nr_frags + 2;
-		percpu_priv->tx_returned++;
-		dev_kfree_skb(skb);
-		skb = NULL;
-	}
-
 	if (unlikely(dpa_xmit(priv, percpu_priv, queue_mapping, &fd) < 0))
 		goto xmit_failed;
 
@@ -870,13 +816,6 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	return NETDEV_TX_OK;
 
 xmit_failed:
-	if (fd.cmd & FM_FD_CMD_FCO) {
-		*percpu_priv->dpa_bp_count -= skb_shinfo(skb)->nr_frags + 2;
-		percpu_priv->tx_returned--;
-
-		dpa_fd_release(net_dev, &fd);
-		return NETDEV_TX_OK;
-	}
 	_dpa_cleanup_tx_fd(priv, &fd);
 	dev_kfree_skb(skb);
 
