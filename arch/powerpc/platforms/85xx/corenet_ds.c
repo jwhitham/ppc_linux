@@ -121,6 +121,9 @@ void __init qman_init_early(void);
 #ifdef CONFIG_FSL_BMAN_CONFIG
 void __init bman_init_early(void);
 #endif
+#ifdef CONFIG_FSL_PME2_CTRL
+void __init pme2_init_early(void);
+#endif
 
 __init void corenet_ds_init_early(void)
 {
@@ -129,6 +132,9 @@ __init void corenet_ds_init_early(void)
 #endif
 #ifdef CONFIG_FSL_BMAN_CONFIG
 	bman_init_early();
+#endif
+#ifdef CONFIG_FSL_PME2_CTRL
+	pme2_init_early();
 #endif
 #ifdef CONFIG_FSL_USDPAA
 	fsl_usdpaa_init_early();
