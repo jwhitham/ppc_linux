@@ -572,4 +572,14 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 #endif /* CONFIG_DPA_ETH_WQ_ASSIGN_* */
 
 
+#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
+/* Use in lieu of skb_get_queue_mapping() */
+#define dpa_get_queue_mapping(skb) \
+	smp_processor_id()
+#else
+/* Use the queue selected by XPS */
+#define dpa_get_queue_mapping(skb) \
+	skb_get_queue_mapping(skb)
+#endif
+
 #endif	/* __DPA_H */

@@ -1839,8 +1839,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
 	clear_fd(&fd);
-	/* Use the Tx queue of the current cpu */
-	queue_mapping = smp_processor_id();
+	queue_mapping = dpa_get_queue_mapping(skb);
 
 	if (unlikely(skb_headroom(skb) < DPA_BP_HEAD)) {
 		struct sk_buff *skb_new;
@@ -3134,10 +3133,12 @@ static const struct file_operations dpa_debugfs_fops = {
 };
 #endif
 
+#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
 static u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
 {
 	return smp_processor_id();
 }
+#endif
 
 
 static int dpa_ndo_set_features(struct net_device *dev,
@@ -3163,7 +3164,9 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_get_stats = dpa_get_stats,
 	.ndo_set_mac_address = dpa_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
+#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
 	.ndo_select_queue = dpa_select_queue,
+#endif
 	.ndo_change_mtu = dpa_change_mtu,
 	.ndo_set_rx_mode = dpa_set_rx_mode,
 	.ndo_init = dpa_ndo_init,
