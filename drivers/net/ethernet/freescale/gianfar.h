@@ -426,8 +426,12 @@ extern const char gfar_driver_version[];
 		IMASK_RXFEN0 | IMASK_BSY | IMASK_EBERR | IMASK_BABR | \
 		IMASK_XFUN | IMASK_RXC | IMASK_BABT | IMASK_DPE \
 		| IMASK_PERR)
-#define IMASK_RTX_DISABLED ((~(IMASK_RXFEN0 | IMASK_TXFEN | IMASK_BSY)) \
-			   & IMASK_DEFAULT)
+#define IMASK_RX_DEFAULT	(IMASK_RXFEN0 | IMASK_BSY)
+#define IMASK_TX_DEFAULT	(IMASK_TXFEN | IMASK_TXBEN)
+
+#define IMASK_RX_DISABLED	((~(IMASK_RX_DEFAULT)) & IMASK_DEFAULT)
+#define IMASK_TX_DISABLED	((~(IMASK_TX_DEFAULT)) & IMASK_DEFAULT)
+
 
 /* Fifo management */
 #define FIFO_TX_THR_MASK	0x01ff
@@ -1127,7 +1131,7 @@ struct gfar_priv_rx_q {
 	struct	rxbd8 *rx_bd_base;
 	struct	rxbd8 *cur_rx;
 	struct	net_device *dev;
-	struct gfar_priv_grp *grp;
+	struct gfar_priv_napi_rx *napi_rx;
 	struct rx_q_stats stats;
 	u16	skb_currx;
 	u16	qindex;
@@ -1158,19 +1162,30 @@ struct gfar_irqinfo {
  *	@irqinfo: TX/RX/ER irq data for this group
  */
 
-struct gfar_priv_grp {
-	spinlock_t grplock __aligned(SMP_CACHE_BYTES);
-	struct	napi_struct napi;
-	struct gfar_private *priv;
-	struct gfar __iomem *regs;
-	unsigned int grp_id;
+
+struct gfar_priv_napi_rx {
+	struct	napi_struct napi __aligned(SMP_CACHE_BYTES);
+	struct gfar_priv_grp *grp;
 	unsigned long num_rx_queues;
 	unsigned long rx_bit_map;
-	/* cacheline 3 */
 	unsigned int rstat;
-	unsigned int tstat;
+};
+
+struct gfar_priv_napi_tx {
+	struct	napi_struct napi __aligned(SMP_CACHE_BYTES);
+	struct gfar_priv_grp *grp;
 	unsigned long num_tx_queues;
 	unsigned long tx_bit_map;
+	unsigned int tstat;
+};
+
+struct gfar_priv_grp {
+	spinlock_t grplock __aligned(SMP_CACHE_BYTES);
+	struct gfar __iomem *regs;
+	struct gfar_private *priv;
+	struct gfar_priv_napi_rx *napi_rx;
+	struct gfar_priv_napi_tx *napi_tx;
+	unsigned int grp_id;
 };
 
 #define gfar_irq(grp, ID) \
