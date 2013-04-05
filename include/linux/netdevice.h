@@ -1579,7 +1579,7 @@ extern int call_netdevice_notifiers(unsigned long val, struct net_device *dev);
 
 extern rwlock_t				dev_base_lock;		/* Device list lock */
 
-extern seqcount_t	devnet_rename_seq;	/* Device rename seq */
+extern struct mutex devnet_rename_mutex;
 
 
 #define for_each_netdev(net, d)		\
@@ -1783,6 +1783,7 @@ struct softnet_data {
 	unsigned int		dropped;
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
+	struct sk_buff_head	tofree_queue;
 };
 
 static inline void input_queue_head_incr(struct softnet_data *sd)

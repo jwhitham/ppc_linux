@@ -571,7 +571,6 @@ static int sock_getbindtodevice(struct sock *sk, char __user *optval,
 	struct net *net = sock_net(sk);
 	struct net_device *dev;
 	char devname[IFNAMSIZ];
-	unsigned seq;
 
 	if (sk->sk_bound_dev_if == 0) {
 		len = 0;
@@ -582,20 +581,19 @@ static int sock_getbindtodevice(struct sock *sk, char __user *optval,
 	if (len < IFNAMSIZ)
 		goto out;
 
-retry:
-	seq = read_seqcount_begin(&devnet_rename_seq);
+	mutex_lock(&devnet_rename_mutex);
 	rcu_read_lock();
 	dev = dev_get_by_index_rcu(net, sk->sk_bound_dev_if);
 	ret = -ENODEV;
 	if (!dev) {
 		rcu_read_unlock();
+		mutex_unlock(&devnet_rename_mutex);
 		goto out;
 	}
 
 	strcpy(devname, dev->name);
 	rcu_read_unlock();
-	if (read_seqcount_retry(&devnet_rename_seq, seq))
-		goto retry;
+	mutex_unlock(&devnet_rename_mutex);
 
 	len = strlen(devname) + 1;
 
@@ -2287,12 +2285,11 @@ void lock_sock_nested(struct sock *sk, int subclass)
 	if (sk->sk_lock.owned)
 		__lock_sock(sk);
 	sk->sk_lock.owned = 1;
-	spin_unlock(&sk->sk_lock.slock);
+	spin_unlock_bh(&sk->sk_lock.slock);
 	/*
 	 * The sk_lock has mutex_lock() semantics here:
 	 */
 	mutex_acquire(&sk->sk_lock.dep_map, subclass, 0, _RET_IP_);
-	local_bh_enable();
 }
 EXPORT_SYMBOL(lock_sock_nested);
 

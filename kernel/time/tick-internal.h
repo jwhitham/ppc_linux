@@ -4,6 +4,9 @@
 #include <linux/hrtimer.h>
 #include <linux/tick.h>
 
+extern raw_spinlock_t jiffies_lock;
+extern seqcount_t jiffies_seq;
+
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BUILD
 
 #define TICK_DO_TIMER_NONE	-1

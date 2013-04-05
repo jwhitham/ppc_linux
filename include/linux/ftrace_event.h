@@ -49,7 +49,9 @@ struct trace_entry {
 	unsigned char		flags;
 	unsigned char		preempt_count;
 	int			pid;
-	int			padding;
+	unsigned short		migrate_disable;
+	unsigned short		padding;
+	unsigned char		preempt_lazy_count;
 };
 
 #define FTRACE_MAX_EVENT						\
