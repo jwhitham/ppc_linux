@@ -35,6 +35,10 @@
  * Validates device-tree configuration and sets up the offline ports.
  */
 
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": %s:%hu:%s() " fmt, \
+	KBUILD_BASENAME".c", __LINE__, __func__
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
@@ -79,7 +83,7 @@ static int __devinit __cold oh_alloc_pcd_fqids(struct device *dev,
 	uint8_t alignment,
 	uint32_t *base_fqid)
 {
-	cpu_dev_crit(dev, "callback not implemented!\n");
+	dev_crit(dev, "callback not implemented!\n");
 	BUG();
 
 	return 0;
@@ -87,7 +91,7 @@ static int __devinit __cold oh_alloc_pcd_fqids(struct device *dev,
 
 static int __devinit __cold oh_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
 {
-	dpaa_eth_crit(dev, "callback not implemented!\n");
+	dev_crit(dev, "callback not implemented!\n");
 	BUG();
 
 	return 0;
@@ -122,7 +126,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	if (!match)
 		return -EINVAL;
 
-	cpu_dev_dbg(dpa_oh_dev, "Probing OH port...\n");
+	dev_dbg(dpa_oh_dev, "Probing OH port...\n");
 
 	/*
 	 * Find the referenced OH node
@@ -131,14 +135,14 @@ oh_port_probe(struct platform_device *_of_dev)
 	oh_port_handle = of_get_property(dpa_oh_node,
 		"fsl,fman-oh-port", &lenp);
 	if (oh_port_handle == NULL) {
-		cpu_dev_err(dpa_oh_dev, "No OH port handle found in node %s\n",
+		dev_err(dpa_oh_dev, "No OH port handle found in node %s\n",
 			dpa_oh_node->full_name);
 		return -EINVAL;
 	}
 
 	BUG_ON(lenp % sizeof(*oh_port_handle));
 	if (lenp != sizeof(*oh_port_handle)) {
-		cpu_dev_err(dpa_oh_dev, "Found %lu OH port bindings in node %s,"
+		dev_err(dpa_oh_dev, "Found %lu OH port bindings in node %s,"
 			" only 1 phandle is allowed.\n",
 			(unsigned long int)(lenp / sizeof(*oh_port_handle)),
 			dpa_oh_node->full_name);
@@ -148,11 +152,11 @@ oh_port_probe(struct platform_device *_of_dev)
 	/* Read configuration for the OH port */
 	oh_node = of_find_node_by_phandle(*oh_port_handle);
 	if (oh_node == NULL) {
-		cpu_dev_err(dpa_oh_dev, "Can't find OH node referenced from "
+		dev_err(dpa_oh_dev, "Can't find OH node referenced from "
 			"node %s\n", dpa_oh_node->full_name);
 		return -EINVAL;
 	}
-	cpu_dev_info(dpa_oh_dev, "Found OH node handle compatible with %s.\n",
+	dev_info(dpa_oh_dev, "Found OH node handle compatible with %s.\n",
 		match->compatible);
 
 	oh_of_dev = of_find_device_by_node(oh_node);
@@ -177,7 +181,7 @@ oh_port_probe(struct platform_device *_of_dev)
 
 	/* If we aren't the "owner" of the OH node, we're done here. */
 	if (!init_oh_port) {
-		cpu_dev_dbg(dpa_oh_dev, "Not owning the shared OH port %s, "
+		dev_dbg(dpa_oh_dev, "Not owning the shared OH port %s, "
 			"will not initialize it.\n", oh_node->full_name);
 		return 0;
 	}
@@ -185,7 +189,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	/* Allocate OH dev private data */
 	oh_config = devm_kzalloc(dpa_oh_dev, sizeof(*oh_config), GFP_KERNEL);
 	if (oh_config == NULL) {
-		cpu_dev_err(dpa_oh_dev, "Can't allocate private data for "
+		dev_err(dpa_oh_dev, "Can't allocate private data for "
 			"OH node %s referenced from node %s!\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		return -ENOMEM;
@@ -197,7 +201,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	oh_all_queues = (uint32_t *)of_get_property(dpa_oh_node,
 		"fsl,qman-frame-queues-oh", &lenp);
 	if (oh_all_queues == NULL) {
-		cpu_dev_err(dpa_oh_dev, "No frame queues have been "
+		dev_err(dpa_oh_dev, "No frame queues have been "
 			"defined for OH node %s referenced from node %s\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -EINVAL;
@@ -208,7 +212,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	BUG_ON(lenp % (2 * sizeof(*oh_all_queues)));
 	queues_count = lenp / (2 * sizeof(*oh_all_queues));
 	if (queues_count != 2) {
-		dpaa_eth_err(dpa_oh_dev, "Error and Default queues must be "
+		dev_err(dpa_oh_dev, "Error and Default queues must be "
 			"defined for OH node %s referenced from node %s\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -EINVAL;
@@ -216,14 +220,14 @@ oh_port_probe(struct platform_device *_of_dev)
 	}
 
 	/* Read the FQIDs defined for this OH port */
-	cpu_dev_dbg(dpa_oh_dev, "Reading %d queues...\n", queues_count);
+	dev_dbg(dpa_oh_dev, "Reading %d queues...\n", queues_count);
 	fq_idx = 0;
 
 	/* Error FQID - must be present */
 	crt_fqid_base = oh_all_queues[fq_idx++];
 	crt_fq_count = oh_all_queues[fq_idx++];
 	if (crt_fq_count != 1) {
-		cpu_dev_err(dpa_oh_dev, "Only 1 Error FQ allowed in OH node %s "
+		dev_err(dpa_oh_dev, "Only 1 Error FQ allowed in OH node %s "
 			"referenced from node %s (read: %d FQIDs).\n",
 			oh_node->full_name, dpa_oh_node->full_name,
 			crt_fq_count);
@@ -231,14 +235,14 @@ oh_port_probe(struct platform_device *_of_dev)
 		goto return_kfree;
 	}
 	oh_config->error_fqid = crt_fqid_base;
-	cpu_dev_dbg(dpa_oh_dev, "Read Error FQID 0x%x for OH port %s.\n",
+	dev_dbg(dpa_oh_dev, "Read Error FQID 0x%x for OH port %s.\n",
 		oh_config->error_fqid, oh_node->full_name);
 
 	/* Default FQID - must be present */
 	crt_fqid_base = oh_all_queues[fq_idx++];
 	crt_fq_count = oh_all_queues[fq_idx++];
 	if (crt_fq_count != 1) {
-		cpu_dev_err(dpa_oh_dev, "Only 1 Default FQ allowed "
+		dev_err(dpa_oh_dev, "Only 1 Default FQ allowed "
 			"in OH node %s referenced from %s (read: %d FQIDs).\n",
 			oh_node->full_name, dpa_oh_node->full_name,
 			crt_fq_count);
@@ -246,14 +250,14 @@ oh_port_probe(struct platform_device *_of_dev)
 		goto return_kfree;
 	}
 	oh_config->default_fqid = crt_fqid_base;
-	cpu_dev_dbg(dpa_oh_dev, "Read Default FQID 0x%x for OH port %s.\n",
+	dev_dbg(dpa_oh_dev, "Read Default FQID 0x%x for OH port %s.\n",
 		oh_config->default_fqid, oh_node->full_name);
 
 	/* Get a handle to the fm_port so we can set
 	 * its configuration params */
 	oh_config->oh_port = fm_port_bind(oh_dev);
 	if (oh_config->oh_port == NULL) {
-		cpu_dev_err(dpa_oh_dev, "NULL drvdata from fm port dev %s!\n",
+		dev_err(dpa_oh_dev, "NULL drvdata from fm port dev %s!\n",
 			oh_node->full_name);
 		_errno = -EINVAL;
 		goto return_kfree;
@@ -273,7 +277,7 @@ oh_port_probe(struct platform_device *_of_dev)
 
 	/* Enable the OH port */
 	fm_port_enable(oh_config->oh_port);
-	cpu_dev_info(dpa_oh_dev, "OH port %s enabled.\n", oh_node->full_name);
+	dev_info(dpa_oh_dev, "OH port %s enabled.\n", oh_node->full_name);
 
 	return 0;
 
@@ -287,20 +291,20 @@ static int __devexit __cold oh_port_remove(struct platform_device *_of_dev)
 	int _errno = 0;
 	struct dpa_oh_config_s *oh_config;
 
-	cpu_pr_info("Removing OH port...\n");
+	pr_info("Removing OH port...\n");
 
 	oh_config = dev_get_drvdata(&_of_dev->dev);
 	if (oh_config == NULL) {
-		cpu_pr_err(KBUILD_MODNAME
+		pr_err(KBUILD_MODNAME
 			": %s:%hu:%s(): No OH config in device private data!\n",
-			__file__, __LINE__, __func__);
+			KBUILD_BASENAME".c", __LINE__, __func__);
 		_errno = -ENODEV;
 		goto return_error;
 	}
 	if (oh_config->oh_port == NULL) {
-		cpu_pr_err(KBUILD_MODNAME
+		pr_err(KBUILD_MODNAME
 			": %s:%hu:%s(): No fm port in device private data!\n",
-			__file__, __LINE__, __func__);
+			KBUILD_BASENAME".c", __LINE__, __func__);
 		_errno = -EINVAL;
 		goto return_error;
 	}
@@ -317,26 +321,29 @@ static int __init __cold oh_port_load(void)
 {
 	int _errno;
 
-	cpu_pr_info(KBUILD_MODNAME ": " OH_MOD_DESCRIPTION " (" VERSION ")\n");
+	pr_info(KBUILD_MODNAME ": " OH_MOD_DESCRIPTION " (" VERSION ")\n");
 
 	_errno = platform_driver_register(&oh_port_driver);
 	if (_errno < 0) {
-		cpu_pr_err(KBUILD_MODNAME
+		pr_err(KBUILD_MODNAME
 			": %s:%hu:%s(): platform_driver_register() = %d\n",
-			__file__, __LINE__, __func__, _errno);
+			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
 	}
 
-	cpu_pr_debug(KBUILD_MODNAME ": %s:%s() ->\n", __file__, __func__);
+	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
+		KBUILD_BASENAME".c", __func__);
 	return _errno;
 }
 module_init(oh_port_load);
 
 static void __exit __cold oh_port_unload(void)
 {
-	cpu_pr_debug(KBUILD_MODNAME ": -> %s:%s()\n", __file__, __func__);
+	pr_debug(KBUILD_MODNAME ": -> %s:%s()\n",
+		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&oh_port_driver);
 
-	cpu_pr_debug(KBUILD_MODNAME ": %s:%s() ->\n", __file__, __func__);
+	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
+		KBUILD_BASENAME".c", __func__);
 }
 module_exit(oh_port_unload);

@@ -37,9 +37,6 @@
 #include <linux/device.h>	/* dev_*() */
 #include <linux/smp.h>		/* smp_processor_id() */
 
-/* The basename of the source file is being compiled */
-#define __file__ KBUILD_BASENAME".c"
-
 #define __hot
 
 /*
@@ -64,91 +61,6 @@
 
 #define cpu_printk(level, format, arg...) \
 	pr_##level("cpu%d: " format, raw_smp_processor_id(), ##arg)
-
-#define cpu_pr_emerg(format, arg...)	\
-	cpu_printk(emerg, format, ##arg)
-#define cpu_pr_alert(format, arg...)	\
-	cpu_printk(alert, format, ##arg)
-#define cpu_pr_crit(format, arg...)	\
-	cpu_printk(crit, format, ##arg)
-#define cpu_pr_err(format, arg...)	\
-	cpu_printk(err, format, ##arg)
-#define cpu_pr_warning(format, arg...)	\
-	cpu_printk(warning, format, ##arg)
-#define cpu_pr_notice(format, arg...)	\
-	cpu_printk(notice, format, ##arg)
-#define cpu_pr_info(format, arg...)	\
-	cpu_printk(info, format, ##arg)
-#define cpu_pr_debug(format, arg...)	\
-	cpu_printk(debug, format, ##arg)
-
-/* Keep this in sync with the dev_*() definitions from linux/device.h */
-#define cpu_dev_printk(level, dev, format, arg...) \
-	cpu_pr_##level("%s: %s: " format, dev_driver_string(dev), \
-			dev_name(dev), ##arg)
-
-#define cpu_dev_emerg(dev, format, arg...)	\
-	cpu_dev_printk(emerg, dev, format, ##arg)
-#define cpu_dev_alert(dev, format, arg...)	\
-	cpu_dev_printk(alert, dev, format, ##arg)
-#define cpu_dev_crit(dev, format, arg...)	\
-	cpu_dev_printk(crit, dev, format, ##arg)
-#define cpu_dev_err(dev, format, arg...)	\
-	cpu_dev_printk(err, dev, format, ##arg)
-#define cpu_dev_warn(dev, format, arg...)	\
-	cpu_dev_printk(warning, dev, format, ##arg)
-#define cpu_dev_notice(dev, format, arg...)	\
-	cpu_dev_printk(notice, dev, format, ##arg)
-#define cpu_dev_info(dev, format, arg...)	\
-	cpu_dev_printk(info, dev, format, ##arg)
-#define cpu_dev_dbg(dev, format, arg...)	\
-	cpu_dev_printk(debug, dev, format, ##arg)
-
-#define dpaa_eth_printk(level, dev, format, arg...) \
-	cpu_dev_printk(level, dev, "%s:%hu:%s() " format, \
-			__file__, __LINE__, __func__, ##arg)
-
-#define dpaa_eth_emerg(dev, format, arg...)	\
-	dpaa_eth_printk(emerg, dev, format, ##arg)
-#define dpaa_eth_alert(dev, format, arg...)	\
-	dpaa_eth_printk(alert, dev, format, ##arg)
-#define dpaa_eth_crit(dev, format, arg...)	\
-	dpaa_eth_printk(crit, dev, format, ##arg)
-#define dpaa_eth_err(dev, format, arg...)	\
-	dpaa_eth_printk(err, dev, format, ##arg)
-#define dpaa_eth_warning(dev, format, arg...)	\
-	dpaa_eth_printk(warning, dev, format, ##arg)
-#define dpaa_eth_notice(dev, format, arg...)	\
-	dpaa_eth_printk(notice, dev, format, ##arg)
-#define dpaa_eth_info(dev, format, arg...)	\
-	dpaa_eth_printk(info, dev, format, ##arg)
-#define dpaa_eth_debug(dev, format, arg...)	\
-	dpaa_eth_printk(debug, dev, format, ##arg)
-
-#define cpu_netdev_emerg(net_dev, format, arg...)	\
-	dpaa_eth_emerg((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_alert(net_dev, format, arg...)	\
-	dpaa_eth_alert((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_crit(net_dev, format, arg...)	\
-	dpaa_eth_crit((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_err(net_dev, format, arg...)		\
-	dpaa_eth_err((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_warn(net_dev, format, arg...)	\
-	dpaa_eth_warning((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_notice(net_dev, format, arg...)	\
-	dpaa_eth_notice((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_info(net_dev, format, arg...)	\
-	dpaa_eth_info((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
-#define cpu_netdev_dbg(net_dev, format, arg...)		\
-	dpaa_eth_debug((net_dev)->dev.parent, "%s: " format, \
-			(net_dev)->name , ##arg)
 
 /* Simple enum of FQ types - used for array indexing */
 enum {RX, TX};

@@ -29,6 +29,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": %s:%hu:%s() " fmt, \
+	KBUILD_BASENAME".c", __LINE__, __func__
+
 #include <linux/string.h>
 
 #include "dpaa_eth.h"
@@ -41,17 +45,17 @@ static int __cold dpa_get_settings(struct net_device *net_dev, struct ethtool_cm
 	priv = netdev_priv(net_dev);
 
 	if (priv->mac_dev == NULL) {
-		cpu_netdev_info(net_dev, "This is a MAC-less interface\n");
+		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return -ENODEV;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		cpu_netdev_err(net_dev, "phy device not initialized\n");
+		netdev_err(net_dev, "phy device not initialized\n");
 		return -ENODEV;
 	}
 
 	_errno = phy_ethtool_gset(priv->mac_dev->phy_dev, et_cmd);
 	if (unlikely(_errno < 0))
-		cpu_netdev_err(net_dev, "phy_ethtool_gset() = %d\n", _errno);
+		netdev_err(net_dev, "phy_ethtool_gset() = %d\n", _errno);
 
 	return _errno;
 }
@@ -64,17 +68,17 @@ static int __cold dpa_set_settings(struct net_device *net_dev, struct ethtool_cm
 	priv = netdev_priv(net_dev);
 
 	if (priv->mac_dev == NULL) {
-		cpu_netdev_info(net_dev, "This is a MAC-less interface\n");
+		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return -ENODEV;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		cpu_netdev_err(net_dev, "phy device not initialized\n");
+		netdev_err(net_dev, "phy device not initialized\n");
 		return -ENODEV;
 	}
 
 	_errno = phy_ethtool_sset(priv->mac_dev->phy_dev, et_cmd);
 	if (unlikely(_errno < 0))
-		cpu_netdev_err(net_dev, "phy_ethtool_sset() = %d\n", _errno);
+		netdev_err(net_dev, "phy_ethtool_sset() = %d\n", _errno);
 
 	return _errno;
 }
@@ -90,9 +94,9 @@ static void __cold dpa_get_drvinfo(struct net_device *net_dev, struct ethtool_dr
 	_errno = snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version), "%X", 0);
 
 	if (unlikely(_errno >= sizeof(drvinfo->fw_version))) {	/* Truncated output */
-		cpu_netdev_notice(net_dev, "snprintf() = %d\n", _errno);
+		netdev_notice(net_dev, "snprintf() = %d\n", _errno);
 	} else if (unlikely(_errno < 0)) {
-		cpu_netdev_warn(net_dev, "snprintf() = %d\n", _errno);
+		netdev_warn(net_dev, "snprintf() = %d\n", _errno);
 		memset(drvinfo->fw_version, 0, sizeof(drvinfo->fw_version));
 	}
 	strncpy(drvinfo->bus_info, dev_name(net_dev->dev.parent->parent),
@@ -117,11 +121,11 @@ int __cold dpa_nway_reset(struct net_device *net_dev)
 	priv = netdev_priv(net_dev);
 
 	if (priv->mac_dev == NULL) {
-		cpu_netdev_info(net_dev, "This is a MAC-less interface\n");
+		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return -ENODEV;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		cpu_netdev_err(net_dev, "phy device not initialized\n");
+		netdev_err(net_dev, "phy device not initialized\n");
 		return -ENODEV;
 	}
 
@@ -129,7 +133,7 @@ int __cold dpa_nway_reset(struct net_device *net_dev)
 	if (priv->mac_dev->phy_dev->autoneg) {
 		_errno = phy_start_aneg(priv->mac_dev->phy_dev);
 		if (unlikely(_errno < 0))
-			cpu_netdev_err(net_dev, "phy_start_aneg() = %d\n",
+			netdev_err(net_dev, "phy_start_aneg() = %d\n",
 					_errno);
 	}
 
@@ -156,11 +160,11 @@ void __cold dpa_get_pauseparam(struct net_device *net_dev, struct ethtool_pausep
 	priv = netdev_priv(net_dev);
 
 	if (priv->mac_dev == NULL) {
-		cpu_netdev_info(net_dev, "This is a MAC-less interface\n");
+		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		cpu_netdev_err(net_dev, "phy device not initialized\n");
+		netdev_err(net_dev, "phy device not initialized\n");
 		return;
 	}
 
@@ -174,11 +178,11 @@ int __cold dpa_set_pauseparam(struct net_device *net_dev, struct ethtool_pausepa
 	priv = netdev_priv(net_dev);
 
 	if (priv->mac_dev == NULL) {
-		cpu_netdev_info(net_dev, "This is a MAC-less interface\n");
+		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return -ENODEV;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		cpu_netdev_err(net_dev, "phy device not initialized\n");
+		netdev_err(net_dev, "phy device not initialized\n");
 		return -ENODEV;
 	}
 
