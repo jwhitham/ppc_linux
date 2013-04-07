@@ -9,7 +9,7 @@
  * Maintainer: Kumar Gala
  * Modifier: Sandeep Gopalpet <sandeep.kumar@freescale.com>
  *
- * Copyright 2002-2009, 2011 Freescale Semiconductor, Inc.
+ * Copyright 2002-2009, 2011-2012 Freescale Semiconductor, Inc.
  * Copyright 2007 MontaVista Software, Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
@@ -388,10 +388,11 @@ static void gfar_init_mac(struct net_device *ndev)
 	}
 
 	/* Insert receive time stamps into padding alignment bytes */
-	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_TIMER) {
+	if (priv->ptimer) {
 		rctrl &= ~RCTRL_PAL_MASK;
-		rctrl |= RCTRL_PADDING(8);
+		rctrl |= RCTRL_PADDING(8) | RCTRL_PRSDEP_INIT;
 		priv->padding = 8;
+		priv->uses_rxfcb = 1;
 	}
 
 	/* Enable HW time stamping if requested from user space */
@@ -775,8 +776,7 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 				     FSL_GIANFAR_DEV_HAS_CSUM |
 				     FSL_GIANFAR_DEV_HAS_VLAN |
 				     FSL_GIANFAR_DEV_HAS_MAGIC_PACKET |
-				     FSL_GIANFAR_DEV_HAS_EXTENDED_HASH |
-				     FSL_GIANFAR_DEV_HAS_TIMER;
+				     FSL_GIANFAR_DEV_HAS_EXTENDED_HASH;
 
 	ctype = of_get_property(np, "phy-connection-type", NULL);
 
@@ -793,6 +793,10 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 
 	/* Find the TBI PHY.  If it's not there, we don't support SGMII */
 	priv->tbi_node = of_parse_phandle(np, "tbi-handle", 0);
+
+	/* Handle IEEE1588 node */
+	if (!gfar_ptp_init(np, priv))
+		dev_info(&ofdev->dev, "ptp 1588 is initialized.\n");
 
 	return 0;
 
@@ -811,6 +815,7 @@ static int gfar_hwtstamp_ioctl(struct net_device *netdev,
 {
 	struct hwtstamp_config config;
 	struct gfar_private *priv = netdev_priv(netdev);
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
 
 	if (copy_from_user(&config, ifr->ifr_data, sizeof(config)))
 		return -EFAULT;
@@ -822,11 +827,25 @@ static int gfar_hwtstamp_ioctl(struct net_device *netdev,
 	switch (config.tx_type) {
 	case HWTSTAMP_TX_OFF:
 		priv->hwts_tx_en = 0;
+		/*
+		 * remove RTPE bit - disable timestamp
+		 * insertion on tx packets
+		 */
+		gfar_write(&(priv->ptimer->tmr_ctrl),
+			gfar_read(&(priv->ptimer->tmr_ctrl))
+					& (~TMR_RTPE));
 		break;
 	case HWTSTAMP_TX_ON:
 		if (!(priv->device_flags & FSL_GIANFAR_DEV_HAS_TIMER))
 			return -ERANGE;
 		priv->hwts_tx_en = 1;
+		/*
+		 * add RTPE bit - enable timestamp insertion
+		 * on tx packets
+		 */
+		gfar_write(&(priv->ptimer->tmr_ctrl),
+			gfar_read(&(priv->ptimer->tmr_ctrl))
+							| TMR_RTPE);
 		break;
 	default:
 		return -ERANGE;
@@ -837,6 +856,8 @@ static int gfar_hwtstamp_ioctl(struct net_device *netdev,
 		if (priv->hwts_rx_en) {
 			stop_gfar(netdev);
 			priv->hwts_rx_en = 0;
+			gfar_write(&regs->rctrl,
+				gfar_read(&regs->rctrl) & ~RCTRL_TS_ENABLE);
 			startup_gfar(netdev);
 		}
 		break;
@@ -846,6 +867,8 @@ static int gfar_hwtstamp_ioctl(struct net_device *netdev,
 		if (!priv->hwts_rx_en) {
 			stop_gfar(netdev);
 			priv->hwts_rx_en = 1;
+			gfar_write(&regs->rctrl,
+				gfar_read(&regs->rctrl) | RCTRL_TS_ENABLE);
 			startup_gfar(netdev);
 		}
 		config.rx_filter = HWTSTAMP_FILTER_ALL;
@@ -870,7 +893,11 @@ static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	if (!priv->phydev)
 		return -ENODEV;
 
-	return phy_mii_ioctl(priv->phydev, rq, cmd);
+	if ((cmd >= PTP_ENBL_TXTS_IOCTL) &&
+			(cmd <= PTP_CLEANUP_TS))
+		return gfar_ioctl_1588(dev, rq, cmd);
+	else
+		return phy_mii_ioctl(priv->phydev, rq, cmd);
 }
 
 static unsigned int reverse_bitmap(unsigned int bit_map, unsigned int max_qs)
@@ -1261,6 +1288,7 @@ static int gfar_probe(struct platform_device *ofdev)
 	return 0;
 
 register_fail:
+	gfar_ptp_cleanup(priv);
 	unmap_group_regs(priv);
 	free_tx_pointers(priv);
 	free_rx_pointers(priv);
@@ -2139,7 +2167,7 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	/* check if time stamp should be generated */
 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP &&
-		     priv->hwts_tx_en)) {
+		     priv->hwts_tx_en) || unlikely(priv->hwts_tx_en_ioctl)) {
 		do_tstamp = 1;
 		fcb_length = GMAC_FCB_LEN + GMAC_TXPAL_LEN;
 	}
@@ -2259,11 +2287,29 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	/* Setup tx hardware time stamping if requested */
 	if (unlikely(do_tstamp)) {
+		u32 vlan_ctrl;
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 		if (fcb == NULL)
 			fcb = gfar_add_fcb(skb);
+		/*
+		 * the timestamp overwrites the ethertype and the following
+		 * 2 bytes -> storing 4 bytes at the end of the control buffer
+		 * structure - will be recovered in the function
+		 * gfar_clean_tx_ring
+		 */
+		memcpy(skb->cb, (skb->data + GMAC_FCB_LEN +
+					ETH_ALEN + ETH_ALEN), 4);
 		fcb->ptp = 1;
 		lstatus |= BD_LFLAG(TXBD_TOE);
+		/*
+		 * SYMM: When PTP in FCB is enabled, VLN in FCB is ignored.
+		 * Instead VLAN tag is read from DFVLAN register. Thus need
+		 * to copy VLCTL to DFVLAN register.
+		 */
+		vlan_ctrl = gfar_read(&regs->dfvlan);
+		vlan_ctrl &= ~0xFFFF;
+		vlan_ctrl |= (fcb->vlctl & 0xFFFF);
+		gfar_write(&regs->dfvlan, vlan_ctrl);
 	}
 
 	txbdp_start->bufPtr = dma_map_single(priv->dev, skb->data,
@@ -2613,13 +2659,44 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 				 buflen, DMA_TO_DEVICE);
 
 		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_IN_PROGRESS)) {
+			struct gfar __iomem *regs = priv->gfargrp[0].regs;
 			struct skb_shared_hwtstamps shhwtstamps;
-			u64 *ns = (u64*) (((u32)skb->data + 0x10) & ~0x7);
+			u32 high, low;
+			struct gfar_ptp_time tx_ts;
+			u64 ns;
 
-			memset(&shhwtstamps, 0, sizeof(shhwtstamps));
-			shhwtstamps.hwtstamp = ns_to_ktime(*ns);
-			skb_pull(skb, GMAC_FCB_LEN + GMAC_TXPAL_LEN);
-			skb_tstamp_tx(skb, &shhwtstamps);
+			if (priv->device_flags &
+					FSL_GIANFAR_DEV_HAS_TS_TO_BUFFER) {
+				/* get tx timestamp out of frame */
+				void *ts;
+				ts = (void *)(((uintptr_t)skb->data + 0x10)
+						& ~0x7);
+				ns = be64_to_cpup(ts);
+			} else
+				/* get tx timestamp from register */
+				ns = gfar_get_tx_timestamp(regs);
+
+			if (unlikely(priv->hwts_tx_en))
+				shhwtstamps.hwtstamp = ns_to_ktime(ns);
+			if (likely(priv->hwts_tx_en_ioctl)) {
+				high = upper_32_bits(ns);
+				low = lower_32_bits(ns);
+				gfar_cnt_to_ptp_time(high, low, &tx_ts);
+			}
+			/* remove tx fcb */
+			skb_pull(skb, GMAC_FCB_LEN);
+			/*
+			 * the timestamp overwrote the ethertype and the
+			 * following 2 bytes, 4 byters were stored in the
+			 * end of the control buffer in function
+			 * gfar_start_xmit to be recovered here
+			 */
+			memcpy((skb->data + ETH_ALEN + ETH_ALEN), skb->cb, 4);
+			/* pass timestamp back */
+			if (unlikely(priv->hwts_tx_en))
+				skb_tstamp_tx(skb, &shhwtstamps);
+			if (likely(priv->hwts_tx_en_ioctl))
+				gfar_ptp_store_txstamp(dev, skb, &tx_ts);
 			bdp->lstatus &= BD_LFLAG(TXBD_WRAP);
 			bdp = next;
 		}
@@ -2809,16 +2886,30 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	}
 
 	/* Get receive timestamp from the skb */
-	if (priv->hwts_rx_en) {
-		struct skb_shared_hwtstamps *shhwtstamps = skb_hwtstamps(skb);
-		u64 *ns = (u64 *) skb->data;
+	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_TIMER) {
+		u32 high, low;
 
-		memset(shhwtstamps, 0, sizeof(*shhwtstamps));
-		shhwtstamps->hwtstamp = ns_to_ktime(*ns);
-	}
-
-	if (priv->padding)
-		skb_pull(skb, priv->padding);
+		/* get timestamp */
+		high = *((u32 *)skb->data);
+		low = *(((u32 *)skb->data) + 1);
+		skb_pull(skb, 8);
+		/* proprietary PTP timestamping over ioctl */
+		if (unlikely(priv->hwts_rx_en_ioctl)) {
+			struct gfar_ptp_time rx_ts;
+			/* get rx timestamp */
+			gfar_cnt_to_ptp_time(high, low, &rx_ts);
+			/* parse and store rx timestamp */
+			gfar_ptp_store_rxstamp(dev, skb, &rx_ts);
+		} else if (unlikely(priv->hwts_rx_en)) {
+			/* kernel-API timestamping ? */
+			u64 nsec;
+			struct skb_shared_hwtstamps *hws;
+			hws = skb_hwtstamps(skb);
+			nsec = make64(high, low);
+			hws->hwtstamp = ns_to_ktime(nsec);
+		}
+	} else if (priv->padding)
+			skb_pull(skb, priv->padding);
 
 	if (dev->features & NETIF_F_RXCSUM)
 		gfar_rx_checksum(skb, fcb);

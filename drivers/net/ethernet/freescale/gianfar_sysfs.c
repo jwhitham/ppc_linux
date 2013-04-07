@@ -10,7 +10,7 @@
  * Maintainer: Kumar Gala (galak@kernel.crashing.org)
  * Modifier: Sandeep Gopalpet <sandeep.kumar@freescale.com>
  *
- * Copyright 2002-2009 Freescale Semiconductor, Inc.
+ * Copyright 2002-2009, 2012 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -391,6 +391,47 @@ static DEVICE_ATTR(recycle_target, 0644, gfar_show_recycle_target,
 		   gfar_set_recycle_target);
 
 
+static ssize_t gfar_show_ptp_1588(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct gfar_private *priv = netdev_priv(to_net_dev(dev));
+
+	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_TIMER)
+		return sprintf(buf, "1\n");
+	else
+		return sprintf(buf, "0\n");
+}
+
+static ssize_t gfar_set_ptp_1588(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct gfar_private *priv = netdev_priv(ndev);
+	unsigned int num;
+	unsigned long flags;
+
+	if (kstrtouint(buf, 0, &num) < 0)
+		return -EINVAL;
+
+	local_irq_save(flags);
+	lock_tx_qs(priv);
+	lock_rx_qs(priv);
+
+	if (num)
+		gfar_1588_start(priv);
+	else
+		gfar_1588_stop(priv);
+
+	unlock_rx_qs(priv);
+	unlock_tx_qs(priv);
+	local_irq_restore(flags);
+
+	return count;
+}
+
+static DEVICE_ATTR(ptp_1588, 0644, gfar_show_ptp_1588, gfar_set_ptp_1588);
+
 void gfar_init_sysfs(struct net_device *dev)
 {
 	struct gfar_private *priv = netdev_priv(dev);
@@ -410,6 +451,7 @@ void gfar_init_sysfs(struct net_device *dev)
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_starve_off);
 	rc |= device_create_file(&dev->dev, &dev_attr_recycle);
 	rc |= device_create_file(&dev->dev, &dev_attr_recycle_target);
+	rc |= device_create_file(&dev->dev, &dev_attr_ptp_1588);
 	if (rc)
 		dev_err(&dev->dev, "Error creating gianfar sysfs files.\n");
 }

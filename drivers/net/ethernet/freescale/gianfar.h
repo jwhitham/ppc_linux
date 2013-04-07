@@ -9,7 +9,7 @@
  * Maintainer: Kumar Gala
  * Modifier: Sandeep Gopalpet <sandeep.kumar@freescale.com>
  *
- * Copyright 2002-2009, 2011 Freescale Semiconductor, Inc.
+ * Copyright 2002-2009, 2011, 2013 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -46,6 +46,7 @@
 #include <linux/crc32.h>
 #include <linux/workqueue.h>
 #include <linux/ethtool.h>
+#include <linux/circ_buf.h>
 
 struct ethtool_flow_spec_container {
 	struct ethtool_rx_flow_spec fs;
@@ -145,6 +146,57 @@ extern const char gfar_driver_version[];
 		| SUPPORTED_100baseT_Full \
 		| SUPPORTED_Autoneg \
 		| SUPPORTED_MII)
+
+/* 1588 defines */
+#define make64(high, low) (((u64)(high) << 32) | (low))
+
+#define PTP_ENBL_TXTS_IOCTL	SIOCDEVPRIVATE
+#define PTP_DSBL_TXTS_IOCTL	(SIOCDEVPRIVATE + 1)
+#define PTP_ENBL_RXTS_IOCTL	(SIOCDEVPRIVATE + 2)
+#define PTP_DSBL_RXTS_IOCTL	(SIOCDEVPRIVATE + 3)
+#define PTP_GET_TX_TIMESTAMP	(SIOCDEVPRIVATE + 4)
+#define PTP_GET_RX_TIMESTAMP	(SIOCDEVPRIVATE + 5)
+#define PTP_SET_TIME		(SIOCDEVPRIVATE + 6)
+#define PTP_GET_TIME		(SIOCDEVPRIVATE + 7)
+#define PTP_SET_FIPER_ALARM	(SIOCDEVPRIVATE + 8)
+#define PTP_SET_ADJ		(SIOCDEVPRIVATE + 9)
+#define PTP_GET_ADJ		(SIOCDEVPRIVATE + 10)
+#define PTP_CLEANUP_TS		(SIOCDEVPRIVATE + 11)
+
+#define DEFAULT_PTP_TX_BUF_SZ		1024
+#define DEFAULT_PTP_RX_BUF_SZ		2048
+
+#define GFAR_PTP_SOURCE_PORT_LENGTH	10
+#define	GFAR_PTP_HEADER_SEQ_OFFS	30
+#define GFAR_PTP_SPID_OFFS		20
+#define GFAR_PTP_HEADER_SZE		34
+#define GFAR_PTP_EVENT_PORT		0x013F
+
+#define GFAR_VLAN_QINQ_1		0x9100
+#define GFAR_VLAN_QINQ_2		0x9200
+#define GFAR_VLAN_QINQ_3		0x9300
+#define GFAR_VLAN_QINQ_4		0x88A8
+#define GFAR_VLAN_TAG_LEN		0x04
+#define GFAR_ETHTYPE_LEN		0x02
+#define GFAR_PACKET_TYPE_UDP		0x11
+/* 1588-2008 network protocol enumeration values */
+#define GFAR_PTP_PROT_IPV4		1
+#define GFAR_PTP_PROT_IPV6		2
+#define GFAR_PTP_PROT_802_3		3
+#define GFAR_PTP_PROT_DONTCARE		0xFFFF
+
+/* 1588 Module Registers bits */
+#define TMR_CTRL_CKSEL_MASK	0x00000003
+#define TMR_CTRL_ENABLE		0x00000004
+#define TMR_RTPE		0x00008000
+#define TMR_CTRL_TCLK_MASK	0x03ff0000
+#define TMR_CTRL_FIPER_START	0x10000000
+#define ONE_GIGA	1000000000
+
+/*Alarm to traigger at 15sec boundary */
+#define TMR_ALARM1_L	0xD964B800
+#define TMR_ALARM1_H	0x00000045
+#define NANOSEC_PER_SEC	1000000000
 
 /* TBI register addresses */
 #define MII_TBICON		0x11
@@ -659,6 +711,78 @@ struct gfar_extra_stats {
 /* Number of stats exported via ethtool */
 #define GFAR_STATS_LEN (GFAR_RMON_LEN + GFAR_EXTRA_STATS_LEN)
 
+/* IEEE-1588 Timer Controller Registers */
+struct gfar_regs_1588 {
+	u32	tmr_ctrl;	/* 0x.e00 - Timer Control Register */
+	u32	tmr_tevent;	/* 0x.e04 - Timer stamp event register */
+	u32	tmr_temask;	/* 0x.e08 - Timer event mask register */
+	u32	tmr_pevent;	/* 0x.e0c - Timer stamp event register */
+	u32	tmr_pemask;	/* 0x.e10 - Timer event mask register */
+	u32	tmr_stat;	/* 0x.e14 - Timer stamp status register */
+	u32	tmr_cnt_h;	/* 0x.e18 - Timer counter high register */
+	u32	tmr_cnt_l;	/* 0x.e1c - Timer counter low register */
+	u32	tmr_add;	/* 0x.e20 - Timer dirft compensation */
+					/* addend register */
+	u32	tmr_acc;	/* 0x.e24 - Timer accumulator register */
+	u32	tmr_prsc;	/* 0x.e28 - Timer prescale register */
+	u8	res24a[4];	/* 0x.e2c - 0x.e2f reserved */
+	u32	tmr_off_h;	/* 0x.e30 - Timer offset high register */
+	u32	tmr_off_l;	/* 0x.e34 - Timer offset low register */
+	u8	res24b[8];	/* 0x.e38 - 0x.e3f reserved */
+	u32	tmr_alarm1_h;	/* 0x.e40 - Timer alarm 1 high register */
+	u32	tmr_alarm1_l;	/* 0x.e44 - Timer alarm 1 low register */
+	u32	tmr_alarm2_h;	/* 0x.e48 - Timer alarm 2 high register */
+	u32	tmr_alarm2_l;	/* 0x.e4c - Timer alarm 2 low register */
+	u8	res24c[48];	/* 0x.e50 - 0x.e7f reserved */
+	u32	tmr_fiper1;	/* 0x.e80 - Timer fixed period register 1 */
+	u32	tmr_fiper2;	/* 0x.e84 - Timer fixed period register 2 */
+	u32	tmr_fiper3;	/* 0x.e88 - Timer fixed period register 3 */
+	u8	res24d[20];	/* 0x.e8c - 0x.ebf reserved */
+	u32	tmr_etts1_h;	/* 0x.ea0 - Timer stamp high of */
+					/* general purpose external trigger 1 */
+	u32	tmr_etts1_l;	/* 0x.ea4 - Timer stamp low of */
+					/* general purpose external trigger 1 */
+	u32	tmr_etts2_h;	/* 0x.ea8 - Timer stamp high of */
+					/* general purpose external trigger 2 */
+	u32	tmr_etts2_l;	/* 0x.eac - Timer stamp low of */
+};
+
+/* struct needed to identify a timestamp */
+struct gfar_ptp_ident {
+	u8  version;
+	u8  msg_type;
+	u16 netw_prot;
+	u16 seq_id;
+	u8  snd_port_id[GFAR_PTP_SOURCE_PORT_LENGTH];
+};
+
+/* timestamp format in 1588-2008 */
+struct gfar_ptp_time {
+	u64 sec; /* just 48 bit used */
+	u32 nsec;
+};
+
+/* needed for timestamp data over ioctl */
+struct gfar_ptp_data {
+	struct  gfar_ptp_ident  ident;
+	struct  gfar_ptp_time   ts;
+};
+
+/* circular buffer for ptp timestamps over ioctl */
+struct gfar_ptp_circular {
+	struct circ_buf circ_buf;
+	u32 size;
+	spinlock_t ptp_lock;
+};
+
+struct gfar_ptp_attr_t {
+	u32 tclk_period;
+	u32 nominal_freq;
+	u32 sysclock_freq;
+	u32 tmr_fiper1;
+	u32 freq_comp;
+};
+
 struct gfar {
 	u32	tsec_id;	/* 0x.000 - Controller ID register */
 	u32	tsec_id2;	/* 0x.004 - Controller ID2 register */
@@ -731,7 +855,15 @@ struct gfar {
 	u32	tbase6;		/* 0x.234 - TxBD Base Address of ring 6 */
 	u8	res10g[4];
 	u32	tbase7;		/* 0x.23c - TxBD Base Address of ring 7 */
-	u8	res10[192];
+	u8	res10h[64];
+	u32	tmr_txts1_id;	/* 0x.280 Tx time stamp identification */
+	u32	tmr_txts2_id;	/* 0x.284 Tx time stamp Identification */
+	u8	res10i[56];
+	u32	tmr_txts1_h;	/* 0x.2c0 Tx time stamp high */
+	u32	tmr_txts1_l;	/* 0x.2c4 Tx Time Stamp low */
+	u32	tmr_txts2_h;	/* 0x.2c8 Tx time stamp high */
+	u32	tmr_txts2_l;	/* 0x.2cc  Tx Time Stamp low */
+	u8	res10j[48];
 	u32	rctrl;		/* 0x.300 - Receive Control Register */
 	u32	rstat;		/* 0x.304 - Receive Status Register */
 	u8	res12[8];
@@ -782,7 +914,10 @@ struct gfar {
 	u32	rbase6;		/* 0x.434 - RxBD base address of ring 6 */
 	u8	res17g[4];
 	u32	rbase7;		/* 0x.43c - RxBD base address of ring 7 */
-	u8	res17[192];
+	u8	res17h[128];
+	u32	tmr_rxts_h;	/* 0x.4c0 Rx Time Stamp high */
+	u32	tmr_rxts_l;	/* 0x.4c4 Rx Time Stamp low */
+	u8	res17i[56];
 	u32	maccfg1;	/* 0x.500 - MAC Configuration 1 Register */
 	u32	maccfg2;	/* 0x.504 - MAC Configuration 2 Register */
 	u32	ipgifg;		/* 0x.508 - Inter Packet Gap/Inter Frame Gap Register */
@@ -851,7 +986,8 @@ struct gfar {
 	u8	res23c[248];
 	u32	attr;		/* 0x.bf8 - Attributes Register */
 	u32	attreli;	/* 0x.bfc - Attributes Extract Length and Extract Index Register */
-	u8	res24[688];
+	u8	res24[512];
+	struct gfar_regs_1588 regs_1588;
 	u32	isrg0;		/* 0x.eb0 - Interrupt steering group 0 register */
 	u32	isrg1;		/* 0x.eb4 - Interrupt steering group 1 register */
 	u32	isrg2;		/* 0x.eb8 - Interrupt steering group 2 register */
@@ -890,6 +1026,7 @@ struct gfar {
 #define FSL_GIANFAR_DEV_HAS_BD_STASHING		0x00000200
 #define FSL_GIANFAR_DEV_HAS_BUF_STASHING	0x00000400
 #define FSL_GIANFAR_DEV_HAS_TIMER		0x00000800
+#define FSL_GIANFAR_DEV_HAS_TS_TO_BUFFER	0x00001000
 
 #if (MAXGROUPS == 2)
 #define DEFAULT_MAPPING 	0xAA
@@ -1076,9 +1213,11 @@ struct gfar_private {
 	u16 uses_rxfcb;
 	u16 padding;
 
-	/* HW time stamping enabled flag */
-	int hwts_rx_en;
-	int hwts_tx_en;
+	u32 device_flags;
+
+	/* HW TX timestamping enabled flag */
+	u16 hwts_tx_en;
+	u16 hwts_tx_en_ioctl;
 
 	struct gfar_priv_tx_q *tx_queue[MAX_TX_QS];
 	struct gfar_priv_rx_q *rx_queue[MAX_RX_QS];
@@ -1087,14 +1226,21 @@ struct gfar_private {
 	struct gfar_priv_recycle recycle;
 	struct gfar_priv_recycle *recycle_target;
 
-	u32 device_flags;
-
 	unsigned int mode;
 	unsigned int num_tx_queues;
 	unsigned int num_grps;
 
 	/* Network Statistics */
 	struct gfar_extra_stats extra_stats;
+
+	/* HW RX timestamping enabled flag */
+	u16 hwts_rx_en;
+	u16 hwts_rx_en_ioctl;
+
+	/* 1588 stuff */
+	struct gfar_regs_1588 __iomem *ptimer;
+	struct gfar_ptp_circular tx_timestamps;
+	struct gfar_ptp_circular rx_timestamps;
 
 	/* PHY stuff */
 	phy_interface_t interface;
@@ -1201,6 +1347,17 @@ extern irqreturn_t gfar_receive(int irq, void *dev_id);
 extern int startup_gfar(struct net_device *dev);
 extern void stop_gfar(struct net_device *dev);
 extern void gfar_halt(struct net_device *dev);
+void gfar_1588_start(struct gfar_private *priv);
+void gfar_1588_stop(struct gfar_private *priv);
+int gfar_ptp_init(struct device_node *np, struct gfar_private *priv);
+void gfar_ptp_cleanup(struct gfar_private *priv);
+int gfar_ioctl_1588(struct net_device *dev, struct ifreq *ifr, int cmd);
+void gfar_ptp_store_txstamp(struct net_device *dev,
+			struct sk_buff *skb, struct gfar_ptp_time *tx_ts);
+void gfar_ptp_store_rxstamp(struct net_device *dev,
+			struct sk_buff *skb, struct gfar_ptp_time *rx_ts);
+void gfar_cnt_to_ptp_time(u32 high, u32 low, struct gfar_ptp_time *time);
+u64 gfar_get_tx_timestamp(struct gfar __iomem *regs);
 extern void gfar_phy_test(struct mii_bus *bus, struct phy_device *phydev,
 		int enable, u32 regnum, u32 read);
 extern void gfar_configure_coalescing_all(struct gfar_private *priv);
