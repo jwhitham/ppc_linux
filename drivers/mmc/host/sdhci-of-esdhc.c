@@ -140,6 +140,23 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 			(val & SDHCI_RESET_ALL))
 		val = SDHCI_RESET_CMD | SDHCI_RESET_DATA;
 
+	if (reg == SDHCI_POWER_CONTROL) {
+		/* eSDHC don't support gate off power */
+		if (!host->pwr || !val)
+			return;
+
+		if (fsl_svr_is(SVR_T4240)) {
+			u8 vol;
+
+			vol = sdhci_be32bs_readb(host, reg);
+			if (host->pwr == SDHCI_POWER_180)
+				vol &= ~ESDHC_VOL_SEL;
+			else
+				vol |= ESDHC_VOL_SEL;
+		} else
+			return;
+	}
+
 	sdhci_be32bs_writeb(host, val, reg);
 }
 
