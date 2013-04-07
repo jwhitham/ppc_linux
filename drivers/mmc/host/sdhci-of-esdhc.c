@@ -221,7 +221,6 @@ static void esdhc_of_suspend(struct sdhci_host *host)
 
 static void esdhc_of_resume(struct sdhci_host *host)
 {
-	esdhc_of_enable_dma(host);
 	sdhci_be32bs_writel(host, esdhc_proctl, SDHCI_HOST_CONTROL);
 }
 #endif
