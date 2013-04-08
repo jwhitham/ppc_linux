@@ -68,7 +68,10 @@ void __init corenet_ds_setup_arch(void)
 
 static const struct of_device_id of_device_ids[] = {
 	{
-		.compatible	= "simple-bus"
+		.compatible	= "simple-bus",
+	},
+	{
+		.compatible	= "fsl,dpaa",
 	},
 	{
 		.compatible	= "fsl,srio",
