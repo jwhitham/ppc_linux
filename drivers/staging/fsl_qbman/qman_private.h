@@ -372,3 +372,6 @@ int qman_ceetm_set_prescaler(enum qm_dc_portal portal);
 int qman_ceetm_get_prescaler(u16 *pres);
 int qman_ceetm_query_cq(unsigned int cqid, unsigned int dcpid,
                                 struct qm_mcr_ceetm_cq_query *cq_query);
+int qman_ceetm_query_ccgr(struct qm_mcc_ceetm_ccgr_query *ccgr_query,
+				struct qm_mcr_ceetm_ccgr_query *response);
+int qman_ceetm_get_xsfdr(enum qm_dc_portal portal, unsigned int *num);

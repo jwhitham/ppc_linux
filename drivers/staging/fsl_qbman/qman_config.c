@@ -88,8 +88,9 @@
 #define REG_REV3_QCSP_LIO_CFG(n)	(0x1000 + ((n) * 0x10))
 #define REG_REV3_QCSP_IO_CFG(n)	(0x1004 + ((n) * 0x10))
 #define REG_REV3_QCSP_DD_CFG(n)	(0x100c + ((n) * 0x10))
-#define REG_CEETM_CFG_IDX      0x900
-#define REG_CEETM_CFG_PRES     0x904
+#define REG_CEETM_CFG_IDX	0x900
+#define REG_CEETM_CFG_PRES	0x904
+#define REG_CEETM_XSFDR_IN_USE	0x908
 
 /* Assists for QMAN_MCR */
 #define MCR_INIT_PFDR		0x01000000
@@ -972,6 +973,14 @@ int qman_sp_disable_ceetm_mode(enum qm_dc_portal portal, u16 sub_portal)
 	dcp_cfg = qm_in(DCP_CFG(portal));
 	dcp_cfg &= ~(QM_SP_ENABLE_CEETM(sub_portal));
 	qm_out(DCP_CFG(portal), dcp_cfg);
+	return 0;
+}
+
+int qman_ceetm_get_xsfdr(enum qm_dc_portal portal, unsigned int *num)
+{
+	if (!qman_have_ccsr())
+		return -ENODEV;
+	*num = qm_in(CEETM_XSFDR_IN_USE);
 	return 0;
 }
 
