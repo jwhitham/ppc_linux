@@ -1,7 +1,6 @@
 config DPA_ETH
 	bool "DPAA Ethernet"
-# FIXME enable this when all dependencies are merged
-#	depends on FSL_SOC && FSL_BMAN && FSL_QMAN && FSL_FMAN
+	depends on FSL_SOC && FSL_BMAN && FSL_QMAN && FSL_FMAN
 	select PHYLIB
 	---help---
 	  Data Path Acceleration Architecture Ethernet driver, supporting the
