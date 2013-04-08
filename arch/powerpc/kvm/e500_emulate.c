@@ -27,6 +27,7 @@
 #define XOP_TLBRE   946
 #define XOP_TLBWE   978
 #define XOP_TLBILX  18
+#define XOP_EHPRIV  270
 
 #ifdef CONFIG_KVM_E500MC
 static int dbell2prio(ulong param)
@@ -137,6 +138,15 @@ int kvmppc_core_emulate_op(struct kvm_run *run, struct kvm_vcpu *vcpu,
 				kvmppc_set_gpr(vcpu, rt, 1 | (1 << 8));
 			else
 				emulated = EMULATE_FAIL;
+			break;
+
+		case XOP_EHPRIV:
+			run->exit_reason = KVM_EXIT_DEBUG;
+			run->debug.arch.address = vcpu->arch.pc;
+			run->debug.arch.status = 0;
+			kvmppc_account_exit(vcpu, DEBUG_EXITS);
+			emulated = EMULATE_EXIT_USER;
+			*advance = 0;
 			break;
 
 		default:
