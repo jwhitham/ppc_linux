@@ -543,9 +543,12 @@ static void unmap_group_regs(struct gfar_private *priv)
 {
 	int i;
 
-	for (i = 0; i < MAXGROUPS; i++)
-		if (priv->gfargrp[i].regs)
-			iounmap(priv->gfargrp[i].regs);
+	for (i = 0; i < MAXGROUPS; i++) {
+		struct gfar_priv_grp *grp = &priv->gfargrp[i];
+
+		if (grp->regs)
+			iounmap(grp->regs);
+	}
 }
 
 static void free_gfar_dev(struct gfar_private *priv)
@@ -565,16 +568,22 @@ static void disable_napi(struct gfar_private *priv)
 {
 	int i;
 
-	for (i = 0; i < priv->num_grps; i++)
-		napi_disable(&priv->gfargrp[i].napi);
+	for (i = 0; i < priv->num_grps; i++) {
+		struct gfar_priv_grp *grp = &priv->gfargrp[i];
+
+		napi_disable(&grp->napi);
+	}
 }
 
 static void enable_napi(struct gfar_private *priv)
 {
 	int i;
 
-	for (i = 0; i < priv->num_grps; i++)
-		napi_enable(&priv->gfargrp[i].napi);
+	for (i = 0; i < priv->num_grps; i++) {
+		struct gfar_priv_grp *grp = &priv->gfargrp[i];
+
+		napi_enable(&grp->napi);
+	}
 }
 
 static int gfar_parse_group(struct device_node *np,
@@ -1046,6 +1055,7 @@ static int gfar_probe(struct platform_device *ofdev)
 	u32 rstat = 0, tstat = 0, rqueue = 0, tqueue = 0;
 	u32 isrg = 0;
 	u32 __iomem *baddr;
+	struct gfar_priv_grp *grp;
 
 	err = gfar_of_init(ofdev, &dev);
 
@@ -1099,9 +1109,11 @@ static int gfar_probe(struct platform_device *ofdev)
 	dev->ethtool_ops = &gfar_ethtool_ops;
 
 	/* Register for napi ...We are registering NAPI for each grp */
-	for (i = 0; i < priv->num_grps; i++)
-		netif_napi_add(dev, &priv->gfargrp[i].napi, gfar_poll,
-			       GFAR_DEV_WEIGHT);
+	for (i = 0; i < priv->num_grps; i++) {
+		grp = &priv->gfargrp[i];
+
+		netif_napi_add(dev, &grp->napi, gfar_poll, GFAR_DEV_WEIGHT);
+	}
 
 	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_CSUM) {
 		dev->hw_features = NETIF_F_IP_CSUM | NETIF_F_SG |
@@ -1163,8 +1175,10 @@ static int gfar_probe(struct platform_device *ofdev)
 	if (priv->num_grps > 1) {
 		baddr = &regs->isrg0;
 		for (i = 0; i < priv->num_grps; i++) {
-			isrg |= (priv->gfargrp[i].rx_bit_map << ISRG_SHIFT_RX);
-			isrg |= (priv->gfargrp[i].tx_bit_map << ISRG_SHIFT_TX);
+			grp = &priv->gfargrp[i];
+
+			isrg |= (grp->rx_bit_map << ISRG_SHIFT_RX);
+			isrg |= (grp->tx_bit_map << ISRG_SHIFT_TX);
 			gfar_write(baddr, isrg);
 			baddr++;
 			isrg = 0x0;
@@ -1176,36 +1190,37 @@ static int gfar_probe(struct platform_device *ofdev)
 	 * basically reverses the queue numbers
 	 */
 	for (i = 0; i< priv->num_grps; i++) {
-		priv->gfargrp[i].tx_bit_map =
-			reverse_bitmap(priv->gfargrp[i].tx_bit_map, MAX_TX_QS);
-		priv->gfargrp[i].rx_bit_map =
-			reverse_bitmap(priv->gfargrp[i].rx_bit_map, MAX_RX_QS);
+		grp = &priv->gfargrp[i];
+
+		grp->tx_bit_map = reverse_bitmap(grp->tx_bit_map, MAX_TX_QS);
+		grp->rx_bit_map = reverse_bitmap(grp->rx_bit_map, MAX_RX_QS);
 	}
 
 	/* Calculate RSTAT, TSTAT, RQUEUE and TQUEUE values,
 	 * also assign queues to groups
 	 */
 	for (grp_idx = 0; grp_idx < priv->num_grps; grp_idx++) {
-		priv->gfargrp[grp_idx].num_rx_queues = 0x0;
+		grp = &priv->gfargrp[grp_idx];
+		grp->num_rx_queues = 0x0;
 
-		for_each_set_bit(i, &priv->gfargrp[grp_idx].rx_bit_map,
+		for_each_set_bit(i, &grp->rx_bit_map,
 				 priv->num_rx_queues) {
-			priv->gfargrp[grp_idx].num_rx_queues++;
-			priv->rx_queue[i]->grp = &priv->gfargrp[grp_idx];
+			grp->num_rx_queues++;
+			priv->rx_queue[i]->grp = grp;
 			rstat = rstat | (RSTAT_CLEAR_RHALT >> i);
 			rqueue = rqueue | ((RQUEUE_EN0 | RQUEUE_EX0) >> i);
 		}
-		priv->gfargrp[grp_idx].num_tx_queues = 0x0;
+		grp->num_tx_queues = 0x0;
 
-		for_each_set_bit(i, &priv->gfargrp[grp_idx].tx_bit_map,
+		for_each_set_bit(i, &grp->tx_bit_map,
 				 priv->num_tx_queues) {
-			priv->gfargrp[grp_idx].num_tx_queues++;
-			priv->tx_queue[i]->grp = &priv->gfargrp[grp_idx];
+			grp->num_tx_queues++;
+			priv->tx_queue[i]->grp = grp;
 			tstat = tstat | (TSTAT_CLEAR_THALT >> i);
 			tqueue = tqueue | (TQUEUE_EN0 >> i);
 		}
-		priv->gfargrp[grp_idx].rstat = rstat;
-		priv->gfargrp[grp_idx].tstat = tstat;
+		grp->rstat = rstat;
+		grp->tstat = tstat;
 		rstat = tstat =0;
 	}
 
@@ -1888,10 +1903,12 @@ void gfar_start(struct net_device *dev)
 	gfar_write(&regs->dmactrl, tempval);
 
 	for (i = 0; i < priv->num_grps; i++) {
-		regs = priv->gfargrp[i].regs;
+		struct gfar_priv_grp *grp = &priv->gfargrp[i];
+
+		regs = grp->regs;
 		/* Clear THLT/RHLT, so that the DMA starts polling now */
-		gfar_write(&regs->tstat, priv->gfargrp[i].tstat);
-		gfar_write(&regs->rstat, priv->gfargrp[i].rstat);
+		gfar_write(&regs->tstat, grp->tstat);
+		gfar_write(&regs->rstat, grp->rstat);
 		/* Unmask the interrupts we look for */
 		gfar_write(&regs->imask, IMASK_DEFAULT);
 	}
