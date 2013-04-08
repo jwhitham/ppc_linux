@@ -509,7 +509,15 @@ struct kvm_vcpu_arch {
 	u32 eptcfg;
 	u32 epr;
 	u32 crit_save;
+
+	/* Flag indicating that debug registers are used by guest */
+	bool debug_active;
+	/* for save/restore thread->dbcr0 on vcpu run/heavyweight_exit */
+	u32 saved_dbcr0;
+	/* guest debug registers*/
 	struct kvmppc_booke_debug_reg dbg_reg;
+	/* shadow debug registers */
+	struct kvmppc_booke_debug_reg shadow_dbg_reg;
 #endif
 	gpa_t paddr_accessed;
 	gva_t vaddr_accessed;
