@@ -314,6 +314,7 @@ config B4860_QDS
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+	select HAS_FSL_QBMAN
 	help
 	  This option enables support for the B4860 QDS board
 
@@ -328,6 +329,7 @@ config T4240_QDS
 	select GPIO_MPC8XXX
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
+	select HAS_FSL_QBMAN
 	help
 	  This option enables support for the T4240 QDS board
 
