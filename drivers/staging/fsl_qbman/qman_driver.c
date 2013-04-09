@@ -30,10 +30,6 @@
  */
 
 #include "qman_private.h"
-//#ifdef CONFIG_FSL_PAMU
-#if 0
-#include <sysdev/fsl_pamu.h>
-#endif
 
 /* Global variable containing revision id (even on non-control plane systems
  * where CCSR isn't available) */
@@ -433,25 +429,8 @@ static struct qm_portal_config *get_pcfg(struct list_head *list)
 	return pcfg;
 }
 
-//#ifdef CONFIG_FSL_PAMU
-#if 0
-static void portal_set_liodns(const struct qm_portal_config *pcfg, int cpu)
-{
-	unsigned int index = 0;
-	unsigned int liodn_cnt = pamu_get_liodn_count(pcfg->node);
-	while (index < liodn_cnt) {
-		int ret = pamu_set_stash_dest(pcfg->node, index++, cpu, 1);
-		if (ret < 0)
-			pr_warning("Failed to set QMan stashing LIODN\n");
-	}
-}
-#else
-#define portal_set_liodns(pcfg, cpu) do { } while (0)
-#endif
-
 static void portal_set_cpu(const struct qm_portal_config *pcfg, int cpu)
 {
-	portal_set_liodns(pcfg, cpu);
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
