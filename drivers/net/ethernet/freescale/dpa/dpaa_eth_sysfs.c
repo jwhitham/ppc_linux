@@ -37,6 +37,9 @@
 #include <linux/io.h>
 #include <linux/of_net.h>
 #include "dpaa_eth.h"
+#ifdef CONFIG_FSL_DPA_1588
+#include "dpaa_1588.h"
+#endif
 
 static ssize_t dpaa_eth_show_addr(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -156,11 +159,55 @@ static ssize_t dpaa_eth_show_mac_regs(struct device *dev,
 	return 0;
 }
 
+
+#ifdef CONFIG_FSL_DPA_1588
+static ssize_t dpaa_eth_show_ptp_1588(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
+
+	if (priv->tsu && priv->tsu->valid)
+		return sprintf(buf, "1\n");
+	else
+		return sprintf(buf, "0\n");
+}
+
+static ssize_t dpaa_eth_set_ptp_1588(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
+	unsigned int num;
+	unsigned long flags;
+
+	if (kstrtouint(buf, 0, &num) < 0)
+		return -EINVAL;
+
+	local_irq_save(flags);
+
+	if (num) {
+		if (priv->tsu)
+			priv->tsu->valid = TRUE;
+	} else {
+		if (priv->tsu)
+			priv->tsu->valid = FALSE;
+	}
+
+	local_irq_restore(flags);
+
+	return count;
+}
+#endif
+
 static struct device_attribute dpaa_eth_attrs[] = {
 	__ATTR(device_addr, S_IRUGO, dpaa_eth_show_addr, NULL),
 	__ATTR(fqids, S_IRUGO, dpaa_eth_show_fqids, NULL),
 	__ATTR(dflt_bpid, S_IRUGO, dpaa_eth_show_dflt_bpid, NULL),
-	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL)
+	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL),
+#ifdef CONFIG_FSL_DPA_1588
+	__ATTR(ptp_1588, S_IRUGO | S_IWUSR, dpaa_eth_show_ptp_1588,
+					dpaa_eth_set_ptp_1588),
+#endif
 };
 
 void dpaa_eth_sysfs_init(struct device *dev)

@@ -3035,7 +3035,7 @@ dpa_mac_probe(struct platform_device *_of_dev)
 		if (timer_node && (net_dev = dev_get_drvdata(dpa_dev))) {
 			priv = netdev_priv(net_dev);
 			if (!dpa_ptp_init(priv))
-				dev_info(dev, "%s: ptp-timer enabled\n",
+				dev_info(dev, "%s: ptp 1588 is initialized.\n",
 						mac_node->full_name);
 		}
 	}

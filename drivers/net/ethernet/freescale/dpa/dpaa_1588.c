@@ -589,7 +589,7 @@ int dpa_ptp_init(struct dpa_priv_s *priv)
 	if (!tsu)
 		return -ENOMEM;
 
-	tsu->valid = TRUE;
+	tsu->valid = FALSE;
 	tsu->dpa_priv = priv;
 
 	dpa_ptp_init_circ(&tsu->rx_timestamps, DEFAULT_PTP_RX_BUF_SZ);
