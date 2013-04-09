@@ -147,6 +147,11 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	ts->nsec = tmp->ts.nsec;
 
 	if (idx != tail) {
+		if (CIRC_CNT(idx, tail, size) > TS_ACCUMULATION_THRESHOLD) {
+			tail = circ_buf->tail =
+				(idx - TS_ACCUMULATION_THRESHOLD) & (size - 1);
+		}
+
 		while (CIRC_CNT(idx, tail, size) > 0) {
 			tmp = (struct dpa_ptp_data *)(circ_buf->buf) + idx;
 			idx = (idx - 1) & (size - 1);
@@ -584,7 +589,6 @@ int dpa_ptp_init(struct dpa_priv_s *priv)
 	if (!tsu)
 		return -ENOMEM;
 
-	memset(tsu, 0, sizeof(*tsu));
 	tsu->valid = TRUE;
 	tsu->dpa_priv = priv;
 

@@ -26,8 +26,8 @@
 #include <linux/circ_buf.h>
 #include <linux/fsl_qman.h>
 
-#define DEFAULT_PTP_RX_BUF_SZ		2048
-#define DEFAULT_PTP_TX_BUF_SZ		1024
+#define DEFAULT_PTP_RX_BUF_SZ		256
+#define DEFAULT_PTP_TX_BUF_SZ		256
 
 /* 1588 private ioctl calls */
 #define PTP_ENBL_TXTS_IOCTL	SIOCDEVPRIVATE
@@ -91,6 +91,9 @@ enum {
 #define DPA_PTP_TIMESTAMP_OFFSET	0x30
 #define DPA_PTP_NOMINAL_FREQ_PERIOD	5  /* 5ns -> 200M */
 #define NANOSEC_PER_SECOND		1000000000
+
+/* The threshold between the current found one and the oldest one */
+#define TS_ACCUMULATION_THRESHOLD	50
 
 /* Struct needed to identify a timestamp */
 struct dpa_ptp_ident {
