@@ -449,7 +449,7 @@ static int fsl_pamu_domain_init(struct iommu_domain *domain)
 	dma_domain->iommu_domain = domain;
 	/* defaul geometry 64 GB i.e. maximum system address */
 	domain->geometry.aperture_start = 0;
-	domain->geometry.aperture_end = 1ULL << 36;
+	domain->geometry.aperture_end = (1ULL << 36) - 1;
 	domain->geometry.force_aperture = true;
 
 	return 0;
@@ -761,7 +761,7 @@ static  int configure_domain_geometry(struct iommu_domain *domain, void *data)
 	dma_addr_t geom_size;
 	unsigned long flags;
 
-	geom_size = geom_attr->aperture_end - geom_attr->aperture_start;
+	geom_size = geom_attr->aperture_end - geom_attr->aperture_start + 1;
 	/*
 	 * Sanity check the geometry size. Also, we do not support
 	 * DMA outside of the geometry.
