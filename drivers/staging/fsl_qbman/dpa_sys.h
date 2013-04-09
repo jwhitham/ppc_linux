@@ -88,7 +88,7 @@ struct dpa_uio_vtable {
 	void (*destroy)(const struct list_head *pcfg, struct uio_info *info);
 	/* Called when the portal is opened (Qman uses this for rerouting
 	 * stashing to the current cpu) */
-	int (*on_open)(const struct list_head *pcfg);
+	int (*on_open)(struct list_head *pcfg);
 	void (*on_close)(const struct list_head *pcfg);
 	/* Called when an interrupt fires - must disable interrupts */
 	void (*on_interrupt)(const struct list_head *pcfg);

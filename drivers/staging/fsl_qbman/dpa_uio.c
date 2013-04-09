@@ -38,7 +38,7 @@ static LIST_HEAD(dpa_uio_list);
 
 struct dpa_uio_info {
 	const struct dpa_uio_vtable *vtable;
-	const struct list_head *pcfg;
+	struct list_head *pcfg;
 	atomic_t ref; /* exclusive, only one open() at a time */
 	struct uio_info uio;
 	struct platform_device *pdev;

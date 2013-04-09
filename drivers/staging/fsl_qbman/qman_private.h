@@ -115,7 +115,8 @@ struct qm_portal_config {
 	 * [0]==cache-enabled, [1]==cache-inhibited. */
 	__iomem void *addr_virt[2];
 	struct resource addr_phys[2];
-	struct device_node *node;
+	struct device dev;
+	struct iommu_domain *iommu_domain;
 	/* Allow these to be joined in lists */
 	struct list_head list;
 	/* User-visible portal configuration settings */

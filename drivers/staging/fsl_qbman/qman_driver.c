@@ -31,6 +31,8 @@
 
 #include "qman_private.h"
 
+#include <linux/iommu.h>
+
 /* Global variable containing revision id (even on non-control plane systems
  * where CCSR isn't available) */
 u16 qman_ip_rev;
@@ -348,6 +350,18 @@ static struct qm_portal_config * __init parse_pcfg(struct device_node *node)
 		return NULL;
 	}
 
+	/*
+	 * This is a *horrible hack*, but the IOMMU/PAMU driver needs a
+	 * 'struct device' in order to get the PAMU stashing setup and the QMan
+	 * portal [driver] won't function at all without ring stashing
+	 *
+	 * Making the QMan portal driver nice and proper is part of the
+	 * upstreaming effort
+	 */
+	pcfg->dev.bus = &platform_bus_type;
+	pcfg->dev.of_node = node;
+	pcfg->dev.archdata.iommu_domain = NULL;
+
 	ret = of_address_to_resource(node, DPA_PORTAL_CE,
 				&pcfg->addr_phys[DPA_PORTAL_CE]);
 	if (ret) {
@@ -390,7 +404,6 @@ static struct qm_portal_config * __init parse_pcfg(struct device_node *node)
 	}
 	pcfg->public_cfg.irq = irq;
 	pcfg->public_cfg.index = *index;
-	pcfg->node = node;
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	/* We need the same LIODN offset for all portals */
 	qman_liodn_fixup(pcfg->public_cfg.channel);
@@ -429,17 +442,82 @@ static struct qm_portal_config *get_pcfg(struct list_head *list)
 	return pcfg;
 }
 
-static void portal_set_cpu(const struct qm_portal_config *pcfg, int cpu)
+static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 {
+	int ret;
+	int window_count = 1;
+	struct iommu_domain_geometry geom_attr;
+	struct iommu_stash_attribute stash_attr;
+
+	pcfg->iommu_domain = iommu_domain_alloc(&platform_bus_type);
+	if (!pcfg->iommu_domain) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_alloc() failed",
+			   __func__);
+		return;
+	}
+	geom_attr.aperture_start = 0;
+	geom_attr.aperture_end = (1ULL << 36) - 1;
+	geom_attr.force_aperture = true;
+	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_GEOMETRY,
+				    &geom_attr);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
+			   __func__, ret);
+		goto _iommu_domain_free;
+	}
+	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_WINDOWS,
+				    &window_count);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
+			   __func__, ret);
+		goto _iommu_domain_free;
+	}
+	stash_attr.cpu = cpu;
+	stash_attr.cache = IOMMU_ATTR_CACHE_L1;
+	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_PAMU_STASH,
+				    &stash_attr);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
+			   __func__, ret);
+		goto _iommu_domain_free;
+	}
+	ret = iommu_domain_window_enable(pcfg->iommu_domain, 0, 0, 1ULL << 36,
+					 IOMMU_READ | IOMMU_WRITE);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_window_enable() = %d",
+			   __func__, ret);
+		goto _iommu_domain_free;
+	}
+	ret = iommu_attach_device(pcfg->iommu_domain, &pcfg->dev);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_device_attach() = %d",
+			   __func__, ret);
+		goto _iommu_domain_free;
+	}
+	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_PAMU_ENABLE,
+				    &window_count);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
+			   __func__, ret);
+		goto _iommu_detach_device;
+	}
+
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
 		pr_warning("Failed to set QMan portal's stash request queue\n");
+
+	return;
+
+_iommu_detach_device:
+	iommu_detach_device(pcfg->iommu_domain, NULL);
+_iommu_domain_free:
+	iommu_domain_free(pcfg->iommu_domain);
 }
 
 /* UIO handling callbacks */
 #define QMAN_UIO_PREAMBLE() \
-	const struct qm_portal_config *pcfg = \
+	struct qm_portal_config *pcfg = \
 		container_of(__p, struct qm_portal_config, list)
 static int qman_uio_cb_init(const struct list_head *__p, struct uio_info *info)
 {
@@ -473,7 +551,7 @@ static void qman_uio_cb_destroy(const struct list_head *__p,
 	 * Here it's passed back to us for final clean it up, so de-constify. */
 	destroy_pcfg((struct qm_portal_config *)pcfg);
 }
-static int qman_uio_cb_open(const struct list_head *__p)
+static int qman_uio_cb_open(struct list_head *__p)
 {
 	QMAN_UIO_PREAMBLE();
 	/* Bind stashing LIODNs to the CPU we are currently executing on, and
@@ -608,6 +686,7 @@ static __init int qman_init(void)
 		if (ret)
 			return ret;
 	}
+
 	/* Initialise portals. See bman_driver.c for comments */
 	for_each_compatible_node(dn, NULL, "fsl,qman-portal") {
 		if (!of_device_is_available(dn))
