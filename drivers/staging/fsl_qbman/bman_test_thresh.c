@@ -56,7 +56,7 @@ static void cb_depletion(struct bman_portal *portal,
 	struct affine_test_data *data = opaque;
 	int c = smp_processor_id();
 	pr_info("cb_depletion: bpid=%d, depleted=%d, cpu=%d, original=%d\n",
-		bman_get_params(pool)->bpid, depleted, c, data->cpu);
+		bman_get_params(pool)->bpid, !!depleted, c, data->cpu);
 	/* We should be executing on the CPU of the thread that owns the pool if
 	 * and that CPU has an affine portal (ie. it isn't slaved). */
 	BUG_ON((c != data->cpu) && data->expect_affinity);
