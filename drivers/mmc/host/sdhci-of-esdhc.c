@@ -342,6 +342,23 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 
 	if (vvn > VENDOR_V_22)
 		host->quirks &= ~SDHCI_QUIRK_NO_BUSY_IRQ;
+
+	/*
+	 * Check for A-005055: A glitch is generated on the card clock
+	 * due to software reset or a clock change
+	 * Impact list:
+	 * T4240-R1.0 B4860-R1.0 P3041-R1.0 P3041-R2.0 P2041-R1.0
+	 * P2041-R1.1 P2041-R2.0 P1010-R1.0
+	 */
+	if ((fsl_svr_is(SVR_T4240) && fsl_svr_rev_is(1, 0)) ||
+		(fsl_svr_is(SVR_B4860) && fsl_svr_rev_is(1, 0)) ||
+		(fsl_svr_is(SVR_P3041) && fsl_svr_rev_is(1, 0)) ||
+		(fsl_svr_is(SVR_P3041) && fsl_svr_rev_is(2, 0)) ||
+		(fsl_svr_is(SVR_P2041) && fsl_svr_rev_is(2, 0)) ||
+		(fsl_svr_is(SVR_P2041) && fsl_svr_rev_is(1, 1)) ||
+		(fsl_svr_is(SVR_P2041) && fsl_svr_rev_is(1, 0)) ||
+		(fsl_svr_is(SVR_P1010) && fsl_svr_rev_is(1, 0)))
+		host->quirks2 |= SDHCI_QUIRK2_BROKEN_RESET_ALL;
 }
 
 /* Return: 1 - the card is present; 0 - card is absent */

@@ -91,18 +91,11 @@ void sdhci_get_of_property(struct platform_device *pdev)
 			host->quirks |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
 
 		if (of_device_is_compatible(np, "fsl,t4240-esdhc")) {
-			host->quirks2 |= SDHCI_QUIRK2_BROKEN_RESET_ALL;
 			host->quirks2 |= SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ;
 			host->quirks2 |= SDHCI_QUIRK2_CIRCUIT_SUPPORT_VS33;
 			host->quirks2 |= SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD;
 			host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
 		}
-
-		if (of_device_is_compatible(np, "fsl,p4860-rev1-esdhc") ||
-		    of_device_is_compatible(np, "fsl,p1010-esdhc") ||
-		    of_device_is_compatible(np, "fsl,p2041-esdhc") ||
-		    of_device_is_compatible(np, "fsl,p3041-esdhc"))
-			host->quirks2 |= SDHCI_QUIRK2_BROKEN_RESET_ALL;
 
 		clk = of_get_property(np, "clock-frequency", &size);
 		if (clk && size == sizeof(*clk) && *clk)
