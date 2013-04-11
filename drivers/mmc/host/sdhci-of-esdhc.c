@@ -20,6 +20,7 @@
 #include <linux/mmc/host.h>
 #include "sdhci-pltfm.h"
 #include "sdhci-esdhc.h"
+#include <asm/mpc85xx.h>
 
 #define VENDOR_V_22	0x12
 #define VENDOR_V_23	0x13
@@ -180,19 +181,94 @@ static void esdhci_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 	applicable = (intmask & SDHCI_INT_DATA_END) &&
 		(intmask & SDHCI_INT_BLK_GAP) &&
 		(tmp == VENDOR_V_23);
-	if (!applicable)
+	if (applicable) {
+
+		sdhci_reset(host, SDHCI_RESET_DATA);
+		host->data->error = 0;
+		dmastart = sg_dma_address(host->data->sg);
+		dmanow = dmastart + host->data->bytes_xfered;
+		/*
+		 * Force update to the next DMA block boundary.
+		 */
+		dmanow = (dmanow & ~(SDHCI_DEFAULT_BOUNDARY_SIZE - 1)) +
+			SDHCI_DEFAULT_BOUNDARY_SIZE;
+		host->data->bytes_xfered = dmanow - dmastart;
+		sdhci_writel(host, dmanow, SDHCI_DMA_ADDRESS);
+
+		return;
+	}
+
+	/*
+	 * Check for A-004388: eSDHC DMA might not stop if error
+	 * occurs on system transaction
+	 * Impact list:
+	 * T4240-R1.0 B4860-R1.0 P1010-R1.0
+	 */
+	if (!((fsl_svr_is(SVR_T4240) && fsl_svr_rev_is(1, 0)) ||
+		(fsl_svr_is(SVR_B4860) && fsl_svr_rev_is(1, 0)) ||
+		(fsl_svr_is(SVR_P1010) && fsl_svr_rev_is(1, 0))))
 		return;
 
-	host->data->error = 0;
-	dmastart = sg_dma_address(host->data->sg);
-	dmanow = dmastart + host->data->bytes_xfered;
-	/*
-	 * Force update to the next DMA block boundary.
-	 */
-	dmanow = (dmanow & ~(SDHCI_DEFAULT_BOUNDARY_SIZE - 1)) +
-		SDHCI_DEFAULT_BOUNDARY_SIZE;
-	host->data->bytes_xfered = dmanow - dmastart;
-	sdhci_writel(host, dmanow, SDHCI_DMA_ADDRESS);
+	if (host->flags & SDHCI_USE_ADMA) {
+		u32 mod, i, offset;
+		u8 *desc;
+		dma_addr_t addr;
+		struct scatterlist *sg;
+
+		mod = esdhc_readl(host, SDHCI_TRANSFER_MODE);
+		if (mod & SDHCI_TRNS_BLK_CNT_EN) {
+			/* In case read transfer there is no data
+			 * was corrupted
+			 */
+			if (host->data->flags & MMC_DATA_READ)
+				return;
+			host->data->error = 0;
+			sdhci_reset(host, SDHCI_RESET_DATA);
+		}
+
+		sdhci_reset(host, SDHCI_RESET_DATA);
+
+		BUG_ON(!host->data);
+		desc = host->adma_desc;
+		for_each_sg(host->data->sg, sg, host->sg_count, i) {
+			addr = sg_dma_address(sg);
+			offset = (4 - (addr & 0x3)) & 0x3;
+			if (offset)
+				desc += 8;
+			desc += 8;
+		}
+
+		/*
+		 * Add an extra zero descriptor next to the
+		 * terminating descriptor.
+		 */
+		desc += 8;
+		WARN_ON((desc - host->adma_desc) > (128 * 2 + 1) * 4);
+
+		if (host->quirks & SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC) {
+			desc -= 8;
+			desc[0] |= 0x2; /* end */
+		} else {
+			__le32 *dataddr = (__le32 __force *)(desc + 4);
+			__le16 *cmdlen = (__le16 __force *)desc;
+
+			cmdlen[0] = cpu_to_le16(0x3);
+			cmdlen[1] = cpu_to_le16(0);
+
+			dataddr[0] = cpu_to_le32(0);
+		}
+
+		return;
+	}
+
+	if ((host->flags & SDHCI_USE_SDMA)) {
+		if (host->data->flags & MMC_DATA_READ)
+			return;
+
+		host->data->error = 0;
+		sdhci_reset(host, SDHCI_RESET_DATA);
+		return;
+	}
 }
 
 static int esdhc_of_enable_dma(struct sdhci_host *host)
