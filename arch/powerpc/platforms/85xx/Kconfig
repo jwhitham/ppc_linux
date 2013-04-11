@@ -303,21 +303,6 @@ config PPC_QEMU_E500
 
 if PPC64
 
-config B4860_QDS
-	bool "Freescale B4860 QDS"
-	select DEFAULT_UIMAGE
-	select E500
-	select PPC_E500MC
-	select PHYS_64BIT
-	select SWIOTLB
-	select ARCH_REQUIRE_GPIOLIB
-	select GPIO_MPC8XXX
-	select HAS_RAPIDIO
-	select PPC_EPAPR_HV_PIC
-	select HAS_FSL_QBMAN
-	help
-	  This option enables support for the B4860 QDS board
-
 config T4240_QDS
 	bool "Freescale T4240 QDS"
 	select DEFAULT_UIMAGE
