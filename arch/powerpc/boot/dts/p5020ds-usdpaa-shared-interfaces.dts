@@ -58,19 +58,19 @@
 	bp9: buffer-pool@9 {
 		compatible = "fsl,p5020-bpool", "fsl,bpool";
 		fsl,bpid = <9>;
-		fsl,bpool-ethernet-cfg = <0 0 0 1600 0 0xfeedabba>;
+		fsl,bpool-ethernet-cfg = <0 0 0 1728 0 0xfeedabba>;
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 	bp16: buffer-pool@16 {
 		compatible = "fsl,p5020-bpool", "fsl,bpool";
 		fsl,bpid = <16>;
-		fsl,bpool-ethernet-cfg = <0 2048 0 1600 0 0>;
+		fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 	bp17: buffer-pool@17 {
 		compatible = "fsl,p5020-bpool", "fsl,bpool";
 		fsl,bpid = <17>;
-		fsl,bpool-ethernet-cfg = <0 2048 0 1600 0 0>;
+		fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 

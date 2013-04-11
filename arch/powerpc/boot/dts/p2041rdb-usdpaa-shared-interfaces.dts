@@ -1,7 +1,7 @@
 /*
- * P4080DS Device Tree Source
+ * P2041RDB Device Tree Source
  *
- * Copyright 2009-2012 Freescale Semiconductor Inc.
+ * Copyright 2011-2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,7 +32,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/include/ "p4080ds.dts"
+/include/ "p2041rdb.dts"
 
 / {
 	/* NB: "bpool-ethernet-seeds" is not set to avoid buffer seeding,
@@ -44,108 +44,86 @@
 	 * values).
 	 */
 	bp7: buffer-pool@7 {
-		compatible = "fsl,p4080-bpool", "fsl,bpool";
+		compatible = "fsl,p2041-bpool", "fsl,bpool";
 		fsl,bpid = <7>;
 		fsl,bpool-ethernet-cfg = <0 0 0 192 0 0xdeadbeef>;
 		fsl,bpool-thresholds = <0x400 0xc00 0x0 0x0>;
 	};
 	bp8: buffer-pool@8 {
-		compatible = "fsl,p4080-bpool", "fsl,bpool";
+		compatible = "fsl,p2041-bpool", "fsl,bpool";
 		fsl,bpid = <8>;
 		fsl,bpool-ethernet-cfg = <0 0 0 576 0 0xabbaf00d>;
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 	bp9: buffer-pool@9 {
-		compatible = "fsl,p4080-bpool", "fsl,bpool";
+		compatible = "fsl,p2041-bpool", "fsl,bpool";
 		fsl,bpid = <9>;
 		fsl,bpool-ethernet-cfg = <0 0 0 1728 0 0xfeedabba>;
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 	bp16: buffer-pool@16 {
-                        compatible = "fsl,p4080-bpool", "fsl,bpool";
-                        fsl,bpid = <16>;
-                        fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
-                        fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
-       };
+		compatible = "fsl,p2041-bpool", "fsl,bpool";
+		fsl,bpid = <16>;
+		fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
+		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
+	};
 	bp17: buffer-pool@17 {
-                        compatible = "fsl,p4080-bpool", "fsl,bpool";
-                        fsl,bpid = <17>;
-                        fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
-                        fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
-       };
+		compatible = "fsl,p2041-bpool", "fsl,bpool";
+		fsl,bpid = <17>;
+		fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
+		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
+	};
+
 	fsl,dpaa {
 		ethernet@0 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			compatible = "fsl,p2041-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
 			fsl,qman-frame-queues-rx = <0x50 1 0x51 1>;
 			fsl,qman-frame-queues-tx = <0x70 1 0x71 1>;
 		};
-
-		/* ethernet@1 will be used as a normal Linux ethernet that
-		 * interfaces to the kernel network stack. All others will be
-		 * dedicated for use by usdpaa */
-
+		ethernet@1 {
+			compatible = "fsl,p2041-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,qman-frame-queues-rx = <0x52 1 0x53 1>;
+			fsl,qman-frame-queues-tx = <0x72 1 0x73 1>;
+		};
 		ethernet@2 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			compatible = "fsl,p2041-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
 			fsl,qman-frame-queues-rx = <0x54 1 0x55 1>;
 			fsl,qman-frame-queues-tx = <0x74 1 0x75 1>;
 		};
 		ethernet@3 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			compatible = "fsl,p2041-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
 			fsl,qman-frame-queues-rx = <0x56 1 0x57 1>;
 			fsl,qman-frame-queues-tx = <0x76 1 0x77 1>;
 		};
 		ethernet@4 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			compatible = "fsl,p2041-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x5a 1 0x5b 1>;
-			fsl,qman-frame-queues-tx = <0x7a 1 0x7b 1>;
+			fsl,qman-frame-queues-rx = <0x58 1 0x59 1>;
+			fsl,qman-frame-queues-tx = <0x78 1 0x79 1>;
 		};
-		ethernet@5 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x5c 1 0x5d 1>;
-			fsl,qman-frame-queues-tx = <0x7c 1 0x7d 1>;
-		};
-		ethernet@6 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x5e 1 0x5f 1>;
-			fsl,qman-frame-queues-tx = <0x7e 1 0x7f 1>;
-		};
-		ethernet@7 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x60 1 0x61 1>;
-			fsl,qman-frame-queues-tx = <0x80 1 0x81 1>;
-		};
-		ethernet@8 {
-			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x62 1 0x63 1>;
-			fsl,qman-frame-queues-tx = <0x82 1 0x83 1>;
-		};
-		/* ethernet@9 declared as shared MAC. USDPAA will seed buffers to
+		/* ethernet@5 declared as shared MAC. USDPAA will seed buffers to
 		 * this buffer pool. The ethernet driver will initialize the RX default,
 		 * RX error, TX error, TX confirm and 8 TX Frame queues. On receiving frame
 		 * at this interface, the ethernet driver will do kmap_atomic/kunmap_atomic
 		 * for that frame. */
-		ethernet@9 {
-			compatible = "fsl,p4080-dpa-ethernet", "fsl,dpa-ethernet";
-			fsl,bman-buffer-pools = <&bp17>;
-			fsl,qman-frame-queues-rx = <0x66 1 0x67 1 0x2000 3>;
+		ethernet@5 {
+			compatible = "fsl,p2041-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <0x5a 1 0x5b 1 0x2000 3>;
 			fsl,qman-frame-queues-tx = <0 1 0 1 0x3000 8>;
 		};
-		/* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
+		/* ethernet@6 declared as MAC-less interface with no "fsl,fman-mac" property.
 		 * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
 		 * queues. The ethernet driver will initialize 8 RX default Frame queues.
 		 * On receiving frame at this interface, the ethernet driver will do
 		 * kmap_atomic/kunmap_atomic for that frame. */
-		ethernet@16 {
-			compatible = "fsl,p4080-dpa-ethernet", "fsl,dpa-ethernet";
-			fsl,bman-buffer-pools = <&bp16>;
+		ethernet@6 {
+			compatible = "fsl,p2041-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp17>;
 			fsl,qman-frame-queues-rx = <4000 8>;
 			fsl,qman-frame-queues-tx = <4008 8>;
 			local-mac-address = [00 11 22 33 44 55];
