@@ -1245,9 +1245,16 @@ enum gfar_errata {
 	GFAR_ERRATA_12		= 0x08, /* a.k.a errata eTSEC49 */
 };
 
+struct gfar_priv_recycle_local {
+	struct sk_buff_head recycle_q; /* percpu queue */
+	unsigned int recycle_cnt;
+	unsigned int reuse_cnt;
+};
+
+#define GFAR_RECYCLE_MAX	DEFAULT_TX_RING_SIZE
 struct gfar_priv_recycle {
-#define GFAR_RECYCLE_MAX	DEFAULT_RX_RING_SIZE
-	struct sk_buff_head recycle_q __aligned(SMP_CACHE_BYTES);
+	struct gfar_priv_recycle_local __percpu *local;
+	struct sk_buff_head recycle_q; /* shared queue */
 	unsigned int buff_size;
 	atomic_t recycle_cnt;
 	atomic_t reuse_cnt;

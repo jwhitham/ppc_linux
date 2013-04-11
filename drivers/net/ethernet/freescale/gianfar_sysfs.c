@@ -325,8 +325,17 @@ static ssize_t gfar_show_recycle(struct device *dev,
 {
 	struct gfar_private *priv = netdev_priv(to_net_dev(dev));
 	struct gfar_priv_recycle *rec = &priv->recycle;
+	int cpu;
 
-	pr_info("recycled skbs: %d\nreused skbs: %d\n",
+	for_each_possible_cpu(cpu) {
+		struct gfar_priv_recycle_local *local;
+
+		local = per_cpu_ptr(rec->local, cpu);
+		pr_info("local: CPU#%d: recycled skbs %d, reused skbs %d\n",
+			cpu, local->recycle_cnt, local->reuse_cnt);
+	}
+
+	pr_info("shared: recycled skbs %d, reused skbs %d\n",
 		atomic_read(&rec->recycle_cnt),
 		atomic_read(&rec->reuse_cnt));
 

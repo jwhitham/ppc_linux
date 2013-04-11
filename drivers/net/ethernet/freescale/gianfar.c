@@ -592,6 +592,7 @@ static void unmap_group_regs(struct gfar_private *priv)
 
 static void free_gfar_dev(struct gfar_private *priv)
 {
+	struct gfar_priv_recycle *rec = &priv->recycle;
 	int i, j;
 
 	for (i = 0; i < MAXGROUPS; i++) {
@@ -607,6 +608,8 @@ static void free_gfar_dev(struct gfar_private *priv)
 			priv->irqinfo[i][j] = NULL;
 		}
 	}
+
+	free_percpu(rec->local);
 
 	free_netdev(priv->ndev);
 }
@@ -1104,19 +1107,41 @@ static void gfar_detect_errata(struct gfar_private *priv)
 static void gfar_init_recycle(struct gfar_private *priv)
 {
 	struct gfar_priv_recycle *rec = &priv->recycle;
+	int cpu;
 
 	rec->buff_size = priv->rx_buffer_size + RXBUF_ALIGNMENT;
 	skb_queue_head_init(&rec->recycle_q);
+
+	if (!gfar_skb_recycling_en)
+		goto disable_rec;
+
 	/* recycle skbs to the own queue by default */
-	if (gfar_skb_recycling_en) {
-		priv->recycle_target = &priv->recycle;
-		priv->recycle_ndev = priv->ndev;
-	} else {
-		priv->recycle_target = NULL;
-		priv->recycle_ndev = NULL;
+	priv->recycle_target = &priv->recycle;
+	priv->recycle_ndev = priv->ndev;
+
+	rec->local = alloc_percpu(struct gfar_priv_recycle_local);
+	if (!rec->local) {
+		netdev_err(priv->ndev, "Recycle queues init failed!\n");
+		goto disable_rec;
+	}
+
+	for_each_possible_cpu(cpu) {
+		struct gfar_priv_recycle_local *local;
+		local = per_cpu_ptr(rec->local, cpu);
+		skb_queue_head_init(&local->recycle_q);
+		local->recycle_cnt = 0;
+		local->reuse_cnt = 0;
 	}
 
 	list_add(&priv->recycle_node, &gfar_recycle_queues);
+
+	return;
+
+disable_rec:
+	netdev_info(priv->ndev, "skb recycling disabled\n");
+	priv->recycle_target = NULL;
+	priv->recycle_ndev = NULL;
+	return;
 }
 
 /* Set up the ethernet device structure, private data,
@@ -1311,9 +1336,6 @@ static int gfar_probe(struct platform_device *ofdev)
 
 	priv->rx_buffer_size = DEFAULT_RX_BUFFER_SIZE;
 
-	/* init buffer recycling fields */
-	gfar_init_recycle(priv);
-
 	/* Initializing some of the rx/tx queue level parameters */
 	for (i = 0; i < priv->num_tx_queues; i++) {
 		priv->tx_queue[i]->tx_ring_size = DEFAULT_TX_RING_SIZE;
@@ -1363,6 +1385,9 @@ static int gfar_probe(struct platform_device *ofdev)
 		} else
 			strcpy(gfar_irq(grp, TX)->name, dev->name);
 	}
+
+	/* Init buffer recycling fields and queues */
+	gfar_init_recycle(priv);
 
 	/* Initialize the filer table */
 	gfar_init_filer_table(priv);
@@ -2069,8 +2094,19 @@ static void free_skb_rx_queue(struct gfar_priv_rx_q *rx_queue)
 static void free_skb_recycle_q(struct gfar_priv_recycle *rec)
 {
 	struct sk_buff *skb;
+	int cpu;
+
 	while ((skb = skb_dequeue(&rec->recycle_q)) != NULL)
 		dev_kfree_skb_any(skb);
+
+	for_each_possible_cpu(cpu) {
+		struct gfar_priv_recycle_local *local;
+
+		local = per_cpu_ptr(rec->local, cpu);
+		while ((skb = __skb_dequeue(&local->recycle_q)) != NULL)
+			dev_kfree_skb_any(skb);
+	}
+
 }
 
 /* If there are any tx skbs or rx skbs still around, free them.
@@ -3162,12 +3198,30 @@ static void gfar_recycle_skb(struct gfar_private *priv, struct sk_buff *skb)
 {
 	struct gfar_priv_recycle *rec_target = priv->recycle_target;
 	struct sk_buff_head *recycle_q;
+	struct gfar_priv_recycle_local *local;
+	int cpu;
 
 	if (unlikely(!rec_target))
 		goto free;
 
 	if (unlikely(!skb_is_recycleable(skb, rec_target->buff_size)))
 		goto free;
+
+	cpu = get_cpu();
+	local = per_cpu_ptr(rec_target->local, cpu);
+
+	if (likely(skb_queue_len(&local->recycle_q) < GFAR_RECYCLE_MAX)) {
+		local->recycle_cnt++;
+
+		skb_recycle(skb);
+
+		gfar_align_skb(skb);
+
+		__skb_queue_head(&local->recycle_q, skb);
+		put_cpu();
+		return;
+	}
+	put_cpu();
 
 	recycle_q = &rec_target->recycle_q;
 
@@ -3406,7 +3460,19 @@ static struct sk_buff *gfar_new_skb(struct gfar_private *priv)
 {
 	struct sk_buff *skb = NULL;
 	struct gfar_priv_recycle *rec = &priv->recycle;
+	struct gfar_priv_recycle_local *local;
 	struct sk_buff_head *recycle_q;
+	int cpu;
+
+	cpu = get_cpu();
+	local = per_cpu_ptr(rec->local, cpu);
+	skb = __skb_dequeue(&local->recycle_q);
+	if (likely(skb)) {
+		local->reuse_cnt++;
+		put_cpu();
+		return skb;
+	}
+	put_cpu();
 
 	recycle_q = &rec->recycle_q;
 
