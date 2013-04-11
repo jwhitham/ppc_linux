@@ -52,6 +52,11 @@
 #define SVR_8569_E	0x808800
 #define SVR_8572	0x80E000
 #define SVR_8572_E	0x80E800
+#define SVR_P1010	0x80f900
+#define SVR_P2041	0x821801
+#define SVR_P3041	0x821903
+#define SVR_T4240	0x824800
+#define SVR_B4860	0x868800
 
 
 static inline int fsl_svr_is(u32 svr)
@@ -59,6 +64,15 @@ static inline int fsl_svr_is(u32 svr)
 	u32 id = SVR_SOC_VER(mfspr(SPRN_SVR));
 
 	return (id == svr);
+}
+
+/* Check the SOC design version of this board */
+static inline int fsl_svr_rev_is(u8 maj, u8 min)
+{
+	u32 rev = SVR_REV(mfspr(SPRN_SVR));
+	u32 cmp = (maj << 4) | min;
+
+	return (rev == cmp);
 }
 
 /* Return true if current SOC revision is prior to (maj, min)  */
