@@ -21,8 +21,8 @@ config FSL_85XX_CACHE_SRAM
 	help
 	  When selected, this option enables cache-sram support
 	  for memory allocation on P1/P2 QorIQ platforms.
-	  cache-sram-size and cache-sram-offset kernel boot
-	  parameters should be passed when this option is enabled.
+	  cache-sram kernel boot parameters should be passed when
+	  this option is enabled.
 
 config BSC9131_RDB
 	bool "Freescale BSC9131RDB"

@@ -27,47 +27,45 @@
 
 #include "fsl_85xx_cache_ctlr.h"
 
-static char *sram_size;
-static char *sram_offset;
+static char *cache_sram;
 struct mpc85xx_l2ctlr __iomem *l2ctlr;
 
 static int get_cache_sram_params(struct sram_parameters *sram_params)
 {
 	unsigned long long addr;
 	unsigned int size;
+	char *str;
 
-	if (!sram_size || (kstrtouint(sram_size, 0, &size) < 0))
+	if (!cache_sram)
 		return -EINVAL;
 
-	if (!sram_offset || (kstrtoull(sram_offset, 0, &addr) < 0))
+	str = strchr(cache_sram, ',');
+	if (!str)
 		return -EINVAL;
 
-	sram_params->sram_offset = addr;
+	*str = 0;
+	str++;
+
+	if (kstrtouint(str, 0, &size) < 0 ||
+			kstrtoull(cache_sram, 0, &addr) < 0)
+		return -EINVAL;
+
+	sram_params->sram_addr = addr;
 	sram_params->sram_size = size;
 
 	return 0;
 }
 
-static int __init get_size_from_cmdline(char *str)
+static int __init get_cache_sram_cmdline(char *str)
 {
 	if (!str)
 		return 0;
 
-	sram_size = str;
+	cache_sram = str;
 	return 1;
 }
 
-static int __init get_offset_from_cmdline(char *str)
-{
-	if (!str)
-		return 0;
-
-	sram_offset = str;
-	return 1;
-}
-
-__setup("cache-sram-size=", get_size_from_cmdline);
-__setup("cache-sram-offset=", get_offset_from_cmdline);
+__setup("cache-sram=", get_cache_sram_cmdline);
 
 static int mpc85xx_l2ctlr_of_probe(struct platform_device *dev)
 {
@@ -92,7 +90,7 @@ static int mpc85xx_l2ctlr_of_probe(struct platform_device *dev)
 
 	if (get_cache_sram_params(&sram_params)) {
 		dev_err(&dev->dev,
-			"Entire L2 as cache, provide valid sram offset and size\n");
+			"Entire L2 as cache, provide valid sram address and size\n");
 		return -EINVAL;
 	}
 
@@ -114,14 +112,14 @@ static int mpc85xx_l2ctlr_of_probe(struct platform_device *dev)
 	 * Write bits[0-17] to srbar0
 	 */
 	out_be32(&l2ctlr->srbar0,
-		lower_32_bits(sram_params.sram_offset) & L2SRAM_BAR_MSK_LO18);
+		lower_32_bits(sram_params.sram_addr) & L2SRAM_BAR_MSK_LO18);
 
 	/*
 	 * Write bits[18-21] to srbare0
 	 */
 #ifdef CONFIG_PHYS_64BIT
 	out_be32(&l2ctlr->srbarea0,
-		upper_32_bits(sram_params.sram_offset) & L2SRAM_BARE_MSK_HI4);
+		upper_32_bits(sram_params.sram_addr) & L2SRAM_BARE_MSK_HI4);
 #endif
 
 	clrsetbits_be32(&l2ctlr->ctl, L2CR_L2E, L2CR_L2FI);

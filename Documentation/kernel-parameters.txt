@@ -439,6 +439,9 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 
 	c101=		[NET] Moxa C101 synchronous serial card
 
+	cache-sram=     [HW] Create a cache-based SRAM.
+			Format: <phys-addr>,<size>
+
 	cachesize=	[BUGS=X86-32] Override level 2 CPU cache size detection.
 			Sometimes CPU hardware bugs make them report the cache
 			size incorrectly. The kernel will attempt work arounds

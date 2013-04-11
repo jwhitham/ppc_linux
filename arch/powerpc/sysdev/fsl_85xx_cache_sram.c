@@ -96,7 +96,7 @@ int __init instantiate_cache_sram(struct platform_device *dev,
 		return -ENOMEM;
 	}
 
-	cache_sram->base_phys = sram_params.sram_offset;
+	cache_sram->base_phys = sram_params.sram_addr;
 	cache_sram->size = sram_params.sram_size;
 
 	if (!request_mem_region(cache_sram->base_phys, cache_sram->size,

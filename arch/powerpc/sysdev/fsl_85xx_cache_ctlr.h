@@ -91,7 +91,7 @@ struct mpc85xx_l2ctlr {
 
 struct sram_parameters {
 	unsigned int sram_size;
-	phys_addr_t sram_offset;
+	phys_addr_t sram_addr;
 };
 
 extern int instantiate_cache_sram(struct platform_device *dev,
