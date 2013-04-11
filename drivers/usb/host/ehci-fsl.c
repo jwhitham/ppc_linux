@@ -191,6 +191,7 @@ static int usb_hcd_fsl_probe(const struct hc_driver *driver,
 #if defined(CONFIG_FSL_USB2_OTG) || defined(CONFIG_FSL_USB2_OTG_MODULE)
 	if (pdata->operating_mode == FSL_USB2_DR_OTG) {
 		struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+		struct ehci_fsl *ehci_fsl = hcd_to_ehci_fsl(hcd);
 
 		hcd->phy = usb_get_phy(USB_PHY_TYPE_USB2);
 
@@ -211,6 +212,11 @@ static int usb_hcd_fsl_probe(const struct hc_driver *driver,
 			retval = -ENODEV;
 			goto err4;
 		}
+
+		ehci_fsl->have_hcd = 1;
+	} else {
+		dev_err(&pdev->dev, "wrong operating mode\n");
+		return -ENODEV;
 	}
 #endif
 	return retval;
