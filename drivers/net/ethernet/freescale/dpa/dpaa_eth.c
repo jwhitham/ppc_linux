@@ -1321,6 +1321,11 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
+	/* Execute the Rx processing hook, if it exists. */
+	if (dpaa_eth_hooks.rx_default && dpaa_eth_hooks.rx_default((void *)fd,
+		net_dev, fqid) == DPAA_ETH_STOLEN)
+		/* won't count the rx bytes in */
+		goto skb_stolen;
 
 	skb = *skbh;
 	prefetch(skb);
@@ -1342,11 +1347,6 @@ void __hot _dpa_rx(struct net_device *net_dev,
 		goto drop_large_frame;
 	}
 
-	/* Execute the Rx processing hook, if it exists. */
-	if (dpaa_eth_hooks.rx_default && dpaa_eth_hooks.rx_default(skb,
-		net_dev, fqid) == DPAA_ETH_STOLEN)
-		/* won't count the rx bytes in */
-		goto skb_stolen;
 
 	skb_len = skb->len;
 
