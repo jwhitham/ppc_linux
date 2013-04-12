@@ -1291,7 +1291,6 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	u32 fd_status = fd->status;
 	unsigned int skb_len;
 	t_FmPrsResult *parse_result;
-	int ret;
 	unsigned int hdr_size_unused;
 	int use_gro = net_dev->features & NETIF_F_GRO;
 
