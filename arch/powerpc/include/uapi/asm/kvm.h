@@ -485,4 +485,11 @@ struct kvm_get_htab_header {
 #define KVM_REG_PPC_TLB3PS	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x9a)
 #define KVM_REG_PPC_EPTCFG	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x9b)
 
+/* Device control API: PPC-specific devices */
+#define KVM_DEV_MPIC_GRP_MISC		1
+#define KVM_DEV_MPIC_BASE_ADDR		0	/* 64-bit */
+
+#define KVM_DEV_MPIC_GRP_REGISTER	2	/* 32-bit */
+#define KVM_DEV_MPIC_GRP_IRQ_ACTIVE	3	/* 32-bit */
+
 #endif /* __LINUX_KVM_POWERPC_H */

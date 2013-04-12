@@ -2185,6 +2185,12 @@ static int kvm_ioctl_create_device(struct kvm *kvm,
 	int ret;
 
 	switch (cd->type) {
+#ifdef CONFIG_KVM_MPIC
+	case KVM_DEV_TYPE_FSL_MPIC_20:
+	case KVM_DEV_TYPE_FSL_MPIC_42:
+		ops = &kvm_mpic_ops;
+		break;
+#endif
 	default:
 		return -ENODEV;
 	}
