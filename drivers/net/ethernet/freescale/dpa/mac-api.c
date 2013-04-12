@@ -439,18 +439,8 @@ static void adjust_link(struct net_device *net_dev)
 
 	if (!phy_dev->link) {
 #if (DPAA_VERSION < 11)
-#warning fsl_pq_mdio_lock() no longer supported
-/*
-		fsl_pq_mdio_lock(NULL);
-*/
-
 		mac_priv = (struct mac_priv_s *)macdev_priv(mac_dev);
 		DtsecRestartTbiAN(mac_priv->mac);
-
-#warning fsl_pq_mdio_unlock() no longer supported
-/*
-		fsl_pq_mdio_unlock(NULL);
-*/
 #endif
 		return;
 	}

@@ -3430,8 +3430,6 @@ dpa_fq_probe(struct platform_device *_of_dev, struct list_head *list,
 					FQ_TYPE_RX_PCD : FQ_TYPE_TX);
 		}
 
-#warning We lost the 8-queue enforcement
-
 		for (j = 0; j < fqids[i].count; j++) {
 			dpa_fq[j].fqid = fqids[i].start ?
 				fqids[i].start + j : 0;
