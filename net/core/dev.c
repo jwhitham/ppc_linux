@@ -2299,6 +2299,17 @@ static inline int skb_needs_linearize(struct sk_buff *skb,
 				!(features & NETIF_F_SG)));
 }
 
+#ifdef CONFIG_ASF_EGRESS_QOS
+/* Linux QoS hook to tranfer all packet to ASF QoS */
+static asf_qos_fn_hook *asf_qos_fn;
+
+void asf_qos_fn_register(asf_qos_fn_hook *fn)
+{
+	asf_qos_fn = fn;
+}
+EXPORT_SYMBOL(asf_qos_fn_register);
+#endif
+
 int dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 			struct netdev_queue *txq)
 {
@@ -2617,24 +2628,6 @@ static void skb_update_prio(struct sk_buff *skb)
 static DEFINE_PER_CPU(int, xmit_recursion);
 #define RECURSION_LIMIT 10
 
-#ifdef CONFIG_ASF_EGRESS_QOS
-/* Linux QoS hook to tranfer all packet to ASF QoS */
-static asf_qos_fn_hook *asf_qos_fn;
-
-void asf_qos_fn_register(asf_qos_fn_hook *fn)
-{
-	asf_qos_fn = fn;
-}
-EXPORT_SYMBOL(asf_qos_fn_register);
-
-void asf_qos_fn_unregister(void)
-{
-	asf_qos_fn = NULL;
-}
-EXPORT_SYMBOL(asf_qos_fn_unregister);
-#endif
-
-
 /**
  *	dev_loopback_xmit - loop back @skb
  *	@skb: buffer to transmit
@@ -2691,6 +2684,13 @@ int dev_queue_xmit(struct sk_buff *skb)
 
 	skb_update_prio(skb);
 
+#ifdef CONFIG_ASF_EGRESS_QOS
+	if (asf_qos_fn) {
+		rc = asf_qos_fn(skb);
+		if (!rc)
+			goto out;
+	}
+#endif
 	txq = netdev_pick_tx(dev, skb);
 #ifdef CONFIG_AS_FASTPATH
 	if ((dev->features & NETIF_F_HW_QDISC) &&
@@ -2703,13 +2703,6 @@ int dev_queue_xmit(struct sk_buff *skb)
 
 #ifdef CONFIG_NET_CLS_ACT
 	skb->tc_verd = SET_TC_AT(skb->tc_verd, AT_EGRESS);
-#endif
-
-#ifdef CONFIG_ASF_EGRESS_QOS
-	if (asf_qos_fn) {
-		rc = asf_qos_fn(skb);
-		goto out;
-	}
 #endif
 
 	trace_net_dev_queue(skb);

@@ -692,9 +692,26 @@ typedef int prio_flush_hook(
 
 void prio_hook_fn_register(prio_add_hook *add,
 		prio_flush_hook *flush);
+
+typedef int drr_add_hook(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent,
+		uint32_t		quantum);
+typedef int drr_flush_hook(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent);
+
+typedef void invalidate_flows(void);
+
+void drr_hook_fn_register(drr_add_hook *add,
+			drr_flush_hook *flush,
+			invalidate_flows *invalidate);
+u32 drr_filter_lookup(struct sk_buff *skb, struct Qdisc *sch);
 #endif
 
-#ifdef CONFIG_ASF_EGRESS_SHAPER
+#if defined(CONFIG_ASF_EGRESS_SHAPER) || defined(CONFIG_ASF_HW_SHAPER)
 struct tbf_opt {
 	struct net_device	*dev;
 	uint32_t		handle;
@@ -713,13 +730,12 @@ typedef int tbf_del_hook(
 
 void tbf_hook_fn_register(tbf_add_hook *add,
 		tbf_del_hook *del);
+struct Qdisc *tbf_get_inner_qdisc(struct Qdisc *sch);
 #endif
 
 #ifdef CONFIG_ASF_EGRESS_QOS
 typedef int asf_qos_fn_hook(struct sk_buff *skb);
-
 void asf_qos_fn_register(asf_qos_fn_hook *fn);
-void asf_qos_fn_unregister(void);
 #endif
 
 #endif
