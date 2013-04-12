@@ -902,6 +902,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 	while (bman_release(_dpa_bp->pool, &_bmb, 1, 0))
 		cpu_relax();
 }
+EXPORT_SYMBOL(dpa_fd_release);
 
 #ifndef CONFIG_DPAA_ETH_SG_SUPPORT
 /*
