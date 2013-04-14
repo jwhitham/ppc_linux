@@ -164,6 +164,7 @@ static void done(struct fsl_ep *ep, struct fsl_req *req, int status)
 	unsigned char stopped = ep->stopped;
 	struct ep_td_struct *curr_td, *next_td;
 	int j;
+	struct device *pdev = NULL;
 
 	udc = (struct fsl_udc *)ep->udc;
 	/* Removed the req from fsl_ep->queue */
@@ -185,20 +186,24 @@ static void done(struct fsl_ep *ep, struct fsl_req *req, int status)
 		dma_pool_free(udc->td_pool, curr_td, curr_td->td_dma);
 	}
 
-	if (req->mapped) {
-		dma_unmap_single(ep->udc->gadget.dev.parent,
-			req->req.dma, req->req.length,
-			ep_is_in(ep)
-				? DMA_TO_DEVICE
-				: DMA_FROM_DEVICE);
-		req->req.dma = DMA_ADDR_INVALID;
-		req->mapped = 0;
-	} else
-		dma_sync_single_for_cpu(ep->udc->gadget.dev.parent,
-			req->req.dma, req->req.length,
-			ep_is_in(ep)
-				? DMA_TO_DEVICE
-				: DMA_FROM_DEVICE);
+	if (req->req.length) {
+		/* Non Zero Length Packet */
+		pdev = ep->udc->gadget.dev.parent;
+		if (req->mapped) {
+			dma_unmap_single(pdev, req->req.dma,
+				req->req.length,
+				ep_is_in(ep)
+					? DMA_TO_DEVICE
+					: DMA_FROM_DEVICE);
+			req->req.dma = DMA_ADDR_INVALID;
+			req->mapped = 0;
+		} else
+			dma_sync_single_for_cpu(pdev, req->req.dma,
+				req->req.length,
+				ep_is_in(ep)
+					? DMA_TO_DEVICE
+					: DMA_FROM_DEVICE);
+	}
 
 	if (status && (status != -ESHUTDOWN))
 		VDBG("complete %s req %p stat %d len %u/%u",
@@ -888,6 +893,7 @@ fsl_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 	struct fsl_req *req = container_of(_req, struct fsl_req, req);
 	struct fsl_udc *udc;
 	unsigned long flags;
+	struct device *pdev = NULL;
 
 	/* catch various bogus parameters */
 	if (!_req || !req->req.complete || !req->req.buf
@@ -910,21 +916,24 @@ fsl_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 
 	req->ep = ep;
 
-	/* map virtual address to hardware */
-	if (req->req.dma == DMA_ADDR_INVALID) {
-		req->req.dma = dma_map_single(ep->udc->gadget.dev.parent,
-					req->req.buf,
-					req->req.length, ep_is_in(ep)
-						? DMA_TO_DEVICE
-						: DMA_FROM_DEVICE);
-		req->mapped = 1;
-	} else {
-		dma_sync_single_for_device(ep->udc->gadget.dev.parent,
-					req->req.dma, req->req.length,
-					ep_is_in(ep)
-						? DMA_TO_DEVICE
-						: DMA_FROM_DEVICE);
-		req->mapped = 0;
+	if (req->req.length) {
+		/* Non Zero Length Packet */
+		/* map virtual address to hardware */
+		pdev = ep->udc->gadget.dev.parent;
+		if (req->req.dma == DMA_ADDR_INVALID) {
+			req->req.dma = dma_map_single(pdev, req->req.buf,
+						req->req.length, ep_is_in(ep)
+							? DMA_TO_DEVICE
+							: DMA_FROM_DEVICE);
+			req->mapped = 1;
+		} else {
+			dma_sync_single_for_device(pdev, req->req.dma,
+						req->req.length,
+						ep_is_in(ep)
+							? DMA_TO_DEVICE
+							: DMA_FROM_DEVICE);
+			req->mapped = 0;
+		}
 	}
 
 	req->req.status = -EINPROGRESS;
@@ -1305,11 +1314,6 @@ static int ep0_prime_status(struct fsl_udc *udc, int direction)
 	req->req.actual = 0;
 	req->req.complete = NULL;
 	req->dtd_count = 0;
-
-	req->req.dma = dma_map_single(ep->udc->gadget.dev.parent,
-			req->req.buf, req->req.length,
-			ep_is_in(ep) ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
-	req->mapped = 1;
 
 	if (fsl_req_to_dtd(req, GFP_ATOMIC) == 0)
 		fsl_queue_td(ep, req);
