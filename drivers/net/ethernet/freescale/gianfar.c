@@ -2891,6 +2891,7 @@ alloc:
 
 	return skb;
 }
+EXPORT_SYMBOL(gfar_new_skb);
 
 static inline void count_errors(unsigned short status, struct net_device *dev)
 {
