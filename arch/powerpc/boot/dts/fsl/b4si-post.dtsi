@@ -65,6 +65,13 @@
 	};
 };
 
+&bportals {
+/include/ "qoriq-bman2-portals.dtsi"
+};
+&qportals {
+/include/ "qoriq-qman2-portals.dtsi"
+};
+
 &dcsr {
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -203,7 +210,76 @@
 		};
 	};
 
+/include/ "qoriq-qman1.dtsi"
+
+	qman: qman@318000 {
+		interrupts = <16 2 1 28>;
+	};
+
+/include/ "qoriq-bman1.dtsi"
+
+	bman: bman@31a000 {
+		interrupts = <16 2 1 29>;
+	};
+
+/include/ "qoriq-rman-0.dtsi"
+	rman: rman@1e0000 {
+		fsl,qman-channels-id = <0x820 0x821>;
+	};
 /include/ "qoriq-mpic.dtsi"
+
+/include/ "qoriq-fman3-0.dtsi"
+/include/ "qoriq-fman3-0-1g-0.dtsi"
+/include/ "qoriq-fman3-0-1g-1.dtsi"
+/include/ "qoriq-fman3-0-1g-2.dtsi"
+/include/ "qoriq-fman3-0-1g-3.dtsi"
+	fman0: fman@400000 {
+		interrupts = <
+			96 2 0 0
+			16 2 1 30>;
+
+		/* tx - 1g - 0 */
+		port@a8000 {
+			fsl,qman-channel-id = <0x802>;
+		};
+		/* tx - 1g - 1 */
+		port@a9000 {
+			fsl,qman-channel-id = <0x803>;
+		};
+		/* tx - 1g - 2 */
+		port@aa000 {
+			fsl,qman-channel-id = <0x804>;
+		};
+		/* tx - 1g - 3 */
+		port@ab000 {
+			fsl,qman-channel-id = <0x805>;
+		};
+		/* offline - 0 is not usable on B4860 */
+		/* offline - 1 */
+		port@82000 {
+			fsl,qman-channel-id = <0x809>;
+		};
+		/* offline - 2 */
+		port@83000 {
+			fsl,qman-channel-id = <0x80a>;
+		};
+		/* offline - 3 */
+		port@84000 {
+			fsl,qman-channel-id = <0x80b>;
+		};
+		/* offline - 4 */
+		port@85000 {
+			fsl,qman-channel-id = <0x80c>;
+		};
+		/* offline - 5 */
+		port@86000 {
+			fsl,qman-channel-id = <0x80d>;
+		};
+		/* offline - 6 */
+		port@87000 {
+			fsl,qman-channel-id = <0x80e>;
+		};
+	};
 
 	guts: global-utilities@e0000 {
 		compatible = "fsl,b4-device-config";

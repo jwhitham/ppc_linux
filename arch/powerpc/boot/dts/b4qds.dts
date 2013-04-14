@@ -39,6 +39,13 @@
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
 
+	aliases{
+		phy_sgmii_10 = &phy_sgmii_10;
+		phy_sgmii_11 = &phy_sgmii_11;
+		phy_sgmii_1c = &phy_sgmii_1c;
+		phy_sgmii_1d = &phy_sgmii_1d;
+	};
+
 	ifc: localbus@ffe124000 {
 		reg = <0xf 0xfe124000 0 0x2000>;
 		ranges = <0 0 0xf 0xe8000000 0x08000000
@@ -101,6 +108,14 @@
 		ranges = <0x00000000 0xf 0x00000000 0x01052000>;
 	};
 
+	bportals: bman-portals@ff4000000 {
+		ranges = <0x0 0xf 0xf4000000 0x2000000>;
+	};
+
+	qportals: qman-portals@ff6000000 {
+		ranges = <0x0 0xf 0xf6000000 0x2000000>;
+	};
+
 	soc: soc@ffe000000 {
 		ranges = <0x00000000 0xf 0xfe000000 0x1000000>;
 		reg = <0xf 0xfe000000 0 0x00001000>;
@@ -147,6 +162,39 @@
 			phy_type = "ulpi";
 		};
 
+		fman0: fman@400000 {
+			fm1mac1: ethernet@e0000 {
+				phy-handle = <&phy_sgmii_10>;
+				phy-connection-type = "sgmii";
+			};
+			fm1mac2: ethernet@e2000 {
+				phy-handle = <&phy_sgmii_11>;
+				phy-connection-type = "sgmii";
+			};
+			fm1mac3: ethernet@e4000 {
+				phy-handle = <&phy_sgmii_1c>;
+				phy-connection-type = "sgmii";
+			};
+			fm1mac4: ethernet@e6000 {
+				phy-handle = <&phy_sgmii_1d>;
+				phy-connection-type = "sgmii";
+			};
+
+			mdio0: mdio@fc000 {
+				phy_sgmii_10: ethernet-phy@10 {
+					reg = <0x10>;
+				};
+				phy_sgmii_11: ethernet-phy@11 {
+					reg = <0x11>;
+				};
+				phy_sgmii_1c: ethernet-phy@1c {
+					reg = <0x1c>;
+				};
+				phy_sgmii_1d: ethernet-phy@1d {
+					reg = <0x1d>;
+				};
+			};
+		};
 	};
 
 	pci0: pcie@ffe200000 {
@@ -164,6 +212,27 @@
 		};
 	};
 
+	fsl,dpaa {
+		compatible = "fsl,dpaa";
+		ethernet@0 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac1>;
+		};
+		ethernet@1 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac2>;
+		};
+		ethernet@2 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac3>;
+		};
+		ethernet@3 {
+			compatible = "fsl,dpa-ethernet";
+			fsl,fman-mac = <&fm1mac4>;
+		};
+	};
+
 };
 
 /include/ "fsl/b4si-post.dtsi"
+/include/ "fsl/qoriq-dpaa-res3.dtsi"
