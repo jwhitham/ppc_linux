@@ -117,7 +117,7 @@ int main(void)
 #ifdef CONFIG_KVM_BOOK3S_32_HANDLER
 	DEFINE(THREAD_KVM_SVCPU, offsetof(struct thread_struct, kvm_shadow_vcpu));
 #endif
-#ifdef CONFIG_KVM_BOOKE_HV
+#if defined(CONFIG_KVM) && defined(CONFIG_BOOKE)
 	DEFINE(THREAD_KVM_VCPU, offsetof(struct thread_struct, kvm_vcpu));
 #endif
 
@@ -568,6 +568,7 @@ int main(void)
 	DEFINE(VCPU_LAST_INST, offsetof(struct kvm_vcpu, arch.last_inst));
 	DEFINE(VCPU_FAULT_DEAR, offsetof(struct kvm_vcpu, arch.fault_dear));
 	DEFINE(VCPU_FAULT_ESR, offsetof(struct kvm_vcpu, arch.fault_esr));
+	DEFINE(VCPU_CRIT_SAVE, offsetof(struct kvm_vcpu, arch.crit_save));
 #endif /* CONFIG_PPC_BOOK3S */
 #endif /* CONFIG_KVM */
 

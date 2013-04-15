@@ -505,6 +505,7 @@ struct kvm_vcpu_arch {
 	u32 tlbcfg[4];
 	u32 mmucfg;
 	u32 epr;
+	u32 crit_save;
 	struct kvmppc_booke_debug_reg dbg_reg;
 #endif
 	gpa_t paddr_accessed;
@@ -522,6 +523,8 @@ struct kvm_vcpu_arch {
 	u8 sane;
 	u8 cpu_type;
 	u8 hcall_needed;
+	u8 epr_enabled;
+	u8 epr_needed;
 
 	u32 cpr0_cfgaddr; /* holds the last set cpr0_cfgaddr */
 
