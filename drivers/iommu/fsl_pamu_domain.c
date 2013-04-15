@@ -1106,6 +1106,35 @@ static u32 fsl_pamu_get_windows(struct iommu_domain *domain)
 	return dma_domain->win_cnt;
 }
 
+static struct iommu_domain *fsl_get_dev_domain(struct device *dev)
+{
+	struct pci_controller *pci_ctl;
+	struct device_domain_info *info;
+	struct pci_dev *pdev;
+
+	/*
+	 * Use PCI controller dev struct for pci devices as current
+	 * LIODN schema assign LIODN to PCI controller not PCI device
+	 * This should get corrected with proper LIODN schema.
+	 */
+	if (dev->bus == &pci_bus_type) {
+		pdev = to_pci_dev(dev);
+		pci_ctl = pci_bus_to_host(pdev->bus);
+		/*
+		 * make dev point to pci controller device
+		 * so we can get the LIODN programmed by
+		 * u-boot.
+		 */
+		dev = pci_ctl->parent;
+	}
+
+	info = dev->archdata.iommu_domain;
+	if (info && info->domain)
+		return info->domain->iommu_domain;
+
+	return NULL;
+}
+
 static struct iommu_ops fsl_pamu_ops = {
 	.domain_init	= fsl_pamu_domain_init,
 	.domain_destroy = fsl_pamu_domain_destroy,
@@ -1121,6 +1150,7 @@ static struct iommu_ops fsl_pamu_ops = {
 	.domain_get_attr = fsl_pamu_get_domain_attr,
 	.add_device	= fsl_pamu_add_device,
 	.remove_device	= fsl_pamu_remove_device,
+	.get_dev_iommu_domain = fsl_get_dev_domain,
 };
 
 int pamu_domain_init()
