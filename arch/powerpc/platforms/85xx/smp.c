@@ -561,7 +561,7 @@ static const struct of_device_id mpc85xx_smp_guts_ids[] = {
 	{ .compatible = "fsl,p1023-guts", },
 	{ .compatible = "fsl,p2020-guts", },
 	{ .compatible = "fsl,qoriq-rcpm-1.0", },
-	{ .compatible = "fsl,qoriq-rcpm-2", },
+	{ .compatible = "fsl,qoriq-rcpm-2.0", },
 	{},
 };
 
@@ -588,7 +588,7 @@ void __init mpc85xx_smp_init(void)
 
 	np = of_find_matching_node(NULL, mpc85xx_smp_guts_ids);
 	if (np) {
-		if (of_device_is_compatible(np, "fsl,qoriq-rcpm-2"))
+		if (of_device_is_compatible(np, "fsl,qoriq-rcpm-2.0"))
 			rcpmv2 = true;
 
 		guts_regs = of_iomap(np, 0);
