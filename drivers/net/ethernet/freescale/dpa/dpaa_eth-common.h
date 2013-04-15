@@ -71,6 +71,8 @@ enum dpa_fq_type {
 	param.hash_results = true; \
 	param.frag_enable = false; \
 	param.time_stamp = has_timer; \
+	param.data_align = 0;	\
+	param.manip_extra_space = 0; \
 	fm_set_##type##_port_params(port, &param); \
 }
 
