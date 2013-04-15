@@ -679,4 +679,47 @@ static inline struct sk_buff *skb_act_clone(struct sk_buff *skb, gfp_t gfp_mask,
 }
 #endif
 
+#if defined(CONFIG_ASF_EGRESS_SCH) || defined(CONFIG_ASF_HW_SCH)
+typedef int prio_add_hook(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent,
+		uint32_t		bands);
+typedef int prio_flush_hook(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent);
+
+void prio_hook_fn_register(prio_add_hook *add,
+		prio_flush_hook *flush);
+#endif
+
+#ifdef CONFIG_ASF_EGRESS_SHAPER
+struct tbf_opt {
+	struct net_device	*dev;
+	uint32_t		handle;
+	uint32_t		parent;
+	uint32_t		rate;
+	uint32_t		limit;
+	uint32_t		buffer;
+	uint16_t		mpu;
+};
+
+typedef int tbf_add_hook(struct tbf_opt *opt);
+typedef int tbf_del_hook(
+		struct net_device	*dev,
+		uint32_t		handle,
+		uint32_t		parent);
+
+void tbf_hook_fn_register(tbf_add_hook *add,
+		tbf_del_hook *del);
+#endif
+
+#ifdef CONFIG_ASF_EGRESS_QOS
+typedef int asf_qos_fn_hook(struct sk_buff *skb);
+
+void asf_qos_fn_register(asf_qos_fn_hook *fn);
+void asf_qos_fn_unregister(void);
+#endif
+
 #endif

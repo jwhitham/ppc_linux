@@ -22,6 +22,16 @@
 #include <net/pkt_sched.h>
 
 
+#if defined(CONFIG_ASF_EGRESS_SCH) || defined(CONFIG_ASF_HW_SCH)
+static inline void _prio_add_hook(struct Qdisc	*sch,
+				uint32_t	bands);
+static inline void _prio_flush_hook(struct Qdisc *sch);
+
+/* Define ADD/DELETE Hooks */
+static prio_add_hook *prio_add_fn;
+static prio_flush_hook *prio_flush_fn;
+#endif
+
 struct prio_sched_data {
 	int bands;
 	struct tcf_proto *filter_list;
@@ -161,6 +171,11 @@ prio_destroy(struct Qdisc *sch)
 	tcf_destroy_chain(&q->filter_list);
 	for (prio = 0; prio < q->bands; prio++)
 		qdisc_destroy(q->queues[prio]);
+
+#if defined(CONFIG_ASF_EGRESS_SCH) || defined(CONFIG_ASF_HW_SCH)
+	/* Invoke PRIO Qdisc Deletiion */
+	_prio_flush_hook(sch);
+#endif
 }
 
 static int prio_tune(struct Qdisc *sch, struct nlattr *opt)
@@ -234,6 +249,12 @@ static int prio_init(struct Qdisc *sch, struct nlattr *opt)
 
 		if ((err = prio_tune(sch, opt)) != 0)
 			return err;
+
+#if defined(CONFIG_ASF_EGRESS_SCH) || defined(CONFIG_ASF_HW_SCH)
+		/* PRIO Qdisc creation is complete, now safe to offload */
+		_prio_add_hook(sch, q->bands);
+#endif
+
 	}
 	return 0;
 }
@@ -359,6 +380,45 @@ static struct tcf_proto **prio_find_tcf(struct Qdisc *sch, unsigned long cl)
 		return NULL;
 	return &q->filter_list;
 }
+
+#if defined(CONFIG_ASF_EGRESS_SCH) || defined(CONFIG_ASF_HW_SCH)
+static inline void _prio_add_hook(
+		struct Qdisc		*sch,
+		uint32_t		bands)
+{
+	if (prio_add_fn) {
+		struct net_device *dev = qdisc_dev(sch);
+
+		if (prio_add_fn(dev, sch->handle, sch->parent,  bands) < 0) {
+			printk(KERN_DEBUG "%s: PRIO Creation on %s: fail: handle 0x%X\n",
+			__func__, dev->name, sch->handle);
+		}
+	}
+}
+
+static inline void _prio_flush_hook(struct Qdisc *sch)
+{
+
+	if (prio_flush_fn) {
+		struct net_device *dev = qdisc_dev(sch);
+
+		if (prio_flush_fn(dev, sch->handle, sch->parent) < 0) {
+			printk(KERN_DEBUG "%s: PRIO Fush on %s: fail: handle 0x%X\n",
+			__func__, dev->name, sch->handle);
+		}
+	}
+}
+
+
+void prio_hook_fn_register(prio_add_hook *add,
+		prio_flush_hook *flush)
+{
+	prio_add_fn = add;
+	prio_flush_fn = flush;
+}
+EXPORT_SYMBOL(prio_hook_fn_register);
+#endif
+
 
 static const struct Qdisc_class_ops prio_class_ops = {
 	.graft		=	prio_graft,

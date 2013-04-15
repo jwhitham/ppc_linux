@@ -1214,7 +1214,9 @@ struct net_device {
 
 	/* root qdisc from userspace point of view */
 	struct Qdisc		*qdisc;
-
+#ifdef CONFIG_ASF_EGRESS_QOS
+	void			*asf_qdisc;
+#endif
 	unsigned long		tx_queue_len;	/* Max frames per queue allowed */
 	spinlock_t		tx_global_lock;
 

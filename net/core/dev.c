@@ -2617,6 +2617,24 @@ static void skb_update_prio(struct sk_buff *skb)
 static DEFINE_PER_CPU(int, xmit_recursion);
 #define RECURSION_LIMIT 10
 
+#ifdef CONFIG_ASF_EGRESS_QOS
+/* Linux QoS hook to tranfer all packet to ASF QoS */
+static asf_qos_fn_hook *asf_qos_fn;
+
+void asf_qos_fn_register(asf_qos_fn_hook *fn)
+{
+	asf_qos_fn = fn;
+}
+EXPORT_SYMBOL(asf_qos_fn_register);
+
+void asf_qos_fn_unregister(void)
+{
+	asf_qos_fn = NULL;
+}
+EXPORT_SYMBOL(asf_qos_fn_unregister);
+#endif
+
+
 /**
  *	dev_loopback_xmit - loop back @skb
  *	@skb: buffer to transmit
@@ -2686,6 +2704,14 @@ int dev_queue_xmit(struct sk_buff *skb)
 #ifdef CONFIG_NET_CLS_ACT
 	skb->tc_verd = SET_TC_AT(skb->tc_verd, AT_EGRESS);
 #endif
+
+#ifdef CONFIG_ASF_EGRESS_QOS
+	if (asf_qos_fn) {
+		rc = asf_qos_fn(skb);
+		goto out;
+	}
+#endif
+
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
 		rc = __dev_xmit_skb(skb, q, dev, txq);
