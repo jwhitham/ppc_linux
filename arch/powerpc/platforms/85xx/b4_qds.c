@@ -93,6 +93,7 @@ define_machine(b4_qds) {
 #else
 	.power_save		= e500_idle,
 #endif
+	.init_early             = corenet_ds_init_early,
 };
 
 machine_arch_initcall(b4_qds, corenet_ds_publish_devices);
