@@ -947,30 +947,35 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 /* net_device */
 
-static struct net_device_stats * __cold
-dpa_get_stats(struct net_device *net_dev)
+/**
+ * @param net_dev the device for which statistics are calculated
+ * @param stats the function fills this structure with the device's statistics
+ * @return the address of the structure containing the statistics
+ *
+ * Calculates the statistics for the given device by adding the statistics
+ * collected by each CPU.
+ */
+static struct rtnl_link_stats64 * __cold
+dpa_get_stats64(struct net_device *net_dev,
+		struct rtnl_link_stats64 *stats)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	unsigned long *netstats;
-	unsigned long *cpustats;
+	u64 *cpustats;
+	u64 *netstats = (u64 *)stats;
 	int i, j;
 	struct dpa_percpu_priv_s	*percpu_priv;
-	int numstats = sizeof(net_dev->stats) / sizeof(unsigned long);
-
-	netstats = (unsigned long *)&net_dev->stats;
-
-	memset(netstats, 0, sizeof(net_dev->stats));
+	int numstats = sizeof(struct rtnl_link_stats64) / sizeof(u64);
 
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 
-		cpustats = (unsigned long *)&percpu_priv->stats;
+		cpustats = (u64 *)&percpu_priv->stats;
 
 		for (j = 0; j < numstats; j++)
 			netstats[j] += cpustats[j];
 	}
 
-	return &net_dev->stats;
+	return stats;
 }
 
 static int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
@@ -1851,7 +1856,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct dpa_priv_s	*priv;
 	struct qm_fd		 fd;
 	struct dpa_percpu_priv_s *percpu_priv;
-	struct net_device_stats *percpu_stats;
+	struct rtnl_link_stats64 *percpu_stats;
 	int queue_mapping;
 	int err;
 
@@ -3078,8 +3083,8 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 		total.stats.rx_errors += percpu_priv->stats.rx_errors;
 		count_total += dpa_bp_count;
 
-		seq_printf(file, "     %hu/%hu  %8u  %8lu  %8lu  %8u  %8u" \
-				"  %8u  %8lu  %8lu     %8d\n",
+		seq_printf(file, "     %hu/%hu  %8llu  %8llu  %8llu  %8llu  "
+				"%8llu  %8llu  %8llu  %8llu     %8d\n",
 				get_hard_smp_processor_id(i), i,
 				percpu_priv->in_interrupt,
 				percpu_priv->stats.rx_packets,
@@ -3091,8 +3096,8 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 				percpu_priv->stats.rx_errors,
 				dpa_bp_count);
 	}
-	seq_printf(file, "Total     %8u  %8lu  %8lu  %8u  %8u  %8u  %8lu  %8lu"\
-				"     %8d\n",
+	seq_printf(file, "Total     %8llu  %8llu  %8llu  %8llu  %8llu  %8llu  "
+			"%8llu  %8llu     %8d\n",
 			total.in_interrupt,
 			total.stats.rx_packets,
 			total.stats.tx_packets,
@@ -3131,8 +3136,8 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 		total.rx_errors.phe += percpu_priv->rx_errors.phe;
 		total.rx_errors.cse += percpu_priv->rx_errors.cse;
 
-		seq_printf(file, "     %hu/%hu  %8u  %8u  %8u" \
-					"  %8u  %8u\n",
+		seq_printf(file, "     %hu/%hu  %8llu  %8llu  %8llu  %8llu  "
+				"%8llu\n",
 				get_hard_smp_processor_id(i), i,
 				percpu_priv->rx_errors.dme,
 				percpu_priv->rx_errors.fpe,
@@ -3140,7 +3145,7 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 				percpu_priv->rx_errors.phe,
 				percpu_priv->rx_errors.cse);
 	}
-	seq_printf(file, "Total     %8u  %8u  %8u  %8u  %8u\n",
+	seq_printf(file, "Total     %8llu  %8llu  %8llu  %8llu  %8llu\n",
 			total.rx_errors.dme,
 			total.rx_errors.fpe,
 			total.rx_errors.fse,
@@ -3163,8 +3168,8 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 		total.ern_cnt.fq_retired += percpu_priv->ern_cnt.fq_retired;
 		total.ern_cnt.orp_zero += percpu_priv->ern_cnt.orp_zero;
 
-		seq_printf(file, "  %hu/%hu  %8u  %8u  %8u  %8u  %8u  %8u" \
-			"  %8u  %8u\n",
+		seq_printf(file, "  %hu/%hu  %8llu  %8llu  %8llu  %8llu  "
+			"%8llu  %8llu  %8llu  %8llu\n",
 			get_hard_smp_processor_id(i), i,
 			percpu_priv->ern_cnt.cg_tdrop,
 			percpu_priv->ern_cnt.wred,
@@ -3175,7 +3180,8 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 			percpu_priv->ern_cnt.fq_retired,
 			percpu_priv->ern_cnt.orp_zero);
 	}
-	seq_printf(file, "Total  %8u  %8u  %8u  %8u  %8u  %8u  %8u  %8u\n",
+	seq_printf(file, "Total  %8llu  %8llu  %8llu  %8llu  %8llu  %8llu  "
+			"%8llu  %8llu\n",
 		total.ern_cnt.cg_tdrop,
 		total.ern_cnt.wred,
 		total.ern_cnt.err_cond,
@@ -3252,7 +3258,7 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_start_xmit = dpa_tx,
 	.ndo_stop = dpa_stop,
 	.ndo_tx_timeout = dpa_timeout,
-	.ndo_get_stats = dpa_get_stats,
+	.ndo_get_stats64 = dpa_get_stats64,
 	.ndo_set_mac_address = dpa_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
 #ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
@@ -3269,23 +3275,23 @@ static const struct net_device_ops dpa_private_ops = {
 };
 
 static const struct net_device_ops dpa_shared_ops = {
-        .ndo_open = dpa_start,
-        .ndo_start_xmit = dpa_shared_tx,
-        .ndo_stop = dpa_stop,
-        .ndo_tx_timeout = dpa_timeout,
-        .ndo_get_stats = dpa_get_stats,
-        .ndo_set_mac_address = dpa_set_mac_address,
-        .ndo_validate_addr = eth_validate_addr,
+	.ndo_open = dpa_start,
+	.ndo_start_xmit = dpa_shared_tx,
+	.ndo_stop = dpa_stop,
+	.ndo_tx_timeout = dpa_timeout,
+	.ndo_get_stats64 = dpa_get_stats64,
+	.ndo_set_mac_address = dpa_set_mac_address,
+	.ndo_validate_addr = eth_validate_addr,
 #ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
-        .ndo_select_queue = dpa_select_queue,
+	.ndo_select_queue = dpa_select_queue,
 #endif
-        .ndo_change_mtu = dpa_change_mtu,
-        .ndo_set_rx_mode = dpa_set_rx_mode,
-        .ndo_init = dpa_ndo_init,
+	.ndo_change_mtu = dpa_change_mtu,
+	.ndo_set_rx_mode = dpa_set_rx_mode,
+	.ndo_init = dpa_ndo_init,
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_fix_features,
 #ifdef CONFIG_FSL_DPA_1588
-        .ndo_do_ioctl = dpa_ioctl,
+	.ndo_do_ioctl = dpa_ioctl,
 #endif
 };
 

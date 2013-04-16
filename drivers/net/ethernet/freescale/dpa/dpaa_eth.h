@@ -299,23 +299,23 @@ struct dpa_bp {
 };
 
 struct dpa_rx_errors {
-	u32 dme;		/* DMA Error */
-	u32 fpe;		/* Frame Physical Error */
-	u32 fse;		/* Frame Size Error */
-	u32 phe;		/* Header Error */
-	u32 cse;		/* Checksum Validation Error */
+	u64 dme;		/* DMA Error */
+	u64 fpe;		/* Frame Physical Error */
+	u64 fse;		/* Frame Size Error */
+	u64 phe;		/* Header Error */
+	u64 cse;		/* Checksum Validation Error */
 };
 
 /* Counters for QMan ERN frames - one counter per rejection code */
 struct dpa_ern_cnt {
-	u32 cg_tdrop;		/* Congestion group taildrop */
-	u32 wred;		/* WRED congestion */
-	u32 err_cond;		/* Error condition */
-	u32 early_window;	/* Order restoration, frame too early */
-	u32 late_window;	/* Order restoration, frame too late */
-	u32 fq_tdrop;		/* FQ taildrop */
-	u32 fq_retired;		/* FQ is retired */
-	u32 orp_zero;		/* ORP disabled */
+	u64 cg_tdrop;		/* Congestion group taildrop */
+	u64 wred;		/* WRED congestion */
+	u64 err_cond;		/* Error condition */
+	u64 early_window;	/* Order restoration, frame too early */
+	u64 late_window;	/* Order restoration, frame too late */
+	u64 fq_tdrop;		/* FQ taildrop */
+	u64 fq_retired;		/* FQ is retired */
+	u64 orp_zero;		/* ORP disabled */
 };
 
 struct dpa_percpu_priv_s {
@@ -334,12 +334,12 @@ struct dpa_percpu_priv_s {
 	/* current number of skbs in the CPU's list */
 	int skb_count;
 #endif
-	u32 in_interrupt;
-	u32 tx_returned;
-	u32 tx_confirm;
+	u64 in_interrupt;
+	u64 tx_returned;
+	u64 tx_confirm;
 	/* fragmented (non-linear) skbuffs received from the stack */
-	u32 tx_frag_skbuffs;
-	struct net_device_stats	 stats;
+	u64 tx_frag_skbuffs;
+	struct rtnl_link_stats64 stats;
 	struct dpa_rx_errors rx_errors;
 	struct dpa_ern_cnt ern_cnt;
 };
@@ -493,7 +493,7 @@ static inline void clear_fd(struct qm_fd *fd)
 }
 
 static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
-			struct net_device_stats *percpu_stats, int queue,
+			struct rtnl_link_stats64 *percpu_stats, int queue,
 			struct qm_fd *fd)
 {
 	int err, i;

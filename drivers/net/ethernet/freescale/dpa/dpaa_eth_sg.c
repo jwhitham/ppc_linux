@@ -442,7 +442,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	dma_addr_t addr = qm_fd_addr(fd);
 	u32 fd_status = fd->status;
 	unsigned int skb_len;
-	struct net_device_stats *percpu_stats = &percpu_priv->stats;
+	struct rtnl_link_stats64 *percpu_stats = &percpu_priv->stats;
 	int use_gro = net_dev->features & NETIF_F_GRO;
 
 	if (unlikely(fd_status & FM_FD_STAT_ERRORS) != 0) {
@@ -694,7 +694,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct dpa_priv_s	*priv;
 	struct qm_fd		 fd;
 	struct dpa_percpu_priv_s *percpu_priv;
-	struct net_device_stats *percpu_stats;
+	struct rtnl_link_stats64 *percpu_stats;
 	int err = 0;
 	const int queue_mapping = dpa_get_queue_mapping(skb);
 	const bool nonlinear = skb_is_nonlinear(skb);
