@@ -28,7 +28,7 @@ config DPAA_ETH_SG_SUPPORT
 choice DPAA_ETH_OPTIMIZE
 	prompt "Optimization choices for the DPAA Ethernet driver"
 	depends on DPA_ETH
-	default DPAA_ETH_OPTIMIZE_FOR_IPFWD
+	default DPAA_ETH_OPTIMIZE_FOR_TERM
 	---help---
 	  Compile-time switch between driver optimizations for forwarding use-cases and
 	  termination scenarios.
