@@ -27,6 +27,7 @@
 #define __KVM_HAVE_PPC_SMT
 #define __KVM_HAVE_GUEST_DEBUG
 #define __KVM_HAVE_IRQCHIP
+#define __KVM_HAVE_IRQ_LINE
 
 struct kvm_regs {
 	__u64 pc;
