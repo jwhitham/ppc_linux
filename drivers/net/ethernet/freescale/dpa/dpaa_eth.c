@@ -3962,6 +3962,8 @@ static int dpa_netdev_init(struct device_node *dpa_node,
 		}
 	}
 
+	net_dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
+
 	net_dev->features |= net_dev->hw_features;
 	net_dev->vlan_features = net_dev->features;
 
