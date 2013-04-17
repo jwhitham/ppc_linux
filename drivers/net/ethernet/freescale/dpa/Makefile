@@ -17,3 +17,6 @@ fsl-dpa-objs	:= dpa-ethtool.o dpaa_eth.o dpaa_eth_sysfs.o
 fsl-dpa-sg-objs	:= dpaa_eth_sg.o
 fsl-mac-objs	:= mac.o mac-api.o
 fsl-oh-objs	:= offline_port.o
+
+#Needed by the tracing framework
+CFLAGS_dpaa_eth.o := -I$(src)

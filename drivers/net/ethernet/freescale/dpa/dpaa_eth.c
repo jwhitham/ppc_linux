@@ -71,6 +71,13 @@
 #include "dpaa_eth.h"
 #include "dpaa_1588.h"
 
+/* CREATE_TRACE_POINTS only needs to be defined once. Other dpa files
+ * using trace events only need to #include <trace/events/sched.h>
+ */
+#define CREATE_TRACE_POINTS
+#include "dpaa_eth_trace.h"
+
+
 #define ARRAY2_SIZE(arr)	(ARRAY_SIZE(arr) * ARRAY_SIZE((arr)[0]))
 
 /* DPAA platforms benefit from hardware-assisted queue management */
@@ -2369,6 +2376,9 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
+	/* Trace the Rx fd */
+	trace_dpa_rx_fd(net_dev, fq, &dq->fd);
+
 	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
@@ -2419,6 +2429,9 @@ ingress_tx_default_dqrr(struct qman_portal		*portal,
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
+
+	/* Trace the fd */
+	trace_dpa_tx_conf_fd(net_dev, fq, &dq->fd);
 
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);

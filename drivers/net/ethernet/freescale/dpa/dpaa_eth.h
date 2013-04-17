@@ -56,6 +56,8 @@
 
 #include "mac.h"		/* struct mac_device */
 
+#include "dpaa_eth_trace.h"
+
 #ifdef CONFIG_DPAA_ETH_SG_SUPPORT
 #define dpa_get_rx_extra_headroom() fm_get_rx_extra_headroom()
 #else
@@ -553,6 +555,9 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 #else
 	egress_fq = priv->egress_fqs[queue];
 #endif
+
+	/* Trace this Tx fd */
+	trace_dpa_tx_fd(priv->net_dev, egress_fq, fd);
 
 	for (i = 0; i < 100000; i++) {
 		err = qman_enqueue(egress_fq, fd, 0);
