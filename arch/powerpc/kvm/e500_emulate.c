@@ -21,6 +21,7 @@
 
 #define XOP_MSGSND  206
 #define XOP_MSGCLR  238
+#define XOP_MFTMR   366
 #define XOP_TLBIVAX 786
 #define XOP_TLBSX   914
 #define XOP_TLBRE   946
@@ -128,6 +129,14 @@ int kvmppc_core_emulate_op(struct kvm_run *run, struct kvm_vcpu *vcpu,
 		case XOP_TLBIVAX:
 			ea = kvmppc_get_ea_indexed(vcpu, ra, rb);
 			emulated = kvmppc_e500_emul_tlbivax(vcpu, ea);
+			break;
+
+		case XOP_MFTMR:
+			/* Expose one thread per vcpu */
+			if (get_tmrn(inst) == TMRN_TMCFG0)
+				kvmppc_set_gpr(vcpu, rt, 1 | (1 << 8));
+			else
+				emulated = EMULATE_FAIL;
 			break;
 
 		default:
