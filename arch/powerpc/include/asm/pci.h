@@ -117,6 +117,8 @@ extern int pci_proc_domain(struct pci_bus *bus);
 #define arch_setup_msi_irqs arch_setup_msi_irqs
 #define arch_teardown_msi_irqs arch_teardown_msi_irqs
 #define arch_msi_check_device arch_msi_check_device
+#define arch_msi_get_region_count arch_msi_get_region_count
+#define arch_msi_get_region arch_msi_get_region
 
 struct vm_area_struct;
 /* Map a range of PCI memory or I/O space for a device into user space */

@@ -29,6 +29,7 @@ struct rtc_time;
 struct file;
 struct pci_controller;
 struct kimage;
+struct msi_region;
 
 struct machdep_calls {
 	char		*name;
@@ -117,6 +118,13 @@ struct machdep_calls {
 	int		(*setup_msi_irqs)(struct pci_dev *dev,
 					  int nvec, int type);
 	void		(*teardown_msi_irqs)(struct pci_dev *dev);
+
+	/* returns the number of MSI regions (banks) */
+	int		(*msi_get_region_count)(void);
+
+	/* Returns the request region address and size */
+	int		(*msi_get_region)(int region_num,
+					  struct msi_region *region);
 #endif
 
 	void		(*restart)(char *cmd);

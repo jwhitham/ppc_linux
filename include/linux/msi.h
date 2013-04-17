@@ -49,6 +49,12 @@ struct msi_desc {
 	struct kobject kobj;
 };
 
+struct msi_region {
+	int region_num;
+	dma_addr_t addr;
+	size_t size;
+};
+
 /*
  * The arch hook for setup up msi irqs
  */
@@ -57,6 +63,7 @@ void arch_teardown_msi_irq(unsigned int irq);
 extern int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type);
 extern void arch_teardown_msi_irqs(struct pci_dev *dev);
 extern int arch_msi_check_device(struct pci_dev* dev, int nvec, int type);
-
+extern int arch_msi_get_region_count(void);
+extern int arch_msi_get_region(int region_num, struct msi_region *region);
 
 #endif /* LINUX_MSI_H */

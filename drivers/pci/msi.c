@@ -28,6 +28,20 @@ static int pci_msi_enable = 1;
 
 /* Arch hooks */
 
+#ifndef arch_msi_get_region_count
+int arch_msi_get_region_count(void)
+{
+	return 0;
+}
+#endif
+
+#ifndef arch_msi_get_region
+int arch_msi_get_region(int region_num, struct msi_region *region)
+{
+	return 0;
+}
+#endif
+
 #ifndef arch_msi_check_device
 int arch_msi_check_device(struct pci_dev *dev, int nvec, int type)
 {
@@ -884,6 +898,18 @@ void pci_disable_msi(struct pci_dev *dev)
 	dev->msi_kset = NULL;
 }
 EXPORT_SYMBOL(pci_disable_msi);
+
+int msi_get_region_count(void)
+{
+	return arch_msi_get_region_count();
+}
+EXPORT_SYMBOL(msi_get_region_count);
+
+int msi_get_region(int region_num, struct msi_region *region)
+{
+	return arch_msi_get_region(region_num, region);
+}
+EXPORT_SYMBOL(msi_get_region);
 
 /**
  * pci_msix_table_size - return the number of device's MSI-X table entries

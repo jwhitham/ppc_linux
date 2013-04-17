@@ -37,6 +37,14 @@ struct fsl_msi {
 	u32 feature;
 	int msi_virqs[NR_MSI_REG];
 
+	/*
+	 * During probe each bank is assigned a index number.
+	 * index number ranges from 0 to 2^32.
+	 * Example  MSI bank 1 = 0
+	 * MSI bank 2 = 1, and so on.
+	 */
+	int bank_index;
+
 	struct msi_bitmap bitmap;
 
 	struct list_head list;          /* support multiple MSI banks */
