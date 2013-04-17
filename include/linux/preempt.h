@@ -135,14 +135,20 @@ do { \
 
 #else /* !CONFIG_PREEMPT_COUNT */
 
-#define preempt_disable()		do { } while (0)
-#define sched_preempt_enable_no_resched()	do { } while (0)
-#define preempt_enable_no_resched()	do { } while (0)
-#define preempt_enable()		do { } while (0)
+/*
+ * Even if we don't have any preemption, we need preempt disable/enable
+ * to be barriers, so that we don't have things like get_user/put_user
+ * that can cause faults and scheduling migrate into our preempt-protected
+ * region.
+ */
+#define preempt_disable()		barrier()
+#define sched_preempt_enable_no_resched()	barrier()
+#define preempt_enable_no_resched()	barrier()
+#define preempt_enable()		barrier()
 
-#define preempt_disable_notrace()		do { } while (0)
-#define preempt_enable_no_resched_notrace()	do { } while (0)
-#define preempt_enable_notrace()		do { } while (0)
+#define preempt_disable_notrace()		barrier()
+#define preempt_enable_no_resched_notrace()	barrier()
+#define preempt_enable_notrace()		barrier()
 #define preempt_check_resched_rt()	do { } while (0)
 
 #endif /* CONFIG_PREEMPT_COUNT */
@@ -150,18 +156,18 @@ do { \
 #ifdef CONFIG_PREEMPT_RT_FULL
 # define preempt_disable_rt()		preempt_disable()
 # define preempt_enable_rt()		preempt_enable()
-# define preempt_disable_nort()		do { } while (0)
-# define preempt_enable_nort()		do { } while (0)
+# define preempt_disable_nort()		barrier()
+# define preempt_enable_nort()		barrier()
 # ifdef CONFIG_SMP
    extern void migrate_disable(void);
    extern void migrate_enable(void);
 # else /* CONFIG_SMP */
-#  define migrate_disable()		do { } while (0)
-#  define migrate_enable()		do { } while (0)
+#  define migrate_disable()		barrier()
+#  define migrate_enable()		barrier()
 # endif /* CONFIG_SMP */
 #else
-# define preempt_disable_rt()		do { } while (0)
-# define preempt_enable_rt()		do { } while (0)
+# define preempt_disable_rt()		barrier()
+# define preempt_enable_rt()		barrier()
 # define preempt_disable_nort()		preempt_disable()
 # define preempt_enable_nort()		preempt_enable()
 # define migrate_disable()		preempt_disable()
