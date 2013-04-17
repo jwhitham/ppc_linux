@@ -63,6 +63,13 @@ config CLK_TWL6040
 	  McPDM. McPDM module is using the external bit clock on the McPDM bus
 	  as functional clock.
 
+config CLK_PPC_CORENET
+	bool "Clock driver for PowerPC corenet platforms"
+	depends on PPC_E500MC && OF
+	---help---
+	  This adds the clock driver support for Freescale PowerPC corenet
+	  platforms using common clock framework.
+
 endmenu
 
 source "drivers/clk/mvebu/Kconfig"
