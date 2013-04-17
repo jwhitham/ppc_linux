@@ -596,6 +596,126 @@ int kvmppc_set_sregs_e500_tlb(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 	return 0;
 }
 
+int kvmppc_get_one_reg_e500_tlb(struct kvm_vcpu *vcpu, u64 id,
+				union kvmppc_one_reg *val)
+{
+	int r = 0;
+	long int i;
+
+	switch (id) {
+	case KVM_REG_PPC_MAS0:
+		*val = get_reg_val(id, vcpu->arch.shared->mas0);
+		break;
+	case KVM_REG_PPC_MAS1:
+		*val = get_reg_val(id, vcpu->arch.shared->mas1);
+		break;
+	case KVM_REG_PPC_MAS2:
+		*val = get_reg_val(id, vcpu->arch.shared->mas2);
+		break;
+	case KVM_REG_PPC_MAS7_3:
+		*val = get_reg_val(id, vcpu->arch.shared->mas7_3);
+		break;
+	case KVM_REG_PPC_MAS4:
+		*val = get_reg_val(id, vcpu->arch.shared->mas4);
+		break;
+	case KVM_REG_PPC_MAS6:
+		*val = get_reg_val(id, vcpu->arch.shared->mas6);
+		break;
+	case KVM_REG_PPC_MMUCFG:
+		*val = get_reg_val(id, vcpu->arch.mmucfg);
+		break;
+	case KVM_REG_PPC_EPTCFG:
+		*val = get_reg_val(id, vcpu->arch.eptcfg);
+		break;
+	case KVM_REG_PPC_TLB0CFG:
+	case KVM_REG_PPC_TLB1CFG:
+	case KVM_REG_PPC_TLB2CFG:
+	case KVM_REG_PPC_TLB3CFG:
+		i = id - KVM_REG_PPC_TLB0CFG;
+		*val = get_reg_val(id, vcpu->arch.tlbcfg[i]);
+		break;
+	case KVM_REG_PPC_TLB0PS:
+	case KVM_REG_PPC_TLB1PS:
+	case KVM_REG_PPC_TLB2PS:
+	case KVM_REG_PPC_TLB3PS:
+		i = id - KVM_REG_PPC_TLB0PS;
+		*val = get_reg_val(id, vcpu->arch.tlbps[i]);
+		break;
+	default:
+		r = -EINVAL;
+		break;
+	}
+
+	return r;
+}
+
+int kvmppc_set_one_reg_e500_tlb(struct kvm_vcpu *vcpu, u64 id,
+			       union kvmppc_one_reg *val)
+{
+	int r = 0;
+	long int i;
+
+	switch (id) {
+	case KVM_REG_PPC_MAS0:
+		vcpu->arch.shared->mas0 = set_reg_val(id, *val);
+		break;
+	case KVM_REG_PPC_MAS1:
+		vcpu->arch.shared->mas1 = set_reg_val(id, *val);
+		break;
+	case KVM_REG_PPC_MAS2:
+		vcpu->arch.shared->mas2 = set_reg_val(id, *val);
+		break;
+	case KVM_REG_PPC_MAS7_3:
+		vcpu->arch.shared->mas7_3 = set_reg_val(id, *val);
+		break;
+	case KVM_REG_PPC_MAS4:
+		vcpu->arch.shared->mas4 = set_reg_val(id, *val);
+		break;
+	case KVM_REG_PPC_MAS6:
+		vcpu->arch.shared->mas6 = set_reg_val(id, *val);
+		break;
+	/* Only allow MMU registers to be set to the config supported by KVM */
+	case KVM_REG_PPC_MMUCFG: {
+		u32 reg = set_reg_val(id, *val);
+		if (reg != vcpu->arch.mmucfg)
+			r = -EINVAL;
+		break;
+	}
+	case KVM_REG_PPC_EPTCFG: {
+		u32 reg = set_reg_val(id, *val);
+		if (reg != vcpu->arch.eptcfg)
+			r = -EINVAL;
+		break;
+	}
+	case KVM_REG_PPC_TLB0CFG:
+	case KVM_REG_PPC_TLB1CFG:
+	case KVM_REG_PPC_TLB2CFG:
+	case KVM_REG_PPC_TLB3CFG: {
+		/* MMU geometry (N_ENTRY/ASSOC) can be set only using SW_TLB */
+		u32 reg = set_reg_val(id, *val);
+		i = id - KVM_REG_PPC_TLB0CFG;
+		if (reg != vcpu->arch.tlbcfg[i])
+			r = -EINVAL;
+		break;
+	}
+	case KVM_REG_PPC_TLB0PS:
+	case KVM_REG_PPC_TLB1PS:
+	case KVM_REG_PPC_TLB2PS:
+	case KVM_REG_PPC_TLB3PS: {
+		u32 reg = set_reg_val(id, *val);
+		i = id - KVM_REG_PPC_TLB0PS;
+		if (reg != vcpu->arch.tlbps[i])
+			r = -EINVAL;
+		break;
+	}
+	default:
+		r = -EINVAL;
+		break;
+	}
+
+	return r;
+}
+
 static int vcpu_mmu_geometry_update(struct kvm_vcpu *vcpu,
 		struct kvm_book3e_206_tlb_params *params)
 {
@@ -760,6 +880,14 @@ static int vcpu_mmu_init(struct kvm_vcpu *vcpu,
 			     ~(TLBnCFG_N_ENTRY | TLBnCFG_ASSOC);
 	vcpu->arch.tlbcfg[1] |= params[1].entries;
 	vcpu->arch.tlbcfg[1] |= params[1].ways << TLBnCFG_ASSOC_SHIFT;
+
+	if (has_feature(vcpu, VCPU_FTR_MMU_V2)) {
+		vcpu->arch.tlbps[0] = mfspr(SPRN_TLB0PS);
+		vcpu->arch.tlbps[1] = mfspr(SPRN_TLB1PS);
+
+		/* Guest mmu emulation currently doesn't handle E.PT */
+		vcpu->arch.eptcfg = 0;
+	}
 
 	return 0;
 }
