@@ -660,7 +660,7 @@ static int handle_attach_device(struct fsl_dma_domain *dma_domain,
 		 * for the domain. If yes, set the geometry for
 		 * the LIODN.
 		 */
-		if (dma_domain->win_cnt) {
+		if (dma_domain->win_arr) {
 			u32 win_cnt = dma_domain->win_cnt > 1 ? dma_domain->win_cnt : 0;
 			ret = pamu_set_liodn(liodn[i], dev, dma_domain,
 					      &domain->geometry,
