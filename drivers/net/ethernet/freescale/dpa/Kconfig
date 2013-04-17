@@ -91,7 +91,6 @@ config DPAA_ETH_USE_NDO_SELECT_QUEUE
 	  and use the standard XPS support instead.
 
 config DPAA_ETH_UNIT_TESTS
-	bool "Run Unit Tests for DPAA Ethernet"
+	bool
 	depends on DPA_ETH
-	default y
-
+	default n

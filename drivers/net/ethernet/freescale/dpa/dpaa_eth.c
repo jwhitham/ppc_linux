@@ -79,6 +79,10 @@
 #define DPA_NETIF_FEATURES	NETIF_F_HW_ACCEL_MQ
 #endif
 
+#ifdef CONFIG_DPAA_ETH_UNIT_TESTS
+#undef CONFIG_DPAA_ETH_UNIT_TESTS
+#endif
+
 #define DEFAULT_COUNT		128
 #define REFILL_THRESHOLD	80
 
@@ -173,6 +177,8 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 static struct dpa_bp *dpa_bp_array[64];
 
 static struct dpa_bp *default_pool;
+static bool default_pool_seeded;
+static uint32_t default_buf_size;
 
 /* A set of callbacks for hooking into the fastpath at different points. */
 static struct dpaa_eth_hooks_s dpaa_eth_hooks;
@@ -488,7 +494,6 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp)
 	dpa_bp->dev = &pdev->dev;
 
 	if (dpa_bp->kernel_pool) {
-		dpa_make_private_pool(dpa_bp);
 		if (!default_pool)
 			default_pool = dpa_bp;
 	} else {
@@ -1469,6 +1474,11 @@ static struct dpa_bp *dpa_size2pool(struct dpa_priv_s *priv, size_t size)
 		if (DPA_BP_SIZE(size) <= priv->dpa_bp[i].size)
 			return dpa_bpid2pool(priv->dpa_bp[i].bpid);
 	return ERR_PTR(-ENODEV);
+}
+
+static inline uint32_t dpa_bp_size(struct fm_port *rx_port)
+{
+	return DEFAULT_BUF_SIZE;
 }
 
 /**
@@ -2706,12 +2716,30 @@ static int __cold dpa_start(struct net_device *net_dev)
 	int err, i;
 	struct dpa_priv_s *priv;
 	struct mac_device *mac_dev;
+	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
 	mac_dev = priv->mac_dev;
 
 	if (!mac_dev)
 		goto no_mac;
+
+	/* Seed the global buffer pool at the first ifconfig up
+	 * of a private port. Update the percpu buffer counters
+	 * of each private interface.
+	 */
+	if (!priv->shared && !default_pool_seeded) {
+		default_pool->size = default_buf_size;
+		dpa_make_private_pool(default_pool);
+		default_pool_seeded = true;
+	}
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		if (!priv->shared && !percpu_priv->dpa_bp)
+			percpu_priv->dpa_bp = priv->dpa_bp;
+			percpu_priv->dpa_bp_count =
+				per_cpu_ptr(priv->dpa_bp->percpu_count, i);
+	}
 
 	dpaa_eth_napi_enable(priv);
 
@@ -2909,14 +2937,6 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 		goto _return_of_node_put;
 	} else if (has_kernel_pool) {
 		dpa_bp->target_count = DEFAULT_COUNT;
-		dpa_bp->size = DEFAULT_BUF_SIZE;
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
-		if (dpa_bp->size > PAGE_SIZE) {
-			dev_warn(dev, "Default buffer size too large. "
-				     "Round down to PAGE_SIZE\n");
-			dpa_bp->size = PAGE_SIZE;
-		}
-#endif
 		dpa_bp->kernel_pool = 1;
 	}
 
@@ -3611,7 +3631,6 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 	for (i = 0; i < count; i++) {
 		if (i >= rx_port_param.num_pools)
 			break;
-
 		rx_port_param.pool_param[i].id = bp[i].bpid;
 		rx_port_param.pool_param[i].size = bp[i].size;
 	}
@@ -3776,9 +3795,6 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		percpu_priv->net_dev = net_dev;
 
-		percpu_priv->dpa_bp = priv->dpa_bp;
-		percpu_priv->dpa_bp_count =
-			per_cpu_ptr(priv->dpa_bp->percpu_count, i);
 #ifdef CONFIG_DPAA_ETH_SG_SUPPORT
 		/* init the percpu list and add some skbs */
 		skb_queue_head_init(&percpu_priv->skb_list);
@@ -3946,8 +3962,6 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		err = PTR_ERR(dpa_bp);
 		goto bp_probe_failed;
 	}
-	if (!dpa_bp->kernel_pool)
-		is_shared = true;
 
 	mac_dev = dpa_mac_probe(_of_dev);
 	if (IS_ERR(mac_dev)) {
@@ -3956,6 +3970,18 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	} else if (mac_dev) {
 		rxport = mac_dev->port_dev[RX];
 		txport = mac_dev->port_dev[TX];
+	}
+
+	if (!dpa_bp->kernel_pool) {
+		is_shared = true;
+	} else {
+		/* For private ports, need to compute the size of the default
+		 * buffer pool, based on FMan port buffer layout;also update
+		 * the maximum buffer size for private ports if necessary
+		 */
+		dpa_bp->size = dpa_bp_size(rxport);
+		if (dpa_bp->size > default_buf_size)
+			default_buf_size = dpa_bp->size;
 	}
 
 	INIT_LIST_HEAD(&rxfqlist);
