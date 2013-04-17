@@ -249,6 +249,16 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		 */
 		sgt = phys_to_virt(addr + dpa_fd_offset(fd));
 
+#ifdef CONFIG_FSL_DPA_TS
+	if (unlikely(priv->ts_tx_en &&
+			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+		struct skb_shared_hwtstamps shhwtstamps;
+
+		dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh);
+		skb_tstamp_tx(skb, &shhwtstamps);
+	}
+#endif /* CONFIG_FSL_DPA_TS */
+
 		/* sgt[0] is from lowmem, was dma_map_single()-ed */
 		dma_unmap_single(dpa_bp->dev, sgt[0].addr,
 				sgt[0].length, dma_dir);
@@ -269,7 +279,19 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 		/* Free separately the pages that we allocated on Tx */
 		free_page((unsigned long)phys_to_virt(addr));
-}
+	}
+#ifdef CONFIG_FSL_DPA_TS
+	else {
+		/* get the timestamp for non-SG frames */
+		if (unlikely(priv->ts_tx_en &&
+				skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+			struct skb_shared_hwtstamps shhwtstamps;
+
+			dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh);
+			skb_tstamp_tx(skb, &shhwtstamps);
+		}
+	}
+#endif /* CONFIG_FSL_DPA_TS */
 
 	return skb;
 }
@@ -295,6 +317,7 @@ static void __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 
 	vaddr = phys_to_virt(addr);
 
+	/* do we need the timestamp for bad frames? */
 #ifdef CONFIG_FSL_DPA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(priv->net_dev, skb, fd);
@@ -303,6 +326,11 @@ static void __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	/* Peek at the parse results for csum validation and headers size */
 	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
 	_dpa_process_parse_results(parse_results, fd, skb, use_gro, &copy_size);
+
+#ifdef CONFIG_FSL_DPA_TS
+	if (priv->ts_rx_en)
+		dpa_get_ts(priv, RX, skb_hwtstamps(skb), vaddr);
+#endif /* CONFIG_FSL_DPA_TS */
 
 	tailptr = skb_put(skb, copy_size);
 
@@ -363,6 +391,11 @@ static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
 	/* Inspect the parse results before anything else. */
 	_dpa_process_parse_results(parse_results, fd, skb, use_gro, &copy_size);
+
+#ifdef CONFIG_FSL_DPA_TS
+	if (priv->ts_rx_en)
+		dpa_get_ts(priv, RX, skb_hwtstamps(skb), vaddr);
+#endif /* CONFIG_FSL_DPA_TS */
 
 	/*
 	 * Iterate through the SGT entries and add the data buffers as
@@ -708,6 +741,12 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
 		fd.cmd |= FM_FD_CMD_UPD;
 #endif
+#ifdef CONFIG_FSL_DPA_TS
+	if (unlikely(priv->ts_tx_en &&
+			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+		fd.cmd |= FM_FD_CMD_UPD;
+	skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+#endif /* CONFIG_FSL_DPA_TS */
 
 	/*
 	 * MAX_SKB_FRAGS is larger than our DPA_SGT_MAX_ENTRIES; make sure

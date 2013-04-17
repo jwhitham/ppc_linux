@@ -40,7 +40,7 @@
 #define __hot
 
 /* Simple enum of FQ types - used for array indexing */
-enum {RX, TX};
+enum port_type {RX, TX};
 
 /* More detailed FQ types - used for fine-grained WQ assignments */
 enum dpa_fq_type {

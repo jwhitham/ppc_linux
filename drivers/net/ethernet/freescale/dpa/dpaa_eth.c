@@ -51,6 +51,7 @@
 #include <linux/udp.h>		/* struct udphdr */
 #include <linux/tcp.h>		/* struct tcphdr */
 #include <linux/net.h>		/* net_ratelimit() */
+#include <linux/net_tstamp.h>	/* struct hwtstamp_config */
 #include <linux/if_ether.h>	/* ETH_P_IP and ETH_P_IPV6 */
 #include <linux/highmem.h>
 #include <linux/percpu.h>
@@ -912,6 +913,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 {
 	dma_addr_t addr = qm_fd_addr(fd);
 	dma_addr_t sg_addr;
+	void *vaddr;
 	struct dpa_bp *bp = priv->dpa_bp;
 	struct sk_buff **skbh;
 	struct sk_buff *skb = NULL;
@@ -920,8 +922,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 	if (unlikely(!addr))
 		return skb;
-
-	skbh = (struct sk_buff **)phys_to_virt(addr);
+	vaddr = phys_to_virt(addr);
+	skbh = (struct sk_buff **)vaddr;
 
 	if (fd->format == qm_fd_contig) {
 		/* For contiguous frames, just unmap data buffer;
@@ -939,7 +941,6 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		/* For s/g, we need to unmap both the SGT buffer and the
 		 * data buffer, and also free the SGT buffer */
 		struct qm_sg_entry *sg_entry;
-		void *vaddr = phys_to_virt(addr);
 
 		/* Unmap first buffer (contains S/G table) */
 		dma_unmap_single(bp->dev, addr, sgt_buffer_size(priv),
@@ -954,9 +955,23 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		/* Retrieve the skb backpointer */
 		skb = *skbh;
 
-		/* Free first buffer (which was allocated on Tx) */
-		kfree(vaddr);
 	}
+/* on some error paths this might not be necessary: */
+#ifdef CONFIG_FSL_DPA_TS
+	if (unlikely(priv->ts_tx_en &&
+			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+		struct skb_shared_hwtstamps shhwtstamps;
+
+		if (!dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh))
+			skb_tstamp_tx(skb, &shhwtstamps);
+	}
+#endif /* CONFIG_FSL_DPA_TS */
+
+	/* Free first buffer (which was allocated on Tx) containing the
+	 * skb backpointer and hardware timestamp information
+	 */
+	if (fd->format != qm_fd_contig)
+		kfree(vaddr);
 
 	return skb;
 }
@@ -1086,25 +1101,159 @@ static void dpa_set_rx_mode(struct net_device *net_dev)
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }
 
-#ifdef CONFIG_FSL_DPA_1588
-static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+#ifdef CONFIG_FSL_DPA_TS
+int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
+	struct skb_shared_hwtstamps *shhwtstamps, const void *data)
 {
-	struct dpa_priv_s *priv = netdev_priv(dev);
-	int ret = 0;
+	u64 *ts, ns;
 
-	if (!netif_running(dev))
+	/* this will be replaced by a new FMD wrapper API */
+	ts = FM_PORT_GetBufferTimeStamp(
+			fm_port_get_handle(priv->mac_dev->port_dev[rx_tx]),
+			(char *)data);
+
+	memset(shhwtstamps, 0, sizeof(*shhwtstamps));
+
+	/* was the timestamping performed? */
+	if (!ts || *ts == 0)
 		return -EINVAL;
 
+	/* The timestamp unit was found to be 0.4 ns */
+	ns = *ts * 10;
+	do_div(ns, 4);
+	shhwtstamps->hwtstamp = ns_to_ktime(ns);
+
+	return 0;
+}
+
+static void dpa_ts_tx_enable(struct net_device *dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(dev);
+	struct mac_device *mac_dev = priv->mac_dev;
+
+	if (mac_dev->fm_rtc_enable)
+		mac_dev->fm_rtc_enable(dev);
+	if (mac_dev->ptp_enable)
+		mac_dev->ptp_enable(mac_dev);
+
+	priv->ts_tx_en = TRUE;
+}
+
+static void dpa_ts_tx_disable(struct net_device *dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(dev);
+
+#if 0
+/*
+ * the RTC might be needed by the Rx Ts, cannot disable here
+ * no separate ptp_disable API for Rx/Tx, cannot disable here
+ */
+	struct mac_device *mac_dev = priv->mac_dev;
+
+	if (mac_dev->fm_rtc_disable)
+		mac_dev->fm_rtc_disable(dev);
+
+	if (mac_dev->ptp_disable)
+		mac_dev->ptp_disable(mac_dev);
+#endif
+
+	priv->ts_tx_en = FALSE;
+}
+
+static void dpa_ts_rx_enable(struct net_device *dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(dev);
+	struct mac_device *mac_dev = priv->mac_dev;
+
+	if (mac_dev->fm_rtc_enable)
+		mac_dev->fm_rtc_enable(dev);
+	if (mac_dev->ptp_enable)
+		mac_dev->ptp_enable(mac_dev);
+
+	priv->ts_rx_en = TRUE;
+}
+
+static void dpa_ts_rx_disable(struct net_device *dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(dev);
+
+#if 0
+/*
+ * the RTC might be needed by the Tx Ts, cannot disable here
+ * no separate ptp_disable API for Rx/Tx, cannot disable here
+ */
+	struct mac_device *mac_dev = priv->mac_dev;
+
+	if (mac_dev->fm_rtc_disable)
+		mac_dev->fm_rtc_disable(dev);
+
+	if (mac_dev->ptp_disable)
+		mac_dev->ptp_disable(mac_dev);
+#endif
+
+	priv->ts_rx_en = FALSE;
+}
+
+static int dpa_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+{
+	struct hwtstamp_config config;
+
+	if (copy_from_user(&config, rq->ifr_data, sizeof(config)))
+		return -EFAULT;
+
+	switch (config.tx_type) {
+	case HWTSTAMP_TX_OFF:
+		dpa_ts_tx_disable(dev);
+		break;
+	case HWTSTAMP_TX_ON:
+		dpa_ts_tx_enable(dev);
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	if (config.rx_filter == HWTSTAMP_FILTER_NONE)
+		dpa_ts_rx_disable(dev);
+	else {
+		dpa_ts_rx_enable(dev);
+		/* TS is set for all frame types, not only those requested */
+		config.rx_filter = HWTSTAMP_FILTER_ALL;
+	}
+
+	return copy_to_user(rq->ifr_data, &config, sizeof(config)) ?
+			-EFAULT : 0;
+}
+#endif /* CONFIG_FSL_DPA_TS */
+
+static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+{
+#ifdef CONFIG_FSL_DPA_1588
+	struct dpa_priv_s *priv = netdev_priv(dev);
+#endif
+	int ret = 0;
+
+/* at least one timestamping feature must be enabled to proceed */
+#if defined(CONFIG_FSL_DPA_1588) || defined(CONFIG_FSL_DPA_TS)
+	if (!netif_running(dev))
+#endif
+		return -EINVAL;
+
+#ifdef CONFIG_FSL_DPA_TS
+	if (cmd == SIOCSHWTSTAMP)
+		return dpa_ts_ioctl(dev, rq, cmd);
+#endif /* CONFIG_FSL_DPA_TS */
+
+#ifdef CONFIG_FSL_DPA_1588
 	if ((cmd >= PTP_ENBL_TXTS_IOCTL) && (cmd <= PTP_CLEANUP_TS)) {
 		if (priv->tsu && priv->tsu->valid)
 			ret = dpa_ioctl_1588(dev, rq, cmd);
 		else
 			ret = -ENODEV;
 	}
+#endif
 
 	return ret;
 }
-#endif
 
 #ifndef CONFIG_DPAA_ETH_SG_SUPPORT
 /*
@@ -1352,6 +1501,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	prefetch(skb_shinfo(skb));
 
+/* Shouldn't we store the timestamp after we validate the mtu? */
 #ifdef CONFIG_FSL_DPA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(net_dev, skb, fd);
@@ -1371,6 +1521,11 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	parse_result = (t_FmPrsResult *)((u8 *)skbh + DPA_RX_PRIV_DATA_SIZE);
 	_dpa_process_parse_results(parse_result, fd, skb, &use_gro,
 					 &hdr_size_unused);
+
+#ifdef CONFIG_FSL_DPA_TS
+	if (priv->ts_rx_en)
+		dpa_get_ts(priv, RX, skb_hwtstamps(skb), (void *)skbh);
+#endif /* CONFIG_FSL_DPA_TS */
 
 	if (use_gro) {
 		gro_result_t gro_result;
@@ -1451,6 +1606,8 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 {
 	struct sk_buff	*skb;
 
+	/* do we need the timestamp for the error frames? */
+
 	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_warn(net_dev, "FD status = 0x%08x\n",
@@ -1458,6 +1615,8 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 
 		percpu_priv->stats.tx_errors++;
 	}
+
+	/* hopefully we need not get the timestamp before the hook */
 
 	if (dpaa_eth_hooks.tx_confirm && dpaa_eth_hooks.tx_confirm(net_dev,
 		fd, fqid) == DPAA_ETH_STOLEN)
@@ -1497,8 +1656,13 @@ static void dpa_set_buffer_layout(struct dpa_priv_s *priv, struct fm_port *port,
 			DPA_RX_PRIV_DATA_SIZE : DPA_TX_PRIV_DATA_SIZE);
 	layout->parse_results = true;
 	layout->hash_results = true;
+#ifdef CONFIG_FSL_DPA_1588
 	if (priv && priv->tsu && priv->tsu->valid)
 		layout->time_stamp = true;
+#endif
+#ifdef CONFIG_FSL_DPA_TS
+	layout->time_stamp = true;
+#endif
 
 	fm_port_get_buff_layout_ext_params(port, &params);
 	layout->manip_extra_space = params.manip_extra_space;
@@ -1767,6 +1931,13 @@ static int skb_to_sg_fd(struct dpa_priv_s *priv,
 	sg_entry->addr_hi = upper_32_bits(paddr);
 	sg_entry->addr_lo = lower_32_bits(paddr);
 
+#ifdef CONFIG_FSL_DPA_TS
+	if (unlikely(priv->ts_tx_en &&
+			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+	}
+#endif /* CONFIG_FSL_DPA_TS */
+
 	return 0;
 }
 
@@ -1835,6 +2006,15 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 			can_recycle = true;
 		}
 	}
+
+#ifdef CONFIG_FSL_DPA_TS
+	if (unlikely(priv->ts_tx_en &&
+			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+		/* we need the fd back to get the timestamp */
+		can_recycle = false;
+		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+	}
+#endif /* CONFIG_FSL_DPA_TS */
 
 	if (likely(can_recycle)) {
 		/* Buffer will get recycled, setup fd accordingly */
@@ -1925,6 +2105,11 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
 		fd.cmd |= FM_FD_CMD_UPD;
 #endif
+#ifdef CONFIG_FSL_DPA_TS
+	if (unlikely(priv->ts_tx_en &&
+			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
+		fd.cmd |= FM_FD_CMD_UPD;
+#endif /* CONFIG_FSL_DPA_TS */
 
 	/*
 	 * We have two paths here:
@@ -3319,9 +3504,7 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_init = dpa_ndo_init,
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_fix_features,
-#ifdef CONFIG_FSL_DPA_1588
 	.ndo_do_ioctl = dpa_ioctl,
-#endif
 };
 
 static const struct net_device_ops dpa_shared_ops = {
@@ -3340,9 +3523,7 @@ static const struct net_device_ops dpa_shared_ops = {
 	.ndo_init = dpa_ndo_init,
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_fix_features,
-#ifdef CONFIG_FSL_DPA_1588
 	.ndo_do_ioctl = dpa_ioctl,
-#endif
 };
 
 static u32 rx_pool_channel;

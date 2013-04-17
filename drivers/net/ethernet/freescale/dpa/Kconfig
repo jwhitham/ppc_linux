@@ -57,6 +57,11 @@ config FSL_DPA_1588
 	depends on DPA_ETH
 	default n
 
+config FSL_DPA_TS
+	tristate "Linux compliant timestamping"
+	depends on DPA_ETH
+	default n
+
 choice DPA_ETH_WQ_ASSIGN
 	prompt "WorkQueue assignment scheme for FrameQueues"
 	depends on DPA_ETH

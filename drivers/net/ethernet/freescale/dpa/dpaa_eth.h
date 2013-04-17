@@ -366,7 +366,9 @@ struct dpa_priv_s {
 #endif
 
 	uint32_t		 msg_enable;	/* net_device message level */
+#ifdef CONFIG_FSL_DPA_1588
 	struct dpa_ptp_tsu	 *tsu;
+#endif
 
 #if defined(CONFIG_DPAA_FMAN_UNIT_TESTS)
 /* TODO: this is temporary until pcd support is implemented in dpaa */
@@ -390,6 +392,12 @@ struct dpa_priv_s {
 		 */
 		u32 cgr_congested_count;
 	} cgr_data;
+
+#ifdef CONFIG_FSL_DPA_TS
+	bool ts_tx_en; /* Tx timestamping enabled */
+	bool ts_rx_en; /* Rx timestamping enabled */
+#endif /* CONFIG_FSL_DPA_TS */
+
 	/*
 	 * Store here the needed Tx headroom for convenience and speed
 	 * (even though it can be computed based on the fields of buf_layout)
@@ -629,5 +637,11 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 #define dpa_get_queue_mapping(skb) \
 	skb_get_queue_mapping(skb)
 #endif
+
+#ifdef CONFIG_FSL_DPA_TS
+/* Updates the skb shared hw timestamp from the hardware timestamp */
+int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
+	struct skb_shared_hwtstamps *shhwtstamps, const void *data);
+#endif /* CONFIG_FSL_DPA_TS */
 
 #endif	/* __DPA_H */
