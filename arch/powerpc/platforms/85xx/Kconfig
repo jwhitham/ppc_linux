@@ -39,6 +39,13 @@ config BSC9132_QDS
 	help
 	  This option enables support for the BSC9132 QDS board
 
+config C293_PCIE
+	  bool "Freescale C293PCIE"
+	  select DEFAULT_UIMAGE
+	  select SWIOTLB
+	  help
+	  This option enables support for the C293PCIE board
+
 config MPC8540_ADS
 	bool "Freescale MPC8540 ADS"
 	select DEFAULT_UIMAGE
