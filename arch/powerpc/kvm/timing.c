@@ -129,13 +129,17 @@ static const char *kvm_exit_names[__NUMBER_OF_KVM_EXIT_TYPES] = {
 	[EMULATED_TLBSX_EXITS] =    "EMUL_TLBSX",
 	[EMULATED_TLBWE_EXITS] =    "EMUL_TLBWE",
 	[EMULATED_RFI_EXITS] =      "EMUL_RFI",
+	[EMULATED_RFCI_EXITS] =     "EMUL_RFCI",
 	[DEC_EXITS] =               "DEC",
 	[EXT_INTR_EXITS] =          "EXTINT",
 	[HALT_WAKEUP] =             "HALT",
 	[USR_PR_INST] =             "USR_PR_INST",
 	[FP_UNAVAIL] =              "FP_UNAVAIL",
 	[DEBUG_EXITS] =             "DEBUG",
-	[TIMEINGUEST] =             "TIMEINGUEST"
+	[TIMEINGUEST] =             "TIMEINGUEST",
+	[DBELL_EXITS] =             "DBELL",
+	[GDBELL_EXITS] =            "GDBELL",
+	[EMULATED_RFMCI_EXITS] =    "EMUL_RFMCI"
 };
 
 static int kvmppc_exit_timing_show(struct seq_file *m, void *private)
