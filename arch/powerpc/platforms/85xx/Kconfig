@@ -125,6 +125,12 @@ config P1022_RDK
 	  This option enables support for the Freescale / iVeia P1022RDK
 	  reference board.
 
+config P1023_RDB
+	bool "Freescale P1023 RDB"
+	select P1023_RDS
+	help
+	  This option enables support for the P1023 RDB board
+
 config P1023_RDS
 	bool "Freescale P1023 RDS"
 	select DEFAULT_UIMAGE
