@@ -179,15 +179,13 @@ static struct sk_buff *dpa_list_get_skb(struct dpa_percpu_priv_s *cpu_priv)
 	return new_skb;
 }
 
-void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count)
+void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count, int size)
 {
 	struct sk_buff *new_skb;
 	int i;
 
 	for (i = 0; i < count; i++) {
-		new_skb = dev_alloc_skb(DPA_BP_HEAD +
-				dpa_get_rx_extra_headroom() +
-				DPA_COPIED_HEADERS_SIZE);
+		new_skb = dev_alloc_skb(size);
 		if (unlikely(!new_skb)) {
 			pr_err("dev_alloc_skb() failed\n");
 			break;
@@ -459,8 +457,8 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	if (unlikely(skb == NULL)) {
 		/* List is empty, so allocate a new skb */
-		skb = dev_alloc_skb(DPA_BP_HEAD + dpa_get_rx_extra_headroom() +
-			DPA_COPIED_HEADERS_SIZE);
+		skb = dev_alloc_skb(priv->tx_headroom +
+			dpa_get_rx_extra_headroom() + DPA_COPIED_HEADERS_SIZE);
 		if (unlikely(skb == NULL)) {
 			if (netif_msg_rx_err(priv) && net_ratelimit())
 				netdev_err(net_dev,
@@ -476,7 +474,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	 * Make sure forwarded skbs will have enough space on Tx,
 	 * if extra headers are added.
 	 */
-	skb_reserve(skb, DPA_BP_HEAD + dpa_get_rx_extra_headroom());
+	skb_reserve(skb, priv->tx_headroom + dpa_get_rx_extra_headroom());
 
 	dpa_bp_removed_one_page(dpa_bp, addr);
 
@@ -538,8 +536,8 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	struct net_device *net_dev = priv->net_dev;
 	int err;
 
-	/* We are guaranteed that we have at least DPA_BP_HEAD of headroom. */
-	skbh = (struct sk_buff **)(skb->data - DPA_BP_HEAD);
+	/* We are guaranteed that we have at least tx_headroom bytes */
+	skbh = (struct sk_buff **)(skb->data - priv->tx_headroom);
 
 	*skbh = skb;
 
@@ -562,7 +560,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	/* Fill in the FD */
 	fd->format = qm_fd_contig;
 	fd->length20 = skb->len;
-	fd->offset = DPA_BP_HEAD; /* This is now guaranteed */
+	fd->offset = priv->tx_headroom; /* This is now guaranteed */
 
 	addr = dma_map_single(dpa_bp->dev, skbh, dpa_bp->size, DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
@@ -615,7 +613,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		goto csum_failed;
 	}
 
-	sgt = (struct qm_sg_entry *)(sgt_page + DPA_BP_HEAD);
+	sgt = (struct qm_sg_entry *)(sgt_page + priv->tx_headroom);
 	sgt[0].bpid = dpa_bp->bpid;
 	sgt[0].offset = 0;
 	sgt[0].length = skb_headlen(skb);
@@ -659,7 +657,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	sgt[i - 1].final = 1;
 
 	fd->length20 = skb->len;
-	fd->offset = DPA_BP_HEAD;
+	fd->offset = priv->tx_headroom;
 
 	/* DMA map the SGT page */
 	buffer_start = (void *)sgt - dpa_fd_offset(fd);
@@ -728,10 +726,10 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		 * data, parse results, etc. Normally this shouldn't happen if
 		 * we're here via the standard kernel stack.
 		 */
-		if (unlikely(skb_headroom(skb) < DPA_BP_HEAD)) {
+		if (unlikely(skb_headroom(skb) < priv->tx_headroom)) {
 			struct sk_buff *skb_new;
 
-			skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);
+			skb_new = skb_realloc_headroom(skb, priv->tx_headroom);
 			if (unlikely(!skb_new)) {
 				dev_kfree_skb(skb);
 				percpu_stats->tx_errors++;

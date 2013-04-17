@@ -55,24 +55,28 @@ enum dpa_fq_type {
 #endif
 };
 
-
-#define DPA_PARSE_RESULTS_SIZE sizeof(t_FmPrsResult)
-#define DPA_HASH_RESULTS_SIZE 16
+struct dpa_buffer_layout_s {
+	uint16_t	priv_data_size;
+	bool		parse_results;
+	bool		time_stamp;
+	bool		hash_results;
+};
 
 #define DPA_TX_PRIV_DATA_SIZE	16
+#define DPA_PARSE_RESULTS_SIZE sizeof(t_FmPrsResult)
+#define DPA_TIME_STAMP_SIZE 8
+#define DPA_HASH_RESULTS_SIZE 8
 
-#define dpaa_eth_init_port(type, port, param, errq_id, defq_id, priv_size, \
-			   has_timer) \
+
+#define dpaa_eth_init_port(type, port, param, errq_id, defq_id, buf_layout) \
 { \
 	param.errq = errq_id; \
 	param.defq = defq_id; \
-	param.priv_data_size = priv_size; \
-	param.parse_results = true; \
-	param.hash_results = true; \
+	param.priv_data_size = buf_layout->priv_data_size; \
+	param.parse_results = buf_layout->parse_results; \
+	param.hash_results = buf_layout->hash_results; \
 	param.frag_enable = false; \
-	param.time_stamp = has_timer; \
-	param.data_align = 0;	\
-	param.manip_extra_space = 0; \
+	param.time_stamp = buf_layout->time_stamp; \
 	fm_set_##type##_port_params(port, &param); \
 }
 

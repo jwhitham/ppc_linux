@@ -112,7 +112,8 @@
 #define DPA_FQ_TD		0x200000
 
 /* S/G table requires at least 256 bytes */
-#define SGT_BUFFER_SIZE		DPA_BP_SIZE(256)
+#define sgt_buffer_size(priv) \
+	dpa_get_buffer_size(&priv->buf_layout[TX], 256)
 
 /* Maximum frame size on Tx for which skb copying is preferrable to
  * creating a S/G frame */
@@ -125,12 +126,19 @@
 #define DPA_MAX_FD_OFFSET	((1 << 9) - 1)
 
 /*
- * Maximum size of a buffer that is to be recycled back to the buffer pool.
+ * Extra size of a buffer (beyond the size of the buffers that are seeded into
+ * the global pool) for which recycling is allowed.
  * The value is arbitrary, but tries to reach a balance such that originating
  * frames may get recycled, while forwarded skbs that get reallocated on Tx
  * aren't allowed to grow unboundedly.
  */
-#define DPA_BP_MAX_BUF_SIZE	(DEFAULT_BUF_SIZE + 256)
+#define DPA_RECYCLE_EXTRA_SIZE	256
+
+/* For MAC-based interfaces, we compute the tx needed headroom from the
+ * associated Tx port's buffer layout settings.
+ * For MACless interfaces just use a default value.
+ */
+#define DPA_DEFAULT_TX_HEADROOM	64
 
 #define DPA_DESCRIPTION "FSL DPAA Ethernet driver"
 
@@ -387,7 +395,8 @@ static void dpaa_eth_seed_pool(struct dpa_bp *bp)
  * Add buffers/pages/skbuffs for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+static void dpaa_eth_refill_bpools(struct dpa_priv_s *priv,
+				   struct dpa_percpu_priv_s *percpu_priv)
 {
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
@@ -408,9 +417,12 @@ static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 
 	/* Add skbs to the percpu skb list, reuse var count */
 	count = percpu_priv->skb_count;
-	if (unlikely(count < DEFAULT_SKB_COUNT / 4))
-		dpa_list_add_skbs(percpu_priv,
-				  DEFAULT_SKB_COUNT - count);
+	if (unlikely(count < DEFAULT_SKB_COUNT / 4)) {
+		int skb_size = priv->tx_headroom + dpa_get_rx_extra_headroom() +
+				DPA_COPIED_HEADERS_SIZE;
+		dpa_list_add_skbs(percpu_priv, DEFAULT_SKB_COUNT - count,
+				  skb_size);
+	}
 #endif
 }
 
@@ -649,7 +661,7 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 			initfq.we_mask |= QM_INITFQ_WE_OAC;
 			initfq.fqd.oac_init.oac = QM_OAC_CG;
 			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
-				DPA_BP_HEAD, (size_t)FSL_QMAN_MAX_OAL);
+				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL);
 		}
 
 		/*
@@ -930,7 +942,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		void *vaddr = phys_to_virt(addr);
 
 		/* Unmap first buffer (contains S/G table) */
-		dma_unmap_single(bp->dev, addr, SGT_BUFFER_SIZE,
+		dma_unmap_single(bp->dev, addr, sgt_buffer_size(priv),
 				 DMA_TO_DEVICE);
 
 		/* Unmap data buffer */
@@ -1471,14 +1483,20 @@ static struct dpa_bp *dpa_size2pool(struct dpa_priv_s *priv, size_t size)
 	int i;
 
 	for (i = 0; i < priv->bp_count; i++)
-		if (DPA_BP_SIZE(size) <= priv->dpa_bp[i].size)
+		if ((size + priv->tx_headroom) <= priv->dpa_bp[i].size)
 			return dpa_bpid2pool(priv->dpa_bp[i].bpid);
 	return ERR_PTR(-ENODEV);
 }
 
-static inline uint32_t dpa_bp_size(struct fm_port *rx_port)
+static void dpa_set_buffer_layout(struct dpa_priv_s *priv, struct fm_port *port,
+				  struct dpa_buffer_layout_s *layout, int type)
 {
-	return DEFAULT_BUF_SIZE;
+	layout->priv_data_size = (type == RX ?
+			DPA_RX_PRIV_DATA_SIZE : DPA_TX_PRIV_DATA_SIZE);
+	layout->parse_results = true;
+	layout->hash_results = true;
+	if (priv && priv->tsu && priv->tsu->valid)
+		layout->time_stamp = true;
 }
 
 /**
@@ -1618,7 +1636,7 @@ static int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	fd.length20 = skb_headlen(skb);
 	fd.addr_hi = bmb.hi;
 	fd.addr_lo = bmb.lo;
-	fd.offset = DPA_BP_HEAD;
+	fd.offset = priv->tx_headroom;
 
 	/*
 	 * The virtual address of the buffer pool is expected to be NULL
@@ -1680,7 +1698,7 @@ static int skb_to_sg_fd(struct dpa_priv_s *priv,
 	int err;
 
 	/* Allocate the first buffer in the FD (used for storing S/G table) */
-	vaddr = kmalloc(SGT_BUFFER_SIZE, GFP_ATOMIC);
+	vaddr = kmalloc(sgt_buffer_size(priv), GFP_ATOMIC);
 	if (unlikely(vaddr == NULL)) {
 		if (netif_msg_tx_err(priv) && net_ratelimit())
 			netdev_err(net_dev, "Memory allocation failed\n");
@@ -1692,7 +1710,7 @@ static int skb_to_sg_fd(struct dpa_priv_s *priv,
 
 	/* Fill in FD */
 	fd->format = qm_fd_sg;
-	fd->offset = DPA_BP_HEAD;
+	fd->offset = priv->tx_headroom;
 	fd->length20 = skb->len;
 
 	/* Enable hardware checksum computation */
@@ -1706,7 +1724,7 @@ static int skb_to_sg_fd(struct dpa_priv_s *priv,
 	}
 
 	/* Map the buffer and store its address in the FD */
-	paddr = dma_map_single(dpa_bp->dev, vaddr, SGT_BUFFER_SIZE,
+	paddr = dma_map_single(dpa_bp->dev, vaddr, sgt_buffer_size(priv),
 			       DMA_TO_DEVICE);
 	if (unlikely(dma_mapping_error(dpa_bp->dev, paddr))) {
 		if (netif_msg_tx_err(priv) && net_ratelimit())
@@ -1728,10 +1746,10 @@ static int skb_to_sg_fd(struct dpa_priv_s *priv,
 	 * Put the same offset in the data buffer as in the SGT (first) buffer.
 	 * This is the format for S/G frames generated by FMan; the manual is
 	 * not clear if same is required of Tx S/G frames, but since we know
-	 * for sure we have at least DPA_BP_HEAD bytes of skb headroom, lets not
-	 * take any chances.
+	 * for sure we have at least tx_headroom bytes of skb headroom,
+	 * lets not take any chances.
 	 */
-	sg_entry->offset = DPA_BP_HEAD;
+	sg_entry->offset = priv->tx_headroom;
 
 	paddr = dma_map_single(dpa_bp->dev, skb->data - sg_entry->offset,
 			       dpa_bp->size, DMA_TO_DEVICE);
@@ -1760,11 +1778,11 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 	int err;
 
 	/*
-	 * We are guaranteed that we have at least DPA_BP_HEAD of headroom.
+	 * We are guaranteed that we have at least tx_headroom bytes.
 	 * Buffers we allocated are padded to improve cache usage. In order
 	 * to increase buffer re-use, we aim to keep any such buffers the
-	 * same. This means the address passed to the FM should be DPA_BP_HEAD
-	 * before the data for forwarded frames.
+	 * same. This means the address passed to the FM should be
+	 * tx_headroom bytes before the data for forwarded frames.
 	 *
 	 * However, offer some flexibility in fd layout, to allow originating
 	 * (termination) buffers to be also recycled when possible.
@@ -1779,23 +1797,24 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 	 * - there's enough room in the buffer pool
 	 */
 	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
-		   (skb_end_pointer(skb) - skb->head <= DPA_BP_MAX_BUF_SIZE) &&
+		   (skb_end_pointer(skb) - skb->head <=
+			dpa_bp->size + DPA_RECYCLE_EXTRA_SIZE) &&
 		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
 
 		/*
-		 * And make sure the offset is no lower than DPA_BP_HEAD,
-		 * as required by FMan
+		 * And make sure the offset is no lower than the offset
+		 * required by FMan
 		 */
-		offset = max(offset, (int)DPA_BP_HEAD);
+		offset = max_t(int, offset, priv->tx_headroom);
 
 		/*
 		 * We also need to align the buffer address to 16, such that
 		 * Fman will be able to reuse it on Rx.
 		 * Since the buffer going to FMan starts at (skb->data - offset)
 		 * this is what we'll try to align. We already know that
-		 * headroom is at least DPA_BP_HEAD bytes long, but with
+		 * headroom is at least tx_headroom bytes long, but with
 		 * the extra offset needed for alignment we may go beyond
 		 * the beginning of the buffer.
 		 *
@@ -1825,7 +1844,7 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 		 * No recycling here, so we don't care about address alignment.
 		 * Just use the smallest offset required by FMan
 		 */
-		offset = DPA_BP_HEAD;
+		offset = priv->tx_headroom;
 	}
 
 	skbh = (struct sk_buff **)(skb->data - offset);
@@ -1883,10 +1902,10 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	clear_fd(&fd);
 	queue_mapping = dpa_get_queue_mapping(skb);
 
-	if (unlikely(skb_headroom(skb) < DPA_BP_HEAD)) {
+	if (unlikely(skb_headroom(skb) < priv->tx_headroom)) {
 		struct sk_buff *skb_new;
 
-		skb_new = skb_realloc_headroom(skb, DPA_BP_HEAD);
+		skb_new = skb_realloc_headroom(skb, priv->tx_headroom);
 		if (unlikely(!skb_new)) {
 			percpu_stats->tx_errors++;
 			kfree_skb(skb);
@@ -2007,7 +2026,7 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 		return qman_cb_dqrr_stop;
 	}
 
-	dpaa_eth_refill_bpools(percpu_priv);
+	dpaa_eth_refill_bpools(priv, percpu_priv);
 	_dpa_rx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
@@ -2045,7 +2064,7 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 	}
 
 	skb = __netdev_alloc_skb(net_dev,
-				 DPA_BP_HEAD + dpa_fd_length(fd),
+				 priv->tx_headroom + dpa_fd_length(fd),
 				 GFP_ATOMIC);
 	if (unlikely(skb == NULL)) {
 		if (netif_msg_rx_err(priv) && net_ratelimit())
@@ -2056,7 +2075,7 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 		goto out;
 	}
 
-	skb_reserve(skb, DPA_BP_HEAD);
+	skb_reserve(skb, priv->tx_headroom);
 
 	if (fd->format == qm_fd_sg) {
 		if (dpa_bp->vaddr) {
@@ -2168,7 +2187,7 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	}
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
-	dpaa_eth_refill_bpools(percpu_priv);
+	dpaa_eth_refill_bpools(priv, percpu_priv);
 	_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
@@ -2604,7 +2623,8 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 
 	/* Try packet sizes from 64-bytes to just above the maximum */
 	for (size = 64; size <= 9600 + 128; size += 64) {
-		for (headroom = DPA_BP_HEAD; headroom < 0x800; headroom += 16) {
+		for (headroom = priv->tx_headroom; headroom < 0x800;
+		     headroom += 16) {
 			int ret;
 			struct sk_buff *skb;
 
@@ -2735,10 +2755,11 @@ static int __cold dpa_start(struct net_device *net_dev)
 	}
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		if (!priv->shared && !percpu_priv->dpa_bp)
+		if (!priv->shared && !percpu_priv->dpa_bp) {
 			percpu_priv->dpa_bp = priv->dpa_bp;
 			percpu_priv->dpa_bp_count =
 				per_cpu_ptr(priv->dpa_bp->percpu_count, i);
+		}
 	}
 
 	dpaa_eth_napi_enable(priv);
@@ -3085,12 +3106,15 @@ static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
 		"CPU           irqs        rx        tx   recycle" \
 		"   confirm     tx sg    tx err    rx err   bp count\n",
 		priv->net_dev->name);
+
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 
 		/* Only private interfaces have an associated counter for bp
-		 * buffers */
-		if (!priv->shared)
+		 * buffers. Also the counter isn't initialized before the first
+		 * ifconfig up
+		 */
+		if (!priv->shared && percpu_priv->dpa_bp_count)
 			dpa_bp_count = *percpu_priv->dpa_bp_count;
 
 		total.in_interrupt += percpu_priv->in_interrupt;
@@ -3611,17 +3635,18 @@ static void dpa_setup_ingress_queues(struct dpa_priv_s *priv,
 
 static void
 dpaa_eth_init_tx_port(struct fm_port *port, struct dpa_fq *errq,
-		struct dpa_fq *defq, bool has_timer)
+		struct dpa_fq *defq, struct dpa_buffer_layout_s *buf_layout)
 {
 	struct fm_port_params tx_port_param;
 
 	dpaa_eth_init_port(tx, port, tx_port_param, errq->fqid, defq->fqid,
-			DPA_TX_PRIV_DATA_SIZE, has_timer);
+			   buf_layout);
 }
 
 static void
 dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
-		struct dpa_fq *errq, struct dpa_fq *defq, bool has_timer)
+		struct dpa_fq *errq, struct dpa_fq *defq,
+		struct dpa_buffer_layout_s *buf_layout)
 {
 	struct fm_port_params rx_port_param;
 	int i;
@@ -3636,7 +3661,7 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 	}
 
 	dpaa_eth_init_port(rx, port, rx_port_param, errq->fqid, defq->fqid,
-			DPA_RX_PRIV_DATA_SIZE, has_timer);
+			   buf_layout);
 }
 
 static void dpa_rx_fq_init(struct dpa_priv_s *priv, struct list_head *head,
@@ -3745,7 +3770,8 @@ static int dpa_netdev_init(struct device_node *dpa_node,
 	memcpy(net_dev->dev_addr, mac_addr, net_dev->addr_len);
 
 	SET_ETHTOOL_OPS(net_dev, &dpa_ethtool_ops);
-	net_dev->needed_headroom = DPA_BP_HEAD;
+
+	net_dev->needed_headroom = priv->tx_headroom;
 	net_dev->watchdog_timeo = msecs_to_jiffies(tx_timeout);
 
 	err = register_netdev(net_dev);
@@ -3799,7 +3825,12 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 		/* init the percpu list and add some skbs */
 		skb_queue_head_init(&percpu_priv->skb_list);
 
-		dpa_list_add_skbs(percpu_priv, DEFAULT_SKB_COUNT);
+		/* Skbs must accomodate the headroom and enough space
+		 * for the frame headers.
+		 */
+		dpa_list_add_skbs(percpu_priv, DEFAULT_SKB_COUNT,
+				  priv->tx_headroom + DPA_COPIED_HEADERS_SIZE +
+				  dpa_get_rx_extra_headroom());
 #endif
 		netif_napi_add(net_dev, &percpu_priv->napi, dpaa_eth_poll,
 			       DPA_NAPI_WEIGHT);
@@ -3892,7 +3923,7 @@ static const struct of_device_id dpa_match[];
 static int
 dpaa_eth_probe(struct platform_device *_of_dev)
 {
-	int err, i;
+	int err = 0, i;
 	struct device *dev;
 	struct device_node *dpa_node;
 	struct dpa_bp *dpa_bp;
@@ -3902,6 +3933,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	size_t count;
 	struct net_device *net_dev = NULL;
 	struct dpa_priv_s *priv = NULL;
+	struct dpa_percpu_priv_s *percpu_priv;
 	struct dpa_fq *rxdefault = NULL;
 	struct dpa_fq *txdefault = NULL;
 	struct dpa_fq *rxerror = NULL;
@@ -3912,7 +3944,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	struct dpa_fq *txrecycle = NULL;
 	struct fm_port *rxport = NULL;
 	struct fm_port *txport = NULL;
-	bool has_timer = FALSE;
+	struct dpa_buffer_layout_s *buf_layout = NULL;
 	bool is_shared = false;
 	struct mac_device *mac_dev;
 	int proxy_enet;
@@ -3970,6 +4002,18 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	} else if (mac_dev) {
 		rxport = mac_dev->port_dev[RX];
 		txport = mac_dev->port_dev[TX];
+
+		/* We have physical ports, so we need to establish
+		 * the buffer layout.
+		 */
+		buf_layout = devm_kzalloc(dev, 2 * sizeof(*buf_layout),
+					  GFP_KERNEL);
+		if (!buf_layout) {
+			dev_err(dev, "devm_kzalloc() failed\n");
+			goto alloc_failed;
+		}
+		dpa_set_buffer_layout(priv, rxport, &buf_layout[RX], RX);
+		dpa_set_buffer_layout(priv, txport, &buf_layout[TX], TX);
 	}
 
 	if (!dpa_bp->kernel_pool) {
@@ -3979,7 +4023,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		 * buffer pool, based on FMan port buffer layout;also update
 		 * the maximum buffer size for private ports if necessary
 		 */
-		dpa_bp->size = dpa_bp_size(rxport);
+		dpa_bp->size = dpa_bp_size(&buf_layout[RX]);
 		if (dpa_bp->size > default_buf_size)
 			default_buf_size = dpa_bp->size;
 	}
@@ -4086,8 +4130,13 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 				goto fq_alloc_failed;
 		}
 
-		if (priv->tsu && priv->tsu->valid)
-			has_timer = TRUE;
+		if (mac_dev) {
+			priv->buf_layout = buf_layout;
+			priv->tx_headroom =
+				dpa_get_headroom(&priv->buf_layout[TX]);
+		} else {
+			priv->tx_headroom = DPA_DEFAULT_TX_HEADROOM;
+		}
 	}
 
 	/* All real interfaces need their ports initialized */
@@ -4095,8 +4144,9 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		struct fm_port_pcd_param rx_port_pcd_param;
 
 		dpaa_eth_init_rx_port(rxport, dpa_bp, count, rxerror,
-				rxdefault, has_timer);
-		dpaa_eth_init_tx_port(txport, txerror, txdefault, has_timer);
+				      rxdefault, &buf_layout[RX]);
+		dpaa_eth_init_tx_port(txport, txerror, txdefault,
+				      &buf_layout[TX]);
 
 		rx_port_pcd_param.cba = dpa_alloc_pcd_fqids;
 		rx_port_pcd_param.cbf = dpa_free_pcd_fqids;
@@ -4129,6 +4179,10 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		dev_err(dev, "__alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
+	}
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		memset(percpu_priv, 0, sizeof(*percpu_priv));
 	}
 
 	if (priv->shared)
@@ -4170,6 +4224,7 @@ get_channel_failed:
 bp_create_failed:
 tx_fq_probe_failed:
 rx_fq_probe_failed:
+alloc_failed:
 mac_probe_failed:
 bp_probe_failed:
 	dev_set_drvdata(dev, NULL);

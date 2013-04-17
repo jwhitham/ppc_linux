@@ -71,6 +71,22 @@
 #define dpa_get_max_mtu()	\
 	(dpa_get_max_frm() - (VLAN_ETH_HLEN + ETH_FCS_LEN))
 
+
+#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+/* We may want this value configurable. Must be <= PAGE_SIZE
+ * A lower value may help with recycling rates, at least on forwarding
+ */
+#define dpa_bp_size(buffer_layout)	PAGE_SIZE
+#else
+
+/* Default buffer size is based on L2 MAX_FRM value, minus the FCS which
+ * is stripped down by hardware.
+ */
+#define dpa_bp_size(buffer_layout) \
+	dpa_get_buffer_size(buffer_layout, (dpa_get_max_frm() - ETH_FCS_LEN))
+#endif
+
+
 #define DPA_RX_PRIV_DATA_SIZE   (DPA_TX_PRIV_DATA_SIZE + \
 					dpa_get_rx_extra_headroom())
 /* number of Tx queues to FMan */
@@ -146,32 +162,16 @@ struct dpaa_eth_hooks_s {
 
 void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
-/* The netdevice's needed_headroom */
-#define DPA_BP_HEAD (DPA_TX_PRIV_DATA_SIZE + DPA_PARSE_RESULTS_SIZE + \
-			DPA_HASH_RESULTS_SIZE)
-#define DPA_BP_SIZE(s)	(DPA_BP_HEAD + dpa_get_rx_extra_headroom() + (s))
-
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
 
 #ifdef CONFIG_DPAA_ETH_SG_SUPPORT
 #define DEFAULT_SKB_COUNT 64 /* maximum number of SKBs in each percpu list */
-/*
- * We may want this value configurable. Must be <= PAGE_SIZE
- * A lower value may help with recycling rates, at least on forwarding
- */
-#define DEFAULT_BUF_SIZE	PAGE_SIZE
 /*
  * Default amount data to be copied from the beginning of a frame into the
  * linear part of the skb, in case we aren't using the hardware parser.
  */
 #define DPA_COPIED_HEADERS_SIZE 128
 
-#else
-/*
- * Default buffer size is based on L2 MAX_FRM value, minus the FCS which is
- * stripped down by hardware.
- */
-#define DEFAULT_BUF_SIZE DPA_BP_SIZE(dpa_get_max_frm() - ETH_FCS_LEN)
 #endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
 
 /*
@@ -390,6 +390,12 @@ struct dpa_priv_s {
 		 */
 		u32 cgr_congested_count;
 	} cgr_data;
+	/*
+	 * Store here the needed Tx headroom for convenience and speed
+	 * (even though it can be computed based on the fields of buf_layout)
+	 */
+	uint16_t tx_headroom;
+	struct dpa_buffer_layout_s *buf_layout;
 };
 
 extern const struct ethtool_ops dpa_ethtool_ops;
@@ -422,7 +428,8 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu_id);
 int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp);
 
-void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count);
+void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count,
+		int skb_size);
 #endif
 
 /*
@@ -477,6 +484,28 @@ static inline int dpa_check_rx_mtu(struct sk_buff *skb, int mtu)
 			return -1;
 
 	return 0;
+}
+
+static inline uint16_t dpa_get_headroom(struct dpa_buffer_layout_s *bl)
+{
+	/* The frame headroom must accomodate:
+	 * - the driver private data area
+	 * - parse results, hash results, timestamp if selected
+	 * If either hash results or time stamp are selected, both will
+	 * be copied to/from the frame headroom, as TS is located between PR and
+	 * HR in the IC and IC copy size has a granularity of 16bytes
+	 * (see description of FMBM_RICP and FMBM_TICP registers in DPAARM)
+	 */
+	return bl->priv_data_size +
+		(bl->parse_results ? DPA_PARSE_RESULTS_SIZE : 0) +
+		(bl->hash_results || bl->time_stamp ?
+		 DPA_TIME_STAMP_SIZE + DPA_HASH_RESULTS_SIZE : 0);
+}
+
+static inline uint16_t dpa_get_buffer_size(struct dpa_buffer_layout_s *bl,
+					   uint16_t data_size)
+{
+	return dpa_get_headroom(bl) + data_size;
 }
 
 void fm_mac_dump_regs(struct mac_device *mac_dev);

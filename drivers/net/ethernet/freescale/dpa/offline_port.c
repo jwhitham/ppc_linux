@@ -97,6 +97,14 @@ static int __cold oh_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
 	return 0;
 }
 
+static void oh_set_buffer_layout(struct dpa_buffer_layout_s *layout)
+{
+	layout->priv_data_size = DPA_TX_PRIV_DATA_SIZE;
+	layout->parse_results = true;
+	layout->hash_results = true;
+	layout->time_stamp = false;
+}
+
 static int
 oh_port_probe(struct platform_device *_of_dev)
 {
@@ -114,6 +122,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	uint32_t		 crt_fq_count;
 	struct fm_port_params	 oh_port_tx_params;
 	struct fm_port_pcd_param	oh_port_pcd_params;
+	struct dpa_buffer_layout_s buf_layout;
 	/* True if the current partition owns the OH port. */
 	bool init_oh_port;
 	const struct of_device_id *match;
@@ -263,10 +272,10 @@ oh_port_probe(struct platform_device *_of_dev)
 		goto return_kfree;
 	}
 
+	oh_set_buffer_layout(&buf_layout);
 	/* Set Tx params */
 	dpaa_eth_init_port(tx, oh_config->oh_port, oh_port_tx_params,
-		oh_config->error_fqid, oh_config->default_fqid,
-		DPA_TX_PRIV_DATA_SIZE, FALSE);
+		oh_config->error_fqid, oh_config->default_fqid, (&buf_layout));
 	/* Set PCD params */
 	oh_port_pcd_params.cba = oh_alloc_pcd_fqids;
 	oh_port_pcd_params.cbf = oh_free_pcd_fqids;
