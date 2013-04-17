@@ -133,6 +133,29 @@ static void kvmppc_vcpu_sync_fpu(struct kvm_vcpu *vcpu)
 #endif
 }
 
+static void kvmppc_vcpu_sync_debug(struct kvm_vcpu *vcpu)
+{
+	/* Synchronize guest's desire to get debug interrupts into shadow MSR */
+#ifndef CONFIG_KVM_BOOKE_HV
+	vcpu->arch.shadow_msr &= ~MSR_DE;
+	vcpu->arch.shadow_msr |= vcpu->arch.shared->msr & MSR_DE;
+#endif
+
+	/* Force enable debug interrupts when user space wants to debug */
+	if (vcpu->guest_debug) {
+#ifdef CONFIG_KVM_BOOKE_HV
+		/*
+		 * Since there is no shadow MSR, sync MSR_DE into the guest
+		 * visible MSR.
+		 */
+		vcpu->arch.shared->msr |= MSR_DE;
+#else
+		vcpu->arch.shadow_msr |= MSR_DE;
+		vcpu->arch.shared->msr &= ~MSR_DE;
+#endif
+	}
+}
+
 /*
  * Helper function for "full" MSR writes.  No need to call this if only
  * EE/CE/ME/DE/RI are changing.
@@ -150,6 +173,7 @@ void kvmppc_set_msr(struct kvm_vcpu *vcpu, u32 new_msr)
 	kvmppc_mmu_msr_notify(vcpu, old_msr);
 	kvmppc_vcpu_sync_spe(vcpu);
 	kvmppc_vcpu_sync_fpu(vcpu);
+	kvmppc_vcpu_sync_debug(vcpu);
 }
 
 static void kvmppc_booke_queue_irqprio(struct kvm_vcpu *vcpu,
@@ -346,7 +370,7 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 		keep_irq = true;
 	}
 
-	if ((priority == BOOKE_IRQPRIO_EXTERNAL) && vcpu->arch.epr_enabled)
+	if ((priority == BOOKE_IRQPRIO_EXTERNAL) && vcpu->arch.epr_flags)
 		update_epr = true;
 
 	switch (priority) {
@@ -427,8 +451,16 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 			set_guest_esr(vcpu, vcpu->arch.queued_esr);
 		if (update_dear == true)
 			set_guest_dear(vcpu, vcpu->arch.queued_dear);
-		if (update_epr == true)
-			kvm_make_request(KVM_REQ_EPR_EXIT, vcpu);
+		if (update_epr == true) {
+			if (vcpu->arch.epr_flags & KVMPPC_EPR_USER)
+				kvm_make_request(KVM_REQ_EPR_EXIT, vcpu);
+#ifdef CONFIG_KVM_MPIC
+			else if (vcpu->arch.epr_flags & KVMPPC_EPR_KERNEL) {
+				BUG_ON(vcpu->arch.irq_type != KVMPPC_IRQ_MPIC);
+				kvmppc_mpic_set_epr(vcpu);
+			}
+#endif
+		}
 
 		new_msr &= msr_mask;
 #if defined(CONFIG_64BIT)
@@ -646,6 +678,46 @@ int kvmppc_core_check_requests(struct kvm_vcpu *vcpu)
 	return r;
 }
 
+static void kvmppc_load_usespace_gebug(void)
+{
+	switch_booke_debug_regs(&current->thread);
+}
+
+static void kvmppc_booke_vcpu_load_debug_regs(struct kvm_vcpu *vcpu)
+{
+	if (!vcpu->arch.debug_active)
+		return;
+
+	/* Disable all debug events and clead pending debug events */
+	mtspr(SPRN_DBCR0, 0x0);
+	kvmppc_clear_dbsr();
+
+	/*
+	 * Check whether guest still need debug resource, if not then there
+	 * is no need to restore guest context.
+	 */
+	if (!vcpu->arch.shadow_dbg_reg.dbcr0)
+		return;
+
+	/* Load Guest Context */
+	mtspr(SPRN_DBCR1, vcpu->arch.shadow_dbg_reg.dbcr1);
+	mtspr(SPRN_DBCR2, vcpu->arch.shadow_dbg_reg.dbcr2);
+#ifdef CONFIG_KVM_E500MC
+	mtspr(SPRN_DBCR4, vcpu->arch.shadow_dbg_reg.dbcr4);
+#endif
+	mtspr(SPRN_IAC1, vcpu->arch.shadow_dbg_reg.iac[0]);
+	mtspr(SPRN_IAC2, vcpu->arch.shadow_dbg_reg.iac[1]);
+#if CONFIG_PPC_ADV_DEBUG_IACS > 2
+	mtspr(SPRN_IAC3, vcpu->arch.shadow_dbg_reg.iac[2]);
+	mtspr(SPRN_IAC4, vcpu->arch.shadow_dbg_reg.iac[3]);
+#endif
+	mtspr(SPRN_DAC1, vcpu->arch.shadow_dbg_reg.dac[0]);
+	mtspr(SPRN_DAC2, vcpu->arch.shadow_dbg_reg.dac[1]);
+
+	/* Enable debug events after other debug registers restored */
+	mtspr(SPRN_DBCR0, vcpu->arch.shadow_dbg_reg.dbcr0);
+}
+
 int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 {
 	int ret, s;
@@ -693,10 +765,24 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	kvmppc_load_guest_fp(vcpu);
 #endif
 
+	/*
+	 * Clear current->thread.dbcr0 so that kernel does not
+	 * restore h/w registers on context switch in vcpu running state.
+	 */
+	vcpu->arch.debug_active = 1;
+	vcpu->arch.saved_dbcr0 = current->thread.dbcr0;
+	current->thread.dbcr0 = 0;
+	kvmppc_booke_vcpu_load_debug_regs(vcpu);
+
 	ret = __kvmppc_vcpu_run(kvm_run, vcpu);
 
 	/* No need for kvm_guest_exit. It's done in handle_exit.
 	   We also get here with interrupts enabled. */
+
+	/* Restore thread->dbcr0 */
+	vcpu->arch.debug_active = 0;
+	current->thread.dbcr0 = vcpu->arch.saved_dbcr0;
+	kvmppc_load_usespace_gebug();
 
 #ifdef CONFIG_PPC_FPU
 	kvmppc_save_guest_fp(vcpu);
@@ -745,9 +831,42 @@ static int emulation_exit(struct kvm_run *run, struct kvm_vcpu *vcpu)
 		kvmppc_core_queue_program(vcpu, ESR_PIL);
 		return RESUME_HOST;
 
+	case EMULATE_EXIT_USER:
+		return RESUME_HOST;
+
 	default:
 		BUG();
 	}
+}
+
+/*
+ * Currently we do not support debug resource emulation to guest,
+ * so always exit to user space irrespective of user space is
+ * expecting the debug exception or not. This is unexpected event
+ * and let us leave the action on user space.
+ */
+static int kvmppc_handle_debug(struct kvm_run *run, struct kvm_vcpu *vcpu)
+{
+	u32 dbsr = mfspr(SPRN_DBSR);
+
+	kvmppc_clear_dbsr();
+	run->debug.arch.status = 0;
+	run->debug.arch.address = vcpu->arch.pc;
+
+	if (dbsr & (DBSR_IAC1 | DBSR_IAC2 | DBSR_IAC3 | DBSR_IAC4)) {
+		run->debug.arch.status |= KVMPPC_DEBUG_BREAKPOINT;
+	} else {
+		if (dbsr & (DBSR_DAC1W | DBSR_DAC2W))
+			run->debug.arch.status |= KVMPPC_DEBUG_WATCH_WRITE;
+		else if (dbsr & (DBSR_DAC1R | DBSR_DAC2R))
+			run->debug.arch.status |= KVMPPC_DEBUG_WATCH_READ;
+		if (dbsr & (DBSR_DAC1R | DBSR_DAC1W))
+			run->debug.arch.address = vcpu->arch.shadow_dbg_reg.dac[0];
+		else if (dbsr & (DBSR_DAC2R | DBSR_DAC2W))
+			run->debug.arch.address = vcpu->arch.shadow_dbg_reg.dac[1];
+	}
+
+	return RESUME_HOST;
 }
 
 static void kvmppc_fill_pt_regs(struct pt_regs *regs)
@@ -1109,18 +1228,10 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 	}
 
 	case BOOKE_INTERRUPT_DEBUG: {
-		u32 dbsr;
-
-		vcpu->arch.pc = mfspr(SPRN_CSRR0);
-
-		/* clear IAC events in DBSR register */
-		dbsr = mfspr(SPRN_DBSR);
-		dbsr &= DBSR_IAC1 | DBSR_IAC2 | DBSR_IAC3 | DBSR_IAC4;
-		mtspr(SPRN_DBSR, dbsr);
-
-		run->exit_reason = KVM_EXIT_DEBUG;
+		r = kvmppc_handle_debug(run, vcpu);
+		if (r == RESUME_HOST)
+			run->exit_reason = KVM_EXIT_DEBUG;
 		kvmppc_account_exit(vcpu, DEBUG_EXITS);
-		r = RESUME_HOST;
 		break;
 	}
 
@@ -1171,7 +1282,7 @@ int kvm_arch_vcpu_setup(struct kvm_vcpu *vcpu)
 	kvmppc_set_msr(vcpu, 0);
 
 #ifndef CONFIG_KVM_BOOKE_HV
-	vcpu->arch.shadow_msr = MSR_USER | MSR_DE | MSR_IS | MSR_DS;
+	vcpu->arch.shadow_msr = MSR_USER | MSR_IS | MSR_DS;
 	vcpu->arch.shadow_pid = 1;
 	vcpu->arch.shared->msr = 0;
 #endif
@@ -1636,16 +1747,128 @@ void kvmppc_decrementer_func(unsigned long data)
 	kvmppc_set_tsr_bits(vcpu, TSR_DIS);
 }
 
+static void kvmppc_booke_vcpu_put_debug_regs(struct kvm_vcpu *vcpu)
+{
+	/* Disable all debug events First */
+	mtspr(SPRN_DBCR0, 0x0);
+	/* Disable pending debug event by clearing DBSR */
+	kvmppc_clear_dbsr();
+}
+
+int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
+					 struct kvm_guest_debug *dbg)
+{
+	struct kvmppc_booke_debug_reg *dbg_reg;
+	int n, b = 0, w = 0;
+	const u32 bp_code[] = {
+		DBCR0_IAC1 | DBCR0_IDM,
+		DBCR0_IAC2 | DBCR0_IDM,
+		DBCR0_IAC3 | DBCR0_IDM,
+		DBCR0_IAC4 | DBCR0_IDM
+	};
+	const u32 wp_code[] = {
+		DBCR0_DAC1W | DBCR0_IDM,
+		DBCR0_DAC2W | DBCR0_IDM,
+		DBCR0_DAC1R | DBCR0_IDM,
+		DBCR0_DAC2R | DBCR0_IDM
+	};
+
+	if (!(dbg->control & KVM_GUESTDBG_ENABLE)) {
+		/* Clear All debug events */
+		vcpu->arch.shadow_dbg_reg.dbcr0 = 0;
+		vcpu->guest_debug = 0;
+#ifdef CONFIG_KVM_BOOKE_HV
+		/*
+		 * When user space is not using the debug resources
+		 * then allow guest to change the MSR.DE.
+		 */
+		vcpu->arch.shadow_msrp &= ~MSRP_DEP;
+#endif
+		return 0;
+	}
+
+#ifdef CONFIG_KVM_BOOKE_HV
+		/*
+		 * When user space is using the debug resource then
+		 * do not allow guest to change the MSR.DE.
+		 */
+		vcpu->arch.shadow_msrp &= ~MSRP_DEP;
+#endif
+	vcpu->guest_debug = dbg->control;
+	vcpu->arch.shadow_dbg_reg.dbcr0 = 0;
+	/* Set DBCR0_EDM in guest visible DBCR0 register. */
+	vcpu->arch.dbg_reg.dbcr0 = DBCR0_EDM;
+
+	if (vcpu->guest_debug & KVM_GUESTDBG_SINGLESTEP)
+		vcpu->arch.shadow_dbg_reg.dbcr0 |= DBCR0_IDM | DBCR0_IC;
+
+	if (!(vcpu->guest_debug & KVM_GUESTDBG_USE_HW_BP))
+		/* Code below handles only HW breakpoints */
+		return 0;
+
+	dbg_reg = &(vcpu->arch.shadow_dbg_reg);
+
+	/*
+	 * On BOOKE (e500v2); Set DBCR1 and DBCR2 to allow debug events
+	 * to occur when MSR.PR is set.
+	 * On BOOKE-HV (e500mc+); MSR.PR = 0 when guest is running. So we
+	 * should clear DBCR1 and DBCR2. And EPCR.DUVD is used to control
+	 * that debug events will not come in hypervisor (GS = 0).
+	 */
+#ifdef CONFIG_KVM_BOOKE_HV
+	dbg_reg->dbcr1 = 0;
+	dbg_reg->dbcr2 = 0;
+#else
+	dbg_reg->dbcr1 = DBCR1_IAC1US | DBCR1_IAC2US | DBCR1_IAC3US |
+			  DBCR1_IAC4US;
+	dbg_reg->dbcr2 = DBCR2_DAC1US | DBCR2_DAC2US;
+#endif
+
+	for (n = 0; n < (KVMPPC_BOOKE_IAC_NUM + KVMPPC_BOOKE_DAC_NUM); n++) {
+		u32 type = dbg->arch.bp[n].type;
+
+		if (!type)
+			continue;
+
+		if (type & (KVMPPC_DEBUG_WATCH_READ |
+			    KVMPPC_DEBUG_WATCH_WRITE)) {
+			if (w >= KVMPPC_BOOKE_DAC_NUM)
+				return -EINVAL;
+
+			if (type & KVMPPC_DEBUG_WATCH_READ)
+				dbg_reg->dbcr0 |= wp_code[w + 2];
+			if (type & KVMPPC_DEBUG_WATCH_WRITE)
+				dbg_reg->dbcr0 |= wp_code[w];
+
+			dbg_reg->dac[w] = dbg->arch.bp[n].addr;
+			w++;
+		} else if (type & KVMPPC_DEBUG_BREAKPOINT) {
+			if (b >= KVMPPC_BOOKE_IAC_NUM)
+				return -EINVAL;
+
+			dbg_reg->dbcr0 |= bp_code[b];
+			dbg_reg->iac[b] = dbg->arch.bp[n].addr;
+			b++;
+		}
+	}
+
+	return 0;
+}
+
 void kvmppc_booke_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	vcpu->cpu = smp_processor_id();
 	current->thread.kvm_vcpu = vcpu;
+
+	kvmppc_booke_vcpu_load_debug_regs(vcpu);
 }
 
 void kvmppc_booke_vcpu_put(struct kvm_vcpu *vcpu)
 {
 	current->thread.kvm_vcpu = NULL;
 	vcpu->cpu = -1;
+
+	kvmppc_booke_vcpu_put_debug_regs(vcpu);
 }
 
 int __init kvmppc_booke_init(void)

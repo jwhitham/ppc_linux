@@ -155,6 +155,7 @@ enum kvm_exit_types {
 	TIMEINGUEST,
 	DBELL_EXITS,
 	GDBELL_EXITS,
+	EMULATED_RFMCI_EXITS,
 	__NUMBER_OF_KVM_EXIT_TYPES
 };
 
@@ -361,6 +362,11 @@ struct kvmppc_slb {
 #define KVMPPC_BOOKE_MAX_IAC	4
 #define KVMPPC_BOOKE_MAX_DAC	2
 
+/* KVMPPC_EPR_USER takes precedence over KVMPPC_EPR_KERNEL */
+#define KVMPPC_EPR_NONE		0 /* EPR not supported */
+#define KVMPPC_EPR_USER		1 /* exit to userspace to fill EPR */
+#define KVMPPC_EPR_KERNEL	2 /* in-kernel irqchip */
+
 struct kvmppc_booke_debug_reg {
 	u32 dbcr0;
 	u32 dbcr1;
@@ -371,6 +377,11 @@ struct kvmppc_booke_debug_reg {
 	u64 iac[KVMPPC_BOOKE_MAX_IAC];
 	u64 dac[KVMPPC_BOOKE_MAX_DAC];
 };
+
+#define KVMPPC_IRQ_DEFAULT	0
+#define KVMPPC_IRQ_MPIC		1
+
+struct openpic;
 
 struct kvm_vcpu_arch {
 	ulong host_stack;
@@ -508,7 +519,15 @@ struct kvm_vcpu_arch {
 	u32 eptcfg;
 	u32 epr;
 	u32 crit_save;
+
+	/* Flag indicating that debug registers are used by guest */
+	bool debug_active;
+	/* for save/restore thread->dbcr0 on vcpu run/heavyweight_exit */
+	u32 saved_dbcr0;
+	/* guest debug registers*/
 	struct kvmppc_booke_debug_reg dbg_reg;
+	/* shadow debug registers */
+	struct kvmppc_booke_debug_reg shadow_dbg_reg;
 #endif
 	gpa_t paddr_accessed;
 	gva_t vaddr_accessed;
@@ -525,7 +544,7 @@ struct kvm_vcpu_arch {
 	u8 sane;
 	u8 cpu_type;
 	u8 hcall_needed;
-	u8 epr_enabled;
+	u8 epr_flags; /* KVMPPC_EPR_xxx */
 	u8 epr_needed;
 
 	u32 cpr0_cfgaddr; /* holds the last set cpr0_cfgaddr */
@@ -551,6 +570,10 @@ struct kvm_vcpu_arch {
 	struct kvm_vcpu_arch_shared *shared;
 	unsigned long magic_page_pa; /* phys addr to map the magic page to */
 	unsigned long magic_page_ea; /* effect. addr to map the magic page to */
+
+	int irq_type;		/* one of KVM_IRQ_* */
+	int irq_cpu_id;
+	struct openpic *mpic;	/* KVM_IRQ_MPIC */
 
 #ifdef CONFIG_KVM_BOOK3S_64_HV
 	struct kvm_vcpu_arch_shared shregs;
@@ -592,5 +615,6 @@ struct kvm_vcpu_arch {
 #define KVM_MMIO_REG_FQPR	0x0060
 
 #define __KVM_HAVE_ARCH_WQP
+#define __KVM_HAVE_CREATE_DEVICE
 
 #endif /* __POWERPC_KVM_HOST_H__ */

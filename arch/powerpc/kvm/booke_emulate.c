@@ -23,6 +23,7 @@
 
 #include "booke.h"
 
+#define OP_19_XOP_RFMCI   38
 #define OP_19_XOP_RFI     50
 #define OP_19_XOP_RFCI    51
 
@@ -41,6 +42,12 @@ static void kvmppc_emul_rfci(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.pc = vcpu->arch.csrr0;
 	kvmppc_set_msr(vcpu, vcpu->arch.csrr1);
+}
+
+static void kvmppc_emul_rfmci(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.pc = vcpu->arch.mcsrr0;
+	kvmppc_set_msr(vcpu, vcpu->arch.mcsrr1);
 }
 
 int kvmppc_booke_emulate_op(struct kvm_run *run, struct kvm_vcpu *vcpu,
@@ -62,6 +69,12 @@ int kvmppc_booke_emulate_op(struct kvm_run *run, struct kvm_vcpu *vcpu,
 		case OP_19_XOP_RFCI:
 			kvmppc_emul_rfci(vcpu);
 			kvmppc_set_exit_type(vcpu, EMULATED_RFCI_EXITS);
+			*advance = 0;
+			break;
+
+		case OP_19_XOP_RFMCI:
+			kvmppc_emul_rfmci(vcpu);
+			kvmppc_set_exit_type(vcpu, EMULATED_RFMCI_EXITS);
 			*advance = 0;
 			break;
 
@@ -137,6 +150,12 @@ int kvmppc_booke_emulate_mtspr(struct kvm_vcpu *vcpu, int sprn, ulong spr_val)
 		break;
 	case SPRN_DBCR1:
 		vcpu->arch.dbg_reg.dbcr1 = spr_val;
+		break;
+	case SPRN_MCSRR0:
+		vcpu->arch.mcsrr0 = spr_val;
+		break;
+	case SPRN_MCSRR1:
+		vcpu->arch.mcsrr1 = spr_val;
 		break;
 	case SPRN_DBSR:
 		vcpu->arch.dbsr &= ~spr_val;
@@ -283,6 +302,12 @@ int kvmppc_booke_emulate_mfspr(struct kvm_vcpu *vcpu, int sprn, ulong *spr_val)
 		break;
 	case SPRN_DBCR1:
 		*spr_val = vcpu->arch.dbg_reg.dbcr1;
+		break;
+	case SPRN_MCSRR0:
+		*spr_val = vcpu->arch.mcsrr0;
+		break;
+	case SPRN_MCSRR1:
+		*spr_val = vcpu->arch.mcsrr1;
 		break;
 	case SPRN_DBSR:
 		*spr_val = vcpu->arch.dbsr;

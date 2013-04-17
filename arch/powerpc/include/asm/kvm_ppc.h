@@ -44,7 +44,7 @@ enum emulation_result {
 	EMULATE_DO_DCR,       /* kvm_run filled with DCR request */
 	EMULATE_FAIL,         /* can't emulate this instruction */
 	EMULATE_AGAIN,        /* something went wrong. go again */
-	EMULATE_DO_PAPR,      /* kvm_run filled with PAPR request */
+	EMULATE_EXIT_USER,    /* emulation requires exit to user-space */
 };
 
 extern int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu);
@@ -164,6 +164,8 @@ extern int kvmppc_prepare_to_enter(struct kvm_vcpu *vcpu);
 
 extern int kvm_vm_ioctl_get_htab_fd(struct kvm *kvm, struct kvm_get_htab_fd *);
 
+int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq);
+
 /*
  * Cuts out inst bits with ordering according to spec.
  * That means the leftmost bit is zero. All given bits are included.
@@ -245,6 +247,8 @@ int kvmppc_set_one_reg(struct kvm_vcpu *vcpu, u64 id, union kvmppc_one_reg *);
 
 void kvmppc_set_pid(struct kvm_vcpu *vcpu, u32 pid);
 
+struct openpic;
+
 #ifdef CONFIG_KVM_BOOK3S_64_HV
 static inline void kvmppc_set_xics_phys(int cpu, unsigned long addr)
 {
@@ -269,6 +273,11 @@ static inline void kvmppc_set_epr(struct kvm_vcpu *vcpu, u32 epr)
 	vcpu->arch.epr = epr;
 #endif
 }
+
+void kvmppc_mpic_set_epr(struct kvm_vcpu *vcpu);
+int kvmppc_mpic_connect_vcpu(struct kvm_device *dev, struct kvm_vcpu *vcpu,
+			     u32 cpu);
+void kvmppc_mpic_disconnect_vcpu(struct openpic *opp, struct kvm_vcpu *vcpu);
 
 int kvm_vcpu_ioctl_config_tlb(struct kvm_vcpu *vcpu,
 			      struct kvm_config_tlb *cfg);
