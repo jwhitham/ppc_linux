@@ -55,11 +55,14 @@ enum dpa_fq_type {
 #endif
 };
 
+/* TODO: This structure should be renamed & moved to the FMD wrapper */
 struct dpa_buffer_layout_s {
 	uint16_t	priv_data_size;
 	bool		parse_results;
 	bool		time_stamp;
 	bool		hash_results;
+	uint8_t		manip_extra_space;
+	uint16_t	data_align;
 };
 
 #define DPA_TX_PRIV_DATA_SIZE	16
@@ -77,6 +80,8 @@ struct dpa_buffer_layout_s {
 	param.hash_results = buf_layout->hash_results; \
 	param.frag_enable = false; \
 	param.time_stamp = buf_layout->time_stamp; \
+	param.manip_extra_space = buf_layout->manip_extra_space; \
+	param.data_align = buf_layout->data_align; \
 	fm_set_##type##_port_params(port, &param); \
 }
 

@@ -1491,12 +1491,18 @@ static struct dpa_bp *dpa_size2pool(struct dpa_priv_s *priv, size_t size)
 static void dpa_set_buffer_layout(struct dpa_priv_s *priv, struct fm_port *port,
 				  struct dpa_buffer_layout_s *layout, int type)
 {
+	struct fm_port_params params;
+
 	layout->priv_data_size = (type == RX ?
 			DPA_RX_PRIV_DATA_SIZE : DPA_TX_PRIV_DATA_SIZE);
 	layout->parse_results = true;
 	layout->hash_results = true;
 	if (priv && priv->tsu && priv->tsu->valid)
 		layout->time_stamp = true;
+
+	fm_port_get_buff_layout_ext_params(port, &params);
+	layout->manip_extra_space = params.manip_extra_space;
+	layout->data_align = params.data_align;
 }
 
 /**
@@ -3639,6 +3645,7 @@ dpaa_eth_init_tx_port(struct fm_port *port, struct dpa_fq *errq,
 {
 	struct fm_port_params tx_port_param;
 
+	memset(&tx_port_param, 0, sizeof(tx_port_param));
 	dpaa_eth_init_port(tx, port, tx_port_param, errq->fqid, defq->fqid,
 			   buf_layout);
 }
@@ -3651,6 +3658,7 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 	struct fm_port_params rx_port_param;
 	int i;
 
+	memset(&rx_port_param, 0, sizeof(rx_port_param));
 	count = min(ARRAY_SIZE(rx_port_param.pool_param), count);
 	rx_port_param.num_pools = count;
 	for (i = 0; i < count; i++) {

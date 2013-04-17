@@ -97,12 +97,19 @@ static int __cold oh_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
 	return 0;
 }
 
-static void oh_set_buffer_layout(struct dpa_buffer_layout_s *layout)
+static void oh_set_buffer_layout(struct fm_port *port,
+				 struct dpa_buffer_layout_s *layout)
 {
+	struct fm_port_params params;
+
 	layout->priv_data_size = DPA_TX_PRIV_DATA_SIZE;
 	layout->parse_results = true;
 	layout->hash_results = true;
 	layout->time_stamp = false;
+
+	fm_port_get_buff_layout_ext_params(port, &params);
+	layout->manip_extra_space = params.manip_extra_space;
+	layout->data_align = params.data_align;
 }
 
 static int
@@ -272,8 +279,9 @@ oh_port_probe(struct platform_device *_of_dev)
 		goto return_kfree;
 	}
 
-	oh_set_buffer_layout(&buf_layout);
+	oh_set_buffer_layout(oh_config->oh_port, &buf_layout);
 	/* Set Tx params */
+	memset(&oh_port_tx_params, 0, sizeof(oh_port_tx_params));
 	dpaa_eth_init_port(tx, oh_config->oh_port, oh_port_tx_params,
 		oh_config->error_fqid, oh_config->default_fqid, (&buf_layout));
 	/* Set PCD params */

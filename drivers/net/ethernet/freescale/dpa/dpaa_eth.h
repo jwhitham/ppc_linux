@@ -488,18 +488,25 @@ static inline int dpa_check_rx_mtu(struct sk_buff *skb, int mtu)
 
 static inline uint16_t dpa_get_headroom(struct dpa_buffer_layout_s *bl)
 {
+	uint16_t headroom;
 	/* The frame headroom must accomodate:
 	 * - the driver private data area
 	 * - parse results, hash results, timestamp if selected
+	 * - manip extra space
 	 * If either hash results or time stamp are selected, both will
 	 * be copied to/from the frame headroom, as TS is located between PR and
 	 * HR in the IC and IC copy size has a granularity of 16bytes
 	 * (see description of FMBM_RICP and FMBM_TICP registers in DPAARM)
+	 *
+	 * Also make sure the headroom is a multiple of data_align bytes
 	 */
-	return bl->priv_data_size +
-		(bl->parse_results ? DPA_PARSE_RESULTS_SIZE : 0) +
-		(bl->hash_results || bl->time_stamp ?
-		 DPA_TIME_STAMP_SIZE + DPA_HASH_RESULTS_SIZE : 0);
+	headroom = bl->priv_data_size +
+		   (bl->parse_results ? DPA_PARSE_RESULTS_SIZE : 0) +
+		   (bl->hash_results || bl->time_stamp ?
+		    DPA_TIME_STAMP_SIZE + DPA_HASH_RESULTS_SIZE : 0) +
+		   bl->manip_extra_space;
+
+	return bl->data_align ? ALIGN(headroom, bl->data_align) : headroom;
 }
 
 static inline uint16_t dpa_get_buffer_size(struct dpa_buffer_layout_s *bl,
