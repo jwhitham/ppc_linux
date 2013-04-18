@@ -226,11 +226,13 @@
 
 				/* XAUI card in slot 1 */
 				phy_xgmii_1: ethernet-phy@4 {
+					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x4>;
 				};
 
 				/* XAUI card in slot 2 */
 				phy_xgmii_2: ethernet-phy@0 {
+					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x0>;
 				};
 			};

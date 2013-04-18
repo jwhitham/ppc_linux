@@ -477,6 +477,7 @@
 					status = "disabled";
 
 					phy_xgmii_slot_1: ethernet-phy@0 {
+						compatible = "ethernet-phy-ieee802.3-c45";
 						reg = <4>;
 					};
 				};
@@ -488,6 +489,7 @@
 					reg = <2>;
 
 					phy_xgmii_slot_2: ethernet-phy@4 {
+						compatible = "ethernet-phy-ieee802.3-c45";
 						reg = <0>;
 					};
 				};

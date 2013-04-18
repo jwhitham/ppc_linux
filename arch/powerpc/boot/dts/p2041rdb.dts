@@ -244,6 +244,7 @@
 			mdio@f1000 {
 				/* XAUI card in slot 2 */
 				phy_xgmii_2: ethernet-phy@0 {
+					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x0>;
 				};
 			};
