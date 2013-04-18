@@ -95,6 +95,26 @@ config DPAA_ETH_USE_NDO_SELECT_QUEUE
 	  or simply don't want to use the driver's ndo_select_queue() callback, then unselect this
 	  and use the standard XPS support instead.
 
+config DPAA_ETH_MAX_BUF_COUNT
+	int "Maximum nuber of buffers in private bpool"
+	depends on DPA_ETH
+	range 64 2048
+	default "128"
+	---help---
+	  The maximum number of buffers to be by default allocated in the DPAA-Ethernet private port's
+	  buffer pool. One needn't normally modify this, as it has probably been tuned for performance
+	  already. This cannot be lower than DPAA_ETH_REFILL_THRESHOLD.
+
+config DPAA_ETH_REFILL_THRESHOLD
+	int "Private bpool refill threshold"
+	depends on DPA_ETH
+	range 32 DPAA_ETH_MAX_BUF_COUNT
+	default "80"
+	---help---
+	  The DPAA-Ethernet driver will start replenishing buffer pools whose count
+	  falls below this threshold. This must be related to DPAA_ETH_MAX_BUF_COUNT. One needn't normally
+	  modify this value unless one has very specific performance reasons.
+
 config DPAA_ETH_UNIT_TESTS
 	bool
 	depends on DPA_ETH

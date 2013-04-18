@@ -91,9 +91,6 @@
 #undef CONFIG_DPAA_ETH_UNIT_TESTS
 #endif
 
-#define DEFAULT_COUNT		128
-#define REFILL_THRESHOLD	80
-
 #define DPA_NAPI_WEIGHT		64
 
 /* Size in bytes of the Congestion State notification threshold on 10G ports */
@@ -411,15 +408,15 @@ static void dpaa_eth_refill_bpools(struct dpa_priv_s *priv,
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
 
 #ifndef CONFIG_DPAA_ETH_SG_SUPPORT
-	if (unlikely(count < REFILL_THRESHOLD)) {
+	if (unlikely(count < CONFIG_DPAA_ETH_REFILL_THRESHOLD)) {
 		int i;
 
-		for (i = count; i < DEFAULT_COUNT; i += 8)
+		for (i = count; i < CONFIG_DPAA_ETH_MAX_BUF_COUNT; i += 8)
 			dpa_bp_add_8(dpa_bp);
 	}
 #else
 	/* Add pages to the buffer pool */
-	while (count < DEFAULT_COUNT)
+	while (count < CONFIG_DPAA_ETH_MAX_BUF_COUNT)
 		count += _dpa_bp_add_8_pages(dpa_bp);
 	*countptr = count;
 
@@ -3176,7 +3173,7 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 		dpa_bp = ERR_PTR(-EINVAL);
 		goto _return_of_node_put;
 	} else if (has_kernel_pool) {
-		dpa_bp->target_count = DEFAULT_COUNT;
+		dpa_bp->target_count = CONFIG_DPAA_ETH_MAX_BUF_COUNT;
 		dpa_bp->kernel_pool = 1;
 	}
 
