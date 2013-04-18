@@ -135,6 +135,10 @@
 		};
 
 		i2c@118000 {
+			pca9547@77 {
+				compatible = "philips,pca9547";
+				reg = <0x77>;
+			};
 			eeprom@50 {
 				compatible = "at24,24c64";
 				reg = <0x50>;
