@@ -674,8 +674,8 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		/* This shouldn't happen */
 		BUG_ON(!frag->page.p);
 
-		addr = dma_map_page(dpa_bp->dev, skb_frag_page(frag),
-			frag->page_offset, dpa_bp->size, dma_dir);
+		addr = skb_frag_dma_map(dpa_bp->dev, frag, 0, dpa_bp->size,
+					dma_dir);
 
 		if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
 			dev_err(dpa_bp->dev, "DMA mapping failed");
