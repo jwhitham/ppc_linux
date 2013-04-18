@@ -168,12 +168,16 @@ void __cold dpa_get_pauseparam(struct net_device *net_dev, struct ethtool_pausep
 		return;
 	}
 
-	et_pauseparam->autoneg	= priv->mac_dev->phy_dev->autoneg;
+	et_pauseparam->autoneg	= priv->mac_dev->autoneg_pause;
+	et_pauseparam->rx_pause	= priv->mac_dev->rx_pause;
+	et_pauseparam->tx_pause	= priv->mac_dev->tx_pause;
 }
 
 int __cold dpa_set_pauseparam(struct net_device *net_dev, struct ethtool_pauseparam *et_pauseparam)
 {
 	struct dpa_priv_s	*priv;
+	int _errno;
+	bool en;
 
 	priv = netdev_priv(net_dev);
 
@@ -186,7 +190,23 @@ int __cold dpa_set_pauseparam(struct net_device *net_dev, struct ethtool_pausepa
 		return -ENODEV;
 	}
 
-	priv->mac_dev->phy_dev->autoneg = et_pauseparam->autoneg;
+	en = et_pauseparam->rx_pause ? true : false;
+	_errno = priv->mac_dev->set_rx_pause(priv->mac_dev, en);
+	if (unlikely(_errno < 0)) {
+		netdev_err(net_dev, "set_rx_pause() = %d\n", _errno);
+		return _errno;
+	}
+
+	en = et_pauseparam->tx_pause ? true : false;
+	_errno = priv->mac_dev->set_tx_pause(priv->mac_dev, en);
+	if (unlikely(_errno < 0)) {
+		netdev_err(net_dev, "set_tx_pause() = %d\n", _errno);
+		return _errno;
+	}
+
+	priv->mac_dev->autoneg_pause = et_pauseparam->autoneg;
+	priv->mac_dev->rx_pause = et_pauseparam->rx_pause;
+	priv->mac_dev->tx_pause = et_pauseparam->tx_pause;
 
 	return 0;
 }

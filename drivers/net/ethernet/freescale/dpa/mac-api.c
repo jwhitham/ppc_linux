@@ -624,6 +624,49 @@ static void *get_mac_handle(struct mac_device *mac_dev)
 	return (void*)priv->mac;
 }
 
+static int __cold set_rx_pause(struct mac_device *mac_dev, bool en)
+{
+	int	_errno;
+	t_Error err;
+
+	/* if rx pause is enabled, do NOT ignore pause frames */
+	err = FM_MAC_SetRxIgnorePauseFrames(
+			((struct mac_priv_s *)macdev_priv(mac_dev))->mac, !en);
+
+	_errno = -GET_ERROR_TYPE(err);
+	if (_errno < 0)
+		dev_err(mac_dev->dev,
+				 "FM_MAC_SetRxIgnorePauseFrames() = 0x%08x\n", err);
+
+	return _errno;
+}
+
+static int __cold set_tx_pause(struct mac_device *mac_dev, bool en)
+{
+	int	_errno;
+	t_Error err;
+
+	if (en)
+		err = FM_MAC_SetTxPauseFrames(
+				((struct mac_priv_s *)macdev_priv(mac_dev))->mac,
+				TX_PAUSE_PRIO_ENABLE,
+				TX_PAUSE_TIME_ENABLE,
+				TX_PAUSE_THRESH_DEFAULT);
+	else
+		err = FM_MAC_SetTxPauseFrames(
+				((struct mac_priv_s *)macdev_priv(mac_dev))->mac,
+				TX_PAUSE_PRIO_DISABLE,
+				TX_PAUSE_TIME_DISABLE,
+				TX_PAUSE_THRESH_DEFAULT);
+
+	_errno = -GET_ERROR_TYPE(err);
+	if (_errno < 0)
+		dev_err(mac_dev->dev,
+				 "FM_MAC_SetTxPauseFrames() = 0x%08x\n", err);
+
+	return _errno;
+}
+
 static int __cold fm_rtc_enable(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
@@ -763,7 +806,6 @@ static int __cold fm_rtc_set_fiper(struct net_device *net_dev, uint32_t id,
 	return _errno;
 }
 
-
 void fm_mac_dump_regs(struct mac_device *mac_dev)
 {
 	struct mac_priv_s *mac_priv = macdev_priv(mac_dev);
@@ -784,6 +826,8 @@ static void __cold setup_dtsec(struct mac_device *mac_dev)
 	mac_dev->ptp_enable		= ptp_enable;
 	mac_dev->ptp_disable		= ptp_disable;
 	mac_dev->get_mac_handle		= get_mac_handle;
+	mac_dev->set_tx_pause		= set_tx_pause;
+	mac_dev->set_rx_pause		= set_rx_pause;
 	mac_dev->fm_rtc_enable		= fm_rtc_enable;
 	mac_dev->fm_rtc_disable		= fm_rtc_disable;
 	mac_dev->fm_rtc_get_cnt		= fm_rtc_get_cnt;
@@ -804,6 +848,8 @@ static void __cold setup_xgmac(struct mac_device *mac_dev)
 	mac_dev->change_addr    = change_addr;
 	mac_dev->set_multi      = set_multi;
 	mac_dev->uninit		= uninit;
+	mac_dev->set_tx_pause	= set_tx_pause;
+	mac_dev->set_rx_pause	= set_rx_pause;
 }
 
 static void __cold setup_memac(struct mac_device *mac_dev)
@@ -816,6 +862,8 @@ static void __cold setup_memac(struct mac_device *mac_dev)
 	mac_dev->change_addr    = change_addr;
 	mac_dev->set_multi      = set_multi;
 	mac_dev->uninit		= uninit;
+	mac_dev->set_tx_pause		= set_tx_pause;
+	mac_dev->set_rx_pause		= set_rx_pause;
 	mac_dev->fm_rtc_enable		= fm_rtc_enable;
 	mac_dev->fm_rtc_disable		= fm_rtc_disable;
 	mac_dev->fm_rtc_get_cnt		= fm_rtc_get_cnt;

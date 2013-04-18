@@ -67,6 +67,10 @@ struct mac_device {
 	/* List of multicast addresses */
 	struct list_head	 mc_addr_list;
 
+	u32	autoneg_pause;
+	u32	rx_pause;
+	u32	tx_pause;
+
 	int (*init_phy)(struct net_device *net_dev);
 	int (*init)(struct mac_device *mac_dev);
 	int (*start)(struct mac_device *mac_dev);
@@ -78,6 +82,8 @@ struct mac_device {
 	int (*ptp_enable)(struct mac_device *mac_dev);
 	int (*ptp_disable)(struct mac_device *mac_dev);
 	void *(*get_mac_handle)(struct mac_device *mac_dev);
+	int (*set_rx_pause)(struct mac_device *mac_dev, bool en);
+	int (*set_tx_pause)(struct mac_device *mac_dev, bool en);
 	int (*fm_rtc_enable)(struct net_device *net_dev);
 	int (*fm_rtc_disable)(struct net_device *net_dev);
 	int (*fm_rtc_get_cnt)(struct net_device *net_dev, uint64_t *ts);
@@ -106,5 +112,11 @@ static inline void * __attribute((nonnull)) macdev_priv(const struct mac_device 
 extern const char	*mac_driver_description;
 extern const size_t	 mac_sizeof_priv[];
 extern void (*const mac_setup[])(struct mac_device *mac_dev);
+
+#define TX_PAUSE_PRIO_ENABLE 0
+#define TX_PAUSE_PRIO_DISABLE 0xff
+#define TX_PAUSE_TIME_ENABLE 0xf000
+#define TX_PAUSE_TIME_DISABLE 0
+#define TX_PAUSE_THRESH_DEFAULT 0
 
 #endif	/* __MAC_H */

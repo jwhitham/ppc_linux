@@ -166,6 +166,13 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 
 	INIT_LIST_HEAD(&mac_dev->mc_addr_list);
 
+	/* pause frame autonegotiation enabled*/
+	mac_dev->autoneg_pause = true;
+	/* does not ignore PAUSE frames */
+	mac_dev->rx_pause = true;
+	/* transmits PAUSE frames when congested */
+	mac_dev->tx_pause = true;
+
 	/* Get the FM node */
 	dev_node = of_get_parent(mac_node);
 	if (unlikely(dev_node == NULL)) {
