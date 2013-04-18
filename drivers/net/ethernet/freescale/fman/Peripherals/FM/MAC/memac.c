@@ -299,7 +299,6 @@ static t_Error MemacAdjustLink(t_Handle h_Memac, e_EnetSpeed speed, bool fullDup
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 UNUSED(p_Memac);
-DBG(WARNING, ("mEMAC works in automatic-mode; therefore, adjust-link is not needed!"));
 
     return E_OK;
 }
