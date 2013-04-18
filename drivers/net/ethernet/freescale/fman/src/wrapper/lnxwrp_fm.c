@@ -1268,6 +1268,32 @@ void fm_port_disable(struct fm_port *port)
 }
 EXPORT_SYMBOL(fm_port_disable);
 
+int fm_port_set_rate_limit(struct fm_port *port,
+			uint16_t	max_burst_size,
+			uint32_t	rate_limit)
+{
+	t_FmPortRateLimit param;
+	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
+	int err = 0;
+
+	param.maxBurstSize = max_burst_size;
+	param.rateLimit = rate_limit;
+	param.rateLimitDivider = 0;
+
+	err = FM_PORT_SetRateLimit(p_LnxWrpFmPortDev->h_Dev, &param);
+	return err;
+}
+EXPORT_SYMBOL(fm_port_set_rate_limit);
+
+int fm_port_del_rate_limit(struct fm_port *port)
+{
+	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
+
+	FM_PORT_DeleteRateLimit(p_LnxWrpFmPortDev->h_Dev);
+	return 0;
+}
+EXPORT_SYMBOL(fm_port_del_rate_limit);
+
 void fm_mutex_lock(void)
 {
     mutex_lock(&lnxwrp_mutex);

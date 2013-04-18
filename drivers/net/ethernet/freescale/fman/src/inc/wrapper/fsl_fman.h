@@ -315,6 +315,31 @@ int fm_get_max_frm(void);
 *//***************************************************************************/
 int fm_get_rx_extra_headroom(void);
 
+/**************************************************************************//**
+ @Function	fm_port_set_rate_limit
+
+ @Description	Configure Shaper parameter on FM-port device (Tx port).
+
+ @Param[in]	port	- A handle of the FM port device.
+ @Param[in]	max_burst_size	- Value of maximum burst size allowed.
+ @Param[in]	rate_limit	- The required rate value.
+
+ @Cautions	Allowed only after the port is initialized.
+*//***************************************************************************/
+int fm_port_set_rate_limit(struct fm_port *port,
+			uint16_t	max_burst_size,
+			uint32_t	rate_limit);
+/**************************************************************************//**
+ @Function	fm_port_set_rate_limit
+
+ @Description	Delete Shaper configuration on FM-port device (Tx port).
+
+ @Param[in]	port	- A handle of the FM port device.
+
+ @Cautions	Allowed only after the port is initialized.
+*//***************************************************************************/
+int fm_port_del_rate_limit(struct fm_port *port);
+
 /** @} */ /* end of FM_LnxKern_ctrl_grp group */
 /** @} */ /* end of FM_LnxKern_grp group */
 
