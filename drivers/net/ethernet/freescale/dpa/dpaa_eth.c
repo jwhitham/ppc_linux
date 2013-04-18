@@ -3034,6 +3034,20 @@ static void __cold dpa_timeout(struct net_device *net_dev)
 	percpu_priv->stats.tx_errors++;
 }
 
+#ifdef CONFIG_NET_POLL_CONTROLLER
+static void dpaa_eth_poll_controller(struct net_device *net_dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct dpa_percpu_priv_s *percpu_priv =
+		this_cpu_ptr(priv->percpu_priv);
+	struct napi_struct napi = percpu_priv->napi;
+
+	qman_irqsource_remove(QM_PIRQ_DQRI);
+	qman_poll_dqrr(napi.weight);
+	qman_irqsource_add(QM_PIRQ_DQRI);
+}
+#endif
+
 static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 {
 	return ((struct dpa_bp *)dpa_bp0)->size -
@@ -3505,6 +3519,9 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_fix_features,
 	.ndo_do_ioctl = dpa_ioctl,
+#ifdef CONFIG_NET_POLL_CONTROLLER
+	.ndo_poll_controller = dpaa_eth_poll_controller,
+#endif
 };
 
 static const struct net_device_ops dpa_shared_ops = {
