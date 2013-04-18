@@ -94,6 +94,10 @@ void sdhci_get_of_property(struct platform_device *pdev)
 			host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
 		}
 
+		if (of_device_is_compatible(np, "fsl,p5040-esdhc") ||
+			of_device_is_compatible(np, "fsl,p1020-esdhc"))
+			host->quirks &= ~SDHCI_QUIRK_BROKEN_CARD_DETECTION;
+
 		clk = of_get_property(np, "clock-frequency", &size);
 		if (clk && size == sizeof(*clk) && *clk)
 			pltfm_host->clock = be32_to_cpup(clk);
