@@ -946,7 +946,7 @@ int gen10g_read_status(struct phy_device *phydev)
 	phydev->duplex = DUPLEX_FULL;
 
 	for (devad = 0; mmd_mask; devad++, mmd_mask = mmd_mask >> 1) {
-		if (!mmd_mask & 1)
+		if (!(mmd_mask & 1))
 			continue;
 
 		/* Read twice because link state is latched and a
