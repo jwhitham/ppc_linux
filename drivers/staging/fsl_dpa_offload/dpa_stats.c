@@ -1455,16 +1455,6 @@ static int set_cls_cnt_eth_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		cnt_sel -= 1;
 
 	for (i = 0; i < params->class_members; i++) {
-		/* 1G Port, DTSEC controller */
-		if (params->eth_params.src[i].eth_id <
-				DPA_STATS_ETH_10G_PORT0) {
-			if (cnt_sel & DPA_STATS_CNT_ETH_IN_UNICAST_PKTS ||
-			    cnt_sel & DPA_STATS_CNT_ETH_OUT_UNICAST_PKTS) {
-				pr_err("Invalid Ethernet counter selection\n");
-				return -EINVAL;
-			}
-		}
-
 		/* Get FM MAC handle */
 		err = get_fm_mac(params->eth_params.src[i], &fm_mac);
 		if (err != 0) {
