@@ -186,6 +186,8 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 
 #define DEFAULT_PTP_TX_BUF_SZ		1024
 #define DEFAULT_PTP_RX_BUF_SZ		2048
+/* The threshold between the current found one and the oldest one */
+#define TS_ACCUMULATION_THRESHOLD	50
 
 #define GFAR_PTP_SOURCE_PORT_LENGTH	10
 #define	GFAR_PTP_HEADER_SEQ_OFFS	30

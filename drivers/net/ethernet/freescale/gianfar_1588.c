@@ -114,8 +114,8 @@ static bool gfar_ptp_find_and_remove(struct gfar_ptp_circular *buf,
 {
 	struct circ_buf *circ_buf = &buf->circ_buf;
 	unsigned int size = buf->size;
-	unsigned int head, idx;
-	struct gfar_ptp_data *tmp;
+	unsigned int head, tail, idx;
+	struct gfar_ptp_data *tmp, *tmp2;
 	struct gfar_ptp_ident *tmp_ident;
 	unsigned long flags;
 
@@ -126,7 +126,7 @@ static bool gfar_ptp_find_and_remove(struct gfar_ptp_circular *buf,
 	}
 
 	head = circ_buf->head;
-	idx = circ_buf->tail;
+	tail = idx = circ_buf->tail;
 
 	while (idx != head) {
 		tmp = (struct gfar_ptp_data *)(circ_buf->buf) + idx;
@@ -140,15 +140,28 @@ static bool gfar_ptp_find_and_remove(struct gfar_ptp_circular *buf,
 
 	/* not found ? */
 	if (idx == head) {
-		circ_buf->tail = head;
 		spin_unlock_irqrestore(&buf->ptp_lock, flags);
 		return 1;
 	}
 
 	*ts = tmp->ts;
 
+	if (idx != tail) {
+		if (CIRC_CNT(idx, tail, size) > TS_ACCUMULATION_THRESHOLD) {
+			tail = circ_buf->tail =
+				(idx - TS_ACCUMULATION_THRESHOLD) & (size - 1);
+		}
+
+		while (CIRC_CNT(idx, tail, size) > 0) {
+			tmp = (struct gfar_ptp_data *)(circ_buf->buf) + idx;
+			idx = (idx - 1) & (size - 1);
+			tmp2 = (struct gfar_ptp_data *)(circ_buf->buf) + idx;
+			*tmp = *tmp2;
+		}
+	}
+
 	/* set tail pointer to postion after found */
-	circ_buf->tail = (idx + 1) & (size - 1);
+	circ_buf->tail = (tail + 1) & (size - 1);
 
 	spin_unlock_irqrestore(&buf->ptp_lock, flags);
 
