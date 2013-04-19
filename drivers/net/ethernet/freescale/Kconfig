@@ -93,6 +93,13 @@ config GIANFAR
 	---help---
 	  This driver supports the Gigabit TSEC on the MPC83xx, MPC85xx,
 	  and MPC86xx family of chips, and the FEC on the 8540.
+config RX_TX_BUFF_XCHG
+        default y
+	 bool "RX and TX ring buffer exchange for Routed packets"
+	 depends on GIANFAR && AS_FASTPATH
+	 ---help---
+	 Enable this flag to get better throughput for the routing functionality.
+	 Enhances the performance for IPv4 Routing, NAT forwarding.
 
 source "drivers/net/ethernet/freescale/fman/Kconfig"
 source "drivers/net/ethernet/freescale/dpa/Kconfig"
