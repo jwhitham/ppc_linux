@@ -25,6 +25,11 @@ config AMD_PHY
 	---help---
 	  Currently supports the am79c874
 
+config ATHEROS_PHY
+	tristate "Drivers for Atheros PHYs"
+	---help---
+	  Currently supports the AR8035 PHY
+
 config MARVELL_PHY
 	tristate "Drivers for Marvell PHYs"
 	---help---
