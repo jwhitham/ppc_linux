@@ -629,7 +629,7 @@ static t_Error DtsecSetTxPauseFrames(t_Handle h_Dtsec,
 
 #ifdef FM_BAD_TX_TS_IN_B_2_B_ERRATA_DTSEC_A003
     if (p_Dtsec->fmMacControllerDriver.fmRevInfo.majorRev == 2)
-        if (pauseTime <= 320)
+        if (0 < pauseTime && pauseTime <= 320)
             RETURN_ERROR(MINOR, E_INVALID_VALUE,
                      ("This pause-time value of %d is illegal due to errata dTSEC-A003!"
                       " value should be greater than 320."));
