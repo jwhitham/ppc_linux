@@ -223,5 +223,6 @@ const struct ethtool_ops dpa_ethtool_ops = {
 	.set_pauseparam = dpa_set_pauseparam,
 	.self_test = NULL, /* TODO invoke the cold-boot unit-test? */
 	.get_ethtool_stats = NULL, /* TODO other stats, currently in debugfs */
+	.get_link = ethtool_op_get_link,
 };
 
