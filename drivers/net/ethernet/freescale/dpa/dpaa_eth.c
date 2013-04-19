@@ -57,10 +57,6 @@
 #include <linux/percpu.h>
 #include <linux/dma-mapping.h>
 #include <asm/smp.h>		/* get_hard_smp_processor_id() */
-#ifdef CONFIG_DEBUG_FS
-#include <linux/debugfs.h>
-#include <asm/debug.h>
-#endif
 #include <linux/fsl_bman.h>
 
 #include "fsl_fman.h"
@@ -70,6 +66,9 @@
 #include "mac.h"
 #include "dpaa_eth.h"
 #include "dpaa_1588.h"
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+#include "dpaa_debugfs.h"
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 /* CREATE_TRACE_POINTS only needs to be defined once. Other dpa files
  * using trace events only need to #include <trace/events/sched.h>
@@ -161,10 +160,6 @@ MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
 static uint16_t tx_timeout = 1000;
 module_param(tx_timeout, ushort, S_IRUGO);
 MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
-
-#ifdef CONFIG_DEBUG_FS
-static struct dentry *dpa_debugfs_root;
-#endif
 
 /* dpaa_eth mirror for the FMan values */
 static int dpa_rx_extra_headroom;
@@ -3302,185 +3297,6 @@ static const char fsl_qman_frame_queues[][25] = {
 	[TX] = "fsl,qman-frame-queues-tx"
 };
 
-#ifdef CONFIG_DEBUG_FS
-static int __cold dpa_debugfs_show(struct seq_file *file, void *offset)
-{
-	int				 i;
-	struct dpa_priv_s		*priv;
-	struct dpa_percpu_priv_s	*percpu_priv, total;
-	struct dpa_bp *dpa_bp;
-	unsigned int dpa_bp_count = 0;
-	unsigned int count_total = 0;
-	struct qm_mcr_querycgr query_cgr;
-
-	BUG_ON(offset == NULL);
-
-	priv = netdev_priv((struct net_device *)file->private);
-
-	dpa_bp = priv->dpa_bp;
-
-	memset(&total, 0, sizeof(total));
-
-	/* "Standard" counters */
-	seq_printf(file, "\nDPA counters for %s:\n"
-		"CPU           irqs        rx        tx   recycle" \
-		"   confirm     tx sg    tx err    rx err   bp count\n",
-		priv->net_dev->name);
-
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-
-		/* Only private interfaces have an associated counter for bp
-		 * buffers. Also the counter isn't initialized before the first
-		 * ifconfig up
-		 */
-		if (!priv->shared && percpu_priv->dpa_bp_count)
-			dpa_bp_count = *percpu_priv->dpa_bp_count;
-
-		total.in_interrupt += percpu_priv->in_interrupt;
-		total.stats.rx_packets += percpu_priv->stats.rx_packets;
-		total.stats.tx_packets += percpu_priv->stats.tx_packets;
-		total.tx_returned += percpu_priv->tx_returned;
-		total.tx_confirm += percpu_priv->tx_confirm;
-		total.tx_frag_skbuffs += percpu_priv->tx_frag_skbuffs;
-		total.stats.tx_errors += percpu_priv->stats.tx_errors;
-		total.stats.rx_errors += percpu_priv->stats.rx_errors;
-		count_total += dpa_bp_count;
-
-		seq_printf(file, "     %hu/%hu  %8llu  %8llu  %8llu  %8llu  "
-				"%8llu  %8llu  %8llu  %8llu     %8d\n",
-				get_hard_smp_processor_id(i), i,
-				percpu_priv->in_interrupt,
-				percpu_priv->stats.rx_packets,
-				percpu_priv->stats.tx_packets,
-				percpu_priv->tx_returned,
-				percpu_priv->tx_confirm,
-				percpu_priv->tx_frag_skbuffs,
-				percpu_priv->stats.tx_errors,
-				percpu_priv->stats.rx_errors,
-				dpa_bp_count);
-	}
-	seq_printf(file, "Total     %8llu  %8llu  %8llu  %8llu  %8llu  %8llu  "
-			"%8llu  %8llu     %8d\n",
-			total.in_interrupt,
-			total.stats.rx_packets,
-			total.stats.tx_packets,
-			total.tx_returned,
-			total.tx_confirm,
-			total.tx_frag_skbuffs,
-			total.stats.tx_errors,
-			total.stats.rx_errors,
-			count_total);
-
-	/* Congestion stats */
-	seq_printf(file, "\nDevice congestion stats:\n");
-	seq_printf(file, "Device has been congested for %d ms.\n",
-		jiffies_to_msecs(priv->cgr_data.congested_jiffies));
-
-	qman_query_cgr(&priv->cgr_data.cgr, &query_cgr);
-	seq_printf(file, "CGR id %d avg count: %llu\n",
-		priv->cgr_data.cgr.cgrid, qm_mcr_querycgr_a_get64(&query_cgr));
-	seq_printf(file, "Device entered congestion %u times. "
-		"Current congestion state is: %s.\n",
-		priv->cgr_data.cgr_congested_count,
-		query_cgr.cgr.cs ? "congested" : "not congested");
-	/* Reset congestion stats (like QMan CGR API does) */
-	priv->cgr_data.congested_jiffies = 0;
-	priv->cgr_data.cgr_congested_count = 0;
-
-	/* Rx Errors demultiplexing */
-	seq_printf(file, "\nDPA RX Errors:\nCPU        dma err  phys err" \
-				"  size err   hdr err  csum err\n");
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-
-		total.rx_errors.dme += percpu_priv->rx_errors.dme;
-		total.rx_errors.fpe += percpu_priv->rx_errors.fpe;
-		total.rx_errors.fse += percpu_priv->rx_errors.fse;
-		total.rx_errors.phe += percpu_priv->rx_errors.phe;
-		total.rx_errors.cse += percpu_priv->rx_errors.cse;
-
-		seq_printf(file, "     %hu/%hu  %8llu  %8llu  %8llu  %8llu  "
-				"%8llu\n",
-				get_hard_smp_processor_id(i), i,
-				percpu_priv->rx_errors.dme,
-				percpu_priv->rx_errors.fpe,
-				percpu_priv->rx_errors.fse,
-				percpu_priv->rx_errors.phe,
-				percpu_priv->rx_errors.cse);
-	}
-	seq_printf(file, "Total     %8llu  %8llu  %8llu  %8llu  %8llu\n",
-			total.rx_errors.dme,
-			total.rx_errors.fpe,
-			total.rx_errors.fse,
-			total.rx_errors.phe,
-			total.rx_errors.cse);
-
-	/* ERN demultiplexing */
-	seq_printf(file, "\nDPA ERN counters:\n  CPU     cg_td      wred  " \
-			"err_cond   early_w    late_w     fq_td    fq_ret" \
-			"     orp_z\n");
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-
-		total.ern_cnt.cg_tdrop += percpu_priv->ern_cnt.cg_tdrop;
-		total.ern_cnt.wred += percpu_priv->ern_cnt.wred;
-		total.ern_cnt.err_cond += percpu_priv->ern_cnt.err_cond;
-		total.ern_cnt.early_window += percpu_priv->ern_cnt.early_window;
-		total.ern_cnt.late_window += percpu_priv->ern_cnt.late_window;
-		total.ern_cnt.fq_tdrop += percpu_priv->ern_cnt.fq_tdrop;
-		total.ern_cnt.fq_retired += percpu_priv->ern_cnt.fq_retired;
-		total.ern_cnt.orp_zero += percpu_priv->ern_cnt.orp_zero;
-
-		seq_printf(file, "  %hu/%hu  %8llu  %8llu  %8llu  %8llu  "
-			"%8llu  %8llu  %8llu  %8llu\n",
-			get_hard_smp_processor_id(i), i,
-			percpu_priv->ern_cnt.cg_tdrop,
-			percpu_priv->ern_cnt.wred,
-			percpu_priv->ern_cnt.err_cond,
-			percpu_priv->ern_cnt.early_window,
-			percpu_priv->ern_cnt.late_window,
-			percpu_priv->ern_cnt.fq_tdrop,
-			percpu_priv->ern_cnt.fq_retired,
-			percpu_priv->ern_cnt.orp_zero);
-	}
-	seq_printf(file, "Total  %8llu  %8llu  %8llu  %8llu  %8llu  %8llu  "
-			"%8llu  %8llu\n",
-		total.ern_cnt.cg_tdrop,
-		total.ern_cnt.wred,
-		total.ern_cnt.err_cond,
-		total.ern_cnt.early_window,
-		total.ern_cnt.late_window,
-		total.ern_cnt.fq_tdrop,
-		total.ern_cnt.fq_retired,
-		total.ern_cnt.orp_zero);
-
-	return 0;
-}
-
-static int __cold dpa_debugfs_open(struct inode *inode, struct file *file)
-{
-	int			 _errno;
-	const struct net_device	*net_dev;
-
-	_errno = single_open(file, dpa_debugfs_show, inode->i_private);
-	if (unlikely(_errno < 0)) {
-		net_dev = (struct net_device *)inode->i_private;
-
-		if (netif_msg_drv((struct dpa_priv_s *)netdev_priv(net_dev)))
-			netdev_err(net_dev, "single_open() = %d\n",
-					_errno);
-	}
-	return _errno;
-}
-
-static const struct file_operations dpa_debugfs_fops = {
-	.open		= dpa_debugfs_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
-#endif
 
 #ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
 static u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
@@ -4013,20 +3829,14 @@ static int dpa_netdev_init(struct device_node *dpa_node,
 		return err;
 	}
 
-#ifdef CONFIG_DEBUG_FS
-	priv->debugfs_file = debugfs_create_file(net_dev->name, S_IRUGO,
-						 dpa_debugfs_root, net_dev,
-						 &dpa_debugfs_fops);
-	if (unlikely(priv->debugfs_file == NULL)) {
-		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s) = %d\n",
-				powerpc_debugfs_root->d_iname,
-				dpa_debugfs_root->d_iname,
-				net_dev->name, err);
-
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	/* create debugfs entry for this net_device */
+	err = dpa_netdev_debugfs_create(net_dev);
+	if (err) {
 		unregister_netdev(net_dev);
-		return -ENOMEM;
+		return err;
 	}
-#endif
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 	return 0;
 }
@@ -4500,9 +4310,10 @@ static int __cold dpa_remove(struct platform_device *of_dev)
 
 	dpa_bp_free(priv, priv->dpa_bp);
 
-#ifdef CONFIG_DEBUG_FS
-	debugfs_remove(priv->debugfs_file);
-#endif
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	/* remove debugfs entry for this net_device */
+	dpa_netdev_debugfs_remove(net_dev);
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 #ifdef CONFIG_FSL_DPA_1588
 	if (priv->tsu && priv->tsu->valid)
@@ -4534,34 +4345,13 @@ static int __init __cold dpa_load(void)
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
 
-#ifdef CONFIG_DEBUG_FS
-	dpa_debugfs_root = debugfs_create_dir(KBUILD_MODNAME,
-					      powerpc_debugfs_root);
-	if (unlikely(dpa_debugfs_root == NULL)) {
-		_errno = -ENOMEM;
-		pr_err(KBUILD_MODNAME ": %s:%hu:%s(): "
-			   "debugfs_create_dir(%s/"KBUILD_MODNAME") = %d\n",
-			   KBUILD_BASENAME".c", __LINE__, __func__,
-			   powerpc_debugfs_root->d_iname, _errno);
-		goto _return;
-	}
-#endif
-
 	_errno = platform_driver_register(&dpa_driver);
 	if (unlikely(_errno < 0)) {
 		pr_err(KBUILD_MODNAME
 			": %s:%hu:%s(): platform_driver_register() = %d\n",
 			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
-		goto _return_debugfs_remove;
 	}
 
-	goto _return;
-
-_return_debugfs_remove:
-#ifdef CONFIG_DEBUG_FS
-	debugfs_remove(dpa_debugfs_root);
-#endif
-_return:
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 
@@ -4575,10 +4365,6 @@ static void __exit __cold dpa_unload(void)
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_driver);
-
-#ifdef CONFIG_DEBUG_FS
-	debugfs_remove(dpa_debugfs_root);
-#endif
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);

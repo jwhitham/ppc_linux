@@ -119,3 +119,10 @@ config DPAA_ETH_UNIT_TESTS
 	bool
 	depends on DPA_ETH
 	default n
+
+config FSL_DPAA_ETH_DEBUGFS
+	tristate "DPAA Ethernet debugfs interface"
+	depends on DEBUG_FS
+	default y
+	---help---
+	  This option compiles debugfs code for the DPAA Ethernet driver.

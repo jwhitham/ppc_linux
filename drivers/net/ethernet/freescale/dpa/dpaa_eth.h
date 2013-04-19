@@ -42,9 +42,6 @@
 #include <linux/if_vlan.h>	/* vlan_eth_hdr */
 #include <linux/ip.h>		/* ip_hdr */
 #include <linux/ipv6.h>		/* ipv6_hdr */
-#ifdef CONFIG_DEBUG_FS
-#include <linux/dcache.h>	/* struct dentry */
-#endif
 
 #include <linux/fsl_qman.h>	/* struct qman_fq */
 
@@ -55,7 +52,9 @@
 #include "fm_port_ext.h" /* FM_PORT_FRM_ERR_* */
 
 #include "mac.h"		/* struct mac_device */
-
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+#include "dpaa_debugfs.h"
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 #include "dpaa_eth_trace.h"
 
 #ifdef CONFIG_DPAA_ETH_SG_SUPPORT
@@ -363,9 +362,9 @@ struct dpa_priv_s {
 	struct mac_device	*mac_dev;
 
 	struct dpa_percpu_priv_s	*percpu_priv;
-#ifdef CONFIG_DEBUG_FS
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	struct dentry		*debugfs_file;
-#endif
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 	uint32_t		 msg_enable;	/* net_device message level */
 #ifdef CONFIG_FSL_DPA_1588
