@@ -57,7 +57,7 @@
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 #include "dpaa_eth_trace.h"
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 #define dpa_get_rx_extra_headroom() fm_get_rx_extra_headroom()
 #else
 #define dpa_get_rx_extra_headroom() dpa_rx_extra_headroom
@@ -73,7 +73,7 @@
 	(dpa_get_max_frm() - (VLAN_ETH_HLEN + ETH_FCS_LEN))
 
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 /* We may want this value configurable. Must be <= PAGE_SIZE
  * A lower value may help with recycling rates, at least on forwarding
  */
@@ -94,7 +94,7 @@
 #define DPAA_ETH_TX_QUEUES	NR_CPUS
 #define DPAA_ETH_RX_QUEUES	128
 
-#if defined(CONFIG_DPAA_FMAN_UNIT_TESTS)
+#if defined(CONFIG_FSL_DPAA_FMAN_UNIT_TESTS)
 /*TODO: temporary for fman pcd testing */
 #define FMAN_PCD_TESTS_MAX_NUM_RANGES	20
 #endif
@@ -165,7 +165,7 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 #define DEFAULT_SKB_COUNT 64 /* maximum number of SKBs in each percpu list */
 /*
  * Default amount data to be copied from the beginning of a frame into the
@@ -173,7 +173,7 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
  */
 #define DPA_COPIED_HEADERS_SIZE 128
 
-#endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /*
  * Largest value that the FQD's OAL field can hold.
@@ -329,7 +329,7 @@ struct dpa_percpu_priv_s {
 	int *dpa_bp_count;
 	struct dpa_bp *dpa_bp;
 	struct napi_struct napi;
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/* a list of preallocated SKBs for this CPU */
 	struct sk_buff_head skb_list;
 	/* current number of skbs in the CPU's list */
@@ -355,7 +355,7 @@ struct dpa_priv_s {
 	struct list_head	 dpa_fq_list;
 	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
 	struct qman_fq		*conf_fqs[DPAA_ETH_TX_QUEUES];
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	struct qman_fq		*recycle_fqs[DPAA_ETH_TX_QUEUES];
 #endif
 
@@ -367,11 +367,11 @@ struct dpa_priv_s {
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 	uint32_t		 msg_enable;	/* net_device message level */
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	struct dpa_ptp_tsu	 *tsu;
 #endif
 
-#if defined(CONFIG_DPAA_FMAN_UNIT_TESTS)
+#if defined(CONFIG_FSL_DPAA_FMAN_UNIT_TESTS)
 /* TODO: this is temporary until pcd support is implemented in dpaa */
 	int			priv_pcd_num_ranges;
 	struct pcd_range	priv_pcd_ranges[FMAN_PCD_TESTS_MAX_NUM_RANGES];
@@ -394,10 +394,10 @@ struct dpa_priv_s {
 		u32 cgr_congested_count;
 	} cgr_data;
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	bool ts_tx_en; /* Tx timestamping enabled */
 	bool ts_rx_en; /* Rx timestamping enabled */
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 	/*
 	 * Store here the needed Tx headroom for convenience and speed
@@ -433,7 +433,7 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 				     int *use_gro,
 				     unsigned int *hdr_size __maybe_unused);
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu_id);
 int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp);
 
@@ -544,7 +544,7 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 	int err, i;
 	struct qman_fq *egress_fq;
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	/* Choose egress fq based on whether we want
 	 * to recycle the frame or not */
 	if (fd->cmd & FM_FD_CMD_FCO)
@@ -577,7 +577,7 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 	return 0;
 }
 
-#if defined CONFIG_DPA_ETH_WQ_LEGACY
+#if defined CONFIG_FSL_DPAA_ETH_WQ_LEGACY
 #define DPA_NUM_WQS 8
 /*
  * Older WQ assignment: statically-defined FQIDs (such as PCDs) are assigned
@@ -590,7 +590,7 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 {
 	fq->wq = fq->fqid ? fq->fqid % DPA_NUM_WQS : DPA_NUM_WQS - 1;
 }
-#elif defined CONFIG_DPA_ETH_WQ_MULTI
+#elif defined CONFIG_FSL_DPAA_ETH_WQ_MULTI
 /*
  * Use multiple WQs for FQ assignment:
  *	- Tx Confirmation queues go to WQ1.
@@ -611,7 +611,7 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 		break;
 	case FQ_TYPE_RX_DEFAULT:
 	case FQ_TYPE_TX:
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	case FQ_TYPE_TX_RECYCLE:
 #endif
 	case FQ_TYPE_RX_PCD:
@@ -629,10 +629,10 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 #else
 /* This shouldn't happen, since we've made a "default" choice in the Kconfig. */
 #warning "No WQ assignment scheme chosen; Kconfig out-of-sync?"
-#endif /* CONFIG_DPA_ETH_WQ_ASSIGN_* */
+#endif /* CONFIG_FSL_DPAA_ETH_WQ_ASSIGN_* */
 
 
-#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 /* Use in lieu of skb_get_queue_mapping() */
 #define dpa_get_queue_mapping(skb) \
 	smp_processor_id()
@@ -642,10 +642,10 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 	skb_get_queue_mapping(skb)
 #endif
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 /* Updates the skb shared hw timestamp from the hardware timestamp */
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
 	struct skb_shared_hwtstamps *shhwtstamps, const void *data);
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 #endif	/* __DPA_H */

@@ -50,7 +50,7 @@ enum dpa_fq_type {
 	FQ_TYPE_TX,             /* "Real" Tx FQs */
 	FQ_TYPE_TX_CONFIRM,     /* Tx Confirmation FQs (actually Rx FQs) */
 	FQ_TYPE_TX_ERROR,       /* Tx Error FQs (these are actually Rx FQs) */
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	FQ_TYPE_TX_RECYCLE,	/* Tx FQs for recycleable frames only */
 #endif
 };

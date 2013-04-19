@@ -37,7 +37,7 @@
 #include <linux/io.h>
 #include <linux/of_net.h>
 #include "dpaa_eth.h"
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 #include "dpaa_1588.h"
 #endif
 
@@ -88,7 +88,7 @@ static ssize_t dpaa_eth_show_fqids(struct device *dev,
 		case FQ_TYPE_TX:
 			str = "Tx";
 			break;
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 		case FQ_TYPE_TX_RECYCLE:
 			str = "Tx(recycling)";
 			break;
@@ -160,7 +160,7 @@ static ssize_t dpaa_eth_show_mac_regs(struct device *dev,
 }
 
 
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 static ssize_t dpaa_eth_show_ptp_1588(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
@@ -204,7 +204,7 @@ static struct device_attribute dpaa_eth_attrs[] = {
 	__ATTR(fqids, S_IRUGO, dpaa_eth_show_fqids, NULL),
 	__ATTR(dflt_bpid, S_IRUGO, dpaa_eth_show_dflt_bpid, NULL),
 	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL),
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	__ATTR(ptp_1588, S_IRUGO | S_IWUSR, dpaa_eth_show_ptp_1588,
 					dpaa_eth_set_ptp_1588),
 #endif

@@ -86,8 +86,8 @@
 #define DPA_NETIF_FEATURES	NETIF_F_HW_ACCEL_MQ
 #endif
 
-#ifdef CONFIG_DPAA_ETH_UNIT_TESTS
-#undef CONFIG_DPAA_ETH_UNIT_TESTS
+#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
+#undef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
 #endif
 
 #define DPA_NAPI_WEIGHT		64
@@ -176,7 +176,7 @@ int dpa_alloc_pcd_fqids(struct device *, uint32_t, uint8_t, uint32_t *)
 __attribute__((weak));
 
 int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
-#endif /* CONFIG_DPAA_FMAN_UNIT_TESTS */
+#endif /* CONFIG_FSL_DPAA_FMAN_UNIT_TESTS */
 
 /* BM */
 
@@ -274,7 +274,7 @@ copy_to_unmapped_area(dma_addr_t phys_start, void *src, size_t buf_size)
 	}
 }
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 static void dpa_bp_add_8(const struct dpa_bp *dpa_bp)
 {
 	struct bm_buffer bmb[8];
@@ -367,7 +367,7 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 			*thiscount = *thiscount - j;
 	}
 }
-#endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 static void dpaa_eth_seed_pool(struct dpa_bp *bp)
 {
@@ -402,16 +402,16 @@ static void dpaa_eth_refill_bpools(struct dpa_priv_s *priv,
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
-	if (unlikely(count < CONFIG_DPAA_ETH_REFILL_THRESHOLD)) {
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+	if (unlikely(count < CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD)) {
 		int i;
 
-		for (i = count; i < CONFIG_DPAA_ETH_MAX_BUF_COUNT; i += 8)
+		for (i = count; i < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT; i += 8)
 			dpa_bp_add_8(dpa_bp);
 	}
 #else
 	/* Add pages to the buffer pool */
-	while (count < CONFIG_DPAA_ETH_MAX_BUF_COUNT)
+	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
 		count += _dpa_bp_add_8_pages(dpa_bp);
 	*countptr = count;
 
@@ -529,7 +529,7 @@ pdev_register_failed:
 	return err;
 }
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 static inline void _dpa_bp_free_buf(void *addr)
 {
 	struct sk_buff **skbh = addr;
@@ -696,7 +696,7 @@ _dpa_fq_alloc(struct list_head *list, struct dpa_fq *dpa_fq)
 			}
 		}
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 		/*
 		 * Configure the Tx queues for recycled frames, such that the
 		 * buffers are released by FMan and no confirmation is sent
@@ -896,7 +896,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 }
 EXPORT_SYMBOL(dpa_fd_release);
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 /*
  * Cleanup function for outgoing frame descriptors that were built on Tx path,
  * either contiguous frames or scatter/gather ones with a single data buffer.
@@ -957,7 +957,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 	}
 /* on some error paths this might not be necessary: */
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	if (unlikely(priv->ts_tx_en &&
 			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
 		struct skb_shared_hwtstamps shhwtstamps;
@@ -965,7 +965,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		if (!dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh))
 			skb_tstamp_tx(skb, &shhwtstamps);
 	}
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 	/* Free first buffer (which was allocated on Tx) containing the
 	 * skb backpointer and hardware timestamp information
@@ -975,7 +975,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 	return skb;
 }
-#endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /* net_device */
 
@@ -1101,7 +1101,7 @@ static void dpa_set_rx_mode(struct net_device *net_dev)
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
 	struct skb_shared_hwtstamps *shhwtstamps, const void *data)
 {
@@ -1223,27 +1223,27 @@ static int dpa_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	return copy_to_user(rq->ifr_data, &config, sizeof(config)) ?
 			-EFAULT : 0;
 }
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	struct dpa_priv_s *priv = netdev_priv(dev);
 #endif
 	int ret = 0;
 
 /* at least one timestamping feature must be enabled to proceed */
-#if defined(CONFIG_FSL_DPA_1588) || defined(CONFIG_FSL_DPA_TS)
+#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
 	if (!netif_running(dev))
 #endif
 		return -EINVAL;
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	if (cmd == SIOCSHWTSTAMP)
 		return dpa_ts_ioctl(dev, rq, cmd);
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	if ((cmd >= PTP_ENBL_TXTS_IOCTL) && (cmd <= PTP_CLEANUP_TS)) {
 		if (priv->tsu && priv->tsu->valid)
 			ret = dpa_ioctl_1588(dev, rq, cmd);
@@ -1255,7 +1255,7 @@ static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	return ret;
 }
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 /*
  * When we put the buffer into the pool, we purposefully added
  * some padding to the address so that the buffers wouldn't all
@@ -1415,7 +1415,7 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 		if (!fm_l4_frame_is_tcp(parse_results))
 			*use_gro = 0;
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		/*
 		 * If the L4 HXS Parser has successfully run, we can reduce the
 		 * number of bytes we'll memcopy into skb->data.
@@ -1431,7 +1431,7 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 	 * checksum zero or an L4 proto other than TCP/UDP
 	 */
 	skb->ip_summed = CHECKSUM_NONE;
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/*
 	 * Even if checksum was not verified, it's still possible L4 parser
 	 * has run, in which case we know the headers size.
@@ -1448,7 +1448,7 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 	*use_gro = 0;
 }
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 void __hot _dpa_rx(struct net_device *net_dev,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,
@@ -1502,7 +1502,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	prefetch(skb_shinfo(skb));
 
 /* Shouldn't we store the timestamp after we validate the mtu? */
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(net_dev, skb, fd);
 #endif
@@ -1522,10 +1522,10 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	_dpa_process_parse_results(parse_result, fd, skb, &use_gro,
 					 &hdr_size_unused);
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	if (priv->ts_rx_en)
 		dpa_get_ts(priv, RX, skb_hwtstamps(skb), (void *)skbh);
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 	if (use_gro) {
 		gro_result_t gro_result;
@@ -1554,7 +1554,7 @@ drop_large_frame:
 _return_dpa_fd_release:
 	dpa_fd_release(net_dev, fd);
 }
-#endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 static void dpaa_eth_napi_disable(struct dpa_priv_s *priv)
 {
@@ -1630,7 +1630,7 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 
 	skb = _dpa_cleanup_tx_fd(priv, fd);
 
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
 		dpa_ptp_store_txstamp(net_dev, skb, fd);
 #endif
@@ -1656,11 +1656,11 @@ static void dpa_set_buffer_layout(struct dpa_priv_s *priv, struct fm_port *port,
 			DPA_RX_PRIV_DATA_SIZE : DPA_TX_PRIV_DATA_SIZE);
 	layout->parse_results = true;
 	layout->hash_results = true;
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	if (priv && priv->tsu && priv->tsu->valid)
 		layout->time_stamp = true;
 #endif
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	layout->time_stamp = true;
 #endif
 
@@ -1855,7 +1855,7 @@ buf_acquire_failed:
 	return NETDEV_TX_OK;
 }
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 static int skb_to_sg_fd(struct dpa_priv_s *priv,
 		struct sk_buff *skb, struct qm_fd *fd)
 {
@@ -1931,12 +1931,12 @@ static int skb_to_sg_fd(struct dpa_priv_s *priv,
 	sg_entry->addr_hi = upper_32_bits(paddr);
 	sg_entry->addr_lo = lower_32_bits(paddr);
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	if (unlikely(priv->ts_tx_en &&
 			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 	}
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 	return 0;
 }
@@ -2007,14 +2007,14 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 		}
 	}
 
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	if (unlikely(priv->ts_tx_en &&
 			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
 		/* we need the fd back to get the timestamp */
 		can_recycle = false;
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 	}
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 	if (likely(can_recycle)) {
 		/* Buffer will get recycled, setup fd accordingly */
@@ -2101,15 +2101,15 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		skb = skb_new;
 	}
 
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
 		fd.cmd |= FM_FD_CMD_UPD;
 #endif
-#ifdef CONFIG_FSL_DPA_TS
+#ifdef CONFIG_FSL_DPAA_TS
 	if (unlikely(priv->ts_tx_en &&
 			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP))
 		fd.cmd |= FM_FD_CMD_UPD;
-#endif /* CONFIG_FSL_DPA_TS */
+#endif /* CONFIG_FSL_DPAA_TS */
 
 	/*
 	 * We have two paths here:
@@ -2177,7 +2177,7 @@ fd_create_failed:
 done:
 	return NETDEV_TX_OK;
 }
-#endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /**
  * Congestion group state change notification callback.
@@ -2625,7 +2625,7 @@ static const struct qman_fq shared_egress_fq = {
 	.cb = { .ern = shared_ern }
 };
 
-#ifdef CONFIG_DPAA_ETH_UNIT_TESTS
+#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
 static bool tx_unit_test_passed = true;
 
 static void tx_unit_test_ern(struct qman_portal	*portal,
@@ -2736,7 +2736,7 @@ static const struct qman_fq tx_unit_test_fq = {
 };
 
 static struct dpa_fq unit_fq;
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 static struct dpa_fq unit_recycle_fq;
 #endif
 static bool tx_unit_test_ran; /* Starts as false */
@@ -2753,7 +2753,7 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 	int err = 0;
 	int tests_failed = 0;
 	const cpumask_t *cpus = qman_affine_cpus();
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	struct qman_fq *oldrecycleq;
 #endif
 
@@ -2793,7 +2793,7 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 	/* Replace queue 0 with this queue */
 	priv->egress_fqs[smp_processor_id()] = &unit_fq.fq_base;
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	oldrecycleq = priv->recycle_fqs[smp_processor_id()];
 	unit_recycle_fq.net_dev = net_dev;
 	unit_recycle_fq.fq_base = tx_unit_test_fq;
@@ -2892,7 +2892,7 @@ end_test:
 	if (unlikely(err < 0))
 		pr_err("Could not OOS TX Unit Test FQ (%d)\n", err);
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	err = qman_retire_fq(&unit_recycle_fq.fq_base, NULL);
 	if (unlikely(err < 0))
 		pr_err("Could not retire Recycle TX Unit Test FQ (%d)\n", err);
@@ -3172,7 +3172,7 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 		dpa_bp = ERR_PTR(-EINVAL);
 		goto _return_of_node_put;
 	} else if (has_kernel_pool) {
-		dpa_bp->target_count = CONFIG_DPAA_ETH_MAX_BUF_COUNT;
+		dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 		dpa_bp->kernel_pool = 1;
 	}
 
@@ -3235,7 +3235,7 @@ dpa_mac_probe(struct platform_device *_of_dev)
 	const phandle		*phandle_prop;
 	struct platform_device	*of_dev;
 	struct mac_device	*mac_dev;
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	struct net_device	*net_dev = NULL;
 	struct dpa_priv_s	*priv = NULL;
 	struct device_node	*timer_node;
@@ -3274,7 +3274,7 @@ dpa_mac_probe(struct platform_device *_of_dev)
 		return ERR_PTR(-EINVAL);
 	}
 
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	phandle_prop = of_get_property(mac_node, "ptimer-handle", &lenp);
 	if (phandle_prop && ((mac_dev->phy_if != PHY_INTERFACE_MODE_SGMII) ||
 			((mac_dev->phy_if == PHY_INTERFACE_MODE_SGMII) &&
@@ -3298,7 +3298,7 @@ static const char fsl_qman_frame_queues[][25] = {
 };
 
 
-#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 static u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
 {
 	return smp_processor_id();
@@ -3341,7 +3341,7 @@ static const struct net_device_ops dpa_private_ops = {
 	.ndo_get_stats64 = dpa_get_stats64,
 	.ndo_set_mac_address = dpa_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
-#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 	.ndo_select_queue = dpa_select_queue,
 #endif
 	.ndo_change_mtu = dpa_change_mtu,
@@ -3363,7 +3363,7 @@ static const struct net_device_ops dpa_shared_ops = {
 	.ndo_get_stats64 = dpa_get_stats64,
 	.ndo_set_mac_address = dpa_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
-#ifdef CONFIG_DPAA_ETH_USE_NDO_SELECT_QUEUE
+#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 	.ndo_select_queue = dpa_select_queue,
 #endif
 	.ndo_change_mtu = dpa_change_mtu,
@@ -3407,7 +3407,7 @@ static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 static const struct fqid_cell tx_recycle_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
@@ -3448,7 +3448,7 @@ dpa_fq_probe(struct platform_device *_of_dev, struct list_head *list,
 		}
 	}
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	/* per-core tx queues for recycleable frames (FManv3 only) */
 	if (txrecycle) {
 		fqids = tx_recycle_fqids;
@@ -3591,7 +3591,7 @@ static void dpa_setup_egress(struct dpa_priv_s *priv,
 	}
 }
 
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 static void dpa_setup_recycle_queues(struct dpa_priv_s *priv, struct dpa_fq *fq,
 				     struct fm_port *port)
 {
@@ -3758,7 +3758,7 @@ static void dpa_tx_fq_init(struct dpa_priv_s *priv, struct list_head *head,
 		dpa_setup_ingress(priv, errq, &tx_private_errq);
 		if (confqs)
 			dpa_setup_conf_queues(priv, confqs);
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 		if (recyclefqs)
 			dpa_setup_recycle_queues(priv, recyclefqs, port);
 #endif
@@ -3797,7 +3797,7 @@ static int dpa_netdev_init(struct device_node *dpa_node,
 		 * private interfaces
 		 */
 		if (!priv->shared) {
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 			net_dev->hw_features |= NETIF_F_SG | NETIF_F_HIGHDMA;
 			/* Recent kernels enable GSO automatically, if
 			 * we declare NETIF_F_SG. For conformity, we'll
@@ -3864,7 +3864,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		percpu_priv->net_dev = net_dev;
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		/* init the percpu list and add some skbs */
 		skb_queue_head_init(&percpu_priv->skb_list);
 
@@ -4085,7 +4085,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		goto rx_fq_probe_failed;
 
 	if (txport)
-#ifdef CONFIG_DPA_TX_RECYCLE
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 		err = dpa_fq_probe(_of_dev, &txfqlist, &txdefault, &txerror,
 				&txfqs, (is_shared ? NULL : &txconf),
 				(is_shared ? NULL : &txrecycle), TX);
@@ -4238,7 +4238,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
-#ifdef CONFIG_DPAA_ETH_UNIT_TESTS
+#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
 	/* The unit test is designed to test private interfaces */
 	if (!priv->shared && !tx_unit_test_ran) {
 		err = dpa_tx_unit_test(net_dev);
@@ -4315,7 +4315,7 @@ static int __cold dpa_remove(struct platform_device *of_dev)
 	dpa_netdev_debugfs_remove(net_dev);
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
-#ifdef CONFIG_FSL_DPA_1588
+#ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid)
 		dpa_ptp_cleanup(priv);
 #endif

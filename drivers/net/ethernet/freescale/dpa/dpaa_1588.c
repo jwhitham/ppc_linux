@@ -196,14 +196,14 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 	u8 *pos = skb->data + ETH_ALEN + ETH_ALEN;
 	u8 *ptp_loc = NULL;
 	u8 msg_type;
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	u32 access_len = ETH_ALEN + ETH_ALEN + DPA_ETYPE_LEN;
 #endif
 	struct iphdr *iph;
 	struct udphdr *udph;
 	struct ipv6hdr *ipv6h;
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/* when we can receive S/G frames we need to check the data we want to
 	 * access is in the linear skb buffer */
 	if (!pskb_may_pull(skb, access_len))
@@ -214,7 +214,7 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 
 	/* Check if inner tag is here */
 	if (*eth_type == ETH_P_8021Q) {
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		access_len += DPA_VLAN_TAG_LEN;
 
 		if (!pskb_may_pull(skb, access_len))
@@ -232,7 +232,7 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 	case ETH_P_1588:
 		ptp_loc = pos;
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		if (!pskb_may_pull(skb, access_len + PTP_OFFS_MSG_TYPE + 1))
 			return NULL;
 #endif
@@ -247,7 +247,7 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 	/* Transport of PTP over IPv4 */
 	case ETH_P_IP:
 		iph = (struct iphdr *)pos;
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		access_len += sizeof(struct iphdr);
 
 		if (!pskb_may_pull(skb, access_len))
@@ -257,7 +257,7 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 		if (ntohs(iph->protocol) != IPPROTO_UDP)
 			return NULL;
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		access_len += iph->ihl * 4 - sizeof(struct iphdr) +
 				sizeof(struct udphdr);
 
@@ -275,7 +275,7 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 	case ETH_P_IPV6:
 		ipv6h = (struct ipv6hdr *)pos;
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		access_len += sizeof(struct ipv6hdr) + sizeof(struct udphdr);
 #endif
 
@@ -320,7 +320,7 @@ static int dpa_ptp_store_stamp(struct net_device *dev, struct sk_buff *skb,
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_DPAA_ETH_SG_SUPPORT
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	if (!pskb_may_pull(skb, ptp_loc - skb->data + PTP_OFFS_SEQ_ID + 2))
 		return -EINVAL;
 #endif

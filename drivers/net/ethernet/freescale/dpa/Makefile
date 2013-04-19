@@ -8,12 +8,12 @@ include $(srctree)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 
 EXTRA_CFLAGS += -I$(NET_DPA)
 
-obj-$(CONFIG_FSL_DPA_1588) += dpaa_1588.o
-obj-$(CONFIG_DPAA_ETH_SG_SUPPORT) += fsl-dpa-sg.o
+obj-$(CONFIG_FSL_DPAA_1588) += dpaa_1588.o
+obj-$(CONFIG_FSL_DPAA_ETH_SG_SUPPORT) += fsl-dpa-sg.o
 # dpaa_debugfs needs to be initialized before dpaa_eth
 obj-$(CONFIG_FSL_DPAA_ETH_DEBUGFS) += dpaa_debugfs.o
-obj-$(CONFIG_DPA_ETH) += fsl-mac.o fsl-dpa.o
-obj-$(CONFIG_DPA_OFFLINE_PORTS) += fsl-oh.o
+obj-$(CONFIG_FSL_DPAA_ETH) += fsl-mac.o fsl-dpa.o
+obj-$(CONFIG_FSL_DPAA_OFFLINE_PORTS) += fsl-oh.o
 
 fsl-dpa-objs	:= dpa-ethtool.o dpaa_eth.o dpaa_eth_sysfs.o
 fsl-dpa-sg-objs	:= dpaa_eth_sg.o
