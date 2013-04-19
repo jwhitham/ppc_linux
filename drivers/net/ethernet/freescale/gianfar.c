@@ -2595,14 +2595,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 		if (fcb == NULL)
 			fcb = gfar_add_fcb(skb);
-		/*
-		 * the timestamp overwrites the ethertype and the following
-		 * 2 bytes -> storing 4 bytes at the end of the control buffer
-		 * structure - will be recovered in the function
-		 * gfar_clean_tx_ring
-		 */
-		memcpy(skb->cb, (skb->data + GMAC_FCB_LEN +
-					ETH_ALEN + ETH_ALEN), 4);
 		fcb->ptp = 1;
 		lstatus |= BD_LFLAG(TXBD_TOE);
 		/*
@@ -2989,18 +2981,13 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 			}
 			/* remove tx fcb */
 			skb_pull(skb, GMAC_FCB_LEN);
-			/*
-			 * the timestamp overwrote the ethertype and the
-			 * following 2 bytes, 4 byters were stored in the
-			 * end of the control buffer in function
-			 * gfar_start_xmit to be recovered here
-			 */
-			memcpy((skb->data + ETH_ALEN + ETH_ALEN), skb->cb, 4);
 			/* pass timestamp back */
 			if (unlikely(priv->hwts_tx_en))
 				skb_tstamp_tx(skb, &shhwtstamps);
-			if (likely(priv->hwts_tx_en_ioctl))
+			if (likely(priv->hwts_tx_en_ioctl)) {
+				skb_pull(skb, GMAC_TXPAL_LEN);
 				gfar_ptp_store_txstamp(dev, skb, &tx_ts);
+			}
 			bdp->lstatus &= BD_LFLAG(TXBD_WRAP);
 			bdp = next;
 		}
