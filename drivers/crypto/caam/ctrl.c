@@ -189,17 +189,6 @@ int caam_get_era(u64 caam_id)
 }
 EXPORT_SYMBOL(caam_get_era);
 
-/**
- * get_rng_vid() - Return the version of the (T)RNG  block of the SEC.
- * @topregs - pointer to SEC register space
- **/
-static inline u8 get_rng_vid(struct caam_full __iomem *topregs)
-{
-	u64 cha_vid = rd_reg64(&topregs->ctrl.perfmon.cha_id);
-
-	return (cha_vid & CHA_ID_RNG_MASK) >> CHA_ID_RNG_SHIFT;
-}
-
 /* Probe routine for CAAM top (controller) level */
 static int caam_probe(struct platform_device *pdev)
 {
@@ -213,6 +202,7 @@ static int caam_probe(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	struct caam_perfmon *perfmon;
 #endif
+	u64 cha_vid;
 
 	ctrlpriv = kzalloc(sizeof(struct caam_drv_private), GFP_KERNEL);
 	if (!ctrlpriv)
@@ -308,7 +298,9 @@ static int caam_probe(struct platform_device *pdev)
 	 * RNG4 based SECs need special initialization prior
 	 * to executing any descriptors
 	 */
-	if (get_rng_vid(topregs) >= 4) {
+	cha_vid = rd_reg64(&topregs->ctrl.perfmon.cha_id);
+
+	if ((cha_vid & CHA_ID_RNG_MASK) >> CHA_ID_RNG_SHIFT >= 4) {
 		kick_trng(pdev);
 		ret = instantiate_rng(ctrlpriv->jrdev[0]);
 		if (ret) {
