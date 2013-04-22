@@ -268,12 +268,12 @@ static void setup_pci_atmu(struct pci_controller *hose)
 
 	if (paddr_hi == paddr_lo) {
 		pr_err("%s: No outbound window space\n", name);
-		goto out;
+		return;
 	}
 
 	if (paddr_lo == 0) {
 		pr_err("%s: No space for inbound window\n", name);
-		goto out;
+		return;
 	}
 
 	/* setup PCSRBAR/PEXCSRBAR */
@@ -419,9 +419,6 @@ static void setup_pci_atmu(struct pci_controller *hose)
 		pr_info("%s: DMA window size is 0x%llx\n", name,
 			(u64)hose->dma_window_size);
 	}
-
-out:
-	iounmap(pci);
 }
 
 static void __init setup_pci_cmd(struct pci_controller *hose)
