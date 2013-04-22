@@ -1092,18 +1092,6 @@ static ssize_t show_sbec(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%u\n", qm_in(SBEC(i)));
 };
 
-#ifdef CONFIG_ASF_EGRESS_QOS
-void asf_set_wq_scheduling(u32 wq_class, u8 cs_elev,
-			u8 csw2, u8 csw3,
-			u8 csw4, u8 csw5,
-			u8 csw6, u8 csw7)
-{
-	qm_set_wq_scheduling(qm, (enum qm_wq_class)wq_class,
-			cs_elev, csw2, csw3, csw4, csw5, csw6, csw7);
-}
-EXPORT_SYMBOL(asf_set_wq_scheduling);
-#endif
-
 static DEVICE_ATTR(pfdr_fpc, S_IRUSR, show_pfdr_fpc, NULL);
 static DEVICE_ATTR(pfdr_cfg, S_IRUSR, show_pfdr_cfg, set_pfdr_cfg);
 static DEVICE_ATTR(idle_stat, S_IRUSR, show_idle_stat, NULL);
