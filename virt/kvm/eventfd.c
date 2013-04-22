@@ -35,7 +35,7 @@
 
 #include "iodev.h"
 
-#ifdef __KVM_HAVE_IOAPIC
+#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
 /*
  * --------------------------------------------------------------------
  * irqfd: Allows an fd to be used to inject an interrupt to the guest
@@ -431,7 +431,7 @@ fail:
 void
 kvm_eventfd_init(struct kvm *kvm)
 {
-#ifdef __KVM_HAVE_IOAPIC
+#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
 	spin_lock_init(&kvm->irqfds.lock);
 	INIT_LIST_HEAD(&kvm->irqfds.items);
 	INIT_LIST_HEAD(&kvm->irqfds.resampler_list);
@@ -440,7 +440,7 @@ kvm_eventfd_init(struct kvm *kvm)
 	INIT_LIST_HEAD(&kvm->ioeventfds);
 }
 
-#ifdef __KVM_HAVE_IOAPIC
+#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
 /*
  * shutdown any irqfd's that match fd+gsi
  */
@@ -544,7 +544,7 @@ void kvm_irq_routing_update(struct kvm *kvm,
  * aggregated from all vm* instances. We need our own isolated single-thread
  * queue to prevent deadlock against flushing the normal work-queue.
  */
-static int __init irqfd_module_init(void)
+int kvm_irqfd_init(void)
 {
 	irqfd_cleanup_wq = create_singlethread_workqueue("kvm-irqfd-cleanup");
 	if (!irqfd_cleanup_wq)
@@ -553,13 +553,10 @@ static int __init irqfd_module_init(void)
 	return 0;
 }
 
-static void __exit irqfd_module_exit(void)
+void kvm_irqfd_exit(void)
 {
 	destroy_workqueue(irqfd_cleanup_wq);
 }
-
-module_init(irqfd_module_init);
-module_exit(irqfd_module_exit);
 #endif
 
 /*

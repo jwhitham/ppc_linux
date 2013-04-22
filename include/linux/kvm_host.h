@@ -295,10 +295,10 @@ struct kvm_kernel_irq_routing_entry {
 	struct hlist_node link;
 };
 
-#ifdef __KVM_HAVE_IOAPIC
+#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
 
 struct kvm_irq_routing_table {
-	int chip[KVM_NR_IRQCHIPS][KVM_IOAPIC_NUM_PINS];
+	int chip[KVM_NR_IRQCHIPS][KVM_IRQCHIP_NUM_PINS];
 	struct kvm_kernel_irq_routing_entry *rt_entries;
 	u32 nr_rt_entries;
 	/*
@@ -419,6 +419,19 @@ void kvm_vcpu_uninit(struct kvm_vcpu *vcpu);
 int __must_check vcpu_load(struct kvm_vcpu *vcpu);
 void vcpu_put(struct kvm_vcpu *vcpu);
 
+#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
+int kvm_irqfd_init(void);
+void kvm_irqfd_exit(void);
+#else
+static inline int kvm_irqfd_init(void)
+{
+	return 0;
+}
+
+static inline void kvm_irqfd_exit(void)
+{
+}
+#endif
 int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 		  struct module *module);
 void kvm_exit(void);
@@ -677,11 +690,6 @@ void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 void kvm_fire_mask_notifiers(struct kvm *kvm, unsigned irqchip, unsigned pin,
 			     bool mask);
 
-#ifdef __KVM_HAVE_IOAPIC
-void kvm_get_intr_delivery_bitmask(struct kvm_ioapic *ioapic,
-				   union kvm_ioapic_redirect_entry *entry,
-				   unsigned long *deliver_bitmask);
-#endif
 int kvm_set_irq(struct kvm *kvm, int irq_source_id, u32 irq, int level);
 int kvm_set_irq_inatomic(struct kvm *kvm, int irq_source_id, u32 irq, int level);
 int kvm_set_msi(struct kvm_kernel_irq_routing_entry *irq_entry, struct kvm *kvm,
@@ -877,7 +885,7 @@ static inline int mmu_notifier_retry(struct kvm *kvm, unsigned long mmu_seq)
 }
 #endif
 
-#ifdef KVM_CAP_IRQ_ROUTING
+#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
 
 #define KVM_MAX_IRQ_ROUTES 1024
 
@@ -886,6 +894,9 @@ int kvm_set_irq_routing(struct kvm *kvm,
 			const struct kvm_irq_routing_entry *entries,
 			unsigned nr,
 			unsigned flags);
+int kvm_set_routing_entry(struct kvm_irq_routing_table *rt,
+			  struct kvm_kernel_irq_routing_entry *e,
+			  const struct kvm_irq_routing_entry *ue);
 void kvm_free_irq_routing(struct kvm *kvm);
 
 int kvm_send_userspace_msi(struct kvm *kvm, struct kvm_msi *msi);
