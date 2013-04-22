@@ -731,60 +731,68 @@ static void create_cnt_reass_stats(struct dpa_stats *dpa_stats)
 	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][5] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			dmaSemaphoreDepletion);
+#if (DPAA_VERSION >= 11)
+	/* DPA_STATS_CNT_REASS_NON_CONSISTENT_SP */
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][6] = offsetof(
+			struct t_FmPcdManipReassemIpStats,
+			nonConsistentSp);
+#else
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][6] = 0;
+#endif /* (DPAA_VERSION >= 11) */
 	/* DPA_STATS_CNT_REASS_IPv4_FRAMES */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][7] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][8] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].successfullyReassembled);
 	/* DPA_STATS_CNT_REASS_IPv4_FRAGS_VALID */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][8] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][9] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].validFragments);
 	/* DPA_STATS_CNT_REASS_IPv4_FRAGS_TOTAL */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][9] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][10] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].processedFragments);
 	/* DPA_STATS_CNT_REASS_IPv4_FRAGS_MALFORMED */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][10] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][11] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].malformedFragments);
 	/* DPA_STATS_CNT_REASS_IPv4_FRAGS_DISCARDED */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][11] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][12] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].discardedFragments);
 	/* DPA_STATS_CNT_REASS_IPv4_AUTOLEARN_BUSY */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][12] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][13] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].autoLearnBusy);
 	/* DPA_STATS_CNT_REASS_IPv4_EXCEED_16FRAGS */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][13] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][14] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[0].moreThan16Fragments);
 	/* DPA_STATS_CNT_REASS_IPv6_FRAMES */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][15] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][16] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].successfullyReassembled);
 	/* DPA_STATS_CNT_REASS_IPv6_FRAGS_VALID */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][16] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][17] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].validFragments);
 	/* DPA_STATS_CNT_REASS_IPv6_FRAGS_TOTAL */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][17] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][18] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].processedFragments);
 	/* DPA_STATS_CNT_REASS_IPv6_FRAGS_MALFORMED */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][18] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][19] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].malformedFragments);
 	/* DPA_STATS_CNT_REASS_IPv6_FRAGS_DISCARDED */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][19] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][20] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].discardedFragments);
 	/* DPA_STATS_CNT_REASS_IPv6_AUTOLEARN_BUSY */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][20] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][21] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].autoLearnBusy);
 	/* DPA_STATS_CNT_REASS_IPv6_EXCEED_16FRAGS */
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][21] = offsetof(
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][22] = offsetof(
 			struct t_FmPcdManipReassemIpStats,
 			specificHdrStatistics[1].moreThan16Fragments);
 }
@@ -2058,6 +2066,16 @@ static inline void get_cnt_32bit_stats(struct dpa_stats_req_cb *req_cb,
 	uint64_t stats_val;
 
 	for (j = 0; j < stats_info->stats_num; j++) {
+
+		if (!stats_info->stats_off[j]) {
+			/* Write the memory location */
+			memset(req_cb->request_area, 0, STATS_VAL_SIZE);
+
+			/* Update the memory pointer */
+			req_cb->request_area += STATS_VAL_SIZE ;
+			continue;
+		}
+
 		/* Get statistics value */
 		stats_val = (uint64_t)(*((uint32_t *)
 				(stats + stats_info->stats_off[j])));

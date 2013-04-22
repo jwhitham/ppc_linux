@@ -223,19 +223,24 @@ struct dpa_stats_cnt_eth {
  */
 enum dpa_stats_cnt_reass_gen_sel {
 	/* Number of timeout occurrences */
-	DPA_STATS_CNT_REASS_TIMEOUT		= 0x00000001,
+	DPA_STATS_CNT_REASS_TIMEOUT			= 0x00000001,
 	/* Number of failed attempts to allocate a Reassembly Frame Descriptor*/
-	DPA_STATS_CNT_REASS_RFD_POOL_BUSY	= 0x00000002,
+	DPA_STATS_CNT_REASS_RFD_POOL_BUSY		= 0x00000002,
 	/* Number of internal buffer busy occurrences */
-	DPA_STATS_CNT_REASS_INT_BUFF_BUSY	= 0x00000004,
+	DPA_STATS_CNT_REASS_INT_BUFF_BUSY		= 0x00000004,
 	/* Number of external buffer busy occurrences */
-	DPA_STATS_CNT_REASS_EXT_BUFF_BUSY	= 0x00000008,
+	DPA_STATS_CNT_REASS_EXT_BUFF_BUSY		= 0x00000008,
 	/* Number of Scatter/Gather fragments */
-	DPA_STATS_CNT_REASS_SG_FRAGS		= 0x00000010,
+	DPA_STATS_CNT_REASS_SG_FRAGS			= 0x00000010,
 	/* Number of failed attempts to allocate a DMA semaphore */
-	DPA_STATS_CNT_REASS_DMA_SEM		= 0x00000020,
-	/* Select all counters from dpa_stats_cnt_reass_common_sel */
-	DPA_STATS_CNT_REASS_GEN_ALL		= 0x00000040
+	DPA_STATS_CNT_REASS_DMA_SEM			= 0x00000020,
+	/*
+	 * Number of Non Consistent Storage Profile occurrences for successfully
+	 * reassembled frames
+	 */
+	DPA_STATS_CNT_REASS_NON_CONSISTENT_SP		= 0x00000040,
+	/* Select all counters from dpa_stats_cnt_reass_gen_sel */
+	DPA_STATS_CNT_REASS_GEN_ALL			= 0x00000080
 };
 
 /*
@@ -244,24 +249,24 @@ enum dpa_stats_cnt_reass_gen_sel {
  */
 enum dpa_stats_cnt_reass_ipv4_sel {
 	/* Number of successfully reassembled IPv4 frames */
-	DPA_STATS_CNT_REASS_IPv4_FRAMES		= 0x00000080,
+	DPA_STATS_CNT_REASS_IPv4_FRAMES		= 0x00000100,
 	/* Number of valid IPv4 fragments */
-	DPA_STATS_CNT_REASS_IPv4_FRAGS_VALID	 = 0x00000100,
+	DPA_STATS_CNT_REASS_IPv4_FRAGS_VALID	 = 0x00000200,
 	/* Number of processed IPv4 fragments */
-	DPA_STATS_CNT_REASS_IPv4_FRAGS_TOTAL	 = 0x00000200,
+	DPA_STATS_CNT_REASS_IPv4_FRAGS_TOTAL	 = 0x00000400,
 	/* Number of malformed IPv4 fragments */
-	DPA_STATS_CNT_REASS_IPv4_FRAGS_MALFORMED = 0x00000400,
+	DPA_STATS_CNT_REASS_IPv4_FRAGS_MALFORMED = 0x00000800,
 	/* Number of discarded IPv4 fragments except Timeout condition */
-	DPA_STATS_CNT_REASS_IPv4_FRAGS_DISCARDED = 0x00000800,
+	DPA_STATS_CNT_REASS_IPv4_FRAGS_DISCARDED = 0x00001000,
 	/* Number of busy conditions due to Automatic Learning Hash access */
-	DPA_STATS_CNT_REASS_IPv4_AUTOLEARN_BUSY	 = 0x00001000,
+	DPA_STATS_CNT_REASS_IPv4_AUTOLEARN_BUSY	 = 0x00002000,
 	/*
 	 * Number of IPv4 fragments occurrences when the number of
 	 * fragments-per-frame exceeds 16
 	 */
-	DPA_STATS_CNT_REASS_IPv4_EXCEED_16FRAGS  = 0x00002000,
+	DPA_STATS_CNT_REASS_IPv4_EXCEED_16FRAGS  = 0x00004000,
 	/* Select all counters from dpa_stats_cnt_reass_ipv4_sel */
-	DPA_STATS_CNT_REASS_IPv4_ALL		 = 0x00004000
+	DPA_STATS_CNT_REASS_IPv4_ALL		 = 0x00008000
 };
 
 /*
@@ -270,24 +275,24 @@ enum dpa_stats_cnt_reass_ipv4_sel {
  */
 enum dpa_stats_cnt_reass_ipv6_sel {
 	/* Number of successfully reassembled IPv6 frames*/
-	DPA_STATS_CNT_REASS_IPv6_FRAMES		= 0x00008000,
+	DPA_STATS_CNT_REASS_IPv6_FRAMES		= 0x00010000,
 	/* Number of valid IPv6 fragments */
-	DPA_STATS_CNT_REASS_IPv6_FRAGS_VALID	 = 0x00010000,
+	DPA_STATS_CNT_REASS_IPv6_FRAGS_VALID	 = 0x00020000,
 	/* Number of processed IPv6 fragments */
-	DPA_STATS_CNT_REASS_IPv6_FRAGS_TOTAL	 = 0x00020000,
+	DPA_STATS_CNT_REASS_IPv6_FRAGS_TOTAL	 = 0x00040000,
 	/* Number of malformed IPv6 fragments */
-	DPA_STATS_CNT_REASS_IPv6_FRAGS_MALFORMED = 0x00040000,
+	DPA_STATS_CNT_REASS_IPv6_FRAGS_MALFORMED = 0x00080000,
 	/* Number of discarded IPv6 fragments except Timeout condition */
-	DPA_STATS_CNT_REASS_IPv6_FRAGS_DISCARDED = 0x00080000,
+	DPA_STATS_CNT_REASS_IPv6_FRAGS_DISCARDED = 0x00100000,
 	/* Number of busy conditions due to Automatic Learning Hash access */
-	DPA_STATS_CNT_REASS_IPv6_AUTOLEARN_BUSY  = 0x00100000,
+	DPA_STATS_CNT_REASS_IPv6_AUTOLEARN_BUSY  = 0x00200000,
 	/*
 	 * Number of IPv6 fragments occurrences when the number of
 	 * fragments-per-frame exceeds 16
 	 */
-	DPA_STATS_CNT_REASS_IPv6_EXCEED_16FRAGS  = 0x00200000,
+	DPA_STATS_CNT_REASS_IPv6_EXCEED_16FRAGS  = 0x00400000,
 	/* Select all counters from dpa_stats_cnt_reass_ipv6_sel */
-	DPA_STATS_CNT_REASS_IPv6_ALL		 = 0x00400000
+	DPA_STATS_CNT_REASS_IPv6_ALL		 = 0x00800000
 };
 
 /* DPA Stats IP Reassembly counter parameters */
