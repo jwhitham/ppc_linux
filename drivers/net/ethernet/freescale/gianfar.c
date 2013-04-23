@@ -3369,43 +3369,35 @@ static int gfar_poll_tx(struct napi_struct *napi, int budget)
 	struct gfar_private *priv = napi_tx->grp->priv;
 	struct gfar __iomem *regs = napi_tx->grp->regs;
 	struct gfar_priv_tx_q *tx_queue = NULL;
-	int has_tx_work;
+	u32 tstat_txf, imask;
 	int i;
 
+	tstat_txf = gfar_read(&regs->tstat) & TSTAT_TXF_MASK_ALL;
 	/* Clear IEVENT, so interrupts aren't called again
 	 * because of the packets that have already arrived
 	 */
 	gfar_write(&regs->ievent, IEVENT_TX_MASK);
 
-	while (1) {
-		has_tx_work = 0;
-		for_each_set_bit(i, &napi_tx->tx_bit_map, priv->num_tx_queues) {
+	for_each_set_bit(i, &napi_tx->tx_bit_map, priv->num_tx_queues) {
+		if (tstat_txf & (TSTAT_TXF0_MASK >> i)) {
 			tx_queue = priv->tx_queue[i];
 			/* run Tx cleanup to completion */
-			if (tx_queue->tx_skbuff[tx_queue->skb_dirtytx]) {
-				gfar_clean_tx_ring(tx_queue);
-				has_tx_work = 1;
-			}
-		}
-
-		if (unlikely(!has_tx_work)) {
-			u32 imask;
-			napi_complete(napi);
-
-			spin_lock_irq(&napi_tx->grp->grplock);
-			imask = gfar_read(&regs->imask);
-			imask |= IMASK_TX_DEFAULT;
-			gfar_write(&regs->imask, imask);
-			spin_unlock_irq(&napi_tx->grp->grplock);
-
-			/* If we are coalescing interrupts, update the timer
-			 * Otherwise, clear it
-			 */
-			gfar_configure_tx_coalescing(priv, napi_tx->tx_bit_map);
-
-			break;
+			gfar_clean_tx_ring(tx_queue);
 		}
 	}
+
+	napi_complete(napi);
+
+	spin_lock_irq(&napi_tx->grp->grplock);
+	imask = gfar_read(&regs->imask);
+	imask |= IMASK_TX_DEFAULT;
+	gfar_write(&regs->imask, imask);
+	spin_unlock_irq(&napi_tx->grp->grplock);
+
+	/* If we are coalescing interrupts, update the timer
+	 * Otherwise, clear it
+	 */
+	gfar_configure_tx_coalescing(priv, napi_tx->tx_bit_map);
 
 	return 0;
 }

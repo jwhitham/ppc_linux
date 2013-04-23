@@ -327,6 +327,9 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define TSTAT_CLEAR_THALT6	0x02000000
 #define TSTAT_CLEAR_THALT7	0x01000000
 
+#define TSTAT_TXF_MASK_ALL	0x0000ff00
+#define TSTAT_TXF0_MASK		0x00008000
+
 /* Interrupt coalescing macros */
 #define IC_ICEN			0x80000000
 #define IC_ICFT_MASK		0x1fe00000
