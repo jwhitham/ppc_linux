@@ -166,12 +166,12 @@ static void fsl_teardown_msi_irqs(struct pci_dev *pdev)
 	return;
 }
 
-static int fsl_iommu_get_iova(struct pci_dev *pdev, dma_addr_t *address)
+static int fsl_iommu_get_iova(struct pci_dev *pdev, uint64_t *address)
 {
 	struct iommu_domain *domain;
 	struct iommu_domain_geometry geometry;
 	u32 wins = 0;
-	dma_addr_t iova, size, msi_phys;
+	uint64_t iova, size, msi_phys;
 	int ret, i;
 
 	domain = iommu_get_dev_domain(&pdev->dev);
