@@ -22,6 +22,7 @@
 #include <asm/tlbflush.h>
 #include <asm/kvm_ppc.h>
 #include <asm/dbell.h>
+#include <asm/cputhreads.h>
 
 #include "booke.h"
 #include "e500.h"
@@ -46,10 +47,11 @@ void kvmppc_set_pending_interrupt(struct kvm_vcpu *vcpu, enum int_class type)
 		return;
 	}
 
-
-	tag = PPC_DBELL_LPID(vcpu->kvm->arch.lpid) | vcpu->vcpu_id;
+	preempt_disable();
+	tag = PPC_DBELL_LPID(vcpu->arch.lpid) | vcpu->vcpu_id;
 	mb();
 	ppc_msgsnd(dbell_type, 0, tag);
+	preempt_enable();
 }
 
 /* gtlbe must not be mapped by more than one host tlb entry */
@@ -58,12 +60,11 @@ void kvmppc_e500_tlbil_one(struct kvmppc_vcpu_e500 *vcpu_e500,
 {
 	unsigned int tid, ts;
 	gva_t eaddr;
-	u32 val, lpid;
+	u32 val;
 	unsigned long flags;
 
 	ts = get_tlb_ts(gtlbe);
 	tid = get_tlb_tid(gtlbe);
-	lpid = vcpu_e500->vcpu.kvm->arch.lpid;
 
 	/* We search the host TLB to invalidate its shadow TLB entry */
 	val = (tid << 16) | ts;
@@ -72,7 +73,7 @@ void kvmppc_e500_tlbil_one(struct kvmppc_vcpu_e500 *vcpu_e500,
 	local_irq_save(flags);
 
 	mtspr(SPRN_MAS6, val);
-	mtspr(SPRN_MAS5, MAS5_SGS | lpid);
+	mtspr(SPRN_MAS5, MAS5_SGS | vcpu_e500->vcpu.arch.lpid);
 
 	asm volatile("tlbsx 0, %[eaddr]\n" : : [eaddr] "r" (eaddr));
 	val = mfspr(SPRN_MAS1);
@@ -93,7 +94,7 @@ void kvmppc_e500_tlbil_all(struct kvmppc_vcpu_e500 *vcpu_e500)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	mtspr(SPRN_MAS5, MAS5_SGS | vcpu_e500->vcpu.kvm->arch.lpid);
+	mtspr(SPRN_MAS5, MAS5_SGS | vcpu_e500->vcpu.arch.lpid);
 	asm volatile("tlbilxlpid");
 	mtspr(SPRN_MAS5, 0);
 	local_irq_restore(flags);
@@ -113,10 +114,22 @@ static DEFINE_PER_CPU(struct kvm_vcpu *, last_vcpu_on_cpu);
 void kvmppc_core_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	struct kvmppc_vcpu_e500 *vcpu_e500 = to_e500(vcpu);
+	int lpid_idx = 0;
 
 	kvmppc_booke_vcpu_load(vcpu, cpu);
 
-	mtspr(SPRN_LPID, vcpu->kvm->arch.lpid);
+	/* Get current core's thread index */
+	lpid_idx = mfspr(SPRN_PIR) % threads_per_core;
+
+	vcpu->arch.lpid = vcpu->kvm->arch.lpid[lpid_idx];
+	vcpu->arch.eplc = EPC_EGS | (vcpu->arch.lpid << EPC_ELPID_SHIFT);
+	vcpu->arch.epsc = vcpu->arch.eplc;
+
+	if (vcpu->arch.oldpir != mfspr(SPRN_PIR))
+		printk(KERN_DEBUG "vcpu 0x%p loaded on PID %d, lpid %d\n",
+		       vcpu, smp_processor_id(), (int)vcpu->arch.lpid);
+
+	mtspr(SPRN_LPID, vcpu->arch.lpid);
 	mtspr(SPRN_EPCR, vcpu->arch.shadow_epcr);
 	mtspr(SPRN_GPIR, vcpu->vcpu_id);
 	mtspr(SPRN_MSRP, vcpu->arch.shadow_msrp);
@@ -195,8 +208,6 @@ int kvmppc_core_vcpu_setup(struct kvm_vcpu *vcpu)
 	vcpu->arch.shadow_epcr |= SPRN_EPCR_ICM;
 #endif
 	vcpu->arch.shadow_msrp = MSRP_UCLEP | MSRP_DEP | MSRP_PMMP;
-	vcpu->arch.eplc = EPC_EGS | (vcpu->kvm->arch.lpid << EPC_ELPID_SHIFT);
-	vcpu->arch.epsc = vcpu->arch.eplc;
 
 	vcpu->arch.pvr = mfspr(SPRN_PVR);
 	vcpu_e500->svr = mfspr(SPRN_SVR);
@@ -329,19 +340,30 @@ void kvmppc_core_vcpu_free(struct kvm_vcpu *vcpu)
 
 int kvmppc_core_init_vm(struct kvm *kvm)
 {
-	int lpid;
+	int i, lpid;
 
-	lpid = kvmppc_alloc_lpid();
-	if (lpid < 0)
-		return lpid;
+	if (threads_per_core > 2)
+		return -ENOMEM;
 
-	kvm->arch.lpid = lpid;
+	/* Each VM allocates one LPID per HW thread index */
+	for(i = 0; i < threads_per_core; i++) {
+		lpid = kvmppc_alloc_lpid();
+		if (lpid < 0)
+			return lpid;
+
+		kvm->arch.lpid[i] = lpid;
+	}
+
 	return 0;
 }
 
 void kvmppc_core_destroy_vm(struct kvm *kvm)
 {
-	kvmppc_free_lpid(kvm->arch.lpid);
+	int i;
+
+	for(i = 0; i < threads_per_core; i++) {
+		kvmppc_free_lpid(kvm->arch.lpid[i]);
+	}
 }
 
 static int __init kvmppc_e500mc_init(void)

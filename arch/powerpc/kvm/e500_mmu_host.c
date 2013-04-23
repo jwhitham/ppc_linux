@@ -77,7 +77,8 @@ static inline u32 e500_shadow_mas2_attrib(u32 mas2, int usermode)
  * writing shadow tlb entry to host TLB
  */
 static inline void __write_host_tlbe(struct kvm_book3e_206_tlb_entry *stlbe,
-				     uint32_t mas0)
+				     uint32_t mas0,
+				     uint32_t *lpid)
 {
 	unsigned long flags;
 
@@ -88,6 +89,8 @@ static inline void __write_host_tlbe(struct kvm_book3e_206_tlb_entry *stlbe,
 	mtspr(SPRN_MAS3, (u32)stlbe->mas7_3);
 	mtspr(SPRN_MAS7, (u32)(stlbe->mas7_3 >> 32));
 #ifdef CONFIG_KVM_BOOKE_HV
+	/* populate mas8 with latest LPID */
+	stlbe->mas8 = MAS8_TGS | *lpid;
 	mtspr(SPRN_MAS8, stlbe->mas8);
 #endif
 	asm volatile("isync; tlbwe" : : : "memory");
@@ -133,11 +136,12 @@ static inline void write_host_tlbe(struct kvmppc_vcpu_e500 *vcpu_e500,
 
 	if (tlbsel == 0) {
 		mas0 = get_host_mas0(stlbe->mas2);
-		__write_host_tlbe(stlbe, mas0);
+		__write_host_tlbe(stlbe, mas0, &vcpu_e500->vcpu.arch.lpid);
 	} else {
 		__write_host_tlbe(stlbe,
 				  MAS0_TLBSEL(1) |
-				  MAS0_ESEL(to_htlb1_esel(sesel)));
+				  MAS0_ESEL(to_htlb1_esel(sesel)),
+				  &vcpu_e500->vcpu.arch.lpid);
 	}
 }
 
@@ -317,9 +321,7 @@ static void kvmppc_e500_setup_stlbe(
 	stlbe->mas7_3 = ((u64)pfn << PAGE_SHIFT) |
 			e500_shadow_mas3_attrib(gtlbe->mas7_3, pr);
 
-#ifdef CONFIG_KVM_BOOKE_HV
-	stlbe->mas8 = MAS8_TGS | vcpu->kvm->arch.lpid;
-#endif
+	/* Set mas8 when executing tlbwe since LPID can change dynamically */
 }
 
 static inline int kvmppc_e500_shadow_map(struct kvmppc_vcpu_e500 *vcpu_e500,

@@ -234,7 +234,11 @@ struct kvm_arch_memory_slot {
 };
 
 struct kvm_arch {
+#ifdef CONFIG_KVM_BOOKE_HV
+	unsigned int lpid[2];
+#else
 	unsigned int lpid;
+#endif
 #ifdef CONFIG_KVM_BOOK3S_64_HV
 	unsigned long hpt_virt;
 	struct revmap_entry *revmap;
@@ -428,6 +432,7 @@ struct kvm_vcpu_arch {
 	u32 eplc;
 	u32 epsc;
 	u32 oldpir;
+	u32 lpid;
 #endif
 
 #if defined(CONFIG_BOOKE)
