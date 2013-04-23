@@ -2448,6 +2448,29 @@ static inline struct txbd8 *next_txbd(struct txbd8 *bdp, struct txbd8 *base,
 	return skip_txbd(bdp, 1, base, ring_size);
 }
 
+#ifdef CONFIG_AS_FASTPATH
+static inline void gfar_asf_reclaim_skb(struct sk_buff *skb)
+{
+	/* Just reset the fields used in software DPA */
+	skb->next = skb->prev = NULL;
+	skb->dev = NULL;
+	skb->len = 0;
+	skb->ip_summed = 0;
+	skb->transport_header = NULL;
+	skb->mac_header = NULL;
+	skb->network_header = NULL;
+	skb->pkt_type = 0;
+	skb->mac_len = 0;
+	skb->protocol = 0;
+	skb->vlan_tci = 0;
+	skb->data = 0;
+
+	/* reset data and tail pointers */
+	skb->data = skb->head + NET_SKB_PAD;
+	skb_reset_tail_pointer(skb);
+
+}
+#endif
 /* This is called by the kernel when a frame is ready for transmission.
  * It is pointed to by the dev->hard_start_xmit function pointer
  */
@@ -2565,6 +2588,11 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		if (tx_queue->tx_skbuff[skb_curtx]) {
 			if (skb_is_recycleable(tx_queue->tx_skbuff[skb_curtx],
 			    DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)) {
+#ifdef CONFIG_AS_FASTPATH
+				if (tx_queue->tx_skbuff[skb_curtx]->pkt_type == PACKET_FASTROUTE)
+					gfar_asf_reclaim_skb(tx_queue->tx_skbuff[skb_curtx]);
+				else
+#endif
 				skb_recycle(tx_queue->tx_skbuff[skb_curtx]);
 				gfar_align_skb(tx_queue->tx_skbuff[skb_curtx]);
 			} else {
