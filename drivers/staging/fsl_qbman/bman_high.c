@@ -302,13 +302,19 @@ struct bman_portal *bman_create_affine_portal(
 			const struct bm_portal_config *config)
 {
 	struct bman_portal *portal = get_raw_affine_portal();
+
+	/*This function is called from the context which is already affine to
+	 *CPU or in other words this in non-migratable to other CPUs. Call
+	 *put_affine_portal() on entry which allows subsequent functions to
+	 *sleep.
+	 */
+	put_affine_portal();
 	portal = bman_create_portal(portal, config);
 	if (portal) {
 		spin_lock(&affine_mask_lock);
 		cpumask_set_cpu(config->public_cfg.cpu, &affine_mask);
 		spin_unlock(&affine_mask_lock);
 	}
-	put_affine_portal();
 	return portal;
 }
 
