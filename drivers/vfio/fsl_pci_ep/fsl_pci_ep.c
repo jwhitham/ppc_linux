@@ -35,7 +35,6 @@
 
 static DEFINE_SPINLOCK(pci_ep_spinlock);
 LIST_HEAD(pci_ep_controllers);
-LIST_HEAD(pci_pf_list);
 
 static int global_phb_number;	/* Global phb counter */
 
@@ -607,6 +606,7 @@ static int fsl_pci_ep_setup(struct pci_ep_dev *ep)
 	}
 
 	ep->dev.parent = ep->pf->parent;
+	ep->dev.of_node = ep->dev.parent->of_node;
 	ep->dev.iommu_group = iommu_group_get(ep->pf->parent);
 	ep->dev.bus = NULL;
 	ep->dev.class = &pci_ep_class;
@@ -696,7 +696,8 @@ static int fsl_pci_pf_iov_init(struct pci_pf_dev *pf)
 	return pf->vf_num;
 }
 
-struct pci_pf_dev *fsl_pci_pf_alloc(struct pci_dev *pdev)
+struct pci_pf_dev *fsl_pci_pf_alloc(struct pci_dev *pdev,
+				    struct list_head *pf_list)
 {
 	struct pci_pf_dev *pf;
 
@@ -718,7 +719,7 @@ struct pci_pf_dev *fsl_pci_pf_alloc(struct pci_dev *pdev)
 	INIT_LIST_HEAD(&pf->ep_list);
 
 	spin_lock(&pci_ep_spinlock);
-	list_add_tail(&pf->node, &pci_pf_list);
+	list_add_tail(&pf->node, pf_list);
 	spin_unlock(&pci_ep_spinlock);
 
 	return pf;
@@ -743,11 +744,11 @@ void fsl_pci_pf_free(struct pci_pf_dev *pf)
 	kfree(pf);
 }
 
-void fsl_pci_pfs_free(void)
+static void fsl_pci_pfs_free(struct list_head *pf_list)
 {
 	struct pci_pf_dev *pf, *tmp;
 
-	list_for_each_entry_safe(pf, tmp, &pci_pf_list, node)
+	list_for_each_entry_safe(pf, tmp, pf_list, node)
 			fsl_pci_pf_free(pf);
 }
 
@@ -758,10 +759,12 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 	struct pci_ep_dev *ep;
 	struct pci_dev *pdev;
 	struct resource rsrc;
+	struct list_head *pf_list;
 	size_t regs_size, mem_size;
 	int pf_idx, pos, i;
 
 	host = pci_bus_to_host(bus);
+	pf_list = host->private_data;
 
 	/* Fetch host bridge registers address */
 	if (of_address_to_resource(host->dn, 0, &rsrc)) {
@@ -801,7 +804,7 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 		if (!bus->self)
 			bus->self = pdev;
 
-		pf = fsl_pci_pf_alloc(pdev);
+		pf = fsl_pci_pf_alloc(pdev, pf_list);
 		if (!pf)
 			goto _err;
 
@@ -846,7 +849,7 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 
 	return 0;
 _err:
-	fsl_pci_pfs_free();
+	fsl_pci_pfs_free(pf_list);
 	return -EINVAL;
 }
 
@@ -929,10 +932,19 @@ static struct pci_controller *
 fsl_pci_ep_controller_alloc(struct device_node *dev)
 {
 	struct pci_controller *host;
+	struct list_head *pf_list;
 
 	host = kzalloc(sizeof(*host), GFP_KERNEL);
 	if (!host)
 		return NULL;
+
+	pf_list = kzalloc(sizeof(*pf_list), GFP_KERNEL);
+	if (!pf_list) {
+		kfree(host);
+		return NULL;
+	}
+	INIT_LIST_HEAD(pf_list);
+	host->private_data = pf_list;
 
 	spin_lock(&pci_ep_spinlock);
 	host->global_number = global_phb_number++;
@@ -945,6 +957,11 @@ fsl_pci_ep_controller_alloc(struct device_node *dev)
 
 static void fsl_pci_ep_controller_free(struct pci_controller *host)
 {
+	if (host->private_data) {
+		fsl_pci_pfs_free(host->private_data);
+		kfree(host->private_data);
+	}
+
 	if (host->bus)
 		fsl_pci_bus_free(host->bus);
 
@@ -958,23 +975,16 @@ static void fsl_pci_ep_controller_free(struct pci_controller *host)
 	kfree(host);
 }
 
-static const struct of_device_id pci_ids[] = {
-	{ .compatible = "fsl,qoriq-pcie-v2.2", },
-	{ .compatible = "fsl,qoriq-pcie-v3.0", },
-	{},
-};
-
-static int fsl_pci_ep_controller_setup(struct device_node *dn)
+static int fsl_pci_ep_controller_probe(struct platform_device *device)
 {
+	struct device_node *dn;
 	struct pci_controller *host;
-	struct platform_device *device;
 	struct resource rsrc;
 	u8 hdr_type;
 	int pf_num;
+	int err;
 
-	if (!of_match_node(pci_ids, dn))
-		return -EINVAL;
-
+	dn = device->dev.of_node;
 	if (!of_device_is_available(dn)) {
 		pr_warn("%s: disabled\n", dn->full_name);
 		return -ENODEV;
@@ -983,13 +993,6 @@ static int fsl_pci_ep_controller_setup(struct device_node *dn)
 	/* Fetch host bridge registers address */
 	if (of_address_to_resource(dn, 0, &rsrc))
 		return -ENOMEM;
-
-	device = of_find_device_by_node(dn);
-	if (!device) {
-		pr_warn("%s: platform device not exist\n",
-			dn->full_name);
-		return -ENODEV;
-	}
 
 	host = fsl_pci_ep_controller_alloc(dn);
 	if (!host)
@@ -1002,12 +1005,16 @@ static int fsl_pci_ep_controller_setup(struct device_node *dn)
 	host->first_busno = host->last_busno = 0;
 
 	host->bus = create_dummy_pci_bus(host, host->ops, 0);
-	if (!host->bus)
+	if (!host->bus) {
+		err = -ENOMEM;
 		goto _err;
+	}
 
 	pci_bus_read_config_byte(host->bus, 0,  PCI_HEADER_TYPE, &hdr_type);
-	if ((hdr_type & 0x7f) != PCI_HEADER_TYPE_NORMAL)
+	if ((hdr_type & 0x7f) != PCI_HEADER_TYPE_NORMAL) {
+		err = -ENODEV;
 		goto _err;
+	}
 
 	if (hdr_type & 0x80)
 		pf_num = MULTI_FUNCTION_NUM;
@@ -1021,30 +1028,67 @@ static int fsl_pci_ep_controller_setup(struct device_node *dn)
 	return 0;
 _err:
 	fsl_pci_ep_controller_free(host);
+	return err;
+}
+
+static int fsl_pci_ep_controller_remove(struct platform_device *pdev)
+{
+	struct pci_controller *host, *tmp;
+
+	list_for_each_entry_safe(host, tmp, &pci_ep_controllers, list_node) {
+		/*
+		 * Because EADC driver has registered private data to the
+		 * device drvdata, so we can not register private host
+		 * to the device again, and only identify controller
+		 * corresponding to platform device via comparing the
+		 * device node pointer.
+		 */
+		if (host->dn == pdev->dev.of_node)
+			fsl_pci_ep_controller_free(host);
+	}
+
 	return 0;
 }
 
+static const struct of_device_id pci_ep_ids[] = {
+	{ .compatible = "fsl,qoriq-pcie-v2.1", },
+	{ .compatible = "fsl,qoriq-pcie-v2.2", },
+	{ .compatible = "fsl,qoriq-pcie-v2.3", },
+	{ .compatible = "fsl,qoriq-pcie-v2.4", },
+	{ .compatible = "fsl,qoriq-pcie-v3.0", },
+	{},
+};
+
+static struct platform_driver fsl_pci_ep_driver = {
+	.driver = {
+		.name = "fsl-pci-ep",
+		.of_match_table = pci_ep_ids,
+	},
+	.probe = fsl_pci_ep_controller_probe,
+	.remove = fsl_pci_ep_controller_remove,
+};
+
 static int __init fsl_pci_ep_controller_init(void)
 {
-	struct device_node *dn;
+	int err;
 
-	pci_ep_class_init();
+	err = pci_ep_class_init();
+	if (err)
+		return err;
 
-	for_each_node_by_type(dn, "pci")
-		fsl_pci_ep_controller_setup(dn);
+	err = platform_driver_register(&fsl_pci_ep_driver);
+	if (err) {
+		pr_err("Unable to register platform driver\n");
+		pci_ep_class_free();
+		return err;
+	}
 
 	return 0;
 }
 
 static void __exit fsl_pci_ep_controller_exit(void)
 {
-	struct pci_controller *host, *tmp;
-
-	fsl_pci_pfs_free();
-
-	list_for_each_entry_safe(host, tmp, &pci_ep_controllers, list_node)
-		fsl_pci_ep_controller_free(host);
-
+	platform_driver_unregister(&fsl_pci_ep_driver);
 	pci_ep_class_free();
 }
 

@@ -1140,7 +1140,7 @@ static int fsl_pci_probe(struct platform_device *pdev)
 
 	mpc85xx_pci_err_probe(pdev);
 
-	return 0;
+	return ret;
 }
 
 #ifdef CONFIG_PM
