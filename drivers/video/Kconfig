@@ -1961,6 +1961,17 @@ config FB_FSL_DIU
 	---help---
 	  Framebuffer driver for the Freescale SoC DIU
 
+config FB_SSD1289
+	tristate "Solomon SSD1289 framebuffer support"
+	depends on FB
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	select FB_SYS_FOPS
+	help
+	  This is a framebuffer device for the Solomon Systek SSD1289
+	  controller.
+
 config FB_W100
 	tristate "W100 frame buffer support"
 	depends on FB && ARCH_PXA
