@@ -688,6 +688,7 @@ EXPORT_SYMBOL(consume_skb);
 void skb_recycle(struct sk_buff *skb)
 {
 	struct skb_shared_info *shinfo;
+	u8 head_frag = skb->head_frag;
 
 	skb_release_head_state(skb);
 
@@ -697,6 +698,7 @@ void skb_recycle(struct sk_buff *skb)
 
 	memset(skb, 0, offsetof(struct sk_buff, tail));
 	skb->data = skb->head + NET_SKB_PAD;
+	skb->head_frag = head_frag;
 	skb_reset_tail_pointer(skb);
 }
 EXPORT_SYMBOL(skb_recycle);

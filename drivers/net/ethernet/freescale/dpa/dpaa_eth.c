@@ -2152,7 +2152,11 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 	if (fd.cmd & FM_FD_CMD_FCO) {
 		/* This skb is recycleable, and the fd generated from it
-		 * has been filled in accordingly */
+		 * has been filled in accordingly.
+		 * NOTE: The recycling mechanism is fragile and dependant on
+		 * upstream changes. It will be maintained for now, but plans
+		 * are to remove it altoghether from the driver.
+		 */
 		skb_recycle(skb);
 		skb = NULL;
 		(*percpu_priv->dpa_bp_count)++;
