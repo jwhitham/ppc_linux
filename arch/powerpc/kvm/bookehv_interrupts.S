@@ -121,22 +121,13 @@
 
 	.if	\flags & NEED_EMU
 	/*
-	 * This assumes you have external PID support.
-	 * To support a bookehv CPU without external PID, you'll
-	 * need to look up the TLB entry and create a temporary mapping.
+	 * Entry code uses external PID support. lwepx faults are handled
+	 * as instruction tlb miss interrupts
 	 *
-	 * FIXME: we don't currently handle if the lwepx faults.  PR-mode
-	 * booke doesn't handle it either.  Since Linux doesn't use
-	 * broadcast tlbivax anymore, the only way this should happen is
-	 * if the guest maps its memory execute-but-not-read, or if we
-	 * somehow take a TLB miss in the middle of this entry code and
-	 * evict the relevant entry.  On e500mc, all kernel lowmem is
-	 * bolted into TLB1 large page mappings, and we don't use
-	 * broadcast invalidates, so we should not take a TLB miss here.
-	 *
-	 * Later we'll need to deal with faults here.  Disallowing guest
-	 * mappings that are execute-but-not-read could be an option on
-	 * e500mc, but not on chips with an LRAT if it is used.
+	 * FIXME: we don't currently handle guest TLB entries that are
+	 * present but have the permissions set for execute-but-not-read.
+	 * Disallowing these mappings could be an option on e500mc, but
+	 * not on chips with an LRAT if it is used.
 	 */
 
 	mfspr	r3, SPRN_EPLC	/* will already have correct ELPID and EGS */
@@ -178,6 +169,7 @@
 2:
 .section .fixup, "ax"
 3:	li	r9, KVM_INST_FETCH_FAILED
+	li	r14, BOOKE_INTERRUPT_ITLB_MISS
 	b	2b
 .previous
 .section __ex_table,"a"
