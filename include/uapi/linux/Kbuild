@@ -124,6 +124,7 @@ header-y += firewire-constants.h
 header-y += flat.h
 header-y += fs.h
 header-y += fsl_hypervisor.h
+header-y += fsl_pci_ep_vfio.h
 header-y += fuse.h
 header-y += futex.h
 header-y += gameport.h

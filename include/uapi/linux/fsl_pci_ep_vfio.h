@@ -21,8 +21,7 @@
 #ifndef _FSL_PCI_EP_VFIO_H
 #define _FSL_PCI_EP_VFIO_H
 
-#include <linux/types.h>
-#include <linux/ioctl.h>
+#include <linux/vfio.h>
 
 enum {
 	PCI_EP_TYPE_PF,
@@ -52,26 +51,26 @@ enum PCI_EP_REGION_INDEX {
 #define PCI_EP_DEFAULT_OW_INDEX PCI_EP_WIN0_INDEX
 
 struct pci_ep_win {
-	uint32_t type;
-	uint32_t idx;
-	uint64_t offset;
 	uint64_t pci_addr;
 	uint64_t cpu_addr;
-	uint32_t attr;
 	uint64_t size;
+	uint64_t offset;
+	uint32_t attr;
+	uint32_t type;
+	uint32_t idx;
 };
 
 #define VFIO_DEVICE_SET_WIN_INFO	_IO(VFIO_TYPE, VFIO_BASE + 20)
 #define VFIO_DEVICE_GET_WIN_INFO	_IO(VFIO_TYPE, VFIO_BASE + 21)
 
 struct pci_ep_info {
-	int	type;
-	int	pf_idx;
-	int	vf_idx;
-	int	iw_num;
-	int	ow_num;
-	int	vf_iw_num;
-	int	vf_ow_num;
+	uint32_t type;
+	uint32_t pf_idx;
+	uint32_t vf_idx;
+	uint32_t iw_num;
+	uint32_t ow_num;
+	uint32_t vf_iw_num;
+	uint32_t vf_ow_num;
 };
 
 #endif

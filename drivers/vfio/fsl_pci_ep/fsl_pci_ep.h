@@ -21,7 +21,7 @@
 #ifndef _FSL_PCI_EP_H
 #define _FSL_PCI_EP_H
 
-#include "fsl_pci_ep_vfio.h"
+#include <linux/fsl_pci_ep_vfio.h>
 
 #define MULTI_FUNCTION_NUM 2
 #define PCI_EP_PF_OFFSET 0x2000
