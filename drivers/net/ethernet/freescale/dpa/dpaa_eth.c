@@ -345,8 +345,7 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 {
 	int i;
 
-	dpa_bp->percpu_count = __alloc_percpu(sizeof(*dpa_bp->percpu_count),
-			__alignof__(*dpa_bp->percpu_count));
+	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
 
 	/* Give each cpu an allotment of "count" buffers */
 	for_each_online_cpu(i) {
@@ -4216,10 +4215,10 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	}
 
 	/* Now we need to initialize either a private or shared interface */
-	priv->percpu_priv = __alloc_percpu(sizeof(*priv->percpu_priv),
-					   __alignof__(*priv->percpu_priv));
+	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "__alloc_percpu() failed\n");
+		dev_err(dev, "alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
