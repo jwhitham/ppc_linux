@@ -294,13 +294,14 @@ static int caam_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	/*
-	 * RNG4 based SECs need special initialization prior
-	 * to executing any descriptors
-	 */
 	cha_vid = rd_reg64(&topregs->ctrl.perfmon.cha_id);
 
-	if ((cha_vid & CHA_ID_RNG_MASK) >> CHA_ID_RNG_SHIFT >= 4) {
+	/*
+	 * If SEC has RNG version >= 4 and RNG state handle has not been
+	 * already instantiated ,do RNG instantiation
+	 */
+	if ((cha_vid & CHA_ID_RNG_MASK) >> CHA_ID_RNG_SHIFT >= 4 &&
+	    !(rd_reg32(&topregs->ctrl.r4tst[0].rdsta) & RDSTA_IF0)) {
 		kick_trng(pdev);
 		ret = instantiate_rng(ctrlpriv->jrdev[0]);
 		if (ret) {

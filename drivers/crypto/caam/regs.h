@@ -265,7 +265,10 @@ struct rng4tst {
 		u32 rtfrqmax;	/* PRGM=1: freq. count max. limit register */
 		u32 rtfrqcnt;	/* PRGM=0: freq. count register */
 	};
-	u32 rsvd1[56];
+	u32 rsvd1[40];
+#define RDSTA_IF0 0x00000001
+	u32 rdsta;
+	u32 rsvd2[15];
 };
 
 /*
