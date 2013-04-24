@@ -1235,13 +1235,21 @@ static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
 			/* Flag that we need to drain FQ */
 			drain = 1;
 
-			if (channel >= 0x400 && channel < 0x410) {
+			if (channel >= qm_channel_pool1 &&
+			    channel < (qm_channel_pool1 + 15)) {
 				/* Pool channel, enable the bit in the portal */
-				dequeue_wq = (channel-0x400)<<4 | wq;
-			} else if (channel < 0x400) {
+				dequeue_wq = (channel -
+					      qm_channel_pool1 + 1)<<4 | wq;
+			} else if (channel < qm_channel_pool1) {
 				/* Dedicated channel */
 				dequeue_wq = wq;
+			} else {
+				pr_info("Cannot recover FQ 0x%x, it is "
+					"scheduled on channel 0x%x",
+					fqid, channel);
+				return -EBUSY;
 			}
+
 			while (!found_fqrn) {
 				/* Keep draining DQRR while checking the MR*/
 				qm_dqrr_sdqcr_set(portal,
