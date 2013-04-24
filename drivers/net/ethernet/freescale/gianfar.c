@@ -2801,6 +2801,184 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
+#ifdef CONFIG_AS_FASTPATH
+/*
+ * This is function is called directly by ASF when ASF runs in Minimal mode
+ * transmission.
+ */
+int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct gfar_priv_tx_q *tx_queue = NULL;
+	struct netdev_queue *txq;
+	struct gfar __iomem *regs = NULL;
+	struct txbd8 *txbdp, *txbdp_start, *base;
+	u32 lstatus;
+	int rq = 0;
+#ifdef CONFIG_RX_TX_BUFF_XCHG
+	struct sk_buff *new_skb;
+	int skb_curtx = 0;
+#else
+	unsigned long flags;
+#endif
+	unsigned int fcb_length = GMAC_FCB_LEN;
+
+
+
+#ifdef CONFIG_RX_TX_BUFF_XCHG
+	rq = smp_processor_id() + 1;
+#else
+	rq = skb->queue_mapping;
+#endif
+	tx_queue = priv->tx_queue[rq];
+	txq = netdev_get_tx_queue(dev, rq);
+	base = tx_queue->tx_bd_base;
+	regs = tx_queue->grp->regs;
+
+
+
+#ifndef CONFIG_RX_TX_BUFF_XCHG
+	/* check if there is space to queue this packet */
+	if (unlikely(tx_queue->num_txbdfree < 1)) {
+		/* no space, stop the queue */
+		netif_tx_stop_queue(txq);
+		dev->stats.tx_fifo_errors++;
+		return NETDEV_TX_BUSY;
+	}
+#else
+	txbdp = tx_queue->cur_tx;
+	skb_curtx = tx_queue->skb_curtx;
+
+		lstatus = txbdp->lstatus;
+		if ((lstatus & BD_LFLAG(TXBD_READY))) {
+			u32 imask;
+			/* BD not free for tx */
+			netif_tx_stop_queue(txq);
+			dev->stats.tx_fifo_errors++;
+			spin_lock_irq(&tx_queue->grp->grplock);
+			imask = gfar_read(&regs->imask);
+			imask |= IMASK_TX_DEFAULT;
+			gfar_write(&regs->imask, imask);
+			spin_unlock_irq(&tx_queue->grp->grplock);
+			return NETDEV_TX_BUSY;
+		}
+
+		/* BD is free to be used by s/w */
+		/* Free skb for this BD if not recycled */
+		if (tx_queue->tx_skbuff[skb_curtx]) {
+			if (skb_is_recycleable(tx_queue->tx_skbuff[skb_curtx],
+			    DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)) {
+				if (tx_queue->tx_skbuff[skb_curtx]->pkt_type == PACKET_FASTROUTE)
+					gfar_asf_reclaim_skb(tx_queue->tx_skbuff[skb_curtx]);
+				gfar_align_skb(tx_queue->tx_skbuff[skb_curtx]);
+			} else {
+				dev_kfree_skb_any(tx_queue->tx_skbuff[skb_curtx]);
+				tx_queue->tx_skbuff[skb_curtx] = NULL;
+			}
+		}
+
+		txbdp->lstatus &= BD_LFLAG(TXBD_WRAP);
+#endif
+	/* Update transmit stats */
+	tx_queue->stats.tx_bytes += skb->len;
+	tx_queue->stats.tx_packets++;
+
+	txbdp = txbdp_start = tx_queue->cur_tx;
+	lstatus = txbdp->lstatus | BD_LFLAG(TXBD_LAST | TXBD_INTERRUPT);
+
+	/* Set up checksumming */
+
+	if (CHECKSUM_PARTIAL == skb->ip_summed) {
+		struct txfcb *fcb = NULL;
+		fcb = gfar_add_fcb(skb);
+		lstatus |= BD_LFLAG(TXBD_TOE);
+		gfar_tx_checksum(skb, fcb, fcb_length);
+	}
+
+#ifdef CONFIG_RX_TX_BUFF_XCHG
+	new_skb = tx_queue->tx_skbuff[tx_queue->skb_curtx];
+	skb_curtx = tx_queue->skb_curtx;
+	if (new_skb && (__this_cpu_read(curr_skb) != skb)) {
+		/* Packet from Kernel free the skb to recycle poll */
+		new_skb->dev = dev;
+		dev_kfree_skb_any(new_skb);
+		new_skb = NULL;
+	}
+#endif
+	txbdp_start->bufPtr = dma_map_single(priv->dev, skb->data,
+					     skb_headlen(skb), DMA_TO_DEVICE);
+
+	lstatus |= BD_LFLAG(TXBD_CRC | TXBD_READY) | skb_headlen(skb);
+
+#ifndef CONFIG_RX_TX_BUFF_XCHG
+	netdev_tx_sent_queue(txq, skb->len);
+
+	/* We can work in parallel with gfar_clean_tx_ring(), except
+	 * when modifying num_txbdfree. Note that we didn't grab the lock
+	 * when we were reading the num_txbdfree and checking for available
+	 * space, that's because outside of this function it can only grow,
+	 * and once we've got needed space, it cannot suddenly disappear.
+	 *
+	 * The lock also protects us from gfar_error(), which can modify
+	 * regs->tstat and thus retrigger the transfers, which is why we
+	 * also must grab the lock before setting ready bit for the first
+	 * to be transmitted BD.
+	 */
+	spin_lock_irqsave(&tx_queue->txlock, flags);
+#endif
+
+	/* The powerpc-specific eieio() is used, as wmb() has too strong
+	 * semantics (it requires synchronization between cacheable and
+	 * uncacheable mappings, which eieio doesn't provide and which we
+	 * don't need), thus requiring a more expensive sync instruction.  At
+	 * some point, the set of architecture-independent barrier functions
+	 * should be expanded to include weaker barriers.
+	 */
+	eieio();
+
+	txbdp_start->lstatus = lstatus;
+
+	eieio(); /* force lstatus write before tx_skbuff */
+
+	tx_queue->tx_skbuff[tx_queue->skb_curtx] = skb;
+
+	/* Update the current skb pointer to the next entry we will use
+	 * (wrapping if necessary)
+	 */
+	tx_queue->skb_curtx = (tx_queue->skb_curtx + 1) &
+			      TX_RING_MOD_MASK(tx_queue->tx_ring_size);
+
+	tx_queue->cur_tx = next_txbd(txbdp, base, tx_queue->tx_ring_size);
+
+#ifndef CONFIG_RX_TX_BUFF_XCHG
+	/* reduce TxBD free count */
+	tx_queue->num_txbdfree -= 1;
+
+	/* If the next BD still needs to be cleaned up, then the bds
+	 * are full.  We need to tell the kernel to stop sending us stuff.
+	 */
+	if (!tx_queue->num_txbdfree) {
+		netif_tx_stop_queue(txq);
+
+		dev->stats.tx_fifo_errors++;
+	}
+#endif
+
+	/* Tell the DMA to go go go */
+	gfar_write(&regs->tstat, TSTAT_CLEAR_THALT >> tx_queue->qindex);
+#ifndef CONFIG_RX_TX_BUFF_XCHG
+	/* Unlock priv */
+	spin_unlock_irqrestore(&tx_queue->txlock, flags);
+#endif
+#ifdef CONFIG_RX_TX_BUFF_XCHG
+	__this_cpu_write(recycled_skb, new_skb);
+	txq->trans_start = jiffies;
+#endif
+	return NETDEV_TX_OK;
+}
+EXPORT_SYMBOL(gfar_fast_xmit);
+#endif
+
 /* Stops the kernel queue, and halts the controller */
 static int gfar_close(struct net_device *dev)
 {
