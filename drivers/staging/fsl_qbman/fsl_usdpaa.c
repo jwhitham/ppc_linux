@@ -876,7 +876,7 @@ out:
 	if (!ret) {
 		unsigned long longret;
 		down_write(&current->mm->mmap_sem);
-		longret = do_mmap_pgoff(fp, 0, map->frag->len, PROT_READ |
+		longret = do_mmap_pgoff(fp, PAGE_SIZE, map->frag->len, PROT_READ |
 			(i->flags & USDPAA_DMA_FLAG_RDONLY ? 0 : PROT_WRITE),
 			MAP_SHARED, map->frag->pfn_base);
 		up_write(&current->mm->mmap_sem);
@@ -1017,12 +1017,11 @@ static int portal_mmap(struct file *fp, struct resource *res, void **ptr)
 	unsigned long longret = 0;
 
 	down_write(&current->mm->mmap_sem);
-	do {
-		longret = do_mmap_pgoff(fp, 0, resource_size(res),
-					PROT_READ | PROT_WRITE, MAP_SHARED,
-					res->start >> PAGE_SHIFT);
-	} while (longret == 0);
+	longret = do_mmap_pgoff(fp, PAGE_SIZE, resource_size(res),
+				PROT_READ | PROT_WRITE, MAP_SHARED,
+				res->start >> PAGE_SHIFT);
 	up_write(&current->mm->mmap_sem);
+
 	if (longret & ~PAGE_MASK)
 		return (int)longret;
 
