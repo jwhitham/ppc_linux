@@ -377,7 +377,9 @@ static struct qm_portal_config * __init parse_pcfg(struct device_node *node)
 	 */
 	pcfg->dev.bus = &platform_bus_type;
 	pcfg->dev.of_node = node;
+#ifdef CONFIG_IOMMU_API
 	pcfg->dev.archdata.iommu_domain = NULL;
+#endif
 
 	ret = of_address_to_resource(node, DPA_PORTAL_CE,
 				&pcfg->addr_phys[DPA_PORTAL_CE]);
@@ -462,10 +464,11 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 	if (!pcfg->iommu_domain) {
 		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_alloc() failed",
 			   __func__);
-		return;
+		goto _no_iommu;
 	}
 	geom_attr.aperture_start = 0;
-	geom_attr.aperture_end = (1ULL << 36) - 1;
+	geom_attr.aperture_end =
+		((dma_addr_t)1 << min(8 * sizeof(dma_addr_t), (size_t)36)) - 1;
 	geom_attr.force_aperture = true;
 	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_GEOMETRY,
 				    &geom_attr);
@@ -511,6 +514,7 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 		goto _iommu_detach_device;
 	}
 
+_no_iommu:
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
