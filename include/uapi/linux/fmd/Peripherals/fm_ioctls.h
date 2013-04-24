@@ -621,8 +621,8 @@ typedef struct ioc_fm_ctrl_mon_counters_params_t {
 /** @} */ /* end of lnx_ioctl_FM_lib_grp group */
 /** @} */ /* end of lnx_ioctl_FM_grp */
 
-#define FMD_API_VERSION_MAJOR 18
-#define FMD_API_VERSION_MINOR 1
-#define FMD_API_VERSION_RESPIN 2
+#define FMD_API_VERSION_MAJOR 21
+#define FMD_API_VERSION_MINOR 0
+#define FMD_API_VERSION_RESPIN 0
 
 #endif /* __FM_IOCTLS_H */

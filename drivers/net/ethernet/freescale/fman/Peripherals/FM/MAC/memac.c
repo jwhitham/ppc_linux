@@ -57,26 +57,26 @@
 static uint32_t GetMacAddrHashCode(uint64_t ethAddr)
 {
     uint64_t    mask1, mask2;
-    uint32_t    xor = 0;
+    uint32_t    xorVal = 0;
     uint8_t     i, j;
 
-    for (i=0; i < 6; i++)
+    for (i=0; i<6; i++)
     {
         mask1 = ethAddr & (uint64_t)0x01;
         ethAddr >>= 1;
 
-        for (j=0; j < 7; j++)
+        for (j=0; j<7; j++)
         {
             mask2 = ethAddr & (uint64_t)0x01;
             mask1 ^= mask2;
             ethAddr >>= 1;
         }
-        xor |= (mask1 << (5-i));
+
+        xorVal |= (mask1 << (5-i));
     }
 
-    return xor;
+    return xorVal;
 }
-
 
 /* ......................................................................... */
 
@@ -178,47 +178,26 @@ static t_Error CheckInitParameters(t_Memac *p_Memac)
 static void MemacErrException(t_Handle h_Memac)
 {
     t_Memac     *p_Memac = (t_Memac *)h_Memac;
-    struct memac_regs   *regs = p_Memac->p_MemMap;
-    uint32_t    event, imsk;
+    uint32_t    event, imask;
 
-    event = memac_get_event(regs, 0xffffffff);
+    event = fman_memac_get_event(p_Memac->p_MemMap, 0xffffffff);
+    imask = fman_memac_get_interrupt_mask(p_Memac->p_MemMap);
 
-    /*
-     * Apparently the imask bits are shifted by 16 bits offset from
-     * their corresponding bits in the ievent - hence the >> 16
-     */
-    imsk = memac_get_interrupt_mask(regs) >> 16;;
+    /* Imask include both error and notification/event bits.
+       Leaving only error bits enabled by imask.
+       The imask error bits are shifted by 16 bits offset from
+       their corresponding location in the ievent - hence the >> 16 */
+    event &= ((imask & MEMAC_ALL_ERRS_IMASK) >> 16);
 
-    /*
-     * Extract all event bits plus the pending interrupts according to
-     * their imask
-     */
-    event = (event & ~(MEMAC_ALL_IMASKS >> 16)) | (event & imsk);
+    fman_memac_ack_event(p_Memac->p_MemMap, event);
 
-    /* Ignoring the status bits */
-    event = event & ~(MEMAC_IEVNT_RX_EMPTY |
-                      MEMAC_IEVNT_TX_EMPTY |
-                      MEMAC_IEVNT_RX_LOWP |
-                      MEMAC_IEVNT_PHY_LOS);
-
-    memac_ack_event(regs, event);
-
-    if (event & MEMAC_IEVNT_RX_FIFO_OVFL)
-        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_RX_FIFO_OVFL);
-    if (event & MEMAC_IEVNT_TX_FIFO_UNFL)
-        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_TX_FIFO_UNFL);
-    if (event & MEMAC_IEVNT_TX_FIFO_OVFL)
-        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_TX_FIFO_OVFL);
+    if (event & MEMAC_IEVNT_TS_ECC_ER)
+        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_TS_FIFO_ECC_ERR);
     if (event & MEMAC_IEVNT_TX_ECC_ER)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_1TX_ECC_ER);
     if (event & MEMAC_IEVNT_RX_ECC_ER)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_RX_ECC_ER);
-    if (event & MEMAC_IEVNT_REM_FAULT)
-        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_REM_FAULT);
-    if (event & MEMAC_IEVNT_LOC_FAULT)
-        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_LOC_FAULT);
 }
-
 
 /* ......................................................................... */
 
@@ -257,7 +236,7 @@ static t_Error MemacEnable(t_Handle h_Memac,  e_CommMode mode)
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_enable(p_Memac->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
+    fman_memac_enable(p_Memac->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
 
     return E_OK;
 }
@@ -271,7 +250,7 @@ static t_Error MemacDisable (t_Handle h_Memac, e_CommMode mode)
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_disable(p_Memac->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
+    fman_memac_disable(p_Memac->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
 
     return E_OK;
 }
@@ -285,7 +264,7 @@ static t_Error MemacSetPromiscuous(t_Handle h_Memac, bool newVal)
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_set_promiscuous(p_Memac->p_MemMap, newVal);
+    fman_memac_set_promiscuous(p_Memac->p_MemMap, newVal);
 
     return E_OK;
 }
@@ -298,8 +277,15 @@ static t_Error MemacAdjustLink(t_Handle h_Memac, e_EnetSpeed speed, bool fullDup
 
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
-UNUSED(p_Memac);
 
+    if ((speed >= e_ENET_SPEED_1000) && (!fullDuplex))
+        RETURN_ERROR(MAJOR, E_CONFLICT,
+                     ("Ethernet MAC 1G or 10G does not support half-duplex"));
+
+    fman_memac_adjust_link(p_Memac->p_MemMap,
+                           (enum enet_interface)ENET_INTERFACE_FROM_MODE(p_Memac->enetMode),
+                           (enum enet_speed)speed,
+                           fullDuplex);
     return E_OK;
 }
 
@@ -433,7 +419,7 @@ static t_Error MemacSetTxPauseFrames(t_Handle h_Memac,
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_set_tx_pause_frames(p_Memac->p_MemMap, priority, pauseTime, threshTime);
+    fman_memac_set_tx_pause_frames(p_Memac->p_MemMap, priority, pauseTime, threshTime);
 
     return E_OK;
 }
@@ -455,7 +441,7 @@ static t_Error MemacSetRxIgnorePauseFrames(t_Handle h_Memac, bool en)
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_set_rx_ignore_pause_frames(p_Memac->p_MemMap, en);
+    fman_memac_set_rx_ignore_pause_frames(p_Memac->p_MemMap, en);
 
     return E_OK;
 }
@@ -485,46 +471,46 @@ static t_Error MemacGetStatistics(t_Handle h_Memac, t_FmMacStatistics *p_Statist
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(p_Statistics, E_NULL_POINTER);
 
-    p_Statistics->eStatPkts64           = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R64);
-    p_Statistics->eStatPkts65to127      = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R127);
-    p_Statistics->eStatPkts128to255     = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R255);
-    p_Statistics->eStatPkts256to511     = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R511);
-    p_Statistics->eStatPkts512to1023    = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R1023);
-    p_Statistics->eStatPkts1024to1518   = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R1518);
-    p_Statistics->eStatPkts1519to1522   = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R1519X);
+    p_Statistics->eStatPkts64           = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R64);
+    p_Statistics->eStatPkts65to127      = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R127);
+    p_Statistics->eStatPkts128to255     = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R255);
+    p_Statistics->eStatPkts256to511     = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R511);
+    p_Statistics->eStatPkts512to1023    = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R1023);
+    p_Statistics->eStatPkts1024to1518   = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R1518);
+    p_Statistics->eStatPkts1519to1522   = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_R1519X);
 /* */
-    p_Statistics->eStatFragments        = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RFRG);
-    p_Statistics->eStatJabbers          = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RJBR);
+    p_Statistics->eStatFragments        = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RFRG);
+    p_Statistics->eStatJabbers          = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RJBR);
 
-    p_Statistics->eStatsDropEvents      = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RDRP);
-    p_Statistics->eStatCRCAlignErrors   = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RALN);
+    p_Statistics->eStatsDropEvents      = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RDRP);
+    p_Statistics->eStatCRCAlignErrors   = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RALN);
 
-    p_Statistics->eStatUndersizePkts    = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TUND);
-    p_Statistics->eStatOversizePkts     = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_ROVR);
+    p_Statistics->eStatUndersizePkts    = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TUND);
+    p_Statistics->eStatOversizePkts     = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_ROVR);
 /* Pause */
-    p_Statistics->reStatPause           = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RXPF);
-    p_Statistics->teStatPause           = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TXPF);
+    p_Statistics->reStatPause           = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RXPF);
+    p_Statistics->teStatPause           = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TXPF);
 
 /* MIB II */
-    p_Statistics->ifInOctets            = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_ROCT);
-    p_Statistics->ifInUcastPkts         = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RUCA);
-    p_Statistics->ifInMcastPkts         = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RMCA);
-    p_Statistics->ifInBcastPkts         = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RBCA);
+    p_Statistics->ifInOctets            = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_ROCT);
+    p_Statistics->ifInUcastPkts         = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RUCA);
+    p_Statistics->ifInMcastPkts         = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RMCA);
+    p_Statistics->ifInBcastPkts         = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RBCA);
     p_Statistics->ifInPkts              = p_Statistics->ifInUcastPkts
                                         + p_Statistics->ifInMcastPkts
                                         + p_Statistics->ifInBcastPkts;
     p_Statistics->ifInDiscards          = 0;
-    p_Statistics->ifInErrors            = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RERR);
+    p_Statistics->ifInErrors            = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_RERR);
 
-    p_Statistics->ifOutOctets           = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TOCT);
-    p_Statistics->ifOutUcastPkts        = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TUCA);
-    p_Statistics->ifOutMcastPkts        = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TMCA);
-    p_Statistics->ifOutBcastPkts        = memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TBCA);
+    p_Statistics->ifOutOctets           = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TOCT);
+    p_Statistics->ifOutUcastPkts        = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TUCA);
+    p_Statistics->ifOutMcastPkts        = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TMCA);
+    p_Statistics->ifOutBcastPkts        = fman_memac_get_counter(p_Memac->p_MemMap, E_MEMAC_COUNTER_TBCA);
     p_Statistics->ifOutPkts             = p_Statistics->ifOutUcastPkts
                                         + p_Statistics->ifOutMcastPkts
                                         + p_Statistics->ifOutBcastPkts;
     p_Statistics->ifOutDiscards         = 0;
-    p_Statistics->ifOutErrors           = memac_get_counter(p_Memac->p_MemMap,  E_MEMAC_COUNTER_TERR);
+    p_Statistics->ifOutErrors           = fman_memac_get_counter(p_Memac->p_MemMap,  E_MEMAC_COUNTER_TERR);
 
     return E_OK;
 }
@@ -538,7 +524,7 @@ static t_Error MemacModifyMacAddress (t_Handle h_Memac, t_EnetAddr *p_EnetAddr)
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_NULL_POINTER);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_hardware_add_addr_in_paddr(p_Memac->p_MemMap, (uint8_t *)(*p_EnetAddr), 0);
+    fman_memac_add_addr_in_paddr(p_Memac->p_MemMap, (uint8_t *)(*p_EnetAddr), 0);
 
     return E_OK;
 }
@@ -552,7 +538,7 @@ static t_Error MemacResetCounters (t_Handle h_Memac)
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
-    memac_reset_counter(p_Memac->p_MemMap);
+    fman_memac_reset_stat(p_Memac->p_MemMap);
 
     return E_OK;
 }
@@ -590,7 +576,7 @@ static t_Error MemacAddExactMatchMacAddress(t_Handle h_Memac, t_EnetAddr *p_EthA
             p_Memac->paddr[paddrNum] = ethAddr;
 
             /* put in hardware */
-            memac_hardware_add_addr_in_paddr(p_Memac->p_MemMap, (uint8_t*)(*p_EthAddr), paddrNum);
+            fman_memac_add_addr_in_paddr(p_Memac->p_MemMap, (uint8_t*)(*p_EthAddr), paddrNum);
             p_Memac->numOfIndAddrInRegs++;
 
             return E_OK;
@@ -622,7 +608,7 @@ static t_Error MemacDelExactMatchMacAddress(t_Handle h_Memac, t_EnetAddr *p_EthA
             /* mark this PADDR as not used */
             p_Memac->indAddrRegUsed[paddrNum] = FALSE;
             /* clear in hardware */
-            memac_hardware_clear_addr_in_paddr(p_Memac->p_MemMap, paddrNum);
+            fman_memac_clear_addr_in_paddr(p_Memac->p_MemMap, paddrNum);
             p_Memac->numOfIndAddrInRegs--;
 
             return E_OK;
@@ -658,7 +644,7 @@ static t_Error MemacAddHashMacAddress(t_Handle h_Memac, t_EnetAddr *p_EthAddr)
     INIT_LIST(&p_HashEntry->node);
 
     LIST_AddToTail(&(p_HashEntry->node), &(p_Memac->p_MulticastAddrHash->p_Lsts[hash]));
-    memac_set_hash_table(p_Memac->p_MemMap, (hash | HASH_CTRL_MCAST_EN));
+    fman_memac_set_hash_table(p_Memac->p_MemMap, (hash | HASH_CTRL_MCAST_EN));
 
     return E_OK;
 }
@@ -691,7 +677,7 @@ static t_Error MemacDelHashMacAddress(t_Handle h_Memac, t_EnetAddr *p_EthAddr)
         }
     }
     if (LIST_IsEmpty(&p_Memac->p_MulticastAddrHash->p_Lsts[hash]))
-        memac_set_hash_table(p_Memac->p_MemMap, (hash & ~HASH_CTRL_MCAST_EN));
+        fman_memac_set_hash_table(p_Memac->p_MemMap, (hash & ~HASH_CTRL_MCAST_EN));
 
     return E_OK;
 }
@@ -718,7 +704,7 @@ static t_Error MemacSetException(t_Handle h_Memac, e_FmMacExceptions exception, 
     else
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Undefined exception"));
 
-    memac_set_exception(p_Memac->p_MemMap, bitMask, enable);
+    fman_memac_set_exception(p_Memac->p_MemMap, bitMask, enable);
 
     return E_OK;
 }
@@ -732,7 +718,7 @@ static uint16_t MemacGetMaxFrameLength(t_Handle h_Memac)
     SANITY_CHECK_RETURN_VALUE(p_Memac, E_INVALID_HANDLE, 0);
     SANITY_CHECK_RETURN_VALUE(!p_Memac->p_MemacDriverParam, E_INVALID_STATE, 0);
 
-    return memac_get_max_frame_length(p_Memac->p_MemMap);
+    return fman_memac_get_max_frame_len(p_Memac->p_MemMap);
 }
 
 /* ......................................................................... */
@@ -826,20 +812,40 @@ static t_Error MemacInit(t_Handle h_Memac)
 
     /* First, reset the MAC if desired. */
     if (p_MemacDriverParam->reset_on_init)
-        memac_reset(p_Memac->p_MemMap);
+        fman_memac_reset(p_Memac->p_MemMap);
 
     /* MAC Address */
     MAKE_ENET_ADDR_FROM_UINT64(p_Memac->addr, ethAddr);
-    memac_hardware_add_addr_in_paddr(p_Memac->p_MemMap, (uint8_t*)ethAddr, 0);
+    fman_memac_add_addr_in_paddr(p_Memac->p_MemMap, (uint8_t*)ethAddr, 0);
 
     enet_interface = (enum enet_interface) ENET_INTERFACE_FROM_MODE(p_Memac->enetMode);
     enet_speed = (enum enet_speed) ENET_SPEED_FROM_MODE(p_Memac->enetMode);
 
-    memac_init(p_Memac->p_MemMap,
+    fman_memac_init(p_Memac->p_MemMap,
                p_Memac->p_MemacDriverParam,
                enet_interface,
                enet_speed,
                p_Memac->exceptions);
+
+#ifdef FM_RX_FIFO_CORRUPT_ERRATA_10GMAC_A006320
+    {
+    	uint32_t tmpReg = 0;
+
+    	FM_GetRevision(p_Memac->fmMacControllerDriver.h_Fm, &p_Memac->fmMacControllerDriver.fmRevInfo);
+        /* check the FMAN version - the bug exists only in rev1 */
+        if ((p_Memac->fmMacControllerDriver.fmRevInfo.majorRev == 6) &&
+        	(p_Memac->fmMacControllerDriver.fmRevInfo.minorRev == 0))
+        {
+        	/* MAC strips CRC from received frames - this workaround should
+        	   decrease the likelihood of bug appearance
+            */
+			tmpReg = GET_UINT32(p_Memac->p_MemMap->command_config);
+			tmpReg &= ~CMD_CFG_CRC_FWD;
+			WRITE_UINT32(p_Memac->p_MemMap->command_config, tmpReg);
+			/* DBG(WARNING, ("mEMAC strips CRC from received frames as part of A006320 errata workaround"));*/
+        }
+    }
+#endif /* FM_RX_FIFO_CORRUPT_ERRATA_10GMAC_A006320 */
 
     if (ENET_INTERFACE_FROM_MODE(p_Memac->enetMode) == e_ENET_IF_SGMII)
     {
@@ -894,7 +900,6 @@ static t_Error MemacInit(t_Handle h_Memac)
                    e_FM_INTR_TYPE_ERR,
                    MemacErrException,
                    p_Memac);
-
 
     XX_Free(p_MemacDriverParam);
     p_Memac->p_MemacDriverParam = NULL;
@@ -1017,7 +1022,7 @@ t_Handle MEMAC_Config(t_FmMacParams *p_FmMacParam)
     /* Plant parameter structure pointer */
     p_Memac->p_MemacDriverParam = p_MemacDriverParam;
 
-    memac_defconfig(p_MemacDriverParam);
+    fman_memac_defconfig(p_MemacDriverParam);
 
     p_Memac->addr           = ENET_ADDR_TO_UINT64(p_FmMacParam->addr);
 

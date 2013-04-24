@@ -326,6 +326,7 @@ typedef struct
     t_Handle            h_KeysMatchTable;
     t_Handle            h_AdTable;
     t_Handle            h_StatsAds;
+    t_Handle            h_TmpAd;
     t_Handle            h_Ad;
     t_Handle            h_StatsFLRs;
 
@@ -340,6 +341,7 @@ typedef struct
     uint32_t            shadowAction;
     uint8_t             userSizeOfExtraction;
     uint8_t             userOffset;
+    uint8_t             kgHashShift;            /* used in hash-table */
 
     t_Handle            h_Spinlock;
 

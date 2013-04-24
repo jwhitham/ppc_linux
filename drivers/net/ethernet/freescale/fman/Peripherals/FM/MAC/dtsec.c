@@ -129,7 +129,7 @@ static void UpdateStatistics(t_Dtsec *p_Dtsec)
 {
     uint32_t car1, car2;
 
-    dtsec_get_clear_carry_regs(p_Dtsec->p_MemMap, &car1, &car2);
+    fman_dtsec_get_clear_carry_regs(p_Dtsec->p_MemMap, &car1, &car2);
 
     if (car1)
     {
@@ -204,7 +204,7 @@ static uint16_t DtsecGetMaxFrameLength(t_Handle h_Dtsec)
     SANITY_CHECK_RETURN_VALUE(p_Dtsec, E_INVALID_HANDLE, 0);
     SANITY_CHECK_RETURN_VALUE(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE, 0);
 
-    return dtsec_get_max_frame_len(p_Dtsec->p_MemMap);
+    return fman_dtsec_get_max_frame_len(p_Dtsec->p_MemMap);
 }
 
 /* .............................................................................. */
@@ -216,11 +216,11 @@ static void DtsecIsr(t_Handle h_Dtsec)
     struct dtsec_regs   *p_DtsecMemMap = p_Dtsec->p_MemMap;
 
     /* do not handle MDIO events */
-    event = dtsec_get_event(p_DtsecMemMap, (uint32_t)(~(DTSEC_IMASK_MMRDEN | DTSEC_IMASK_MMWREN)));
+    event = fman_dtsec_get_event(p_DtsecMemMap, (uint32_t)(~(DTSEC_IMASK_MMRDEN | DTSEC_IMASK_MMWREN)));
 
-    event &= dtsec_get_interrupt_mask(p_DtsecMemMap);
+    event &= fman_dtsec_get_interrupt_mask(p_DtsecMemMap);
 
-    dtsec_ack_event(p_DtsecMemMap, event);
+    fman_dtsec_ack_event(p_DtsecMemMap, event);
 
     if (event & DTSEC_IMASK_BREN)
         p_Dtsec->f_Exception(p_Dtsec->h_App, e_FM_MAC_EX_1G_BAB_RX);
@@ -351,7 +351,7 @@ static void Dtsec1588Isr(t_Handle h_Dtsec)
 
     if (p_Dtsec->ptpTsuEnabled)
     {
-        event = dtsec_check_and_clear_tmr_event(p_DtsecMemMap);
+        event = fman_dtsec_check_and_clear_tmr_event(p_DtsecMemMap);
 
         if (event)
         {
@@ -397,7 +397,7 @@ static t_Error GracefulStop(t_Dtsec *p_Dtsec, e_CommMode mode)
     /* Assert the graceful transmit stop bit */
     if (mode & e_COMM_MODE_RX)
     {
-        dtsec_stop_rx(p_MemMap);
+        fman_dtsec_stop_rx(p_MemMap);
 
 #ifdef FM_GRS_ERRATA_DTSEC_A002
         if (p_Dtsec->fmMacControllerDriver.fmRevInfo.majorRev == 2)
@@ -417,7 +417,7 @@ static t_Error GracefulStop(t_Dtsec *p_Dtsec, e_CommMode mode)
 #ifdef FM_GTS_UNDERRUN_ERRATA_DTSEC_A0014
         DBG(INFO, ("GTS not supported due to DTSEC_A0014 errata."));
 #else  /* FM_GTS_UNDERRUN_ERRATA_DTSEC_A0014 */
-        dtsec_stop_tx(p_MemMap);
+        fman_dtsec_stop_tx(p_MemMap);
 #endif /* FM_GTS_UNDERRUN_ERRATA_DTSEC_A0014 */
 #endif /* defined(FM_GTS_ERRATA_DTSEC_A004) ||...  */
 
@@ -436,10 +436,10 @@ static t_Error GracefulRestart(t_Dtsec *p_Dtsec, e_CommMode mode)
 
     /* clear the graceful receive stop bit */
     if (mode & e_COMM_MODE_TX)
-        dtsec_start_tx(p_MemMap);
+        fman_dtsec_start_tx(p_MemMap);
 
     if (mode & e_COMM_MODE_RX)
-        dtsec_start_rx(p_MemMap);
+        fman_dtsec_start_rx(p_MemMap);
 
     return E_OK;
 }
@@ -448,7 +448,6 @@ static t_Error GracefulRestart(t_Dtsec *p_Dtsec, e_CommMode mode)
 /*****************************************************************************/
 /*                      dTSEC Configs modification functions                 */
 /*****************************************************************************/
-
 
 /* .............................................................................. */
 
@@ -535,6 +534,8 @@ static t_Error DtsecConfigLengthCheck(t_Handle h_Dtsec, bool newVal)
     return E_OK;
 }
 
+/* .............................................................................. */
+
 static t_Error DtsecConfigException(t_Handle h_Dtsec, e_FmMacExceptions exception, bool enable)
 {
     t_Dtsec *p_Dtsec = (t_Dtsec *)h_Dtsec;
@@ -573,6 +574,8 @@ static t_Error DtsecConfigException(t_Handle h_Dtsec, e_FmMacExceptions exceptio
     }
     return E_OK;
 }
+
+
 /*****************************************************************************/
 /*                      dTSEC Run Time API functions                         */
 /*****************************************************************************/
@@ -586,7 +589,7 @@ static t_Error DtsecEnable(t_Handle h_Dtsec,  e_CommMode mode)
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
-    dtsec_enable(p_Dtsec->p_MemMap,
+    fman_dtsec_enable(p_Dtsec->p_MemMap,
                  (bool)!!(mode & e_COMM_MODE_RX),
                  (bool)!!(mode & e_COMM_MODE_TX));
 
@@ -606,7 +609,7 @@ static t_Error DtsecDisable (t_Handle h_Dtsec, e_CommMode mode)
 
     GracefulStop(p_Dtsec, mode);
 
-    dtsec_disable(p_Dtsec->p_MemMap,
+    fman_dtsec_disable(p_Dtsec->p_MemMap,
                   (bool)!!(mode & e_COMM_MODE_RX),
                   (bool)!!(mode & e_COMM_MODE_TX));
 
@@ -635,7 +638,7 @@ static t_Error DtsecSetTxPauseFrames(t_Handle h_Dtsec,
                       " value should be greater than 320."));
 #endif /* FM_BAD_TX_TS_IN_B_2_B_ERRATA_DTSEC_A003 */
 
-    dtsec_set_tx_pause_time(p_Dtsec->p_MemMap, pauseTime);
+    fman_dtsec_set_tx_pause_frames(p_Dtsec->p_MemMap, pauseTime);
     return E_OK;
 }
 
@@ -656,7 +659,7 @@ static t_Error DtsecRxIgnoreMacPause(t_Handle h_Dtsec, bool en)
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
-    dtsec_handle_rx_pause(p_Dtsec->p_MemMap, accept_pause);
+    fman_dtsec_handle_rx_pause(p_Dtsec->p_MemMap, accept_pause);
 
     return E_OK;
 }
@@ -671,7 +674,7 @@ static t_Error DtsecEnable1588TimeStamp(t_Handle h_Dtsec)
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
     p_Dtsec->ptpTsuEnabled = TRUE;
-    dtsec_set_ts(p_Dtsec->p_MemMap, TRUE);
+    fman_dtsec_set_ts(p_Dtsec->p_MemMap, TRUE);
 
     return E_OK;
 }
@@ -686,7 +689,7 @@ static t_Error DtsecDisable1588TimeStamp(t_Handle h_Dtsec)
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
     p_Dtsec->ptpTsuEnabled = FALSE;
-    dtsec_set_ts(p_Dtsec->p_MemMap, FALSE);
+    fman_dtsec_set_ts(p_Dtsec->p_MemMap, FALSE);
 
     return E_OK;
 }
@@ -711,68 +714,68 @@ static t_Error DtsecGetStatistics(t_Handle h_Dtsec, t_FmMacStatistics *p_Statist
 
     if (p_Dtsec->statisticsLevel == e_FM_MAC_FULL_STATISTICS)
     {
-        p_Statistics->eStatPkts64 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR64)
+        p_Statistics->eStatPkts64 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR64)
                 + p_Dtsec->internalStatistics.tr64;
-        p_Statistics->eStatPkts65to127 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR127)
+        p_Statistics->eStatPkts65to127 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR127)
                 + p_Dtsec->internalStatistics.tr127;
-        p_Statistics->eStatPkts128to255 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR255)
+        p_Statistics->eStatPkts128to255 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR255)
                 + p_Dtsec->internalStatistics.tr255;
-        p_Statistics->eStatPkts256to511 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR511)
+        p_Statistics->eStatPkts256to511 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR511)
                 + p_Dtsec->internalStatistics.tr511;
-        p_Statistics->eStatPkts512to1023 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR1K)
+        p_Statistics->eStatPkts512to1023 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TR1K)
                 + p_Dtsec->internalStatistics.tr1k;
-        p_Statistics->eStatPkts1024to1518 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TRMAX)
+        p_Statistics->eStatPkts1024to1518 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TRMAX)
                 + p_Dtsec->internalStatistics.trmax;
-        p_Statistics->eStatPkts1519to1522 = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TRMGV)
+        p_Statistics->eStatPkts1519to1522 = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TRMGV)
                 + p_Dtsec->internalStatistics.trmgv;
 
         /* MIB II */
-        p_Statistics->ifInOctets = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RBYT)
+        p_Statistics->ifInOctets = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RBYT)
                 + p_Dtsec->internalStatistics.rbyt;
-        p_Statistics->ifInPkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RPKT)
+        p_Statistics->ifInPkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RPKT)
                 + p_Dtsec->internalStatistics.rpkt;
         p_Statistics->ifInUcastPkts = 0;
-        p_Statistics->ifInMcastPkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RMCA)
+        p_Statistics->ifInMcastPkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RMCA)
                 + p_Dtsec->internalStatistics.rmca;
-        p_Statistics->ifInBcastPkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RBCA)
+        p_Statistics->ifInBcastPkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RBCA)
                 + p_Dtsec->internalStatistics.rbca;
-        p_Statistics->ifOutOctets = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TBYT)
+        p_Statistics->ifOutOctets = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TBYT)
                 + p_Dtsec->internalStatistics.tbyt;
-        p_Statistics->ifOutPkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TPKT)
+        p_Statistics->ifOutPkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TPKT)
                 + p_Dtsec->internalStatistics.tpkt;
         p_Statistics->ifOutUcastPkts = 0;
-        p_Statistics->ifOutMcastPkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TMCA)
+        p_Statistics->ifOutMcastPkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TMCA)
                 + p_Dtsec->internalStatistics.tmca;
-        p_Statistics->ifOutBcastPkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TBCA)
+        p_Statistics->ifOutBcastPkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TBCA)
                 + p_Dtsec->internalStatistics.tbca;
     }
 
-    p_Statistics->eStatFragments = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RFRG)
+    p_Statistics->eStatFragments = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RFRG)
             + p_Dtsec->internalStatistics.rfrg;
-    p_Statistics->eStatJabbers = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RJBR)
+    p_Statistics->eStatJabbers = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RJBR)
             + p_Dtsec->internalStatistics.rjbr;
-    p_Statistics->eStatsDropEvents = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RDRP)
+    p_Statistics->eStatsDropEvents = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RDRP)
             + p_Dtsec->internalStatistics.rdrp;
-    p_Statistics->eStatCRCAlignErrors = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RALN)
+    p_Statistics->eStatCRCAlignErrors = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RALN)
             + p_Dtsec->internalStatistics.raln;
-    p_Statistics->eStatUndersizePkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RUND)
+    p_Statistics->eStatUndersizePkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RUND)
             + p_Dtsec->internalStatistics.rund;
-    p_Statistics->eStatOversizePkts = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_ROVR)
+    p_Statistics->eStatOversizePkts = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_ROVR)
             + p_Dtsec->internalStatistics.rovr;
-    p_Statistics->reStatPause = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RXPF)
+    p_Statistics->reStatPause = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_RXPF)
             + p_Dtsec->internalStatistics.rxpf;
-    p_Statistics->teStatPause = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TXPF)
+    p_Statistics->teStatPause = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TXPF)
             + p_Dtsec->internalStatistics.txpf;
     p_Statistics->ifInDiscards = p_Statistics->eStatsDropEvents;
     p_Statistics->ifInErrors = p_Statistics->eStatsDropEvents + p_Statistics->eStatCRCAlignErrors
-            + dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_RFLR) + p_Dtsec->internalStatistics.rflr
-            + dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_RCDE) + p_Dtsec->internalStatistics.rcde
-            + dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_RCSE) + p_Dtsec->internalStatistics.rcse;
+            + fman_dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_RFLR) + p_Dtsec->internalStatistics.rflr
+            + fman_dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_RCDE) + p_Dtsec->internalStatistics.rcde
+            + fman_dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_RCSE) + p_Dtsec->internalStatistics.rcse;
 
-    p_Statistics->ifOutDiscards = dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TDRP)
+    p_Statistics->ifOutDiscards = fman_dtsec_get_stat_counter(p_DtsecMemMap, E_DTSEC_STAT_TDRP)
             + p_Dtsec->internalStatistics.tdrp;
     p_Statistics->ifOutErrors = p_Statistics->ifOutDiscards                                           /**< Number of frames transmitted with error: */
-            + dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_TFCS)
+            + fman_dtsec_get_stat_counter(p_DtsecMemMap,E_DTSEC_STAT_TFCS)
             + p_Dtsec->internalStatistics.tfcs;
 
     return E_OK;
@@ -790,7 +793,7 @@ static t_Error DtsecModifyMacAddress (t_Handle h_Dtsec, t_EnetAddr *p_EnetAddr)
     /* Initialize MAC Station Address registers (1 & 2)    */
     /* Station address have to be swapped (big endian to little endian */
     p_Dtsec->addr = ENET_ADDR_TO_UINT64(*p_EnetAddr);
-    dtsec_set_mac_address(p_Dtsec->p_MemMap, (uint8_t *)(*p_EnetAddr));
+    fman_dtsec_set_mac_address(p_Dtsec->p_MemMap, (uint8_t *)(*p_EnetAddr));
 
     return E_OK;
 }
@@ -805,7 +808,7 @@ static t_Error DtsecResetCounters (t_Handle h_Dtsec)
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
     /* clear HW counters */
-    dtsec_reset_stat(p_Dtsec->p_MemMap);
+    fman_dtsec_reset_stat(p_Dtsec->p_MemMap);
 
     /* clear SW counters holding carries */
     memset(&p_Dtsec->internalStatistics, 0, sizeof(t_InternalStatistics));
@@ -846,7 +849,7 @@ static t_Error DtsecAddExactMatchMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthA
             p_Dtsec->paddr[paddrNum] = ethAddr;
 
             /* put in hardware */
-            dtsec_add_addr_in_paddr(p_Dtsec->p_MemMap, (uint64_t)PTR_TO_UINT(&ethAddr), paddrNum);
+            fman_dtsec_add_addr_in_paddr(p_Dtsec->p_MemMap, (uint64_t)PTR_TO_UINT(&ethAddr), paddrNum);
             p_Dtsec->numOfIndAddrInRegs++;
 
             return E_OK;
@@ -878,7 +881,7 @@ static t_Error DtsecDelExactMatchMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthA
             /* mark this PADDR as not used */
             p_Dtsec->indAddrRegUsed[paddrNum] = FALSE;
             /* clear in hardware */
-            dtsec_clear_addr_in_paddr(p_Dtsec->p_MemMap, paddrNum);
+            fman_dtsec_clear_addr_in_paddr(p_Dtsec->p_MemMap, paddrNum);
             p_Dtsec->numOfIndAddrInRegs--;
 
             return E_OK;
@@ -904,7 +907,7 @@ static t_Error DtsecAddHashMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthAddr)
 
     ethAddr = ENET_ADDR_TO_UINT64(*p_EthAddr);
 
-    ghtx = (bool)((dtsec_get_rctrl(p_Dtsec->p_MemMap) & RCTRL_GHTX) ? TRUE : FALSE);
+    ghtx = (bool)((fman_dtsec_get_rctrl(p_Dtsec->p_MemMap) & RCTRL_GHTX) ? TRUE : FALSE);
     mcast = (bool)((ethAddr & MAC_GROUP_ADDRESS) ? TRUE : FALSE);
 
     if (ghtx && !mcast) /* Cannot handle unicast mac addr when GHTX is on */
@@ -931,7 +934,7 @@ static t_Error DtsecAddHashMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthAddr)
             bucket += 0x100;
     }
 
-    dtsec_set_bucket(p_Dtsec->p_MemMap, bucket, TRUE);
+    fman_dtsec_set_bucket(p_Dtsec->p_MemMap, bucket, TRUE);
 
     /* Create element to be added to the driver hash table */
     p_HashEntry = (t_EthHashEntry *)XX_Malloc(sizeof(t_EthHashEntry));
@@ -964,7 +967,7 @@ static t_Error DtsecDelHashMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthAddr)
 
     ethAddr = ENET_ADDR_TO_UINT64(*p_EthAddr);
 
-    ghtx = (bool)((dtsec_get_rctrl(p_Dtsec->p_MemMap) & RCTRL_GHTX) ? TRUE : FALSE);
+    ghtx = (bool)((fman_dtsec_get_rctrl(p_Dtsec->p_MemMap) & RCTRL_GHTX) ? TRUE : FALSE);
     mcast = (bool)((ethAddr & MAC_GROUP_ADDRESS) ? TRUE : FALSE);
 
     if (ghtx && !mcast) /* Cannot handle unicast mac addr when GHTX is on */
@@ -995,7 +998,7 @@ static t_Error DtsecDelHashMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthAddr)
             }
         }
         if (LIST_IsEmpty(&p_Dtsec->p_MulticastAddrHash->p_Lsts[bucket]))
-            dtsec_set_bucket(p_Dtsec->p_MemMap, bucket, FALSE);
+            fman_dtsec_set_bucket(p_Dtsec->p_MemMap, bucket, FALSE);
     }
     else
     {
@@ -1011,24 +1014,13 @@ static t_Error DtsecDelHashMacAddress(t_Handle h_Dtsec, t_EnetAddr *p_EthAddr)
             }
         }
         if (LIST_IsEmpty(&p_Dtsec->p_UnicastAddrHash->p_Lsts[bucket]))
-            dtsec_set_bucket(p_Dtsec->p_MemMap, bucket, FALSE);
+            fman_dtsec_set_bucket(p_Dtsec->p_MemMap, bucket, FALSE);
     }
 
     /* address does not exist */
     ASSERT_COND(p_HashEntry != NULL);
 
     return E_OK;
-}
-
-void DtsecRestartTbiAN(t_Handle h_Dtsec)
-{
-    t_Dtsec         *p_Dtsec = (t_Dtsec *)h_Dtsec;
-
-    if (!p_Dtsec)
-	return;
-
-    DTSEC_MII_WritePhyReg(p_Dtsec, p_Dtsec->tbi_phy_addr, 0,
-		PHY_CR_ANE | PHY_CR_RESET_AN | PHY_CR_FULLDUPLEX | PHY_CR_SPEED1);
 }
 
 /* .............................................................................. */
@@ -1040,8 +1032,8 @@ static t_Error DtsecSetPromiscuous(t_Handle h_Dtsec, bool newVal)
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
-    dtsec_set_uc_promisc(p_Dtsec->p_MemMap, newVal);
-    dtsec_set_mc_promisc(p_Dtsec->p_MemMap, newVal);
+    fman_dtsec_set_uc_promisc(p_Dtsec->p_MemMap, newVal);
+    fman_dtsec_set_mc_promisc(p_Dtsec->p_MemMap, newVal);
 
     return E_OK;
 }
@@ -1058,7 +1050,7 @@ static t_Error DtsecSetStatistics(t_Handle h_Dtsec, e_FmMacStatisticsLevel stati
 
     p_Dtsec->statisticsLevel = statisticsLevel;
 
-    err = (t_Error)dtsec_set_stat_level(p_Dtsec->p_MemMap,
+    err = (t_Error)fman_dtsec_set_stat_level(p_Dtsec->p_MemMap,
                                         (enum mac_stat_level)statisticsLevel);
     if (err != E_OK)
         return err;
@@ -1098,7 +1090,7 @@ static t_Error DtsecAdjustLink(t_Handle h_Dtsec, e_EnetSpeed speed, bool fullDup
     enet_speed = (enum enet_speed) ENET_SPEED_FROM_MODE(p_Dtsec->enetMode);
     p_Dtsec->halfDuplex = !fullDuplex;
 
-    err = (t_Error)dtsec_adjust_link(p_Dtsec->p_MemMap, enet_interface, enet_speed, fullDuplex);
+    err = (t_Error)fman_dtsec_adjust_link(p_Dtsec->p_MemMap, enet_interface, enet_speed, fullDuplex);
 
     if (err == E_CONFLICT)
         RETURN_ERROR(MAJOR, E_CONFLICT, ("Ethernet interface does not support Half Duplex mode"));
@@ -1123,7 +1115,6 @@ static t_Error DtsecRestartAutoneg(t_Handle h_Dtsec)
     return E_OK;
 }
 
-/*************************************************************************************/
 /* .............................................................................. */
 
 static t_Error DtsecGetId(t_Handle h_Dtsec, uint32_t *macId)
@@ -1147,7 +1138,7 @@ static t_Error DtsecGetVersion(t_Handle h_Dtsec, uint32_t *macVersion)
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
-    *macVersion = dtsec_get_revision(p_Dtsec->p_MemMap);
+    *macVersion = fman_dtsec_get_revision(p_Dtsec->p_MemMap);
 
     return E_OK;
 }
@@ -1176,9 +1167,9 @@ static t_Error DtsecSetException(t_Handle h_Dtsec, e_FmMacExceptions exception, 
             RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Undefined exception"));
 
         if (enable)
-            dtsec_enable_interrupt(p_Dtsec->p_MemMap, bitMask);
+            fman_dtsec_enable_interrupt(p_Dtsec->p_MemMap, bitMask);
         else
-            dtsec_disable_interrupt(p_Dtsec->p_MemMap, bitMask);
+            fman_dtsec_disable_interrupt(p_Dtsec->p_MemMap, bitMask);
     }
     else
     {
@@ -1190,10 +1181,10 @@ static t_Error DtsecSetException(t_Handle h_Dtsec, e_FmMacExceptions exception, 
             if (enable)
             {
                 p_Dtsec->enTsuErrExeption = TRUE;
-                dtsec_enable_tmr_interrupt(p_Dtsec->p_MemMap);
+                fman_dtsec_enable_tmr_interrupt(p_Dtsec->p_MemMap);
             } else {
                 p_Dtsec->enTsuErrExeption = FALSE;
-                dtsec_disable_tmr_interrupt(p_Dtsec->p_MemMap);
+                fman_dtsec_disable_tmr_interrupt(p_Dtsec->p_MemMap);
             }
             break;
         default:
@@ -1203,8 +1194,6 @@ static t_Error DtsecSetException(t_Handle h_Dtsec, e_FmMacExceptions exception, 
 
     return E_OK;
 }
-
-
 
 /* ........................................................................... */
 
@@ -1218,7 +1207,6 @@ static t_Error DtsecDumpRegs(t_Handle h_Dtsec)
 
     if (p_Dtsec->p_MemMap)
     {
-
         DUMP_TITLE(p_Dtsec->p_MemMap, ("dTSEC %d: ", p_Dtsec->macId));
         DUMP_VAR(p_Dtsec->p_MemMap, tsec_id);
         DUMP_VAR(p_Dtsec->p_MemMap, tsec_id2);
@@ -1284,7 +1272,7 @@ static t_Error DtsecInit(t_Handle h_Dtsec)
     enet_speed = (enum enet_speed)ENET_SPEED_FROM_MODE(p_Dtsec->enetMode);
     MAKE_ENET_ADDR_FROM_UINT64(p_Dtsec->addr, ethAddr);
 
-    err = (t_Error)dtsec_init(p_Dtsec->p_MemMap,
+    err = (t_Error)fman_dtsec_init(p_Dtsec->p_MemMap,
                               p_DtsecDriverParam,
                               enet_interface,
                               enet_speed,
@@ -1326,7 +1314,7 @@ static t_Error DtsecInit(t_Handle h_Dtsec)
     }
 
     /* Max Frame Length */
-    maxFrmLn = dtsec_get_max_frame_len(p_Dtsec->p_MemMap);
+    maxFrmLn = fman_dtsec_get_max_frame_len(p_Dtsec->p_MemMap);
     err = FmSetMacMaxFrame(p_Dtsec->fmMacControllerDriver.h_Fm, e_FM_MAC_1G,
             p_Dtsec->fmMacControllerDriver.macId, maxFrmLn);
 
@@ -1493,7 +1481,7 @@ t_Handle  DTSEC_Config(t_FmMacParams *p_FmMacParam)
     /* Plant parameter structure pointer */
     p_Dtsec->p_DtsecDriverParam = p_DtsecDriverParam;
 
-    dtsec_defconfig(p_DtsecDriverParam);
+    fman_dtsec_defconfig(p_DtsecDriverParam);
 
     p_Dtsec->p_MemMap           = (struct dtsec_regs *)UINT_TO_PTR(baseAddr);
     p_Dtsec->p_MiiMemMap        = (struct dtsec_mii_reg *)UINT_TO_PTR(baseAddr + DTSEC_TO_MII_OFFSET);

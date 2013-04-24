@@ -756,10 +756,17 @@ void FmPcdLockUnlockAll(t_Handle h_FmPcd)
     CORE_MemoryBarrier();
 }
 
+t_Error FmPcdHcSync(t_Handle h_FmPcd)
+{
+    ASSERT_COND(h_FmPcd);
+    ASSERT_COND(((t_FmPcd*)h_FmPcd)->h_Hc);
+
+    return FmHcPcdSync(((t_FmPcd*)h_FmPcd)->h_Hc);
+}
+
 t_Handle FmPcdGetHcHandle(t_Handle h_FmPcd)
 {
     ASSERT_COND(h_FmPcd);
-    SANITY_CHECK_RETURN_VALUE(((t_FmPcd*)h_FmPcd)->h_Hc, E_INVALID_HANDLE, NULL);
     return ((t_FmPcd*)h_FmPcd)->h_Hc;
 }
 
@@ -893,13 +900,6 @@ t_Handle FM_PCD_Config(t_FmPcdParams *p_FmPcdParams)
     }
 
     return p_FmPcd;
-}
-
-t_Handle FM_PCD_GetHcDevH(t_Handle h_FmPcd)
-{
-    t_FmPcd        *p_FmPcd = (t_FmPcd *) h_FmPcd;
-
-    return (p_FmPcd) ? FmGcGetHcPortDevH(p_FmPcd->h_Hc) : NULL;
 }
 
 t_Error FM_PCD_Init(t_Handle h_FmPcd)
@@ -1228,7 +1228,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
     uint8_t                 ipsecAhUnit = 0,ipsecEspUnit = 0;
     bool                    ipsecAhExists = FALSE, ipsecEspExists = FALSE, shim1Selected = FALSE;
     uint8_t                 hdrNum;
-    t_FmPcdNetEnvParams     *p_modifiedNetEnvParams;
+    t_FmPcdNetEnvParams     *p_ModifiedNetEnvParams;
 
     SANITY_CHECK_RETURN_VALUE(h_FmPcd, E_INVALID_STATE, NULL);
     SANITY_CHECK_RETURN_VALUE(!p_FmPcd->p_FmPcdDriverParam, E_INVALID_STATE, NULL);
@@ -1254,15 +1254,15 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
     /* As anyone doesn't have handle of this netEnv yet, no need
        to protect it with spinlocks */
 
-    p_modifiedNetEnvParams = (t_FmPcdNetEnvParams *) XX_Malloc(sizeof(t_FmPcdNetEnvParams));
-    if (!p_modifiedNetEnvParams)
+    p_ModifiedNetEnvParams = (t_FmPcdNetEnvParams *)XX_Malloc(sizeof(t_FmPcdNetEnvParams));
+    if (!p_ModifiedNetEnvParams)
     {
         REPORT_ERROR(MAJOR, E_NO_MEMORY, ("FmPcdNetEnvParams"));
         return NULL;
     }
 
-    memcpy(p_modifiedNetEnvParams, p_NetEnvParams, sizeof(t_FmPcdNetEnvParams));
-    p_NetEnvParams = p_modifiedNetEnvParams;
+    memcpy(p_ModifiedNetEnvParams, p_NetEnvParams, sizeof(t_FmPcdNetEnvParams));
+    p_NetEnvParams = p_ModifiedNetEnvParams;
 
     netEnvCurrId = (uint8_t)i;
 
@@ -1295,7 +1295,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                     {
                         REPORT_ERROR(MINOR, E_FULL,
                                 ("Illegal unit - header with opt may not be interchangeable with the same header without opt"));
-                        XX_Free(p_modifiedNetEnvParams);
+                        XX_Free(p_ModifiedNetEnvParams);
                         return NULL;
                     }
                 }
@@ -1319,7 +1319,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 if (ipsecEspExists && (ipsecEspUnit != i))
                 {
                     REPORT_ERROR(MINOR, E_INVALID_STATE, ("HEADER_TYPE_IPSEC_AH and HEADER_TYPE_IPSEC_ESP may not be defined in separate units"));
-                    XX_Free(p_modifiedNetEnvParams);
+                    XX_Free(p_ModifiedNetEnvParams);
                     return NULL;
                 }
                 else
@@ -1333,7 +1333,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 if (ipsecAhExists && (ipsecAhUnit != i))
                 {
                     REPORT_ERROR(MINOR, E_INVALID_STATE, ("HEADER_TYPE_IPSEC_AH and HEADER_TYPE_IPSEC_ESP may not be defined in separate units"));
-                    XX_Free(p_modifiedNetEnvParams);
+                    XX_Free(p_ModifiedNetEnvParams);
                     return NULL;
                 }
                 else
@@ -1415,7 +1415,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
             if (p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[1].hdr != HEADER_TYPE_NONE)
             {
                 REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("SHIM header may not be interchanged with other headers"));
-                XX_Free(p_modifiedNetEnvParams);
+                XX_Free(p_ModifiedNetEnvParams);
                 return NULL;
             }
     }
@@ -1429,12 +1429,12 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                     if (shim1Selected)
                     {
                         REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("SHIM header cannot be selected with UDP_IPSEC_ESP"));
-                        XX_Free(p_modifiedNetEnvParams);
+                        XX_Free(p_ModifiedNetEnvParams);
                         return NULL;
                     }
                     shim1Selected = TRUE;
                     p_FmPcd->netEnvs[netEnvCurrId].unitsVectors[i] = 0x00000001;
-                break;
+                    break;
                 case (HEADER_TYPE_USER_DEFINED_SHIM2):
                     p_FmPcd->netEnvs[netEnvCurrId].unitsVectors[i] = 0x00000002;
                     break;
@@ -1466,14 +1466,14 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 if ((hdrNum == ILLEGAL_HDR_NUM) || (hdrNum == NO_HDR_NUM))
                 {
                     REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, NO_MSG);
-                    XX_Free(p_modifiedNetEnvParams);
+                    XX_Free(p_ModifiedNetEnvParams);
                     return NULL;
                 }
                 p_FmPcd->netEnvs[netEnvCurrId].lcvs[hdrNum] |= p_FmPcd->netEnvs[netEnvCurrId].unitsVectors[i];
             }
         }
     }
-    XX_Free(p_modifiedNetEnvParams);
+    XX_Free(p_ModifiedNetEnvParams);
 
     p_FmPcd->netEnvs[netEnvCurrId].h_Spinlock = XX_InitSpinlock();
     if (!p_FmPcd->netEnvs[netEnvCurrId].h_Spinlock)
@@ -1542,7 +1542,10 @@ t_Error FM_PCD_SetAdvancedOffloadSupport(t_Handle h_FmPcd)
         revInfo.packageRev = IP_OFFLOAD_PACKAGE_NUMBER;
     }
     if (revInfo.packageRev != IP_OFFLOAD_PACKAGE_NUMBER)
-        RETURN_ERROR(MINOR, E_NOT_SUPPORTED, ("Fman ctrl code package"));
+        RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Fman ctrl code package"));
+
+    if (!p_FmPcd->h_Hc)
+        RETURN_ERROR(MAJOR, E_INVALID_HANDLE, ("HC must be initialized in this mode"));
 
     p_FmPcd->advancedOffloadSupport = TRUE;
 

@@ -31,13 +31,13 @@
  */
 
 /******************************************************************************
- @File		fsl_fman.h
+ @File		lnxwrp_fsl_fman.h
 
  @Description	Linux internal kernel API
 *//***************************************************************************/
 
-#ifndef __FSL_FMAN_H
-#define __FSL_FMAN_H
+#ifndef __LNXWRP_FSL_FMAN_H
+#define __LNXWRP_FSL_FMAN_H
 
 #include <linux/types.h>
 #include <linux/device.h>   /* struct device */
@@ -201,7 +201,7 @@ void fm_port_pcd_bind (struct fm_port *port, struct fm_port_pcd_param *params);
  @Function	fm_port_get_buff_layout_ext_params
 
  @Description	Get data_align and manip_extra_space from the device tree
-                chosen node if aplied. 
+                chosen node if aplied.
                 This function will only update these two parameters.
                 When this port has no such parameters in the device tree
                 values will be set to 0.
@@ -316,27 +316,27 @@ int fm_get_max_frm(void);
 int fm_get_rx_extra_headroom(void);
 
 /**************************************************************************//**
- @Function	fm_port_set_rate_limit
+@Function     fm_port_set_rate_limit
 
- @Description	Configure Shaper parameter on FM-port device (Tx port).
+@Description  Configure Shaper parameter on FM-port device (Tx port).
 
- @Param[in]	port	- A handle of the FM port device.
- @Param[in]	max_burst_size	- Value of maximum burst size allowed.
- @Param[in]	rate_limit	- The required rate value.
+@Param[in]    port   - A handle of the FM port device.
+@Param[in]    max_burst_size - Value of maximum burst size allowed.
+@Param[in]    rate_limit     - The required rate value.
 
- @Cautions	Allowed only after the port is initialized.
+@Cautions     Allowed only after the port is initialized.
 *//***************************************************************************/
 int fm_port_set_rate_limit(struct fm_port *port,
-			uint16_t	max_burst_size,
-			uint32_t	rate_limit);
+                           uint16_t max_burst_size,
+                           uint32_t rate_limit);
 /**************************************************************************//**
- @Function	fm_port_set_rate_limit
+@Function     fm_port_set_rate_limit
 
- @Description	Delete Shaper configuration on FM-port device (Tx port).
+@Description  Delete Shaper configuration on FM-port device (Tx port).
 
- @Param[in]	port	- A handle of the FM port device.
+@Param[in]    port   - A handle of the FM port device.
 
- @Cautions	Allowed only after the port is initialized.
+@Cautions     Allowed only after the port is initialized.
 *//***************************************************************************/
 int fm_port_del_rate_limit(struct fm_port *port);
 
@@ -344,4 +344,4 @@ int fm_port_del_rate_limit(struct fm_port *port);
 /** @} */ /* end of FM_LnxKern_grp group */
 
 
-#endif /* __FSL_FMAN_H */
+#endif /* __LNXWRP_FSL_FMAN_H */

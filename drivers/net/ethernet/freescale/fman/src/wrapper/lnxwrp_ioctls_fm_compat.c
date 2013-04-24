@@ -508,6 +508,7 @@ void compat_copy_fm_pcd_hash_table(
     {
         param-> max_num_of_keys = compat_param->max_num_of_keys;
         param->statistics_mode  = compat_param->statistics_mode;
+        param->kg_hash_shift    = compat_param->kg_hash_shift;
         param->hash_res_mask    = compat_param->hash_res_mask;
         param->hash_shift       = compat_param->hash_shift;
         param->match_key_size   = compat_param->match_key_size;
@@ -517,6 +518,7 @@ void compat_copy_fm_pcd_hash_table(
     {
         compat_param-> max_num_of_keys = param->max_num_of_keys;
         compat_param->statistics_mode  = param->statistics_mode;
+        compat_param->kg_hash_shift    = param->kg_hash_shift;
         compat_param->hash_res_mask    = param->hash_res_mask;
         compat_param->hash_shift       = param->hash_shift;
         compat_param->match_key_size   = param->match_key_size;
@@ -641,10 +643,10 @@ void compat_copy_fm_pcd_kg_scheme(
         param->bypass_fqid_generation = compat_param->bypass_fqid_generation;
         param->base_fqid = compat_param->base_fqid;
 #if DPAA_VERSION >= 11
-	param->override_storage_profile =
-					 compat_param->override_storage_profile;
-	param->storage_profile = compat_param->storage_profile;
-#endif /* DPAA_VERSION >= 11 */
+        param->override_storage_profile =
+                                 compat_param->override_storage_profile;
+        param->storage_profile = compat_param->storage_profile;
+#endif
         param->num_of_used_extracted_ors = compat_param->num_of_used_extracted_ors;
         memcpy(param->extracted_ors,
                compat_param->extracted_ors,
@@ -694,10 +696,10 @@ void compat_copy_fm_pcd_kg_scheme(
         compat_param->bypass_fqid_generation = param->bypass_fqid_generation;
         compat_param->base_fqid = param->base_fqid;
 #if DPAA_VERSION >= 11
-	compat_param->override_storage_profile =
-					       param->override_storage_profile;
-	compat_param->storage_profile =  param->storage_profile;
-#endif /* DPAA_VERSION >= 11 */
+        compat_param->override_storage_profile =
+                                        param->override_storage_profile;
+        compat_param->storage_profile =  param->storage_profile;
+#endif
         compat_param->num_of_used_extracted_ors = param->num_of_used_extracted_ors;
         memcpy(compat_param->extracted_ors, param->extracted_ors, IOC_FM_PCD_KG_NUM_OF_GENERIC_REGS * sizeof(ioc_fm_pcd_kg_extracted_or_params_t));
         compat_param->next_engine = param->next_engine;

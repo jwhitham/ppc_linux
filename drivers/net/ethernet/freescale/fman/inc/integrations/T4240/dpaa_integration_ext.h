@@ -178,12 +178,12 @@ typedef enum
 ******************************************************************************/
 #define BM_MAX_NUM_OF_POOLS         64          /**< Number of buffers pools */
 
-
 /*****************************************************************************
  SEC INTEGRATION-SPECIFIC DEFINITIONS
 ******************************************************************************/
 #define SEC_NUM_OF_DECOS            3
 #define SEC_ALL_DECOS_MASK          0x00000003
+
 
 /*****************************************************************************
  FM INTEGRATION-SPECIFIC DEFINITIONS
@@ -259,6 +259,7 @@ typedef enum
 /* FM errata */
 #define FM_HEAVY_TRAFFIC_HANG_ERRATA_FMAN_A005669
 #define FM_WRONG_RESET_VALUES_ERRATA_FMAN_A005127
+#define FM_RX_FIFO_CORRUPT_ERRATA_10GMAC_A006320
 
 #define FM_BCB_ERRATA_BMI_SW001
 #define FM_LEN_CHECK_ERRATA_FMAN_SW002

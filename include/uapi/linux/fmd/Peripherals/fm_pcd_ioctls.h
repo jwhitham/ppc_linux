@@ -840,7 +840,9 @@ typedef enum ioc_fm_pcd_cc_stats_mode {
     e_IOC_FM_PCD_CC_STATS_MODE_NONE = 0,        /**< No statistics support */
     e_IOC_FM_PCD_CC_STATS_MODE_FRAME,           /**< Frame count statistics */
     e_IOC_FM_PCD_CC_STATS_MODE_BYTE_AND_FRAME,  /**< Byte and frame count statistics */
+#if (DPAA_VERSION >= 11)
     e_IOC_FM_PCD_CC_STATS_MODE_RMON,            /**< Byte and frame length range count statistics */
+#endif /* (DPAA_VERSION >= 11) */
 } ioc_fm_pcd_cc_stats_mode;
 
 /**************************************************************************//**
@@ -1431,6 +1433,8 @@ typedef struct ioc_fm_pcd_hash_table_params_t {
     uint16_t                    max_num_of_keys;            /**< Maximum Number Of Keys that will (ever) be used in this Hash-table */
     ioc_fm_pcd_cc_stats_mode    statistics_mode;            /**< If not e_IOC_FM_PCD_CC_STATS_MODE_NONE, the required structures for the
                                                                  requested statistics mode will be allocated according to max_num_of_keys. */
+    uint8_t                     kg_hash_shift;              /**< KG-Hash-shift as it was configured in the KG-scheme
+                                                                 that leads to this hash-table. */
     uint16_t                    hash_res_mask;              /**< Mask that will be used on the hash-result;
                                                                  The number-of-sets for this hash will be calculated
                                                                  as (2^(number of bits set in 'hash_res_mask'));
@@ -2034,7 +2038,11 @@ typedef struct ioc_fm_pcd_manip_reassem_ip_stats_t {
     uint32_t    external_buffer_busy;             /**< Counts the number of times external buffer busy occurred */
     uint32_t    sg_fragments;                    /**< Counts the number of Scatter/Gather fragments */
     uint32_t    dma_semaphore_depletion;          /**< Counts the number of failed attempts to allocate a DMA semaphore */
-    struct {
+#if (DPAA_VERSION >= 11)
+    uint32_t        non_consistent_sp;            /**< Counts the number of Non Consistent Storage Profile events for
+                                                     successfully reassembled frames */
+#endif /* (DPAA_VERSION >= 11) */
+struct {
         uint32_t    successfully_reassembled;    /**< Counts the number of successfully reassembled frames */
         uint32_t    valid_fragments;             /**< Counts the total number of valid fragments that
                                                      have been processed for all frames */

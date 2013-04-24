@@ -12,4 +12,4 @@ EXTRA_CFLAGS += -I$(NCSW_FM_INC)
 
 obj-y		+= fsl-ncsw-sp.o
 
-fsl-ncsw-sp-objs	:=   fm_sp.o
+fsl-ncsw-sp-objs	:= fm_sp.o fman_sp.o

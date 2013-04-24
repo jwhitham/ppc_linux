@@ -148,7 +148,6 @@ static void WritePhyReg1G(t_MemacMiiAccessMemMap    *p_MiiAccess,
         XX_UDelay(1);
 
     WRITE_UINT32(p_MiiAccess->mdio_data, data);
-
     CORE_MemoryBarrier();
 
     /* Wait for write transaction to end */

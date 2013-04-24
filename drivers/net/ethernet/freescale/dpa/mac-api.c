@@ -440,7 +440,7 @@ static void adjust_link(struct net_device *net_dev)
 	if (!phy_dev->link) {
 #if (DPAA_VERSION < 11)
 		mac_priv = (struct mac_priv_s *)macdev_priv(mac_dev);
-		DtsecRestartTbiAN(mac_priv->mac);
+		FM_MAC_RestartAutoneg(mac_priv->mac);
 #endif
 		return;
 	}

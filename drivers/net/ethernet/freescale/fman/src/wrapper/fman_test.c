@@ -56,7 +56,7 @@
 
 /* private headers */
 #include "fm_ext.h"
-#include "fsl_fman.h"
+#include "lnxwrp_fsl_fman.h"
 #include "fm_port_ext.h"
 #if (DPAA_VERSION == 11)
 #include "../../Peripherals/FM/MAC/memac.h"

@@ -45,6 +45,7 @@
 
 #include "fm_common.h"
 #include "fm_sp_common.h"
+#include "fsl_fman_sp.h"
 
 
 #define __ERR_MODULE__  MODULE_FM_PORT
@@ -78,24 +79,17 @@
 #define DEFAULT_PORT_bufferPrefixContent_dataAlign      DEFAULT_FM_SP_bufferPrefixContent_dataAlign
 #define DEFAULT_PORT_cheksumLastBytesIgnore             0
 #define DEFAULT_PORT_cutBytesFromEnd                    4
-#define DEFAULT_PORT_txFifoMinFillLevel                 0
 #define DEFAULT_PORT_fifoDeqPipelineDepth_IM            2
-#define DEFAULT_PORT_fifoDeqPipelineDepth_1G            1
-#define DEFAULT_PORT_fifoDeqPipelineDepth_10G           4
-#define DEFAULT_PORT_fifoDeqPipelineDepth_OH            2
 
-#define DEFAULT_PORT_txFifoLowComfLevel                 (5*KILOBYTE)
-#define DEFAULT_PORT_rxFifoPriElevationLevel            BMI_MAX_FIFO_SIZE
-#define DEFAULT_PORT_rxFifoThreshold                    (BMI_MAX_FIFO_SIZE*3/4)
 #define DEFAULT_PORT_frmDiscardOverride                 FALSE
 
-#define DEFAULT_PORT_dmaSwapData                        DEFAULT_FM_SP_dmaSwapData
-#define DEFAULT_PORT_dmaIntContextCacheAttr             DEFAULT_FM_SP_dmaIntContextCacheAttr
-#define DEFAULT_PORT_dmaHeaderCacheAttr                 DEFAULT_FM_SP_dmaHeaderCacheAttr
-#define DEFAULT_PORT_dmaScatterGatherCacheAttr          DEFAULT_FM_SP_dmaScatterGatherCacheAttr
-#define DEFAULT_PORT_dmaWriteOptimize                   DEFAULT_FM_SP_dmaWriteOptimize
+#define DEFAULT_PORT_dmaSwapData                        (e_FmDmaSwapOption)DEFAULT_FMAN_SP_DMA_SWAP_DATA
+#define DEFAULT_PORT_dmaIntContextCacheAttr             (e_FmDmaCacheOption)DEFAULT_FMAN_SP_DMA_INT_CONTEXT_CACHE_ATTR
+#define DEFAULT_PORT_dmaHeaderCacheAttr                 (e_FmDmaCacheOption)DEFAULT_FMAN_SP_DMA_HEADER_CACHE_ATTR
+#define DEFAULT_PORT_dmaScatterGatherCacheAttr          (e_FmDmaCacheOption)DEFAULT_FMAN_SP_DMA_SCATTER_GATHER_CACHE_ATTR
+#define DEFAULT_PORT_dmaWriteOptimize                   DEFAULT_FMAN_SP_DMA_WRITE_OPTIMIZE
 
-#define DEFAULT_PORT_noScatherGather                    DEFAULT_FM_SP_noScatherGather
+#define DEFAULT_PORT_noScatherGather                    DEFAULT_FMAN_SP_NO_SCATTER_GATHER
 #define DEFAULT_PORT_forwardIntContextReuse             FALSE
 #define DEFAULT_PORT_BufMargins_startMargins            32
 #define DEFAULT_PORT_BufMargins_endMargins              0
@@ -109,6 +103,17 @@
 #define DEFAULT_PORT_maxFrameLength                     9600
 
 #define DEFAULT_notSupported                            0xff
+
+#if (DPAA_VERSION < 11)
+#define DEFAULT_PORT_rxFifoPriElevationLevel            BMI_MAX_FIFO_SIZE
+#define DEFAULT_PORT_rxFifoThreshold                    (BMI_MAX_FIFO_SIZE*3/4)
+
+#define DEFAULT_PORT_txFifoMinFillLevel                 0
+#define DEFAULT_PORT_txFifoLowComfLevel                 (5*KILOBYTE)
+#define DEFAULT_PORT_fifoDeqPipelineDepth_1G            1
+#define DEFAULT_PORT_fifoDeqPipelineDepth_10G           4
+
+#define DEFAULT_PORT_fifoDeqPipelineDepth_OH            2
 
 /* Host command port MUST NOT be changed to more than 1 !!! */
 #define DEFAULT_PORT_numOfTasks(type)                       \
@@ -124,9 +129,9 @@
                ((((type) == e_FM_PORT_TYPE_RX) ||           \
                  ((type) == e_FM_PORT_TYPE_TX)) ? 2 : 0))
 
-#define DEFAULT_PORT_numOfOpenDmas(type, rev)             \
-    (uint32_t)((((type) == e_FM_PORT_TYPE_TX_10G) ||      \
-                ((type) == e_FM_PORT_TYPE_RX_10G)) ? 8 : ((rev>=6) ? 2 : 1))
+#define DEFAULT_PORT_numOfOpenDmas(type)                    \
+    (uint32_t)((((type) == e_FM_PORT_TYPE_TX_10G) ||        \
+                ((type) == e_FM_PORT_TYPE_RX_10G)) ? 8 : 1 )
 
 #define DEFAULT_PORT_extraNumOfOpenDmas(type)               \
     (uint32_t)((((type) == e_FM_PORT_TYPE_RX_10G) ||        \
@@ -141,6 +146,45 @@
                  ((type) == e_FM_PORT_TYPE_TX)) ? 44 : 8))
 
 #define DEFAULT_PORT_extraNumOfFifoBufs             0
+
+#else  /* (DPAA_VERSION < 11) */
+/* Defaults are registers' reset values */
+#define DEFAULT_PORT_rxFifoPriElevationLevel            (256 * KILOBYTE)
+#define DEFAULT_PORT_rxFifoThreshold                    (256 * KILOBYTE)
+
+#define DEFAULT_PORT_txFifoMinFillLevel                 0
+#define DEFAULT_PORT_txFifoLowComfLevel                 (5 * KILOBYTE)
+#define DEFAULT_PORT_fifoDeqPipelineDepth_1G            2
+#define DEFAULT_PORT_fifoDeqPipelineDepth_10G           4
+
+#define DEFAULT_PORT_fifoDeqPipelineDepth_OH            2
+
+#define DEFAULT_PORT_numOfTasks(type)                       \
+    (uint32_t)((((type) == e_FM_PORT_TYPE_RX_10G) ||        \
+                ((type) == e_FM_PORT_TYPE_TX_10G)) ? 14 :  \
+               (((type) == e_FM_PORT_TYPE_RX) ||            \
+                 ((type) == e_FM_PORT_TYPE_TX)) ? 4 :       \
+                 ((type) == e_FM_PORT_TYPE_OH_OFFLINE_PARSING) ? 6 : 1)
+
+#define DEFAULT_PORT_extraNumOfTasks(type)          0
+
+#define DEFAULT_PORT_numOfOpenDmas(type)                    \
+    (uint32_t)(((type) == e_FM_PORT_TYPE_RX_10G) ? 8 :      \
+               ((type) == e_FM_PORT_TYPE_TX_10G) ? 12 :    \
+               ((type) == e_FM_PORT_TYPE_RX)     ? 2 :      \
+               ((type) == e_FM_PORT_TYPE_TX)     ? 3 :      \
+               ((type) == e_FM_PORT_TYPE_OH_HOST_COMMAND) ? 2 : 4 )
+
+#define DEFAULT_PORT_extraNumOfOpenDmas(type)       0
+
+#define DEFAULT_PORT_numOfFifoBufs(type)                   \
+    (uint32_t) (((type) == e_FM_PORT_TYPE_RX_10G) ? 96 : \
+                ((type) == e_FM_PORT_TYPE_TX_10G) ? 64 : \
+                ((type) == e_FM_PORT_TYPE_OH_HOST_COMMAND) ? 10 : 50 )
+
+#define DEFAULT_PORT_extraNumOfFifoBufs             0
+
+#endif /* (DPAA_VERSION < 11) */
 
 #define DEFAULT_PORT_txBdRingLength                 16
 #define DEFAULT_PORT_rxBdRingLength                 128
@@ -274,7 +318,7 @@ typedef _Packed struct
     volatile uint32_t   fmbm_tccb;      /**< Tx Coarse Classification Base */
     volatile uint32_t   reserved0[0x0e];/**< (0x038-0x070) */
     volatile uint32_t   fmbm_tfne;      /**< Tx Frame Next Engine */
-    volatile uint32_t   reserved1[0x02];/**< (0x074-0x7C) */
+    volatile uint32_t   fmbm_tpfcm[0x02];/**< Tx Priority based Flow Control (PFC) Mapping */
     volatile uint32_t   fmbm_tcmne;     /**< Tx Frame Continuous Mode Next Engine */
     volatile uint32_t   reserved2[0x60];/**< (0x080-0x200) */
     volatile uint32_t   fmbm_tstc;      /**< Tx Statistics Counters */
@@ -456,7 +500,7 @@ typedef _Packed struct
 #define BMI_PORT_CFG_IM                         0x01000000
 #define BMI_PORT_STATUS_BSY                     0x80000000
 #define BMI_COUNTERS_EN                         0x80000000
-#define BMI_DMA_ATTR_WRITE_OPTIMIZE             FM_SP_DMA_ATTR_WRITE_OPTIMIZE
+#define BMI_DMA_ATTR_WRITE_OPTIMIZE             FMAN_SP_DMA_ATTR_WRITE_OPTIMIZE
 
 #define BMI_PORT_RFNE_FRWD_DCL4C                0x10000000
 #define BMI_PORT_RFNE_FRWD_RPD                  0x40000000
@@ -479,10 +523,10 @@ typedef _Packed struct
 #define BMI_CMD_ATTR_MACCMD_SECURED             0x00001000
 #define BMI_CMD_ATTR_MACCMD_SC_MASK             0x00000f00
 
-#define BMI_EXT_BUF_POOL_EN_COUNTER             FM_SP_EXT_BUF_POOL_EN_COUNTER
-#define BMI_EXT_BUF_POOL_VALID                  FM_SP_EXT_BUF_POOL_VALID
+#define BMI_EXT_BUF_POOL_EN_COUNTER             FMAN_SP_EXT_BUF_POOL_EN_COUNTER
+#define BMI_EXT_BUF_POOL_VALID                  FMAN_SP_EXT_BUF_POOL_VALID
 
-#define BMI_EXT_BUF_POOL_BACKUP                 FM_SP_EXT_BUF_POOL_BACKUP
+#define BMI_EXT_BUF_POOL_BACKUP                 FMAN_SP_EXT_BUF_POOL_BACKUP
 
 #define BMI_EXT_BUF_POOL_ID_MASK                0x003F0000
 #define BMI_STATUS_RX_MASK_UNUSED               (uint32_t)(~(FM_PORT_FRM_ERR_DMA                    | \
@@ -548,10 +592,10 @@ typedef _Packed struct
 
 /* shifts */
 #define BMI_PORT_CFG_MS_SEL_SHIFT               16
-#define BMI_DMA_ATTR_SWP_SHIFT                  FM_SP_DMA_ATTR_SWP_SHIFT
-#define BMI_DMA_ATTR_IC_CACHE_SHIFT             FM_SP_DMA_ATTR_IC_CACHE_SHIFT
-#define BMI_DMA_ATTR_HDR_CACHE_SHIFT            FM_SP_DMA_ATTR_HDR_CACHE_SHIFT
-#define BMI_DMA_ATTR_SG_CACHE_SHIFT             FM_SP_DMA_ATTR_SG_CACHE_SHIFT
+#define BMI_DMA_ATTR_SWP_SHIFT                  FMAN_SP_DMA_ATTR_SWP_SHIFT
+#define BMI_DMA_ATTR_IC_CACHE_SHIFT             FMAN_SP_DMA_ATTR_IC_CACHE_SHIFT
+#define BMI_DMA_ATTR_HDR_CACHE_SHIFT            FMAN_SP_DMA_ATTR_HDR_CACHE_SHIFT
+#define BMI_DMA_ATTR_SG_CACHE_SHIFT             FMAN_SP_DMA_ATTR_SG_CACHE_SHIFT
 
 #define BMI_IM_FOF_SHIFT                        28
 #define BMI_PR_PORTID_SHIFT                     24
@@ -562,15 +606,15 @@ typedef _Packed struct
 #define BMI_RX_FRAME_END_CS_IGNORE_SHIFT        24
 #define BMI_RX_FRAME_END_CUT_SHIFT              16
 
-#define BMI_IC_TO_EXT_SHIFT                     FM_SP_IC_TO_EXT_SHIFT
-#define BMI_IC_FROM_INT_SHIFT                   FM_SP_IC_FROM_INT_SHIFT
-#define BMI_IC_SIZE_SHIFT                       FM_SP_IC_SIZE_SHIFT
+#define BMI_IC_TO_EXT_SHIFT                     FMAN_SP_IC_TO_EXT_SHIFT
+#define BMI_IC_FROM_INT_SHIFT                   FMAN_SP_IC_FROM_INT_SHIFT
+#define BMI_IC_SIZE_SHIFT                       FMAN_SP_IC_SIZE_SHIFT
 
 #define BMI_INT_BUF_MARG_SHIFT                  28
 
-#define BMI_EXT_BUF_MARG_START_SHIFT            FM_SP_EXT_BUF_MARG_START_SHIFT
-#define BMI_SG_DISABLE                          FM_SP_SG_DISABLE
-#define BMI_EXT_BUF_MARG_END_SHIFT              FM_SP_EXT_BUF_MARG_END_SHIFT
+#define BMI_EXT_BUF_MARG_START_SHIFT            FMAN_SP_EXT_BUF_MARG_START_SHIFT
+#define BMI_SG_DISABLE                          FMAN_SP_SG_DISABLE
+#define BMI_EXT_BUF_MARG_END_SHIFT              FMAN_SP_EXT_BUF_MARG_END_SHIFT
 
 #define BMI_CMD_ATTR_COLOR_SHIFT                26
 #define BMI_CMD_ATTR_COM_MODE_SHIFT             16
@@ -579,10 +623,10 @@ typedef _Packed struct
 #define BMI_CMD_ATTR_MACCMD_SECURED_SHIFT       12
 #define BMI_CMD_ATTR_MACCMD_SC_SHIFT            8
 
-#define BMI_POOL_DEP_NUM_OF_POOLS_SHIFT         FM_SP_POOL_DEP_NUM_OF_POOLS_SHIFT
+#define BMI_POOL_DEP_NUM_OF_POOLS_SHIFT         FMAN_SP_POOL_DEP_NUM_OF_POOLS_SHIFT
 #define BMI_POOL_DEP_NUM_OF_POOLS_VECTOR_SHIFT  24
 
-#define BMI_EXT_BUF_POOL_ID_SHIFT               FM_SP_EXT_BUF_POOL_ID_SHIFT
+#define BMI_EXT_BUF_POOL_ID_SHIFT               FMAN_SP_EXT_BUF_POOL_ID_SHIFT
 #define BMI_TX_FIFO_MIN_FILL_SHIFT              16
 #define BMI_FIFO_PIPELINE_DEPTH_SHIFT           12
 #define BMI_TX_LOW_COMF_SHIFT                   0
@@ -874,6 +918,7 @@ typedef struct {
     uint32_t                    savedBmiFpne;
     uint32_t                    savedBmiCmne;
     uint32_t                    savedNonRxQmiRegsPndn;
+    uint32_t                    origNonRxQmiRegsPndn;
     int                         savedPrsStartOffset;
     bool                        includeInPrsStatistics;
     uint16_t                    maxFrameLength;

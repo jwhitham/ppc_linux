@@ -48,13 +48,16 @@
 #include "fsl_fman_memac.h"
 
 
-#define MEMAC_default_exceptions    ((uint32_t)(MEMAC_IMASK_TECC_ER | MEMAC_IMASK_RECC_ER))
+#define MEMAC_default_exceptions    \
+        ((uint32_t)(MEMAC_IMASK_TSECC_ER | MEMAC_IMASK_TECC_ER | MEMAC_IMASK_RECC_ER))
 
 #define GET_EXCEPTION_FLAG(bitMask, exception)       switch (exception){    \
     case e_FM_MAC_EX_10G_1TX_ECC_ER:                                        \
         bitMask = MEMAC_IMASK_TECC_ER; break;                               \
     case e_FM_MAC_EX_10G_RX_ECC_ER:                                         \
-        bitMask = MEMAC_IMASK_RECC_ER; break;                                     \
+        bitMask = MEMAC_IMASK_RECC_ER; break;                               \
+    case e_FM_MAC_EX_TS_FIFO_ECC_ERR:                                       \
+        bitMask = MEMAC_IMASK_TSECC_ER; break;                              \
     default: bitMask = 0;break;}
 
 

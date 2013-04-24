@@ -49,7 +49,6 @@ typedef struct t_FmHcParams {
 
 
 t_Handle    FmHcConfigAndInit(t_FmHcParams *p_FmHcParams);
-t_Handle    FmGcGetHcPortDevH(t_Handle h_FmHc);
 void        FmHcFree(t_Handle h_FmHc);
 t_Error     FmHcSetFramesDataMemory(t_Handle h_FmHc,
                                     uint8_t  memId);
@@ -84,6 +83,8 @@ t_Error     FmHcKgWriteCpp(t_Handle h_FmHc, uint8_t hardwarePortId, uint32_t cpp
 
 t_Error     FmHcPcdKgCcGetSetParams(t_Handle h_FmHc, t_Handle  h_Scheme, uint32_t requiredAction, uint32_t value);
 t_Error     FmHcPcdPlcrCcGetSetParams(t_Handle h_FmHc,uint16_t absoluteProfileId, uint32_t requiredAction);
+
+t_Error     FmHcPcdSync(t_Handle h_FmHc);
 
 
 

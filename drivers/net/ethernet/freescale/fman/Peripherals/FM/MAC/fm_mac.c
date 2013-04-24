@@ -350,13 +350,16 @@ t_Error FM_MAC_SetTxPauseFrames(t_Handle h_FmMac,
 
     SANITY_CHECK_RETURN_ERROR(p_FmMacControllerDriver, E_INVALID_HANDLE);
 
+    if ((priority != 0xFF) && FmGetTnumAgingPeriod(p_FmMacControllerDriver->h_Fm) == 0)
+        RETURN_ERROR(MAJOR, E_CONFLICT, ("Can't configure PFC when TNUM aging is disabled"));
+
     if (p_FmMacControllerDriver->f_FM_MAC_SetTxPauseFrames)
         return p_FmMacControllerDriver->f_FM_MAC_SetTxPauseFrames(h_FmMac,
                                                                   priority,
                                                                   pauseTime,
                                                                   threshTime);
 
-    RETURN_ERROR(MINOR, E_NOT_SUPPORTED, NO_MSG);
+    RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, NO_MSG);
 }
 
 /* ......................................................................... */

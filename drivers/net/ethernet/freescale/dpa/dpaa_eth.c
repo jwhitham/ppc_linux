@@ -59,7 +59,7 @@
 #include <asm/smp.h>		/* get_hard_smp_processor_id() */
 #include <linux/fsl_bman.h>
 
-#include "fsl_fman.h"
+#include "lnxwrp_fsl_fman.h"
 #include "fm_ext.h"
 #include "fm_port_ext.h"
 

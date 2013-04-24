@@ -838,6 +838,7 @@ static void UnbindPortToClsPlanGrp(t_FmPcd *p_FmPcd, uint8_t hardwarePortId)
     KgWriteCpp(p_FmPcd, hardwarePortId, 0);
 }
 
+#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
 static uint32_t ReadClsPlanBlockActionReg(uint8_t grpId)
 {
     return (uint32_t)(FM_KG_KGAR_GO |
@@ -851,6 +852,7 @@ static uint32_t ReadClsPlanBlockActionReg(uint8_t grpId)
        sel = (uint8_t)(0x01 << (7- (entryId % CLS_PLAN_NUM_PER_GRP)));
      */
 }
+#endif /* (defined(DEBUG_ERRORS) && ... */
 
 static void PcdKgErrorException(t_Handle h_FmPcd)
 {

@@ -41,19 +41,19 @@
  *
  * To prepare dTSEC block for transfer use the following call sequence:
  *
- * - dtsec_defconfig() - This step is optional and yet recommended. Its use is
+ * - fman_dtsec_defconfig() - This step is optional and yet recommended. Its use is
  * to obtain the default dTSEC configuration parameters.
  *
  * - Change dtsec configuration in &dtsec_cfg. This structure will be used
  * to customize the dTSEC behavior.
  *
- * - dtsec_init() - Applies the configuration on dTSEC hardware.  Note that
+ * - fman_dtsec_init() - Applies the configuration on dTSEC hardware.  Note that
  * dTSEC is initialized while both Tx and Rx are disabled.
  *
- * - dtsec_set_mac_address() - Set the station address (mac address).
+ * - fman_dtsec_set_mac_address() - Set the station address (mac address).
  * This is used by dTSEC to match against received packets.
  *
- * - dtsec_adjust_link() - Set the link speed and duplex parameters
+ * - fman_dtsec_adjust_link() - Set the link speed and duplex parameters
  * after the PHY establishes the link.
  *
  * - dtsec_enable_tx() and dtsec_enable_rx() to enable transmission and
@@ -63,15 +63,15 @@
 /**
  * DOC: dTSEC Graceful stop
  *
- * To temporary stop dTSEC activity use dtsec_stop_tx() and dtsec_stop_rx().
+ * To temporary stop dTSEC activity use fman_dtsec_stop_tx() and fman_dtsec_stop_rx().
  * Note that these functions request dTSEC graceful stop but return before this
  * stop is complete.  To query for graceful stop completion use
- * dtsec_get_event() and check DTSEC_IEVENT_GTSC and DTSEC_IEVENT_GRSC bits.
+ * fman_dtsec_get_event() and check DTSEC_IEVENT_GTSC and DTSEC_IEVENT_GRSC bits.
  * Alternatively the dTSEC interrupt mask can be set to enable graceful stop
  * interrupts.
  *
- * To resume operation after graceful stop use dtsec_start_tx() and
- * dtsec_start_rx().
+ * To resume operation after graceful stop use fman_dtsec_start_tx() and
+ * fman_dtsec_start_rx().
  */
 
 /**
@@ -93,10 +93,10 @@
  * occurs and its corresponding enable bit is set in the interrupt mask
  * register, the event also causes a hardware interrupt at the PIC.
  *
- * To poll for event status use the dtsec_get_event() function.
- * To configure the interrupt mask use dtsec_enable_interrupt() and
- * dtsec_disable_interrupt() functions.
- * After servicing a dTSEC interrupt use dtsec_ack_event to reset the serviced
+ * To poll for event status use the fman_dtsec_get_event() function.
+ * To configure the interrupt mask use fman_dtsec_enable_interrupt() and
+ * fman_dtsec_disable_interrupt() functions.
+ * After servicing a dTSEC interrupt use fman_dtsec_ack_event to reset the serviced
  * event bit.
  *
  * The following events may be signaled by dTSEC hardware:
@@ -107,7 +107,7 @@
  *
  * %DTSEC_IEVENT_RXC - Receive control (pause frame) interrupt.  A pause
  * control frame was received while Rx pause frame handling is enabled.
- * Also see dtsec_handle_rx_pause().
+ * Also see fman_dtsec_handle_rx_pause().
  *
  * %DTSEC_IEVENT_MSRO - MIB counter overflow.  The count for one of the MIB
  * counters has exceeded the size of its register.
@@ -115,7 +115,7 @@
  * %DTSEC_IEVENT_GTSC - Graceful transmit stop complete.  Graceful stop is now
  * complete. The transmitter is in a stopped state, in which only pause frames
  * can be transmitted.
- * Also see dtsec_stop_tx().
+ * Also see fman_dtsec_stop_tx().
  *
  * %DTSEC_IEVENT_BABT - Babbling transmit error.  The transmitted frame length
  * has exceeded the value in the MAC's Maximum Frame Length register.
@@ -139,7 +139,7 @@
  * being transmitted and transmission of the next frame commences.  This only
  * occurs while in half-duplex mode.
  * The number of retransmit attempts can be set in
- * &dtsec_halfdup_cfg.@retransmit before calling dtsec_init().
+ * &dtsec_halfdup_cfg.@retransmit before calling fman_dtsec_init().
  *
  * %DTSEC_IEVENT_XFUN - Transmit FIFO underrun.  This bit indicates that the
  * transmit FIFO became empty before the complete frame was transmitted.
@@ -654,7 +654,7 @@ enum dtsec_stat_counters {
  *			Ethernet frames and passed up to the packet interface on
  *			a DA match.  Received pause control frames are passed to
  *			the packet interface only if Rx flow control is also
- *			disabled.  See dtsec_handle_rx_pause() function.
+ *			disabled.  See fman_dtsec_handle_rx_pause() function.
  * @tx_pause_time:	Transmit pause time value.  This pause value is used as
  *			part of the pause frame to be sent when a transmit pause
  *			frame is initiated.  If set to 0 this disables
@@ -679,8 +679,8 @@ enum dtsec_stat_counters {
  *			precedes the layer 2 header.
  *
  * This structure contains basic dTSEC configuration and must be passed to
- * dtsec_init() function.  A default set of configuration values can be obtained
- * by calling dtsec_defconfig().
+ * fman_dtsec_init() function.  A default set of configuration values can be obtained
+ * by calling fman_dtsec_defconfig().
  */
 struct dtsec_cfg {
 	bool		halfdup_on;
@@ -723,17 +723,17 @@ struct dtsec_cfg {
 
 
 /**
- * dtsec_defconfig() - Get default dTSEC configuration
+ * fman_dtsec_defconfig() - Get default dTSEC configuration
  * @cfg:	pointer to configuration structure.
  *
  * Call this function to obtain a default set of configuration values for
  * initializing dTSEC.  The user can overwrite any of the values before calling
- * dtsec_init(), if specific configuration needs to be applied.
+ * fman_dtsec_init(), if specific configuration needs to be applied.
  */
-void dtsec_defconfig(struct dtsec_cfg *cfg);
+void fman_dtsec_defconfig(struct dtsec_cfg *cfg);
 
 /**
- * dtsec_init() - Init dTSEC hardware block
+ * fman_dtsec_init() - Init dTSEC hardware block
  * @regs:		Pointer to dTSEC register block
  * @cfg:		dTSEC configuration data
  * @iface_mode:		dTSEC interface mode, the type of MAC - PHY interface.
@@ -747,60 +747,98 @@ void dtsec_defconfig(struct dtsec_cfg *cfg);
  *
  * dTSEC initialization sequence:
  * Before enabling Rx/Tx call dtsec_set_address() to set MAC address,
- * dtsec_adjust_link() to configure interface speed and duplex and finally
+ * fman_dtsec_adjust_link() to configure interface speed and duplex and finally
  * dtsec_enable_tx()/dtsec_enable_rx() to start transmission and reception.
  *
  * Returns: 0 if successful, an error code otherwise.
  */
-int dtsec_init(struct dtsec_regs *regs, struct dtsec_cfg *cfg,
-		enum enet_interface iface_mode,
-		enum enet_speed iface_speed,
-		uint8_t *macaddr, uint8_t fm_rev_maj,
-		uint8_t fm_rev_min,
-		uint32_t exception_mask);
+int fman_dtsec_init(struct dtsec_regs *regs, struct dtsec_cfg *cfg,
+	enum enet_interface iface_mode,
+	enum enet_speed iface_speed,
+	uint8_t *macaddr, uint8_t fm_rev_maj,
+	uint8_t fm_rev_min,
+	uint32_t exception_mask);
 
 /**
- * dtsec_get_revision() - Get dTSEC hardware revision
+ * fman_dtsec_enable() - Enable dTSEC Tx and Tx
+ * @regs:	Pointer to dTSEC register block
+ * @apply_rx:	enable rx side
+ * @apply_tx:	enable tx side
+ *
+ * This function resets Tx and Rx graceful stop bit and enables dTSEC Tx and Rx.
+ */
+void fman_dtsec_enable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx);
+
+/**
+ * fman_dtsec_disable() - Disable dTSEC Tx and Rx
+ * @regs:	Pointer to dTSEC register block
+ * @apply_rx:	disable rx side
+ * @apply_tx:	disable tx side
+ *
+ * This function disables Tx and Rx in dTSEC.
+ */
+void fman_dtsec_disable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx);
+
+/**
+ * fman_dtsec_get_revision() - Get dTSEC hardware revision
  * @regs:   Pointer to dTSEC register block
  *
  * Returns dtsec_id content
  *
  * Call this function to obtain the dTSEC hardware version.
  */
-uint32_t dtsec_get_revision(struct dtsec_regs *regs);
+uint32_t fman_dtsec_get_revision(struct dtsec_regs *regs);
 
 /**
- * dtsec_set_uc_promisc() - Sets unicast promiscuous mode
+ * fman_dtsec_set_mac_address() - Set MAC station address
+ * @regs:   Pointer to dTSEC register block
+ * @macaddr:    MAC address array
+ *
+ * This function sets MAC station address.  To enable unicast reception call
+ * this after fman_dtsec_init().  While promiscuous mode is disabled dTSEC will match
+ * the destination address of received unicast frames against this address.
+ */
+void fman_dtsec_set_mac_address(struct dtsec_regs *regs, uint8_t *macaddr);
+
+/**
+ * fman_dtsec_get_mac_address() - Query MAC station address
+ * @regs:   Pointer to dTSEC register block
+ * @macaddr:    MAC address array
+ */
+void fman_dtsec_get_mac_address(struct dtsec_regs *regs, uint8_t *macaddr);
+
+/**
+ * fman_dtsec_set_uc_promisc() - Sets unicast promiscuous mode
  * @regs:	Pointer to dTSEC register block
  * @enable:	Enable unicast promiscuous mode
  *
  * Use this function to enable/disable dTSEC L2 address filtering.  If the
  * address filtering is disabled all unicast packets are accepted.
- * To set dTSEC in promiscuous mode call both dtsec_set_uc_promisc() and
- * dtsec_set_mc_promisc() to disable filtering for both unicast and multicast
+ * To set dTSEC in promiscuous mode call both fman_dtsec_set_uc_promisc() and
+ * fman_dtsec_set_mc_promisc() to disable filtering for both unicast and multicast
  * addresses.
  */
-void dtsec_set_uc_promisc(struct dtsec_regs *regs, bool enable);
+void fman_dtsec_set_uc_promisc(struct dtsec_regs *regs, bool enable);
 
 /**
- * dtsec_adjust_link() - Adjust dTSEC speed/duplex settings
+ * fman_dtsec_adjust_link() - Adjust dTSEC speed/duplex settings
  * @regs:	Pointer to dTSEC register block
  * @iface_mode: dTSEC interface mode
  * @speed:	Link speed
  * @full_dx:	True for full-duplex, false for half-duplex.
  *
  * This function configures the MAC to function and the desired rates.  Use it
- * to configure dTSEC after dtsec_init() and whenever the link speed changes
+ * to configure dTSEC after fman_dtsec_init() and whenever the link speed changes
  * (for instance following PHY auto-negociation).
  *
  * Returns: 0 if successful, an error code otherwise.
  */
-int dtsec_adjust_link(struct dtsec_regs *regs,
-		enum enet_interface iface_mode,
-		enum enet_speed speed, bool full_dx);
+int fman_dtsec_adjust_link(struct dtsec_regs *regs,
+	enum enet_interface iface_mode,
+	enum enet_speed speed, bool full_dx);
 
 /**
- * dtsec_set_tbi_phy_addr() - Updates TBI address field
+ * fman_dtsec_set_tbi_phy_addr() - Updates TBI address field
  * @regs:	Pointer to dTSEC register block
  * @address:	Valid PHY address in the range of 1 to 31. 0 is reserved.
  *
@@ -809,70 +847,29 @@ int dtsec_adjust_link(struct dtsec_regs *regs,
  *
  * Returns: 0 if successful, an error code otherwise.
  */
-int dtsec_set_tbi_phy_addr(struct dtsec_regs *regs,
-		uint8_t addr);
+int fman_dtsec_set_tbi_phy_addr(struct dtsec_regs *regs,
+	uint8_t addr);
 
 /**
- * dtsec_disable() - Disable dTSEC Tx and Rx
- * @regs:	Pointer to dTSEC register block
- * @apply_rx:	disable rx side
- * @apply_tx:	disable tx side
- *
- * This function disables Tx and Rx in dTSEC.
- */
-void dtsec_disable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx);
-
-/**
- * dtsec_enable() - Enable dTSEC Tx and Tx
- * @regs:	Pointer to dTSEC register block
- * @apply_rx:	enable rx side
- * @apply_tx:	enable tx side
- *
- * This function resets Tx and Rx graceful stop bit and enables dTSEC Tx and Rx.
- */
-void dtsec_enable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx);
-
-/**
- * dtsec_set_mac_address() - Set MAC station address
- * @regs:   Pointer to dTSEC register block
- * @macaddr:    MAC address array
- *
- * This function sets MAC station address.  To enable unicast reception call
- * this after dtsec_init().  While promiscuous mode is disabled dTSEC will match
- * the destination address of received unicast frames against this address.
- */
-void dtsec_set_mac_address(struct dtsec_regs *regs, uint8_t *macaddr);
-
-/**
- * dtsec_get_mac_address() - Query MAC station address
- * @regs:   Pointer to dTSEC register block
- * @macaddr:    MAC address array
- */
-void dtsec_get_mac_address(struct dtsec_regs *regs, uint8_t *macaddr);
-
-/**
- * dtsec_set_max_frame_len() - Set max frame length
+ * fman_dtsec_set_max_frame_len() - Set max frame length
  * @regs:	Pointer to dTSEC register block
  * @length:	Max frame length.
  *
  * Sets maximum frame length for received and transmitted frames.  Frames that
  * exceeds this length are truncated.
  */
-
-void dtsec_set_max_frame_len(struct dtsec_regs *regs, uint16_t length);
-
+void fman_dtsec_set_max_frame_len(struct dtsec_regs *regs, uint16_t length);
 
 /**
- * dtsec_get_max_frame_len() - Query max frame length
+ * fman_dtsec_get_max_frame_len() - Query max frame length
  * @regs:	Pointer to dTSEC register block
  *
  * Returns: the current value of the maximum frame length.
  */
-uint16_t dtsec_get_max_frame_len(struct dtsec_regs *regs);
-
+uint16_t fman_dtsec_get_max_frame_len(struct dtsec_regs *regs);
 
 /**
- * dtsec_handle_rx_pause() - Configure pause frame handling
+ * fman_dtsec_handle_rx_pause() - Configure pause frame handling
  * @regs:	Pointer to dTSEC register block
  * @en:		Enable pause frame handling in dTSEC
  *
@@ -882,20 +879,20 @@ uint16_t dtsec_get_max_frame_len(struct dtsec_regs *regs);
  * frames will be transferred to the packet interface just like regular Ethernet
  * frames.
  */
-void dtsec_handle_rx_pause(struct dtsec_regs *regs, bool en);
+void fman_dtsec_handle_rx_pause(struct dtsec_regs *regs, bool en);
 
 /**
- * dtsec_set_tx_pause_time() - Configure Tx pause time
+ * fman_dtsec_set_tx_pause_frames() - Configure Tx pause time
  * @regs:	Pointer to dTSEC register block
  * @time:	Time value included in pause frames
  *
  * Call this function to set the time value used in transmitted pause frames.
  * If time is 0, transmission of pause frames is disabled
  */
-void dtsec_set_tx_pause_time(struct dtsec_regs *regs, uint16_t time);
+void fman_dtsec_set_tx_pause_frames(struct dtsec_regs *regs, uint16_t time);
 
 /**
- * dtsec_ack_event() - Acknowledge handled events
+ * fman_dtsec_ack_event() - Acknowledge handled events
  * @regs:	Pointer to dTSEC register block
  * @ev_mask:	Events to acknowledge
  *
@@ -903,10 +900,10 @@ void dtsec_set_tx_pause_time(struct dtsec_regs *regs, uint16_t time);
  * call this function to reset the associated status bits in dTSEC event
  * register.
  */
-void dtsec_ack_event(struct dtsec_regs *regs, uint32_t ev_mask);
+void fman_dtsec_ack_event(struct dtsec_regs *regs, uint32_t ev_mask);
 
 /**
- * dtsec_get_event() - Returns currently asserted events
+ * fman_dtsec_get_event() - Returns currently asserted events
  * @regs:	Pointer to dTSEC register block
  * @ev_mask:	Mask of relevant events
  *
@@ -915,9 +912,10 @@ void dtsec_ack_event(struct dtsec_regs *regs, uint32_t ev_mask);
  *
  * Returns: a bit-mask of events asserted in dTSEC.
  */
-uint32_t dtsec_get_event(struct dtsec_regs *regs, uint32_t ev_mask);
+uint32_t fman_dtsec_get_event(struct dtsec_regs *regs, uint32_t ev_mask);
+
 /**
- * dtsec_get_interrupt_mask() - Returns a bit-mask of enabled interrupts
+ * fman_dtsec_get_interrupt_mask() - Returns a bit-mask of enabled interrupts
  * @regs:   Pointer to dTSEC register block
  *
  * Call this function to obtain a bit-mask of enabled interrupts
@@ -925,51 +923,51 @@ uint32_t dtsec_get_event(struct dtsec_regs *regs, uint32_t ev_mask);
  *
  * Returns: a bit-mask of enabled interrupts in dTSEC.
  */
-uint32_t dtsec_get_interrupt_mask(struct dtsec_regs *regs);
+uint32_t fman_dtsec_get_interrupt_mask(struct dtsec_regs *regs);
 
-void dtsec_clear_addr_in_paddr  (struct dtsec_regs *regs,
-                                 uint8_t paddr_num);
+void fman_dtsec_clear_addr_in_paddr(struct dtsec_regs *regs,
+	uint8_t paddr_num);
 
-void dtsec_add_addr_in_paddr    (struct dtsec_regs *regs,
-                                 uint64_t addr,
-                                 uint8_t paddr_num);
+void fman_dtsec_add_addr_in_paddr(struct dtsec_regs *regs,
+	uint64_t addr,
+	uint8_t paddr_num);
 
-void dtsec_enable_tmr_interrupt (struct dtsec_regs *regs);
+void fman_dtsec_enable_tmr_interrupt (struct dtsec_regs *regs);
 
-void dtsec_disable_tmr_interrupt(struct dtsec_regs *regs);
+void fman_dtsec_disable_tmr_interrupt(struct dtsec_regs *regs);
 
 /**
- * dtsec_disable_interrupt() - Disables interrupts for the specified events
+ * fman_dtsec_disable_interrupt() - Disables interrupts for the specified events
  * @regs:	Pointer to dTSEC register block
  * @ev_mask:	Mask of relevant events
  *
  * Call this function to disable interrupts in dTSEC for the specified events.
- * To enable interrupts use dtsec_enable_interrupt().
+ * To enable interrupts use fman_dtsec_enable_interrupt().
  */
-void dtsec_disable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask);
+void fman_dtsec_disable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask);
 
 /**
- * dtsec_enable_interrupt() - Enable interrupts for the specified events
+ * fman_dtsec_enable_interrupt() - Enable interrupts for the specified events
  * @regs:	Pointer to dTSEC register block
  * @ev_mask:	Mask of relevant events
  *
  * Call this function to enable interrupts in dTSEC for the specified events.
- * To disable interrupts use dtsec_disable_interrupt().
+ * To disable interrupts use fman_dtsec_disable_interrupt().
  */
-void dtsec_enable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask);
+void fman_dtsec_enable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask);
 
 /**
- * dtsec_set_ts() - Enables dTSEC timestamps
+ * fman_dtsec_set_ts() - Enables dTSEC timestamps
  * @regs:	Pointer to dTSEC register block
  * @en:		true to enable timestamps, false to disable them
  *
  * Call this function to enable/disable dTSEC timestamps.  This affects both
  * Tx and Rx.
  */
-void dtsec_set_ts(struct dtsec_regs *regs, bool en);
+void fman_dtsec_set_ts(struct dtsec_regs *regs, bool en);
 
 /**
- * dtsec_set_bucket() - Enables/disables a filter bucket
+ * fman_dtsec_set_bucket() - Enables/disables a filter bucket
  * @regs:   Pointer to dTSEC register block
  * @bucket: Bucket index
  * @enable: true/false to enable/disable this bucket
@@ -982,36 +980,36 @@ void dtsec_set_ts(struct dtsec_regs *regs, bool en);
  * is enabled requires further filtering and verification in the upper layers
  *
  */
-void dtsec_set_bucket(struct dtsec_regs *regs, int bucket, bool enable);
+void fman_dtsec_set_bucket(struct dtsec_regs *regs, int bucket, bool enable);
 
 /**
- * dtsec_reset_filter_table() - Resets the address filtering table
+ * fman_dtsec_reset_filter_table() - Resets the address filtering table
  * @regs:	Pointer to dTSEC register block
  * @mcast:	Reset multicast entries
  * @ucast:	Reset unicast entries
  *
  * Resets all entries in L2 address filter table.  After calling this function
- * all buckets enabled using dtsec_set_bucket() will be disabled.
+ * all buckets enabled using fman_dtsec_set_bucket() will be disabled.
  * If dtsec_init_filter_table() was called with @unicast_hash set to false,
  * @ucast argument is ignored.
  * This does not affect the primary nor the 15 additional addresses configured
  * using dtsec_set_address() or dtsec_set_match_address().
  */
-void  dtsec_reset_filter_table(struct dtsec_regs *regs, bool mcast, bool ucast);
+void fman_dtsec_reset_filter_table(struct dtsec_regs *regs, bool mcast, bool ucast);
 
 /**
- * dtsec_set_mc_promisc() - Set multicast promiscous mode
+ * fman_dtsec_set_mc_promisc() - Set multicast promiscous mode
  * @regs:	Pointer to dTSEC register block
  * @enable:	Enable multicast promiscous mode
  *
  * Call this to enable/disable L2 address filtering for multicast packets.
  */
-void dtsec_set_mc_promisc(struct dtsec_regs *regs, bool enable);
+void fman_dtsec_set_mc_promisc(struct dtsec_regs *regs, bool enable);
 
 /* statistics APIs */
 
 /**
- * dtsec_set_stat_level() - Enable a group of MIB statistics counters
+ * fman_dtsec_set_stat_level() - Enable a group of MIB statistics counters
  * @regs:	Pointer to dTSEC register block
  * @level:	Specifies a certain group of dTSEC MIB HW counters or _all_,
  *		to specify all the existing counters.
@@ -1022,16 +1020,16 @@ void dtsec_set_mc_promisc(struct dtsec_regs *regs, bool enable);
  *
  * Returns: error if invalid @level value given.
  */
-int dtsec_set_stat_level(struct dtsec_regs *regs, enum mac_stat_level level);
+int fman_dtsec_set_stat_level(struct dtsec_regs *regs, enum mac_stat_level level);
 
 /**
- * dtsec_reset_stat() - Completely resets all dTSEC HW counters
+ * fman_dtsec_reset_stat() - Completely resets all dTSEC HW counters
  * @regs:	Pointer to dTSEC register block
  */
-void dtsec_reset_stat(struct dtsec_regs *regs);
+void fman_dtsec_reset_stat(struct dtsec_regs *regs);
 
 /**
- * dtsec_get_clear_carry_regs() - Read and clear carry bits (CAR1-2 registers)
+ * fman_dtsec_get_clear_carry_regs() - Read and clear carry bits (CAR1-2 registers)
  * @regs:	Pointer to dTSEC register block
  * @car1:	car1 register value
  * @car2:	car2 register value
@@ -1043,18 +1041,19 @@ void dtsec_reset_stat(struct dtsec_regs *regs);
  *
  * Returns: true if overflow occurred, otherwise - false
  */
-bool dtsec_get_clear_carry_regs(struct dtsec_regs *regs,
-				uint32_t *car1, uint32_t *car2);
+bool fman_dtsec_get_clear_carry_regs(struct dtsec_regs *regs,
+	uint32_t *car1, uint32_t *car2);
 
-uint32_t dtsec_check_and_clear_tmr_event(struct dtsec_regs *regs);
+uint32_t fman_dtsec_check_and_clear_tmr_event(struct dtsec_regs *regs);
 
-uint32_t dtsec_get_stat_counter(struct dtsec_regs *regs,
-				enum dtsec_stat_counters reg_name);
+uint32_t fman_dtsec_get_stat_counter(struct dtsec_regs *regs,
+	enum dtsec_stat_counters reg_name);
 
-void dtsec_start_tx(struct dtsec_regs *regs);
-void dtsec_start_rx(struct dtsec_regs *regs);
-void dtsec_stop_rx(struct dtsec_regs *regs);
-void dtsec_stop_tx(struct dtsec_regs *regs);
-uint32_t dtsec_get_rctrl(struct dtsec_regs *regs);
+void fman_dtsec_start_tx(struct dtsec_regs *regs);
+void fman_dtsec_start_rx(struct dtsec_regs *regs);
+void fman_dtsec_stop_tx(struct dtsec_regs *regs);
+void fman_dtsec_stop_rx(struct dtsec_regs *regs);
+uint32_t fman_dtsec_get_rctrl(struct dtsec_regs *regs);
+
 
 #endif /* __FSL_FMAN_DTSEC_H */

@@ -220,7 +220,7 @@ typedef struct {
     uint8_t             prOffset;
     uint16_t            dataOffset;
   //  uint8_t             poolIndex;
-  //  uint8_t             poolIdForManip;
+    uint8_t             internalBufferOffset;
     uint8_t             numOfTasks;
     uint8_t             numOfExtraTasks;
     uint8_t             hardwarePortId;
@@ -276,7 +276,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 *//***************************************************************************/
 #define INTERNAL_CONTEXT_OFFSET                 0x80000000
 #define OFFSET_OF_PR                            0x40000000
-//#define BUFFER_POOL_ID_FOR_MANIP                0x20000000
+#define MANIP_EXTRA_SPACE                       0x20000000
 #define NUM_OF_TASKS                            0x10000000
 #define OFFSET_OF_DATA                          0x08000000
 #define HW_PORT_ID                              0x04000000
@@ -520,6 +520,7 @@ do {                                                                            
     else ASSERT_COND(FALSE);                                                                                    \
 } while (0)
 
+#define BMI_MAX_FIFO_SIZE                   (FM_MURAM_SIZE)
 #define BMI_FIFO_UNITS                      0x100
 
 typedef struct {
@@ -613,6 +614,7 @@ t_Error     FmPcdUnregisterReassmPort(t_Handle h_FmPcd, t_Handle h_IpReasmCommon
 bool        FmPcdIsAdvancedOffloadSupported(t_Handle h_FmPcd);
 bool        FmPcdLockTryLockAll(t_Handle h_FmPcd);
 void        FmPcdLockUnlockAll(t_Handle h_FmPcd);
+t_Error     FmPcdHcSync(t_Handle h_FmPcd);
 
 /***********************************************************************/
 /*          Common API for FM-PCD KG module                            */
@@ -896,9 +898,13 @@ void FmGetPhysicalMuramBase(t_Handle h_Fm, t_FmPhysAddr *fmPhysAddr);
  @Description   Used internally by other modules in order to get the timeStamp
                 period as requested by the application.
 
+                This function returns bit number that is incremented every 1 usec.
+                To calculate timestamp period in nsec, use
+                1000 / (1 << FmGetTimeStampScale()).
+
  @Param[in]     h_Fm                    A handle to an FM Module.
 
- @Return        TimeStamp period in nanoseconds.
+ @Return        Bit that counts 1 usec.
 
  @Cautions      Allowed only following FM_Init().
 *//***************************************************************************/
@@ -1051,6 +1057,8 @@ void        FmUnregisterFmanCtrlIntr(t_Handle h_Fm, uint8_t eventRegId);
 t_Error     FmSetMacMaxFrame(t_Handle h_Fm, e_FmMacType type, uint8_t macId, uint16_t mtu);
 bool        FmIsMaster(t_Handle h_Fm);
 uint8_t     FmGetGuestId(t_Handle h_Fm);
+uint16_t    FmGetTnumAgingPeriod(t_Handle h_Fm);
+
 #ifdef FM_TX_ECC_FRMS_ERRATA_10GMAC_A004
 t_Error     Fm10GTxEccWorkaround(t_Handle h_Fm, uint8_t macId);
 #endif /* FM_TX_ECC_FRMS_ERRATA_10GMAC_A004 */

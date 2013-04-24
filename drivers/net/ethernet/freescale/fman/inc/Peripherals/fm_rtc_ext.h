@@ -45,7 +45,7 @@
 
 #include "error_ext.h"
 #include "std_ext.h"
-
+#include "fsl_fman_rtc.h"
 
 /**************************************************************************//**
 
@@ -77,8 +77,8 @@
 *//***************************************************************************/
 typedef enum e_FmRtcAlarmPolarity
 {
-    e_FM_RTC_ALARM_POLARITY_ACTIVE_HIGH,    /**< Active-high output polarity */
-    e_FM_RTC_ALARM_POLARITY_ACTIVE_LOW      /**< Active-low output polarity */
+    e_FM_RTC_ALARM_POLARITY_ACTIVE_HIGH = E_FMAN_RTC_ALARM_POLARITY_ACTIVE_HIGH,    /**< Active-high output polarity */
+    e_FM_RTC_ALARM_POLARITY_ACTIVE_LOW = E_FMAN_RTC_ALARM_POLARITY_ACTIVE_LOW     /**< Active-low output polarity */
 } e_FmRtcAlarmPolarity;
 
 /**************************************************************************//**
@@ -86,8 +86,8 @@ typedef enum e_FmRtcAlarmPolarity
 *//***************************************************************************/
 typedef enum e_FmRtcTriggerPolarity
 {
-    e_FM_RTC_TRIGGER_ON_RISING_EDGE,    /**< Trigger on rising edge */
-    e_FM_RTC_TRIGGER_ON_FALLING_EDGE    /**< Trigger on falling edge */
+    e_FM_RTC_TRIGGER_ON_RISING_EDGE = E_FMAN_RTC_TRIGGER_ON_RISING_EDGE,    /**< Trigger on rising edge */
+    e_FM_RTC_TRIGGER_ON_FALLING_EDGE = E_FMAN_RTC_TRIGGER_ON_FALLING_EDGE   /**< Trigger on falling edge */
 } e_FmRtcTriggerPolarity;
 
 /**************************************************************************//**
@@ -95,9 +95,9 @@ typedef enum e_FmRtcTriggerPolarity
 *//***************************************************************************/
 typedef enum e_FmSrcClock
 {
-    e_FM_RTC_SOURCE_CLOCK_EXTERNAL,  /**< external high precision timer reference clock */
-    e_FM_RTC_SOURCE_CLOCK_SYSTEM,    /**< MAC system clock */
-    e_FM_RTC_SOURCE_CLOCK_OSCILATOR  /**< RTC clock oscilator */
+    e_FM_RTC_SOURCE_CLOCK_EXTERNAL = E_FMAN_RTC_SOURCE_CLOCK_EXTERNAL,  /**< external high precision timer reference clock */
+    e_FM_RTC_SOURCE_CLOCK_SYSTEM = E_FMAN_RTC_SOURCE_CLOCK_SYSTEM,    /**< MAC system clock */
+    e_FM_RTC_SOURCE_CLOCK_OSCILATOR = E_FMAN_RTC_SOURCE_CLOCK_OSCILATOR  /**< RTC clock oscilator */
 }e_FmSrcClk;
 
 /**************************************************************************//**
@@ -170,7 +170,7 @@ t_Error FM_RTC_Free(t_Handle h_FmRtc);
  @Function      FM_RTC_ConfigPeriod
 
  @Description   Configures the period of the timestamp if different than
-                default [1000].
+                default [DEFAULT_clockPeriod].
 
  @Param[in]     h_FmRtc         - Handle to FM RTC object.
  @Param[in]     period          - Period in nano-seconds.
@@ -202,7 +202,7 @@ t_Error FM_RTC_ConfigSourceClock(t_Handle      h_FmRtc,
  @Function      FM_RTC_ConfigPulseRealignment
 
  @Description   Configures the RTC to automatic FIPER pulse realignment in
-                response to timer adjustments [FALSE]
+                response to timer adjustments [DEFAULT_pulseRealign]
 
                 In this mode, the RTC clock is identical to the source clock.
                 This feature can be useful when the system contains an external
@@ -221,7 +221,7 @@ t_Error FM_RTC_ConfigPulseRealignment(t_Handle h_FmRtc, bool enable);
  @Function      FM_RTC_ConfigFrequencyBypass
 
  @Description   Configures the RTC to bypass the frequency compensation
-                mechanism. [FALSE]
+                mechanism. [DEFAULT_bypass]
 
                 In this mode, the RTC clock is identical to the source clock.
                 This feature can be useful when the system contains an external
@@ -241,7 +241,7 @@ t_Error FM_RTC_ConfigFrequencyBypass(t_Handle h_FmRtc, bool enabled);
  @Function      FM_RTC_ConfigInvertedInputClockPhase
 
  @Description   Configures the RTC to invert the source clock phase on input.
-                [FALSE]
+                [DEFAULT_invertInputClkPhase]
 
  @Param[in]     h_FmRtc  - Handle to FM RTC object.
  @Param[in]     inverted    - TRUE to invert the source clock phase on input.
@@ -257,7 +257,7 @@ t_Error FM_RTC_ConfigInvertedInputClockPhase(t_Handle h_FmRtc, bool inverted);
  @Function      FM_RTC_ConfigInvertedOutputClockPhase
 
  @Description   Configures the RTC to invert the output clock phase.
-                [FALSE]
+                [DEFAULT_invertOutputClkPhase]
 
  @Param[in]     h_FmRtc  - Handle to FM RTC object.
  @Param[in]     inverted    - TRUE to invert the output clock phase.
@@ -273,7 +273,7 @@ t_Error FM_RTC_ConfigInvertedOutputClockPhase(t_Handle h_FmRtc, bool inverted);
  @Function      FM_RTC_ConfigOutputClockDivisor
 
  @Description   Configures the divisor for generating the output clock from
-                the RTC clock. [0x00000002]
+                the RTC clock. [DEFAULT_outputClockDivisor]
 
  @Param[in]     h_FmRtc  - Handle to FM RTC object.
  @Param[in]     divisor     - Divisor for generation of the output clock.
@@ -288,7 +288,7 @@ t_Error FM_RTC_ConfigOutputClockDivisor(t_Handle h_FmRtc, uint16_t divisor);
  @Function      FM_RTC_ConfigAlarmPolarity
 
  @Description   Configures the polarity (active-high/active-low) of a specific
-                alarm signal. [e_FM_RTC_ALARM_POLARITY_ACTIVE_HIGH]
+                alarm signal. [DEFAULT_alarmPolarity]
 
  @Param[in]     h_FmRtc      - Handle to FM RTC object.
  @Param[in]     alarmId         - Alarm ID.
@@ -306,7 +306,7 @@ t_Error FM_RTC_ConfigAlarmPolarity(t_Handle             h_FmRtc,
  @Function      FM_RTC_ConfigExternalTriggerPolarity
 
  @Description   Configures the polarity (rising/falling edge) of a specific
-                external trigger signal. [e_FM_RTC_TRIGGER_ON_FALLING_EDGE]
+                external trigger signal. [DEFAULT_triggerPolarity]
 
  @Param[in]     h_FmRtc      - Handle to FM RTC object.
  @Param[in]     triggerId       - Trigger ID.

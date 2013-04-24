@@ -46,132 +46,9 @@
 #include "fm_vsp_ext.h"
 #include "fm_sp.h"
 #include "fm_common.h"
-
+#include "fsl_fman_sp.h"
 
 #if (DPAA_VERSION >= 11)
-
-static void fm_vsp_fill_entry(fm_pcd_storage_profile_regs   *regs,
-                              uint16_t                      index,
-                              fm_storage_profile_params     *fm_vsp_params)
-{
-    int i = 0, j = 0;
-    fm_pcd_storage_profile_regs *sp_regs;
-    uint32_t tmp_reg, vector;
-    t_FmExtPools *ext_buf_pools             = fm_vsp_params->fm_ext_pools;
-    t_FmBufPoolDepletion *buf_pool_depletion= fm_vsp_params->buf_pool_depletion;
-    t_FmBackupBmPools *backup_pools         = fm_vsp_params->backup_pools;
-    t_FmSpIntContextDataCopy *int_context_data_copy = fm_vsp_params->int_context;
-    t_FmSpBufMargins *external_buffer_margins = fm_vsp_params->buf_margins;
-    bool no_scather_gather                  = fm_vsp_params->no_scather_gather;
-    uint16_t    liodn_offset                = fm_vsp_params->liodn_offset;
-
-    ASSERT_COND(regs);
-    ASSERT_COND(ext_buf_pools);
-    ASSERT_COND(int_context_data_copy);
-    ASSERT_COND(external_buffer_margins);
-    ASSERT_COND(IN_RANGE(0, index, FM_VSP_MAX_NUM_OF_ENTRIES));
-
-    sp_regs = &regs[index];
-
-    /* fill external buffers manager pool information register*/
-    for (i=0;i<ext_buf_pools->numOfPoolsUsed;i++)
-    {
-        tmp_reg = FM_SP_EXT_BUF_POOL_VALID | FM_SP_EXT_BUF_POOL_EN_COUNTER;
-        tmp_reg |= ((uint32_t)ext_buf_pools->extBufPool[i].id << FM_SP_EXT_BUF_POOL_ID_SHIFT);
-        tmp_reg |= ext_buf_pools->extBufPool[i].size;
-        /* functionality available only for some deriviatives (limited by config) */
-        if (backup_pools)
-            for (j=0;j<backup_pools->numOfBackupPools;j++)
-                if (ext_buf_pools->extBufPool[i].id == backup_pools->poolIds[j])
-                {
-                    tmp_reg |= FM_SP_EXT_BUF_POOL_BACKUP;
-                    break;
-                }
-
-        WRITE_UINT32(sp_regs->fm_sp_ebmpi[i], tmp_reg);
-    }
-
-    /* clear unused pools */
-    for (i=ext_buf_pools->numOfPoolsUsed;i<FM_PORT_MAX_NUM_OF_EXT_POOLS;i++)
-        WRITE_UINT32(sp_regs->fm_sp_ebmpi[i], 0);
-
-    /* fill pool depletion register*/
-    tmp_reg = 0;
-
-    if (buf_pool_depletion && buf_pool_depletion->poolsGrpModeEnable)
-    {
-        /* calculate vector for number of pools depletion */
-        vector = 0;
-        for (i=0;i<BM_MAX_NUM_OF_POOLS;i++)
-            if (buf_pool_depletion->poolsToConsider[i])
-                for (j=0;j<ext_buf_pools->numOfPoolsUsed;j++)
-                    if (i == ext_buf_pools->extBufPool[j].id)
-                    {
-                        vector |= 0x80000000 >> j;
-                        break;
-                    }
-
-        /* configure num of pools and vector for number of pools mode */
-        tmp_reg |= (((uint32_t)buf_pool_depletion->numOfPools - 1) << FM_SP_POOL_DEP_NUM_OF_POOLS_SHIFT);
-        tmp_reg |= vector;
-    }
-
-    if (buf_pool_depletion && buf_pool_depletion->singlePoolModeEnable)
-    {
-        /* calculate vector for number of pools depletion */
-        vector = 0;
-        for (i=0;i<BM_MAX_NUM_OF_POOLS;i++)
-            if (buf_pool_depletion->poolsToConsiderForSingleMode[i])
-                for (j=0;j<ext_buf_pools->numOfPoolsUsed;j++)
-                    if (i == ext_buf_pools->extBufPool[j].id)
-                    {
-                        vector |= 0x00000080 >> j;
-                        break;
-                    }
-
-        /* configure num of pools and vector for number of pools mode */
-        tmp_reg |= vector;
-    }
-
-    /* fill QbbPEV */
-    if (buf_pool_depletion)
-    {
-        vector = 0;
-        for (i=0; i<FM_MAX_NUM_OF_PFC_PRIORITIES; i++)
-            if (buf_pool_depletion->pfcPrioritiesEn[i] == TRUE)
-                vector|= 0x00008000 >> i;
-        tmp_reg |= vector;
-    }
-    WRITE_UINT32(sp_regs->fm_sp_mpd, tmp_reg);
-
-    /* fill dma attributes register */
-    tmp_reg = 0;
-    tmp_reg |= (uint32_t)fm_vsp_params->dma_swap_data << FM_SP_DMA_ATTR_SWP_SHIFT;
-    tmp_reg |= (uint32_t)fm_vsp_params->int_context_cache_attr << FM_SP_DMA_ATTR_IC_CACHE_SHIFT;
-    tmp_reg |= (uint32_t)fm_vsp_params->header_cache_attr << FM_SP_DMA_ATTR_HDR_CACHE_SHIFT;
-    tmp_reg |= (uint32_t)fm_vsp_params->scatter_gather_cache_attr << FM_SP_DMA_ATTR_SG_CACHE_SHIFT;
-    if (fm_vsp_params->dma_write_optimize)
-        tmp_reg |= FM_SP_DMA_ATTR_WRITE_OPTIMIZE;
-    WRITE_UINT32(sp_regs->fm_sp_da, tmp_reg);
-
-    /* IC parameters - fill internal context parameters register */
-    tmp_reg = 0;
-    tmp_reg |= (((uint32_t)int_context_data_copy->extBufOffset/OFFSET_UNITS) << FM_SP_IC_TO_EXT_SHIFT);
-    tmp_reg |= (((uint32_t)int_context_data_copy->intContextOffset/OFFSET_UNITS) << FM_SP_IC_FROM_INT_SHIFT);
-    tmp_reg |= (((uint32_t)int_context_data_copy->size/OFFSET_UNITS)  << FM_SP_IC_SIZE_SHIFT);
-    WRITE_UINT32(sp_regs->fm_sp_icp, tmp_reg);
-
-    /* buffer margins - fill external buffer margins register */
-    tmp_reg = 0;
-    tmp_reg |= (((uint32_t)external_buffer_margins->startMargins) << FM_SP_EXT_BUF_MARG_START_SHIFT);
-    tmp_reg |= (((uint32_t)external_buffer_margins->endMargins) << FM_SP_EXT_BUF_MARG_END_SHIFT);
-    if (no_scather_gather)
-        tmp_reg |= FM_SP_SG_DISABLE;
-    WRITE_UINT32(sp_regs->fm_sp_ebm, tmp_reg);
-
-    /* buffer margins - fill spliodn register */
-    WRITE_UINT32(sp_regs->fm_sp_spliodn, liodn_offset);
-}
 
 static t_Error CheckParamsGeneratedInternally(t_FmVspEntry *p_FmVspEntry)
 {
@@ -530,6 +407,7 @@ t_Error FmSpBuildBufferStructure(t_FmSpIntContextDataCopy   *p_FmSpIntContextDat
 t_Handle FM_VSP_Config(t_FmVspParams *p_FmVspParams)
 {
     t_FmVspEntry          *p_FmVspEntry = NULL;
+    struct fm_storage_profile_params   fm_vsp_params;
 
     p_FmVspEntry = (t_FmVspEntry *)XX_Malloc(sizeof(t_FmVspEntry));
     if (!p_FmVspEntry)
@@ -547,29 +425,25 @@ t_Handle FM_VSP_Config(t_FmVspParams *p_FmVspParams)
         return NULL;
     }
     memset(p_FmVspEntry->p_FmVspEntryDriverParams, 0, sizeof(t_FmVspEntryDriverParams));
-
+    fman_vsp_defconfig(&fm_vsp_params);
+    p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr = fm_vsp_params.header_cache_attr;
+    p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr = fm_vsp_params.int_context_cache_attr;
+    p_FmVspEntry->p_FmVspEntryDriverParams->dmaScatterGatherCacheAttr = fm_vsp_params.scatter_gather_cache_attr;
+    p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData = fm_vsp_params.dma_swap_data;
+    p_FmVspEntry->p_FmVspEntryDriverParams->dmaWriteOptimize = fm_vsp_params.dma_write_optimize;
+    p_FmVspEntry->p_FmVspEntryDriverParams->noScatherGather = fm_vsp_params.no_scather_gather;
     p_FmVspEntry->p_FmVspEntryDriverParams->bufferPrefixContent.privDataSize = DEFAULT_FM_SP_bufferPrefixContent_privDataSize;
     p_FmVspEntry->p_FmVspEntryDriverParams->bufferPrefixContent.passPrsResult= DEFAULT_FM_SP_bufferPrefixContent_passPrsResult;
     p_FmVspEntry->p_FmVspEntryDriverParams->bufferPrefixContent.passTimeStamp= DEFAULT_FM_SP_bufferPrefixContent_passTimeStamp;
     p_FmVspEntry->p_FmVspEntryDriverParams->bufferPrefixContent.passAllOtherPCDInfo
                                                                     = DEFAULT_FM_SP_bufferPrefixContent_passTimeStamp;
     p_FmVspEntry->p_FmVspEntryDriverParams->bufferPrefixContent.dataAlign    = DEFAULT_FM_SP_bufferPrefixContent_dataAlign;
-
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData                      = DEFAULT_FM_SP_dmaSwapData;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr           = DEFAULT_FM_SP_dmaIntContextCacheAttr;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr               = DEFAULT_FM_SP_dmaHeaderCacheAttr;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaScatterGatherCacheAttr        = DEFAULT_FM_SP_dmaScatterGatherCacheAttr;
-    p_FmVspEntry->p_FmVspEntryDriverParams->dmaWriteOptimize                 = DEFAULT_FM_SP_dmaWriteOptimize;
-
-    p_FmVspEntry->p_FmVspEntryDriverParams->noScatherGather                  = DEFAULT_FM_SP_noScatherGather;
-
     p_FmVspEntry->p_FmVspEntryDriverParams->liodnOffset                      = p_FmVspParams->liodnOffset;
 
     memcpy(&p_FmVspEntry->p_FmVspEntryDriverParams->extBufPools, &p_FmVspParams->extBufPools, sizeof(t_FmExtPools));
-
     p_FmVspEntry->h_Fm                                                       = p_FmVspParams->h_Fm;
     p_FmVspEntry->portType                                                   = p_FmVspParams->portParams.portType;
-    p_FmVspEntry->portId                                                     = p_FmVspParams->portParams.portId  ;
+    p_FmVspEntry->portId                                                     = p_FmVspParams->portParams.portId;
 
     p_FmVspEntry->relativeProfileId                                          = p_FmVspParams->relativeProfileId;
 
@@ -580,7 +454,7 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
 {
 
     t_FmVspEntry                *p_FmVspEntry = (t_FmVspEntry *)h_FmVsp;
-    fm_storage_profile_params   fm_vsp_params;
+    struct fm_storage_profile_params   fm_vsp_params;
     uint8_t                     orderedArray[FM_PORT_MAX_NUM_OF_EXT_POOLS];
     uint16_t                    sizesArray[BM_MAX_NUM_OF_POOLS];
     t_Error                     err;
@@ -610,7 +484,7 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
 
 
      p_FmVspEntry->p_FmSpRegsBase =
-        (fm_pcd_storage_profile_regs *)FmGetVSPBaseAddr(p_FmVspEntry->h_Fm);
+        (struct fm_pcd_storage_profile_regs *)FmGetVSPBaseAddr(p_FmVspEntry->h_Fm);
     if (!p_FmVspEntry->p_FmSpRegsBase)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("impossible to initialize SpRegsBase"));
 
@@ -628,7 +502,7 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
     }
 
     /* on user responsibility to fill it according requirement */
-    memset(&fm_vsp_params, 0, sizeof(fm_storage_profile_params));
+    memset(&fm_vsp_params, 0, sizeof(struct fm_storage_profile_params));
     fm_vsp_params.dma_swap_data              = p_FmVspEntry->p_FmVspEntryDriverParams->dmaSwapData;
     fm_vsp_params.int_context_cache_attr     = p_FmVspEntry->p_FmVspEntryDriverParams->dmaIntContextCacheAttr;
     fm_vsp_params.header_cache_attr          = p_FmVspEntry->p_FmVspEntryDriverParams->dmaHeaderCacheAttr;
@@ -637,12 +511,32 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
     fm_vsp_params.liodn_offset               = p_FmVspEntry->p_FmVspEntryDriverParams->liodnOffset;
     fm_vsp_params.no_scather_gather          = p_FmVspEntry->p_FmVspEntryDriverParams->noScatherGather;
 
-    fm_vsp_params.buf_pool_depletion         = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion;
-    fm_vsp_params.backup_pools               = p_FmVspEntry->p_FmVspEntryDriverParams->p_BackupBmPools;
-    fm_vsp_params.fm_ext_pools               = &p_FmVspEntry->extBufPools;
+    if (p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion)
+    {
+        fm_vsp_params.buf_pool_depletion.buf_pool_depletion_enabled = TRUE;
+        fm_vsp_params.buf_pool_depletion.pools_grp_mode_enable = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion->poolsGrpModeEnable;
+        fm_vsp_params.buf_pool_depletion.num_pools = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion->numOfPools;
+        fm_vsp_params.buf_pool_depletion.pools_to_consider = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion->poolsToConsider;
+        fm_vsp_params.buf_pool_depletion.single_pool_mode_enable = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion->singlePoolModeEnable;
+        fm_vsp_params.buf_pool_depletion.pools_to_consider_for_single_mode = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion->poolsToConsiderForSingleMode;
+        fm_vsp_params.buf_pool_depletion.has_pfc_priorities = TRUE;
+        fm_vsp_params.buf_pool_depletion.pfc_priorities_en = p_FmVspEntry->p_FmVspEntryDriverParams->p_BufPoolDepletion->pfcPrioritiesEn;
+    }
+    else
+        fm_vsp_params.buf_pool_depletion.buf_pool_depletion_enabled = FALSE;
+ 
+    if (p_FmVspEntry->p_FmVspEntryDriverParams->p_BackupBmPools)
+    {
+        fm_vsp_params.backup_pools.num_backup_pools = p_FmVspEntry->p_FmVspEntryDriverParams->p_BackupBmPools->numOfBackupPools;
+        fm_vsp_params.backup_pools.pool_ids = p_FmVspEntry->p_FmVspEntryDriverParams->p_BackupBmPools->poolIds;
+    }
+    else
+        fm_vsp_params.backup_pools.num_backup_pools = 0;
 
-    fm_vsp_params.buf_margins                = &p_FmVspEntry->bufMargins;
-    fm_vsp_params.int_context                = &p_FmVspEntry->intContext;
+    fm_vsp_params.fm_ext_pools.num_pools_used = p_FmVspEntry->extBufPools.numOfPoolsUsed;
+    fm_vsp_params.fm_ext_pools.ext_buf_pool = (struct fman_ext_pool_params*)&p_FmVspEntry->extBufPools.extBufPool;
+    fm_vsp_params.buf_margins = (struct fman_sp_buf_margins*)&p_FmVspEntry->bufMargins;
+    fm_vsp_params.int_context = (struct fman_sp_int_context_data_copy*)&p_FmVspEntry->intContext;
 
    /*no check on err - it was checked earlier*/
     FmVSPGetAbsoluteProfileId(p_FmVspEntry->h_Fm,
@@ -651,8 +545,13 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
                                    p_FmVspEntry->relativeProfileId,
                                    &absoluteProfileId);
 
-    /*set all registers related to VSP*/
-    fm_vsp_fill_entry(p_FmVspEntry->p_FmSpRegsBase, absoluteProfileId, &fm_vsp_params);
+
+    ASSERT_COND(p_FmVspEntry->p_FmSpRegsBase);
+    ASSERT_COND(fm_vsp_params.int_context);
+    ASSERT_COND(fm_vsp_params.buf_margins);
+    ASSERT_COND(IN_RANGE(0, absoluteProfileId, FM_VSP_MAX_NUM_OF_ENTRIES));
+    /* Set all registers related to VSP */
+    fman_vsp_init(p_FmVspEntry->p_FmSpRegsBase, absoluteProfileId, &fm_vsp_params,FM_PORT_MAX_NUM_OF_EXT_POOLS, BM_MAX_NUM_OF_POOLS, FM_MAX_NUM_OF_PFC_PRIORITIES);
 
     p_FmVspEntry->absoluteSpId = absoluteProfileId;
 

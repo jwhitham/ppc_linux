@@ -43,11 +43,7 @@
 
 #define DPAA_VERSION    10
 
-/**************************************************************************//**
- @Description   DPAA SW Portals Enumeration.
-*//***************************************************************************/
-typedef enum
-{
+typedef enum {
     e_DPAA_SWPORTAL0 = 0,
     e_DPAA_SWPORTAL1,
     e_DPAA_SWPORTAL2,
@@ -61,11 +57,7 @@ typedef enum
     e_DPAA_SWPORTAL_DUMMY_LAST
 } e_DpaaSwPortal;
 
-/**************************************************************************//**
- @Description   DPAA Direct Connect Portals Enumeration.
-*//***************************************************************************/
-typedef enum
-{
+typedef enum {
     e_DPAA_DCPORTAL0 = 0,
     e_DPAA_DCPORTAL1,
     e_DPAA_DCPORTAL2,

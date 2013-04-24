@@ -154,7 +154,7 @@ t_Error  LNXWRP_FM_TEST_Free(t_Handle h_FmTestLnxWrp);
  @{
 *//***************************************************************************/
 
-#include "fsl_fman.h"
+#include "lnxwrp_fsl_fman.h"
 
 /** @} */ /* end of FM_LnxKern_ctrl_grp group */
 /** @} */ /* end of FM_LnxKern_grp group */

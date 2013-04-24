@@ -332,7 +332,8 @@ typedef _Packed struct t_IpReassCommonTbl {
     volatile uint32_t totalExternalBufferBusy;
     volatile uint32_t totalSgFragmentCounter;
     volatile uint32_t totalDmaSemaphoreDepletionCounter;
-    volatile uint32_t reserved3[2];
+    volatile uint32_t totalNCSPCounter;
+    volatile uint32_t reserved3[1];
 } _PackedType t_IpReassCommonTbl;
 
 typedef _Packed struct t_Hmtd {

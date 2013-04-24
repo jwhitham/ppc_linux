@@ -504,8 +504,8 @@ t_Error FM_PORT_ConfigSizeOfFifo(t_Handle h_FmPort, t_FmPortRsrc *p_SizeOfFifo);
 
  @Description   Calling this routine changes the dequeue priority in the
                 internal driver data base from its default configuration
-                1G: [FALSE]
-                10G: [TRUE]
+                1G: [DEFAULT_PORT_deqHighPriority_1G]
+                10G: [DEFAULT_PORT_deqHighPriority_10G]
 
                 May be used for Non-Rx ports only
 
@@ -523,7 +523,7 @@ t_Error FM_PORT_ConfigDeqHighPriority(t_Handle h_FmPort, bool highPri);
 
  @Description   Calling this routine changes the dequeue type parameter in the
                 internal driver data base from its default configuration
-                [e_FM_PORT_DEQ_TYPE1].
+                [DEFAULT_PORT_deqType].
 
                 May be used for Non-Rx ports only
 
@@ -541,7 +541,7 @@ t_Error FM_PORT_ConfigDeqType(t_Handle h_FmPort, e_FmPortDeqType deqType);
 
  @Description   Calling this routine changes the dequeue prefetch option parameter in the
                 internal driver data base from its default configuration
-                [e_FM_PORT_DEQ_FULL_PREFETCH]
+                [DEFAULT_PORT_deqPrefetchOption]
                 Note: Available for some chips only
 
                 May be used for Non-Rx ports only
@@ -560,8 +560,8 @@ t_Error FM_PORT_ConfigDeqPrefetchOption(t_Handle h_FmPort, e_FmPortDeqPrefetchOp
 
  @Description   Calling this routine changes the dequeue byte count parameter in
                 the internal driver data base from its default configuration
-                1G:[0x400].
-                10G:[0x1400].
+                1G:[DEFAULT_PORT_deqByteCnt_1G].
+                10G:[DEFAULT_PORT_deqByteCnt_10G].
 
                 May be used for Non-Rx ports only
 
@@ -587,9 +587,9 @@ t_Error FM_PORT_ConfigDeqByteCnt(t_Handle h_FmPort, uint16_t deqByteCnt);
                 application buffer, and to offset.
                 Calling this routine changes the buffer margins definitions
                 in the internal driver data base from its default
-                configuration: Data size:  [DEFAULT_FM_SP_bufferPrefixContent_privDataSize]
-                               Pass Parser result: [DEFAULT_FM_SP_bufferPrefixContent_passPrsResult].
-                               Pass timestamp: [DEFAULT_FM_SP_bufferPrefixContent_passTimeStamp].
+                configuration: Data size:  [DEFAULT_PORT_bufferPrefixContent_privDataSize]
+                               Pass Parser result: [DEFAULT_PORT_bufferPrefixContent_passPrsResult].
+                               Pass timestamp: [DEFAULT_PORT_bufferPrefixContent_passTimeStamp].
 
                 May be used for all ports
 
@@ -611,7 +611,7 @@ t_Error FM_PORT_ConfigBufferPrefixContent(t_Handle                      h_FmPort
 
  @Description   Calling this routine changes the number of checksum bytes to ignore
                 parameter in the internal driver data base from its default configuration
-                [0]
+                [DEFAULT_PORT_cheksumLastBytesIgnore]
 
                 May be used by Tx & Rx ports only
 
@@ -629,7 +629,7 @@ t_Error FM_PORT_ConfigCheksumLastBytesIgnore(t_Handle h_FmPort, uint8_t cheksumL
 
  @Description   Calling this routine changes the number of bytes to cut from a
                 frame's end parameter in the internal driver data base
-                from its default configuration [4]
+                from its default configuration [DEFAULT_PORT_cutBytesFromEnd]
                 Note that if the result of (frame length before chop - cutBytesFromEnd) is
                 less than 14 bytes, the chop operation is not executed.
 
@@ -730,7 +730,7 @@ t_Error FM_PORT_ConfigBackupPools(t_Handle h_FmPort, t_FmBackupBmPools *p_FmPort
 
  @Description   Calling this routine changes the error frames destination parameter
                 in the internal driver data base from its default configuration:
-                override = [FALSE]
+                override = [DEFAULT_PORT_frmDiscardOverride]
 
                 May be used for Rx and OP ports only
 
@@ -749,7 +749,7 @@ t_Error FM_PORT_ConfigFrmDiscardOverride(t_Handle h_FmPort, bool override);
 
  @Description   Calling this routine changes the behaviour on error parameter
                 in the internal driver data base from its default configuration:
-                [FM_PORT_FRM_ERR_CLS_DISCARD].
+                [DEFAULT_PORT_errorsToDiscard].
                 If a requested error was previously defined as "ErrorsToEnqueue" it's
                 definition will change and the frame will be discarded.
                 Errors that were not defined either as "ErrorsToEnqueue" nor as
@@ -771,7 +771,7 @@ t_Error FM_PORT_ConfigErrorsToDiscard(t_Handle h_FmPort, fmPortFrameErrSelect_t 
 
  @Description   Calling this routine changes the DMA swap data aparameter
                 in the internal driver data base from its default
-                configuration  [DEFAULT_FM_SP_dmaSwapData]
+                configuration  [DEFAULT_PORT_dmaSwapData]
 
                 May be used for all port types
 
@@ -789,7 +789,7 @@ t_Error FM_PORT_ConfigDmaSwapData(t_Handle h_FmPort, e_FmDmaSwapOption swapData)
 
  @Description   Calling this routine changes the internal context cache
                 attribute parameter in the internal driver data base
-                from its default configuration  [DEFAULT_FM_SP_dmaIntContextCacheAttr]
+                from its default configuration  [DEFAULT_PORT_dmaIntContextCacheAttr]
 
                 May be used for all port types
 
@@ -807,7 +807,7 @@ t_Error FM_PORT_ConfigDmaIcCacheAttr(t_Handle h_FmPort, e_FmDmaCacheOption intCo
 
  @Description   Calling this routine changes the header cache
                 attribute parameter in the internal driver data base
-                from its default configuration  [DEFAULT_FM_SP_dmaHeaderCacheAttr]
+                from its default configuration  [DEFAULT_PORT_dmaHeaderCacheAttr]
 
                 May be used for all port types
 
@@ -825,7 +825,7 @@ t_Error FM_PORT_ConfigDmaHdrAttr(t_Handle h_FmPort, e_FmDmaCacheOption headerCac
 
  @Description   Calling this routine changes the scatter gather cache
                 attribute parameter in the internal driver data base
-                from its default configuration  [DEFAULT_FM_SP_dmaScatterGatherCacheAttr]
+                from its default configuration  [DEFAULT_PORT_dmaScatterGatherCacheAttr]
 
                 May be used for all port types
 
@@ -843,7 +843,7 @@ t_Error FM_PORT_ConfigDmaScatterGatherAttr(t_Handle h_FmPort, e_FmDmaCacheOption
 
  @Description   Calling this routine changes the write optimization
                 parameter in the internal driver data base
-                from its default configuration:  By default optimize = [DEFAULT_FM_SP_dmaWriteOptimize].
+                from its default configuration:  By default optimize = [DEFAULT_PORT_dmaWriteOptimize].
                 Note:
 
                 1. For head optimization, data alignment must be >= 16 (supported by default).
@@ -851,7 +851,6 @@ t_Error FM_PORT_ConfigDmaScatterGatherAttr(t_Handle h_FmPort, e_FmDmaCacheOption
                 3. For tail optimization, note that the optimization is performed by extending the write transaction
                 of the frame payload at the tail as needed to achieve optimal bus transfers, so that the last write
                 is extended to be on 16/64 bytes aligned block (chip dependent).
-
 
                 Relevant for non-Tx port types
 
@@ -885,7 +884,7 @@ t_Error FM_PORT_ConfigNoScatherGather(t_Handle h_FmPort, bool noScatherGather);
 
  @Description   Calling this routine changes the internal default color parameter
                 in the internal driver data base
-                from its default configuration  [e_FM_PORT_COLOR_GREEN]
+                from its default configuration  [DEFAULT_PORT_color]
 
                 May be used for all port types
 
@@ -903,7 +902,7 @@ t_Error FM_PORT_ConfigDfltColor(t_Handle h_FmPort, e_FmPortColor color);
 
  @Description   Calling this routine changes the synchronization attribute parameter
                 in the internal driver data base from its default configuration:
-                syncReq = [TRUE]
+                syncReq = [DEFAULT_PORT_syncReq]
 
                 May be used for all port types
 
@@ -922,7 +921,7 @@ t_Error FM_PORT_ConfigSyncReq(t_Handle h_FmPort, bool syncReq);
  @Description   This routine is relevant for Rx ports that are routed to OP port.
                 It changes the internal context reuse option in the internal
                 driver data base from its default configuration:
-                reuse = [FALSE]
+                reuse = [DEFAULT_PORT_forwardIntContextReuse]
 
                 May be used for Rx ports only
 
@@ -988,7 +987,7 @@ t_Error FM_PORT_ConfigIMMaxRxBufLength(t_Handle h_FmPort, uint16_t newVal);
  @Function      FM_PORT_ConfigIMRxBdRingLength
 
  @Description   Changes the receive BD ring length from its default
-                configuration:[128]
+                configuration:[DEFAULT_PORT_rxBdRingLength]
 
  @Param[in]     h_FmPort        A handle to a FM Port module.
  @Param[in]     newVal          The desired BD ring length.
@@ -1004,7 +1003,7 @@ t_Error FM_PORT_ConfigIMRxBdRingLength(t_Handle h_FmPort, uint16_t newVal);
  @Function      FM_PORT_ConfigIMTxBdRingLength
 
  @Description   Changes the transmit BD ring length from its default
-                configuration:[16]
+                configuration:[DEFAULT_PORT_txBdRingLength]
 
  @Param[in]     h_FmPort        A handle to a FM Port module.
  @Param[in]     newVal          The desired BD ring length.
@@ -1023,7 +1022,7 @@ t_Error FM_PORT_ConfigIMTxBdRingLength(t_Handle h_FmPort, uint16_t newVal);
                 data structures (e.g. BD rings).
                 Calling this routine changes the internal driver data base
                 from its default configuration
-                [0, MEMORY_ATTR_CACHEABLE].
+                [DEFAULT_PORT_ImfwExtStructsMemId, DEFAULT_PORT_ImfwExtStructsMemAttr].
 
  @Param[in]     h_FmPort        A handle to a FM Port module.
  @Param[in]     memId           Memory partition ID.
@@ -1053,7 +1052,7 @@ t_Error FM_PORT_ConfigIMPolling(t_Handle h_FmPort);
  @Function      FM_PORT_ConfigMaxFrameLength
 
  @Description   Changes the definition of the max size of frame that should be
-                transmitted/received on this port from its default value [9600].
+                transmitted/received on this port from its default value [DEFAULT_PORT_maxFrameLength].
                 This parameter is used for confirmation of the minimum Fifo
                 size calculations and only for Tx ports or ports working in
                 independent mode. This should be larger than the maximum possible
@@ -1074,7 +1073,7 @@ t_Error FM_PORT_ConfigMaxFrameLength(t_Handle h_FmPort, uint16_t length);
 
  @Description   Calling this routine changes the fifo minimum
                 fill level parameter in the internal driver data base
-                from its default configuration  [0]
+                from its default configuration  [DEFAULT_PORT_txFifoMinFillLevel]
 
                 May be used for Tx ports only
 
@@ -1093,8 +1092,8 @@ t_Error FM_PORT_ConfigTxFifoMinFillLevel(t_Handle h_FmPort, uint32_t minFillLeve
  @Description   Calling this routine changes the fifo dequeue
                 pipeline depth parameter in the internal driver data base
 
-                from its default configuration: 1G ports: [1],
-                10G port: [4]
+                from its default configuration: 1G ports: [DEFAULT_PORT_fifoDeqPipelineDepth_1G],
+                10G port: [DEFAULT_PORT_fifoDeqPipelineDepth_10G]
 
                 May be used for Tx ports only
 
@@ -1112,7 +1111,7 @@ t_Error FM_PORT_ConfigFifoDeqPipelineDepth(t_Handle h_FmPort, uint8_t deqPipelin
 
  @Description   Calling this routine changes the fifo low comfort level
                 parameter in internal driver data base
-                from its default configuration [5]
+                from its default configuration [DEFAULT_PORT_txFifoLowComfLevel]
 
                 May be used for Tx ports only
 
@@ -1130,7 +1129,7 @@ t_Error FM_PORT_ConfigTxFifoLowComfLevel(t_Handle h_FmPort, uint32_t fifoLowComf
 
  @Description   Calling this routine changes the threshold of the FIFO
                 fill level parameter in the internal driver data base
-                from its default configuration [BMI_MAX_FIFO_SIZE]
+                from its default configuration [DEFAULT_PORT_rxFifoThreshold]
 
                 If the total number of buffers which are
                 currently in use and associated with the
@@ -1154,7 +1153,7 @@ t_Error FM_PORT_ConfigRxFifoThreshold(t_Handle h_FmPort, uint32_t fifoThreshold)
 
  @Description   Calling this routine changes the priority elevation level
                 parameter in the internal driver data base from its default
-                configuration  [BMI_MAX_FIFO_SIZE]
+                configuration  [DEFAULT_PORT_rxFifoPriElevationLevel]
 
                 If the total number of buffers which are currently in use and
                 associated with the specific RX port exceed the amount specified
@@ -1427,6 +1426,8 @@ t_Error FM_PORT_Enable(t_Handle h_FmPort);
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_PORT_Init().
+                If rate limit is set on a port that need to send PFC frames,
+                it might violate the stop transmit timing.
 *//***************************************************************************/
 t_Error FM_PORT_SetRateLimit(t_Handle h_FmPort, t_FmPortRateLimit *p_RateLimit);
 
@@ -1445,6 +1446,24 @@ t_Error FM_PORT_SetRateLimit(t_Handle h_FmPort, t_FmPortRateLimit *p_RateLimit);
  @Cautions      Allowed only following FM_PORT_Init().
 *//***************************************************************************/
 t_Error FM_PORT_DeleteRateLimit(t_Handle h_FmPort);
+
+/**************************************************************************//**
+ @Function      FM_PORT_SetPfcPrioritiesMappingToQmanWQ
+
+ @Description   Calling this routine maps each PFC received priority to the transmit WQ.
+                This WQ will be blocked upon receiving a PFC frame with this priority.
+
+                May be used for Tx ports only.
+
+ @Param[in]     h_FmPort        A handle to a FM Port module.
+ @Param[in]     prio            PFC priority (0-7).
+ @Param[in]     wq              Work Queue (0-7).
+
+ @Return        E_OK on success; Error code otherwise.
+
+ @Cautions      Allowed only following FM_PORT_Init().
+*//***************************************************************************/
+t_Error FM_PORT_SetPfcPrioritiesMappingToQmanWQ(t_Handle h_FmPort, uint8_t prio, uint8_t wq);
 
 /**************************************************************************//**
  @Function      FM_PORT_SetStatisticsCounters
@@ -1926,7 +1945,7 @@ typedef struct t_FmPcdPrsStart {
  @Description   struct for defining external buffer margins
 *//***************************************************************************/
 typedef struct t_FmPortVSPAllocParams {
-    uint8_t     numOfProfiles;          /**< Number of Virtual Storage Profiles */
+    uint8_t     numOfProfiles;          /**< Number of Virtual Storage Profiles; must be a power of 2 */
     uint8_t     dfltRelativeId;         /**< The default Virtual-Storage-Profile-id dedicated to Rx/OP port
                                              The same default Virtual-Storage-Profile-id will be for coupled Tx port
                                              if relevant function called for Rx port */
@@ -2053,7 +2072,7 @@ t_Error FM_PORT_PcdPlcrFreeProfiles(t_Handle h_FmPort);
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_PORT_Init(), and before FM_PORT_SetPCD()
-                and also before FM_PORT_Enable() (i.e. the port should be disabled).
+                and also before FM_PORT_Enable(); i.e. the port should be disabled.
 *//***************************************************************************/
 t_Error FM_PORT_VSPAlloc(t_Handle h_FmPort, t_FmPortVSPAllocParams *p_Params);
 #endif /* (DPAA_VERSION >= 11) */

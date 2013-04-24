@@ -30,7 +30,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #ifndef __FSL_FMAN_DTSEC_MII_ACC_H
 #define __FSL_FMAN_DTSEC_MII_ACC_H
 
@@ -83,7 +82,7 @@ struct dtsec_mii_reg {
 /* dTSEC MII API */
 
 /* functions to access the mii registers for phy configuration.
- * this functionality may not be available for all dtsecs in the system.
+ * this functionality may not be available for all dTSECs in the system.
  * consult the reference manual for details */
 void dtsec_mii_reset(struct dtsec_mii_reg *regs);
 /* frequency is in MHz.

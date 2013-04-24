@@ -328,8 +328,8 @@ struct tgec_regs {
  *            (increasing bandwidth).
  *
  * This structure contains basic TGEC configuration and must be passed to
- * tgec_init() function.  A default set of configuration values can be obtained
- * by calling tgec_defconfig().
+ * fman_tgec_init() function.  A default set of configuration values can be obtained
+ * by calling fman_tgec_defconfig().
  */
 struct tgec_cfg {
 	bool		rx_error_discard;
@@ -350,108 +350,11 @@ struct tgec_cfg {
 	bool		skip_fman11_workaround;
 };
 
-void tgec_set_mac_address(struct tgec_regs *regs, uint8_t *macaddr);
+
+void fman_tgec_defconfig(struct tgec_cfg *cfg);
 
 /**
- * tgec_reset_stat() - Completely resets all TGEC HW counters
- * @regs:    Pointer to TGEC register block
- */
-void tgec_reset_stat(struct tgec_regs *regs);
-
-/**
- * tgec_get_counter() - Reads TGEC HW counters
- * @regs:    Pointer to TGEC register block
- * @reg_name:    Counter name according to the appropriate enum
- *
- * Returns:    Required counter value
- */
-
-uint64_t tgec_get_counter(struct tgec_regs *regs, enum tgec_counters reg_name);
-
-void tgec_enable(struct tgec_regs *regs, bool apply_rx, bool apply_tx);
-void tgec_disable(struct tgec_regs *regs, bool apply_rx, bool apply_tx);
-void tgec_set_promiscuous(struct tgec_regs *regs, bool val);
-
-/**
- * tgec_set_hash_table() - Sets the Hashtable Control Register
- * @regs:    Pointer to TGEC register block
- * @value:    Value to be written in Hashtable Control Register
- */
-void tgec_set_hash_table(struct tgec_regs *regs, uint32_t value);
-
-/**
- * tgec_tx_mac_pause() - Sets the Pause Quanta Register
- * @regs:    Pointer to TGEC register block
- * @pause_time:    Pause quanta value used with transmitted pause frames.
- *        Each quanta represents a 512 bit-times
- */
-
-void tgec_tx_mac_pause(struct tgec_regs *regs, uint16_t pause_time);
-
-/**
- * tgec_rx_ignore_mac_pause() - Changes the policy WRT pause frames
- * @regs:    Pointer to TGEC register block
- * @en:        Ignore/Respond to pause frame quanta
- *
- * Sets the value of PAUSE_IGNORE field in the COMMAND_CONFIG Register
- * 0 - MAC stops transmit process for the duration specified
- * in the Pause frame quanta of a received Pause frame.
- * 1 - MAC ignores received Pause frames.
- */
-
-void tgec_rx_ignore_mac_pause(struct tgec_regs *regs, bool en);
-
-/**
- * tgec_enable_1588_time_stamp() - change timestamp functionality
- * @regs:    Pointer to TGEC register block
- * @en:        enable/disable timestamp functionality
- *
- * Sets the value of EN_TIMESTAMP field in the COMMAND_CONFIG Register
- * IEEE 1588 timestamp functionality control:
- * 0 disabled, 1 enabled
- */
-
-void tgec_enable_1588_time_stamp(struct tgec_regs *regs, bool en);
-
-uint32_t tgec_get_event(struct tgec_regs *regs, uint32_t ev_mask);
-void tgec_ack_event(struct tgec_regs *regs, uint32_t ev_mask);
-uint32_t tgec_get_interrupt_mask(struct tgec_regs *regs);
-
-
-/**
- * tgec_add_addr_in_paddr() - Sets additional exact match MAC address
- * @regs:    Pointer to TGEC register block
- * @addr_ptr:    Pointer to 6-byte array containing the MAC address
- *
- * Sets the additional station MAC address
- */
-
-void tgec_add_addr_in_paddr(struct tgec_regs *regs, uint8_t *addr_ptr);
-void tgec_clear_addr_in_paddr(struct tgec_regs *regs);
-uint32_t tgec_get_revision(struct tgec_regs *regs);
-void tgec_enable_interrupt(struct tgec_regs *regs, uint32_t ev_mask);
-void tgec_disable_interrupt(struct tgec_regs *regs, uint32_t ev_mask);
-
-/**
- * tgec_get_max_frame_len() - Returns the maximum frame length value
- * @regs:    Pointer to TGEC register block
- */
-
-uint16_t tgec_get_max_frame_len(struct tgec_regs *regs);
-
-/**
- * tgec_defconfig() - Initialize the main tgec configuration parameters
- * @cfg:    Pointer to tgec_cfg structure
- *
- * This routine determines the values of the tgec_cfg structure members.
- * This structure represents the initial parameters which the tgec controller
- * will be initialized with later when calling the tgec_init function.
- */
-
-void tgec_defconfig(struct tgec_cfg *cfg);
-
-/**
- * tgec_init() - Init tgec hardware block
+ * fman_tgec_init() - Init tgec hardware block
  * @regs:        Pointer to tgec register block
  * @cfg:        tgec configuration data
  * @exceptions_mask:    initial exceptions mask
@@ -462,11 +365,107 @@ void tgec_defconfig(struct tgec_cfg *cfg);
  * Returns: 0 if successful, an error code otherwise.
  */
 
-int tgec_init(struct tgec_regs *regs, struct tgec_cfg *cfg,
-        uint32_t exception_mask);
+int fman_tgec_init(struct tgec_regs *regs, struct tgec_cfg *cfg,
+	uint32_t exception_mask);
 
+void fman_tgec_enable(struct tgec_regs *regs, bool apply_rx, bool apply_tx);
 
-void tgec_fm_tx_fifo_corruption_errata_10gmac_a007(struct tgec_regs *regs);
+void fman_tgec_disable(struct tgec_regs *regs, bool apply_rx, bool apply_tx);
+
+uint32_t fman_tgec_get_revision(struct tgec_regs *regs);
+
+void fman_tgec_set_mac_address(struct tgec_regs *regs, uint8_t *macaddr);
+
+void fman_tgec_set_promiscuous(struct tgec_regs *regs, bool val);
+
+/**
+ * fman_tgec_reset_stat() - Completely resets all TGEC HW counters
+ * @regs:    Pointer to TGEC register block
+ */
+void fman_tgec_reset_stat(struct tgec_regs *regs);
+
+/**
+ * fman_tgec_get_counter() - Reads TGEC HW counters
+ * @regs:    Pointer to TGEC register block
+ * @reg_name:    Counter name according to the appropriate enum
+ *
+ * Returns:    Required counter value
+ */
+uint64_t fman_tgec_get_counter(struct tgec_regs *regs, enum tgec_counters reg_name);
+
+/**
+ * fman_tgec_set_hash_table() - Sets the Hashtable Control Register
+ * @regs:    Pointer to TGEC register block
+ * @value:    Value to be written in Hashtable Control Register
+ */
+void fman_tgec_set_hash_table(struct tgec_regs *regs, uint32_t value);
+
+/**
+ * fman_tgec_set_tx_pause_frames() - Sets the Pause Quanta Register
+ * @regs:    Pointer to TGEC register block
+ * @pause_time:    Pause quanta value used with transmitted pause frames.
+ *        Each quanta represents a 512 bit-times
+ */
+void fman_tgec_set_tx_pause_frames(struct tgec_regs *regs, uint16_t pause_time);
+
+/**
+ * fman_tgec_set_rx_ignore_pause_frames() - Changes the policy WRT pause frames
+ * @regs:    Pointer to TGEC register block
+ * @en:        Ignore/Respond to pause frame quanta
+ *
+ * Sets the value of PAUSE_IGNORE field in the COMMAND_CONFIG Register
+ * 0 - MAC stops transmit process for the duration specified
+ * in the Pause frame quanta of a received Pause frame.
+ * 1 - MAC ignores received Pause frames.
+ */
+void fman_tgec_set_rx_ignore_pause_frames(struct tgec_regs *regs, bool en);
+
+/**
+ * fman_tgec_enable_1588_time_stamp() - change timestamp functionality
+ * @regs:    Pointer to TGEC register block
+ * @en:        enable/disable timestamp functionality
+ *
+ * Sets the value of EN_TIMESTAMP field in the COMMAND_CONFIG Register
+ * IEEE 1588 timestamp functionality control:
+ * 0 disabled, 1 enabled
+ */
+
+void fman_tgec_enable_1588_time_stamp(struct tgec_regs *regs, bool en);
+
+uint32_t fman_tgec_get_event(struct tgec_regs *regs, uint32_t ev_mask);
+
+void fman_tgec_ack_event(struct tgec_regs *regs, uint32_t ev_mask);
+
+uint32_t fman_tgec_get_interrupt_mask(struct tgec_regs *regs);
+
+/**
+ * fman_tgec_add_addr_in_paddr() - Sets additional exact match MAC address
+ * @regs:    Pointer to TGEC register block
+ * @addr_ptr:    Pointer to 6-byte array containing the MAC address
+ *
+ * Sets the additional station MAC address
+ */
+void fman_tgec_add_addr_in_paddr(struct tgec_regs *regs, uint8_t *addr_ptr);
+
+void fman_tgec_clear_addr_in_paddr(struct tgec_regs *regs);
+
+void fman_tgec_enable_interrupt(struct tgec_regs *regs, uint32_t ev_mask);
+
+void fman_tgec_disable_interrupt(struct tgec_regs *regs, uint32_t ev_mask);
+
+/**
+ * fman_tgec_get_max_frame_len() - Returns the maximum frame length value
+ * @regs:    Pointer to TGEC register block
+ */
+uint16_t fman_tgec_get_max_frame_len(struct tgec_regs *regs);
+
+/**
+ * fman_tgec_set_erratum_tx_fifo_corruption_10gmac_a007() - Initialize the main tgec configuration parameters
+ * @regs:    Pointer to TGEC register block
+ *
+ * TODO
+ */
+void fman_tgec_set_erratum_tx_fifo_corruption_10gmac_a007(struct tgec_regs *regs);
 
 
 #endif /* __FSL_FMAN_TGEC_H */

@@ -99,10 +99,10 @@ static void TgecErrException(t_Handle h_Tgec)
     struct tgec_regs    *p_TgecMemMap = p_Tgec->p_MemMap;
 
     /* do not handle MDIO events */
-    event = tgec_get_event(p_TgecMemMap, ~(TGEC_IMASK_MDIO_SCAN_EVENT | TGEC_IMASK_MDIO_CMD_CMPL));
-    event &= tgec_get_interrupt_mask(p_TgecMemMap);
+    event = fman_tgec_get_event(p_TgecMemMap, ~(TGEC_IMASK_MDIO_SCAN_EVENT | TGEC_IMASK_MDIO_CMD_CMPL));
+    event &= fman_tgec_get_interrupt_mask(p_TgecMemMap);
 
-    tgec_ack_event(p_TgecMemMap, event);
+    fman_tgec_ack_event(p_TgecMemMap, event);
 
     if (event & TGEC_IMASK_REM_FAULT)
         p_Tgec->f_Exception(p_Tgec->h_App, e_FM_MAC_EX_10G_REM_FAULT);
@@ -145,10 +145,10 @@ static void TgecException(t_Handle h_Tgec)
      struct tgec_regs   *p_TgecMemMap = p_Tgec->p_MemMap;
 
      /* handle only MDIO events */
-     event = tgec_get_event(p_TgecMemMap, (TGEC_IMASK_MDIO_SCAN_EVENT | TGEC_IMASK_MDIO_CMD_CMPL));
-     event &= tgec_get_interrupt_mask(p_TgecMemMap);
+     event = fman_tgec_get_event(p_TgecMemMap, (TGEC_IMASK_MDIO_SCAN_EVENT | TGEC_IMASK_MDIO_CMD_CMPL));
+     event &= fman_tgec_get_interrupt_mask(p_TgecMemMap);
 
-     tgec_ack_event(p_TgecMemMap, event);
+     fman_tgec_ack_event(p_TgecMemMap, event);
 
      if (event & TGEC_IMASK_MDIO_SCAN_EVENT)
          p_Tgec->f_Event(p_Tgec->h_App, e_FM_MAC_EX_10G_MDIO_SCAN_EVENTMDIO);
@@ -192,7 +192,7 @@ static t_Error TgecEnable(t_Handle h_Tgec,  e_CommMode mode)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_enable(p_Tgec->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
+    fman_tgec_enable(p_Tgec->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
 
     return E_OK;
 }
@@ -206,7 +206,7 @@ static t_Error TgecDisable (t_Handle h_Tgec, e_CommMode mode)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_disable(p_Tgec->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
+    fman_tgec_disable(p_Tgec->p_MemMap, (mode & e_COMM_MODE_RX), (mode & e_COMM_MODE_TX));
 
     return E_OK;
 }
@@ -220,7 +220,7 @@ static t_Error TgecSetPromiscuous(t_Handle h_Tgec, bool newVal)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_set_promiscuous(p_Tgec->p_MemMap, newVal);
+    fman_tgec_set_promiscuous(p_Tgec->p_MemMap, newVal);
 
     return E_OK;
 }
@@ -341,7 +341,7 @@ static t_Error TgecTxMacPause(t_Handle h_Tgec, uint16_t pauseTime)
 
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
-    tgec_tx_mac_pause(p_Tgec->p_MemMap, pauseTime);
+    fman_tgec_set_tx_pause_frames(p_Tgec->p_MemMap, pauseTime);
 
 
     return E_OK;
@@ -361,7 +361,7 @@ static t_Error TgecSetTxPauseFrames(t_Handle h_Tgec,
 
     UNUSED(priority); UNUSED(threshTime);
 
-    tgec_tx_mac_pause(p_Tgec->p_MemMap, pauseTime);
+    fman_tgec_set_tx_pause_frames(p_Tgec->p_MemMap, pauseTime);
 
     return E_OK;
 }
@@ -375,7 +375,7 @@ static t_Error TgecRxIgnoreMacPause(t_Handle h_Tgec, bool en)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_rx_ignore_mac_pause(p_Tgec->p_MemMap, en);
+    fman_tgec_set_rx_ignore_pause_frames(p_Tgec->p_MemMap, en);
 
     return E_OK;
 }
@@ -393,46 +393,46 @@ static t_Error TgecGetStatistics(t_Handle h_Tgec, t_FmMacStatistics *p_Statistic
 
     p_TgecMemMap = p_Tgec->p_MemMap;
 
-    p_Statistics->eStatPkts64           = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R64);
-    p_Statistics->eStatPkts65to127      = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R127);
-    p_Statistics->eStatPkts128to255     = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R255);
-    p_Statistics->eStatPkts256to511     = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R511);
-    p_Statistics->eStatPkts512to1023    = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R1023);
-    p_Statistics->eStatPkts1024to1518   = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R1518);
-    p_Statistics->eStatPkts1519to1522   = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R1519X);
+    p_Statistics->eStatPkts64           = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R64);
+    p_Statistics->eStatPkts65to127      = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R127);
+    p_Statistics->eStatPkts128to255     = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R255);
+    p_Statistics->eStatPkts256to511     = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R511);
+    p_Statistics->eStatPkts512to1023    = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R1023);
+    p_Statistics->eStatPkts1024to1518   = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R1518);
+    p_Statistics->eStatPkts1519to1522   = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_R1519X);
 /* */
-    p_Statistics->eStatFragments        = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TRFRG);
-    p_Statistics->eStatJabbers          = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TRJBR);
+    p_Statistics->eStatFragments        = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TRFRG);
+    p_Statistics->eStatJabbers          = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TRJBR);
 
-    p_Statistics->eStatsDropEvents      = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RDRP);
-    p_Statistics->eStatCRCAlignErrors   = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RALN);
+    p_Statistics->eStatsDropEvents      = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RDRP);
+    p_Statistics->eStatCRCAlignErrors   = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RALN);
 
-    p_Statistics->eStatUndersizePkts    = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TRUND);
-    p_Statistics->eStatOversizePkts     = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TROVR);
+    p_Statistics->eStatUndersizePkts    = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TRUND);
+    p_Statistics->eStatOversizePkts     = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TROVR);
 /* Pause */
-    p_Statistics->reStatPause           = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RXPF);
-    p_Statistics->teStatPause           = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TXPF);
+    p_Statistics->reStatPause           = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RXPF);
+    p_Statistics->teStatPause           = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TXPF);
 
 /* MIB II */
-    p_Statistics->ifInOctets            = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_ROCT);
-    p_Statistics->ifInUcastPkts         = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RUCA);
-    p_Statistics->ifInMcastPkts         = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RMCA);
-    p_Statistics->ifInBcastPkts         = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RBCA);
+    p_Statistics->ifInOctets            = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_ROCT);
+    p_Statistics->ifInUcastPkts         = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RUCA);
+    p_Statistics->ifInMcastPkts         = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RMCA);
+    p_Statistics->ifInBcastPkts         = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RBCA);
     p_Statistics->ifInPkts              = p_Statistics->ifInUcastPkts
                                         + p_Statistics->ifInMcastPkts
                                         + p_Statistics->ifInBcastPkts;
     p_Statistics->ifInDiscards          = 0;
-    p_Statistics->ifInErrors            = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RERR);
+    p_Statistics->ifInErrors            = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_RERR);
 
-    p_Statistics->ifOutOctets           = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TOCT);
-    p_Statistics->ifOutUcastPkts        = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TUCA);
-    p_Statistics->ifOutMcastPkts        = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TMCA);
-    p_Statistics->ifOutBcastPkts        = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TBCA);
+    p_Statistics->ifOutOctets           = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TOCT);
+    p_Statistics->ifOutUcastPkts        = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TUCA);
+    p_Statistics->ifOutMcastPkts        = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TMCA);
+    p_Statistics->ifOutBcastPkts        = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TBCA);
     p_Statistics->ifOutPkts             = p_Statistics->ifOutUcastPkts
                                         + p_Statistics->ifOutMcastPkts
                                         + p_Statistics->ifOutBcastPkts;
     p_Statistics->ifOutDiscards         = 0;
-    p_Statistics->ifOutErrors           = tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TERR);
+    p_Statistics->ifOutErrors           = fman_tgec_get_counter(p_TgecMemMap, E_TGEC_COUNTER_TERR);
 
     return E_OK;
 }
@@ -446,7 +446,7 @@ static t_Error TgecEnable1588TimeStamp(t_Handle h_Tgec)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_enable_1588_time_stamp(p_Tgec->p_MemMap, 1);
+    fman_tgec_enable_1588_time_stamp(p_Tgec->p_MemMap, 1);
 
     return E_OK;
 }
@@ -460,7 +460,7 @@ static t_Error TgecDisable1588TimeStamp(t_Handle h_Tgec)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_enable_1588_time_stamp(p_Tgec->p_MemMap, 0);
+    fman_tgec_enable_1588_time_stamp(p_Tgec->p_MemMap, 0);
 
     return E_OK;
 }
@@ -475,7 +475,7 @@ static t_Error TgecModifyMacAddress (t_Handle h_Tgec, t_EnetAddr *p_EnetAddr)
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
     p_Tgec->addr = ENET_ADDR_TO_UINT64(*p_EnetAddr);
-    tgec_set_mac_address(p_Tgec->p_MemMap, (uint8_t *)(*p_EnetAddr));
+    fman_tgec_set_mac_address(p_Tgec->p_MemMap, (uint8_t *)(*p_EnetAddr));
 
     return E_OK;
 }
@@ -489,7 +489,7 @@ static t_Error TgecResetCounters (t_Handle h_Tgec)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    tgec_reset_stat(p_Tgec->p_MemMap);
+    fman_tgec_reset_stat(p_Tgec->p_MemMap);
 
     return E_OK;
 }
@@ -528,7 +528,7 @@ static t_Error TgecAddExactMatchMacAddress(t_Handle h_Tgec, t_EnetAddr *p_EthAdd
             p_Tgec->paddr[paddrNum] = ethAddr;
 
             /* put in hardware */
-            tgec_add_addr_in_paddr(p_Tgec->p_MemMap, (uint8_t*)(*p_EthAddr)/* , paddrNum */);
+            fman_tgec_add_addr_in_paddr(p_Tgec->p_MemMap, (uint8_t*)(*p_EthAddr)/* , paddrNum */);
             p_Tgec->numOfIndAddrInRegs++;
 
             return E_OK;
@@ -561,7 +561,7 @@ static t_Error TgecDelExactMatchMacAddress(t_Handle h_Tgec, t_EnetAddr *p_EthAdd
             /* mark this PADDR as not used */
             p_Tgec->indAddrRegUsed[paddrNum] = FALSE;
             /* clear in hardware */
-            tgec_clear_addr_in_paddr(p_Tgec->p_MemMap /*, paddrNum */);
+            fman_tgec_clear_addr_in_paddr(p_Tgec->p_MemMap /*, paddrNum */);
             p_Tgec->numOfIndAddrInRegs--;
 
             return E_OK;
@@ -601,7 +601,7 @@ static t_Error TgecAddHashMacAddress(t_Handle h_Tgec, t_EnetAddr *p_EthAddr)
     INIT_LIST(&p_HashEntry->node);
 
     LIST_AddToTail(&(p_HashEntry->node), &(p_Tgec->p_MulticastAddrHash->p_Lsts[hash]));
-    tgec_set_hash_table(p_Tgec->p_MemMap, (hash | TGEC_HASH_MCAST_EN));
+    fman_tgec_set_hash_table(p_Tgec->p_MemMap, (hash | TGEC_HASH_MCAST_EN));
 
     return E_OK;
 }
@@ -638,7 +638,7 @@ static t_Error TgecDelHashMacAddress(t_Handle h_Tgec, t_EnetAddr *p_EthAddr)
         }
     }
     if (LIST_IsEmpty(&p_Tgec->p_MulticastAddrHash->p_Lsts[hash]))
-        tgec_set_hash_table(p_Tgec->p_MemMap, (hash & ~TGEC_HASH_MCAST_EN));
+        fman_tgec_set_hash_table(p_Tgec->p_MemMap, (hash & ~TGEC_HASH_MCAST_EN));
 
     return E_OK;
 }
@@ -666,7 +666,7 @@ static t_Error TgecGetVersion(t_Handle h_Tgec, uint32_t *macVersion)
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE);
 
-    *macVersion = tgec_get_revision(p_Tgec->p_MemMap);
+    *macVersion = fman_tgec_get_revision(p_Tgec->p_MemMap);
 
     return E_OK;
 }
@@ -693,9 +693,9 @@ static t_Error TgecSetExcpetion(t_Handle h_Tgec, e_FmMacExceptions exception, bo
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Undefined exception"));
 
     if (enable)
-        tgec_enable_interrupt(p_Tgec->p_MemMap, bitMask);
+        fman_tgec_enable_interrupt(p_Tgec->p_MemMap, bitMask);
     else
-        tgec_disable_interrupt(p_Tgec->p_MemMap, bitMask);
+        fman_tgec_disable_interrupt(p_Tgec->p_MemMap, bitMask);
 
     return E_OK;
 }
@@ -709,7 +709,7 @@ static uint16_t TgecGetMaxFrameLength(t_Handle h_Tgec)
     SANITY_CHECK_RETURN_VALUE(p_Tgec, E_INVALID_HANDLE, 0);
     SANITY_CHECK_RETURN_VALUE(!p_Tgec->p_TgecDriverParam, E_INVALID_STATE, 0);
 
-    return tgec_get_max_frame_len(p_Tgec->p_MemMap);
+    return fman_tgec_get_max_frame_len(p_Tgec->p_MemMap);
 }
 
 /* ......................................................................... */
@@ -723,19 +723,20 @@ static t_Error TgecTxEccWorkaround(t_Tgec *p_Tgec)
     XX_Print("Applying 10G TX ECC workaround (10GMAC-A004) ... ");
 #endif /* (DEBUG_ERRORS > 0) */
     /* enable and set promiscuous */
-    tgec_enable(p_Tgec->p_MemMap, TRUE, TRUE);
-    tgec_set_promiscuous(p_Tgec->p_MemMap, TRUE);
+    fman_tgec_enable(p_Tgec->p_MemMap, TRUE, TRUE);
+    fman_tgec_set_promiscuous(p_Tgec->p_MemMap, TRUE);
     err = Fm10GTxEccWorkaround(p_Tgec->fmMacControllerDriver.h_Fm, p_Tgec->macId);
     /* disable */
-    tgec_set_promiscuous(p_Tgec->p_MemMap, FALSE);
-    tgec_enable(p_Tgec->p_MemMap, FALSE, FALSE);
+    fman_tgec_set_promiscuous(p_Tgec->p_MemMap, FALSE);
+    fman_tgec_enable(p_Tgec->p_MemMap, FALSE, FALSE);
+    fman_tgec_reset_stat(p_Tgec->p_MemMap);
+	fman_tgec_ack_event(p_Tgec->p_MemMap, 0xffffffff);
 #if defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0)
     if (err)
         XX_Print("FAILED!\n");
     else
         XX_Print("done.\n");
 #endif /* (DEBUG_ERRORS > 0) */
-    tgec_reset_stat(p_Tgec->p_MemMap);
 
     return err;
 }
@@ -808,7 +809,7 @@ static t_Error TgecInit(t_Handle h_Tgec)
     p_TgecDriverParam = p_Tgec->p_TgecDriverParam;
 
     MAKE_ENET_ADDR_FROM_UINT64(p_Tgec->addr, ethAddr);
-    tgec_set_mac_address(p_Tgec->p_MemMap, (uint8_t *)ethAddr);
+    fman_tgec_set_mac_address(p_Tgec->p_MemMap, (uint8_t *)ethAddr);
 
     /* interrupts */
 #ifdef FM_10G_REM_N_LCL_FLT_EX_10GMAC_ERRATA_SW005
@@ -830,7 +831,7 @@ static t_Error TgecInit(t_Handle h_Tgec)
     }
 #endif /* FM_TX_ECC_FRMS_ERRATA_10GMAC_A004 */
 
-    err = tgec_init(p_Tgec->p_MemMap, p_TgecDriverParam, p_Tgec->exceptions);
+    err = fman_tgec_init(p_Tgec->p_MemMap, p_TgecDriverParam, p_Tgec->exceptions);
     if (err)
     {
         FreeInitResources(p_Tgec);
@@ -846,7 +847,7 @@ static t_Error TgecInit(t_Handle h_Tgec)
 
 #ifdef FM_TX_FIFO_CORRUPTION_ERRATA_10GMAC_A007
     if (p_Tgec->fmMacControllerDriver.fmRevInfo.majorRev == 2)
-        tgec_fm_tx_fifo_corruption_errata_10gmac_a007(p_Tgec->p_MemMap);
+        fman_tgec_set_erratum_tx_fifo_corruption_10gmac_a007(p_Tgec->p_MemMap);
 #endif /* FM_TX_FIFO_CORRUPTION_ERRATA_10GMAC_A007 */
 
     p_Tgec->p_MulticastAddrHash = AllocHashTable(HASH_TABLE_SIZE);
@@ -1001,7 +1002,7 @@ t_Handle TGEC_Config(t_FmMacParams *p_FmMacParam)
     /* Plant parameter structure pointer */
     p_Tgec->p_TgecDriverParam = p_TgecDriverParam;
 
-    tgec_defconfig(p_TgecDriverParam);
+    fman_tgec_defconfig(p_TgecDriverParam);
 
     p_Tgec->p_MemMap        = (struct tgec_regs *)UINT_TO_PTR(baseAddr);
     p_Tgec->p_MiiMemMap     = (t_TgecMiiAccessMemMap *)UINT_TO_PTR(baseAddr + TGEC_TO_MII_OFFSET);

@@ -101,6 +101,8 @@ typedef enum e_FmMacExceptions {
    ,e_FM_MAC_EX_1G_RX_DATA_ERR                                  /**< dTSEC Internal data error on receive */
    ,e_FM_MAC_EX_1G_1588_TS_RX_ERR                               /**< dTSEC Time-Stamp Receive Error */
    ,e_FM_MAC_EX_1G_RX_MIB_CNT_OVFL                              /**< dTSEC MIB counter overflow */
+   ,e_FM_MAC_EX_TS_FIFO_ECC_ERR                                 /**< mEMAC Time-stamp FIFO ECC error interrupt;
+                                                                     not supported on T4240/B4860 rev1 chips */
 } e_FmMacExceptions;
 
 /**************************************************************************//**
@@ -211,9 +213,14 @@ typedef struct t_FmMacParams {
     uint8_t                     macId;              /**< MAC ID <dTSEC 0-3> <10G-MAC 0>      */
     e_EnetMode                  enetMode;           /**< Ethernet operation mode (MAC-PHY interface and speed);
                                                          Note that the speed should indicate the maximum rate that
-                                                         this MAC should support rather than the actuall speed;
+                                                         this MAC should support rather than the actual speed;
                                                          i.e. user should use the FM_MAC_AdjustLink() routine to
                                                          provide accurate speed;
+                                                         In case of mEMAC RGMII mode, the MAC is configured to RGMII
+                                                         automatic mode, where actual speed/duplex mode information
+                                                         is provided by PHY automatically in-band; FM_MAC_AdjustLink()
+                                                         function should be used to switch to manual RGMII speed/duplex mode
+                                                         configuration if RGMII PHY doesn't support in-band status signaling;
                                                          In addition, in mEMAC, in case where user is using the higher MACs
                                                          (i.e. the MACs that should support 10G), user should pass here
                                                          speed=10000 even if the interface is not allowing that (e.g. SGMII). */
@@ -283,7 +290,7 @@ t_Error  FM_MAC_Free(t_Handle h_FmMac);
  @Function      FM_MAC_ConfigResetOnInit
 
  @Description   Tell the driver whether to reset the FM MAC before initialization or
-                not. It changes the default configuration [FALSE].
+                not. It changes the default configuration [DEFAULT_resetOnInit].
 
  @Param[in]     h_FmMac    A handle to a FM MAC Module.
  @Param[in]     enable     When TRUE, FM will be reset before any initialization.
@@ -483,7 +490,7 @@ t_Error FM_MAC_Disable1588TimeStamp(t_Handle h_Fm);
  @Function      FM_MAC_SetTxAutoPauseFrames
 
  @Description   Enable/Disable transmission of Pause-Frames.
-                The routine changes the default configuration [0xf000].
+                The routine changes the default configuration [DEFAULT_TX_PAUSE_TIME].
 
  @Param[in]     h_FmMac       -  A handle to a FM MAC Module.
  @Param[in]     pauseTime     -  Pause quanta value used with transmitted pause frames.
@@ -503,7 +510,7 @@ t_Error FM_MAC_SetTxAutoPauseFrames(t_Handle h_FmMac,
 
  @Description   Enable/Disable transmission of Pause-Frames.
                 The routine changes the default configuration:
-                pause-time - [0xf000]
+                pause-time - [DEFAULT_TX_PAUSE_TIME]
                 threshold-time - [0]
 
  @Param[in]     h_FmMac       -  A handle to a FM MAC Module.
@@ -521,6 +528,9 @@ t_Error FM_MAC_SetTxAutoPauseFrames(t_Handle h_FmMac,
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_MAC_Init().
+                In order for PFC to work properly the user must configure
+                TNUM-aging in the tx-port it is recommended that pre-fetch and
+                rate limit in the tx port should be disabled;
                 PFC is supported only on new mEMAC; i.e. in MACs that don't have
                 PFC support (10G-MAC and dTSEC), user should use 'FM_MAC_NO_PFC'
                 in the 'priority' field.
@@ -699,12 +709,16 @@ t_Error FM_MAC_SetPromiscuous(t_Handle h_FmMac, bool enable);
  @Function      FM_MAC_AdjustLink
 
  @Description   Adjusts the Ethernet link with new speed/duplex setup.
-                This routine is relevant only for dTSEC.
+                This routine is relevant for dTSEC and mEMAC.
+                In case of mEMAC, this routine is also used for manual
+                re-configuration of RGMII speed and duplex mode for
+                RGMII PHYs not supporting in-band status information
+                to MAC.
 
  @Param[in]     h_FmMac     - A handle to a FM Module.
  @Param[in]     speed       - Ethernet speed.
- @Param[in]     fullDuplex  - TRUE for Full-Duplex mode;
-                              FALSE for Half-Duplex mode.
+ @Param[in]     fullDuplex  - TRUE for full-duplex mode;
+                              FALSE for half-duplex mode.
 
  @Return        E_OK on success; Error code otherwise.
 *//***************************************************************************/
@@ -713,13 +727,13 @@ t_Error FM_MAC_AdjustLink(t_Handle h_FmMac, e_EnetSpeed speed, bool fullDuplex);
 /**************************************************************************//**
  @Function      FM_MAC_RestartAutoneg
 
- @Description   Restarts the autonegotiation process.
-                When autonegegotiation process is invoked under traffic the
-                autonegotiation process between the internal TBI PHY and the
-                external PHY does not always complete succesfuly. Calling this
-                function will restart the autonegotiation process that will end
-                succesfuly. It is recomended to call this function after issuing
-                autoneg restart command to the Eth Phy.
+ @Description   Restarts the auto-negotiation process.
+                When auto-negotiation process is invoked under traffic the
+                auto-negotiation process between the internal SGMII PHY and the
+                external PHY does not always complete successfully. Calling this
+                function will restart the auto-negotiation process that will end
+                successfully. It is recommended to call this function after issuing
+                auto-negotiation restart command to the Eth Phy.
                 This routine is relevant only for dTSEC.
 
  @Param[in]     h_FmMac     - A handle to a FM Module.
@@ -807,13 +821,5 @@ t_Error FM_MAC_DumpRegs(t_Handle h_FmMac);
 /** @} */ /* end of FM_mac_grp group */
 /** @} */ /* end of FM_grp group */
 
-/**************************************************************************//**
- @Function      DtsecRestartTbiAN
-
- @Description   Restart TBI autonegotiation for a given Dtsec TBI interface.
-
- @Param[in]     h_Dtsec     -   A handle to the Dtsec.
-*//***************************************************************************/
-void DtsecRestartTbiAN(t_Handle h_Dtsec);
 
 #endif /* __FM_MAC_EXT_H */

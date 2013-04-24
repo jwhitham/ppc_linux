@@ -37,7 +37,7 @@
 #include <linux/phy.h>		/* phy_interface_t, struct phy_device */
 #include <linux/list.h>
 
-#include "fsl_fman.h"		/* struct port_device */
+#include "lnxwrp_fsl_fman.h"		/* struct port_device */
 
 enum {DTSEC, XGMAC, MEMAC};
 

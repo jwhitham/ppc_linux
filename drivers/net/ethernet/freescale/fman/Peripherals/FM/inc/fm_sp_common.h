@@ -45,15 +45,7 @@
 
 #include "fm_ext.h"
 #include "fm_pcd_ext.h"
-
-
-/* sizes */
-#define CAPWAP_FRAG_EXTRA_SPACE                 32
-#define OFFSET_UNITS                            16
-#define MAX_INT_OFFSET                          240
-#define MAX_IC_SIZE                             256
-#define MAX_EXT_OFFSET                          496
-#define MAX_EXT_BUFFER_OFFSET                   511
+#include "fsl_fman.h"
 
 /**************************************************************************//**
  @Description       defaults
@@ -63,35 +55,6 @@
 #define DEFAULT_FM_SP_bufferPrefixContent_passTimeStamp     FALSE
 #define DEFAULT_FM_SP_bufferPrefixContent_allOtherPCDInfo   FALSE
 #define DEFAULT_FM_SP_bufferPrefixContent_dataAlign         64
-#define DEFAULT_FM_SP_dmaSwapData                           e_FM_DMA_NO_SWP
-#define DEFAULT_FM_SP_dmaIntContextCacheAttr                e_FM_DMA_NO_STASH
-#define DEFAULT_FM_SP_dmaHeaderCacheAttr                    e_FM_DMA_NO_STASH
-#define DEFAULT_FM_SP_dmaScatterGatherCacheAttr             e_FM_DMA_NO_STASH
-#define DEFAULT_FM_SP_dmaWriteOptimize                      TRUE
-#define DEFAULT_FM_SP_noScatherGather                       FALSE
-
-/**************************************************************************//**
- @Description       Registers bit fields
-*//***************************************************************************/
-#define FM_SP_EXT_BUF_POOL_EN_COUNTER             0x40000000
-#define FM_SP_EXT_BUF_POOL_VALID                  0x80000000
-#define FM_SP_EXT_BUF_POOL_BACKUP                 0x20000000
-#define FM_SP_DMA_ATTR_WRITE_OPTIMIZE             0x00100000
-#define FM_SP_SG_DISABLE                          0x80000000
-
-/* shifts */
-#define FM_SP_EXT_BUF_POOL_ID_SHIFT               16
-#define FM_SP_POOL_DEP_NUM_OF_POOLS_SHIFT         16
-#define FM_SP_EXT_BUF_MARG_START_SHIFT            16
-#define FM_SP_EXT_BUF_MARG_END_SHIFT              0
-#define FM_SP_DMA_ATTR_SWP_SHIFT                  30
-#define FM_SP_DMA_ATTR_IC_CACHE_SHIFT             28
-#define FM_SP_DMA_ATTR_HDR_CACHE_SHIFT            26
-#define FM_SP_DMA_ATTR_SG_CACHE_SHIFT             24
-#define FM_SP_IC_TO_EXT_SHIFT                     16
-#define FM_SP_IC_FROM_INT_SHIFT                   8
-#define FM_SP_IC_SIZE_SHIFT                       0
-
 
 /**************************************************************************//**
  @Description   structure for defining internal context copying

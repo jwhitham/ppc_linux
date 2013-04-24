@@ -12,4 +12,4 @@ EXTRA_CFLAGS += -I$(NCSW_FM_INC)
 
 obj-y		+= fsl-ncsw-RTC.o
 
-fsl-ncsw-RTC-objs	:=   fm_rtc.o
+fsl-ncsw-RTC-objs	:=   fm_rtc.o fman_rtc.o

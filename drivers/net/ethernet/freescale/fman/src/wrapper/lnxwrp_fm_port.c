@@ -509,39 +509,39 @@ static t_Error CheckNConfigFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
         return E_OK;
 
     uint32_prop = (uint32_t *)of_get_property(port_node, "num-tnums", &lenp);
-    if (uint32_prop) {    
+    if (uint32_prop) {
     	if (WARN_ON(lenp != sizeof(uint32_t)*2))
             RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
- 
+
         portRsrc.num   = uint32_prop[0];
         portRsrc.extra = uint32_prop[1];
- 
+
         if ((err = FM_PORT_ConfigNumOfTasks(p_LnxWrpFmPortDev->h_Dev,
                                             &portRsrc)) != E_OK)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
-    
+
     uint32_prop = (uint32_t *)of_get_property(port_node, "num-dmas", &lenp);
-    if (uint32_prop) {  
+    if (uint32_prop) {
     	if (WARN_ON(lenp != sizeof(uint32_t)*2))
             RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
- 
+
         portRsrc.num   = uint32_prop[0];
         portRsrc.extra = uint32_prop[1];
- 
+
         if ((err = FM_PORT_ConfigNumOfOpenDmas(p_LnxWrpFmPortDev->h_Dev,
                                             &portRsrc)) != E_OK)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
-    
+
     uint32_prop = (uint32_t *)of_get_property(port_node, "fifo_size", &lenp);
     if (uint32_prop) {
     	if (WARN_ON(lenp != sizeof(uint32_t)*2))
             RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
- 
+
         portRsrc.num   = uint32_prop[0];
         portRsrc.extra = uint32_prop[1];
- 
+
         if ((err = FM_PORT_ConfigSizeOfFifo(p_LnxWrpFmPortDev->h_Dev,
                                             &portRsrc)) != E_OK)
             RETURN_ERROR(MINOR, err, NO_MSG);
@@ -580,7 +580,7 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
         uint8_t                 portId;
 
         p_LnxWrpFmDev = ((t_LnxWrpFmDev *)p_LnxWrpFmPortDev->h_LnxWrpFmDev);
-    	
+
     	if (WARN_ON(lenp != sizeof(uint32_t)*2))
             RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
 
@@ -609,7 +609,7 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
                 portId += FM_MAX_NUM_OF_1G_RX_PORTS;
             portVSPAllocParams.h_FmTxPort =
                 p_LnxWrpFmDev->txPorts[portId].h_Dev;
-            fmVspParams.liodnOffset = 
+            fmVspParams.liodnOffset =
                 p_LnxWrpFmDev->rxPorts[portId].settings.param.specificParams.rxParams.liodnOffset;
             memcpy(&fmVspParams.extBufPools,
                    &p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.extBufPools,
@@ -1212,7 +1212,6 @@ static int /*__devinit*/ fm_port_probe(struct platform_device *of_dev)
 		       p_LnxWrpFmDev->name, p_LnxWrpFmPortDev->id);
 		p_LnxWrpFmPortDev->minor =
 			p_LnxWrpFmPortDev->id + DEV_FM_OH_PORTS_MINOR_BASE;
-		p_LnxWrpFmPortDev->h_Dev = FM_PCD_GetHcDevH(p_LnxWrpFmDev->h_PcdDev);
 	} else if (p_LnxWrpFmPortDev->settings.param.portType ==
 		 e_FM_PORT_TYPE_OH_OFFLINE_PARSING) {
 		Sprint(p_LnxWrpFmPortDev->name, "%s-port-oh%d",

@@ -377,9 +377,12 @@ static t_Error AllocAndFillAdForContLookupManip(t_Handle h_CcNode)
 
     if (!p_CcNode->h_Ad)
     {
-        p_CcNode->h_Ad = (t_Handle)FM_MURAM_AllocMem(((t_FmPcd *)(p_CcNode->h_FmPcd))->h_FmMuram,
-                                           FM_PCD_CC_AD_ENTRY_SIZE,
-                                           FM_PCD_CC_AD_TABLE_ALIGN);
+        if (p_CcNode->maxNumOfKeys)
+            p_CcNode->h_Ad = p_CcNode->h_TmpAd;
+        else
+            p_CcNode->h_Ad = (t_Handle)FM_MURAM_AllocMem(((t_FmPcd *)(p_CcNode->h_FmPcd))->h_FmMuram,
+                                                         FM_PCD_CC_AD_ENTRY_SIZE,
+                                                         FM_PCD_CC_AD_TABLE_ALIGN);
 
         XX_UnlockIntrSpinlock(p_CcNode->h_Spinlock, intFlags);
 
@@ -1174,6 +1177,7 @@ static void DeleteNode(t_FmPcdCcNode *p_CcNode)
     {
         FM_MURAM_FreeMem(FmPcdGetMuramHandle(p_CcNode->h_FmPcd), p_CcNode->h_Ad);
         p_CcNode->h_Ad = NULL;
+        p_CcNode->h_TmpAd = NULL;
     }
 
     if (p_CcNode->h_StatsFLRs)
@@ -3185,12 +3189,12 @@ static void UpdateAdPtrOfTreesWhichPointsOnCrntMdfNode(t_FmPcdCcNode            
     }
 }
 
-static t_FmPcdModifyCcKeyAdditionalParams* ModifyKeyCommonPart1(t_Handle        h_FmPcdCcNodeOrTree,
-                                                                uint16_t        keyIndex,
-                                                                e_ModifyState   modifyState,
-                                                                bool            ttlCheck,
-                                                                bool            hashCheck,
-                                                                bool            tree)
+static t_FmPcdModifyCcKeyAdditionalParams * ModifyNodeCommonPart(t_Handle        h_FmPcdCcNodeOrTree,
+                                                                 uint16_t        keyIndex,
+                                                                 e_ModifyState   modifyState,
+                                                                 bool            ttlCheck,
+                                                                 bool            hashCheck,
+                                                                 bool            tree)
 {
     t_FmPcdModifyCcKeyAdditionalParams  *p_FmPcdModifyCcKeyAdditionalParams;
     int                                 i = 0, j = 0;
@@ -3202,14 +3206,6 @@ static t_FmPcdModifyCcKeyAdditionalParams* ModifyKeyCommonPart1(t_Handle        
 
     SANITY_CHECK_RETURN_VALUE(h_FmPcdCcNodeOrTree, E_INVALID_HANDLE, NULL);
 
-    p_KeyAndNextEngineParams = (t_FmPcdCcKeyAndNextEngineParams *)XX_Malloc(sizeof(t_FmPcdCcKeyAndNextEngineParams)*CC_MAX_NUM_OF_KEYS);
-    if (!p_KeyAndNextEngineParams)
-    {
-        REPORT_ERROR(MAJOR, E_NO_MEMORY, ("Next engine and required action structure"));
-        return NULL;
-    }
-    memset(p_KeyAndNextEngineParams, 0, sizeof(t_FmPcdCcKeyAndNextEngineParams)*CC_MAX_NUM_OF_KEYS);
-
     if (!tree)
     {
         p_CcNode = (t_FmPcdCcNode *)h_FmPcdCcNodeOrTree;
@@ -3219,22 +3215,26 @@ static t_FmPcdModifyCcKeyAdditionalParams* ModifyKeyCommonPart1(t_Handle        
         if (!LIST_NumOfObjs(&p_CcNode->ccPrevNodesLst) &&
             !LIST_NumOfObjs(&p_CcNode->ccTreeIdLst))
         {
-            XX_Free(p_KeyAndNextEngineParams);
             REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("node has to be pointed by node or tree"));
             return NULL;
         }
 
         if (!LIST_NumOfObjs(&p_CcNode->ccTreesLst) ||
-           (LIST_NumOfObjs(&p_CcNode->ccTreesLst) != 1))
+            (LIST_NumOfObjs(&p_CcNode->ccTreesLst) != 1))
         {
-            XX_Free(p_KeyAndNextEngineParams);
             REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("node has to be belonging to some tree and only to one tree"));
             return NULL;
         }
 
+        p_KeyAndNextEngineParams = (t_FmPcdCcKeyAndNextEngineParams *)XX_Malloc(sizeof(t_FmPcdCcKeyAndNextEngineParams)*(numOfKeys+1));
+        if (!p_KeyAndNextEngineParams)
+        {
+            REPORT_ERROR(MAJOR, E_NO_MEMORY, ("Next engine and required action structure"));
+            return NULL;
+        }
         memcpy(p_KeyAndNextEngineParams,
                p_CcNode->keyAndNextEngineParams,
-               CC_MAX_NUM_OF_KEYS * sizeof(t_FmPcdCcKeyAndNextEngineParams));
+               (numOfKeys+1) * sizeof(t_FmPcdCcKeyAndNextEngineParams));
 
         if (ttlCheck)
         {
@@ -3261,6 +3261,13 @@ static t_FmPcdModifyCcKeyAdditionalParams* ModifyKeyCommonPart1(t_Handle        
     {
         p_FmPcdCcTree = (t_FmPcdCcTree *)h_FmPcdCcNodeOrTree;
         numOfKeys = p_FmPcdCcTree->numOfEntries;
+
+        p_KeyAndNextEngineParams = (t_FmPcdCcKeyAndNextEngineParams *)XX_Malloc(sizeof(t_FmPcdCcKeyAndNextEngineParams)*FM_PCD_MAX_NUM_OF_CC_GROUPS);
+        if (!p_KeyAndNextEngineParams)
+        {
+            REPORT_ERROR(MAJOR, E_NO_MEMORY, ("Next engine and required action structure"));
+            return NULL;
+        }
         memcpy(p_KeyAndNextEngineParams,
                p_FmPcdCcTree->keyAndNextEngineParams,
                FM_PCD_MAX_NUM_OF_CC_GROUPS * sizeof(t_FmPcdCcKeyAndNextEngineParams));
@@ -3779,17 +3786,15 @@ static t_Error ModifyNextEngineParamNode(t_Handle                    h_FmPcd,
     INIT_LIST(&h_OldPointersLst);
     INIT_LIST(&h_NewPointersLst);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, FALSE, FALSE, FALSE);
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, FALSE, FALSE, FALSE);
     if (!p_ModifyKeyParams)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
 
-    if (p_CcNode->maxNumOfKeys)
+    if (p_CcNode->maxNumOfKeys &&
+        !TRY_LOCK(p_FmPcd->h_ShadowSpinlock, &p_FmPcd->shadowLock))
     {
-        if (!TRY_LOCK(p_FmPcd->h_ShadowSpinlock, &p_FmPcd->shadowLock))
-        {
-            XX_Free(p_ModifyKeyParams);
-            return ERROR_CODE(E_BUSY);
-        }
+        XX_Free(p_ModifyKeyParams);
+        return ERROR_CODE(E_BUSY);
     }
 
     err = BuildNewNodeModifyNextEngine(h_FmPcd,
@@ -4327,18 +4332,18 @@ t_Error FmPcdCcModifyNextEngineParamTree(t_Handle                   h_FmPcd,
 
     keyIndex = (uint16_t)(p_FmPcdCcTree->fmPcdGroupParam[grpId].baseGroupEntry + index);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_FmPcdCcTree, keyIndex, e_MODIFY_STATE_CHANGE, FALSE, FALSE, TRUE);
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_FmPcdCcTree, keyIndex, e_MODIFY_STATE_CHANGE, FALSE, FALSE, TRUE);
     if (!p_ModifyKeyParams)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
 
     p_ModifyKeyParams->tree = TRUE;
 
-    if (p_FmPcd->p_CcShadow)
-        if (!TRY_LOCK(p_FmPcd->h_ShadowSpinlock, &p_FmPcd->shadowLock))
-        {
-            XX_Free(p_ModifyKeyParams);
-            return ERROR_CODE(E_BUSY);
-        }
+    if (p_FmPcd->p_CcShadow &&
+        !TRY_LOCK(p_FmPcd->h_ShadowSpinlock, &p_FmPcd->shadowLock))
+    {
+        XX_Free(p_ModifyKeyParams);
+        return ERROR_CODE(E_BUSY);
+    }
 
     err = BuildNewNodeModifyNextEngine(p_FmPcd,
                                        p_FmPcdCcTree,
@@ -4388,7 +4393,7 @@ t_Error FmPcdCcRemoveKey(t_Handle   h_FmPcd,
     INIT_LIST(&h_OldPointersLst);
     INIT_LIST(&h_NewPointersLst);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_CcNode, keyIndex, e_MODIFY_STATE_REMOVE, TRUE, TRUE, FALSE);
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_CcNode, keyIndex, e_MODIFY_STATE_REMOVE, TRUE, TRUE, FALSE);
     if (!p_ModifyKeyParams)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
 
@@ -4475,7 +4480,7 @@ t_Error FmPcdCcModifyKey(t_Handle   h_FmPcd,
     INIT_LIST(&h_OldPointersLst);
     INIT_LIST(&h_NewPointersLst);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, TRUE, TRUE, FALSE);
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, TRUE, TRUE, FALSE);
     if (!p_ModifyKeyParams)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
 
@@ -4548,17 +4553,15 @@ t_Error FmPcdCcModifyMissNextEngineParamNode(t_Handle                   h_FmPcd,
     INIT_LIST(&h_OldPointersLst);
     INIT_LIST(&h_NewPointersLst);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, FALSE, TRUE, FALSE);
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, FALSE, TRUE, FALSE);
     if (!p_ModifyKeyParams)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
 
-    if (p_CcNode->maxNumOfKeys)
+    if (p_CcNode->maxNumOfKeys &&
+        !TRY_LOCK(p_FmPcd->h_ShadowSpinlock, &p_FmPcd->shadowLock))
     {
-        if (!TRY_LOCK(p_FmPcd->h_ShadowSpinlock, &p_FmPcd->shadowLock))
-        {
-            XX_Free(p_ModifyKeyParams);
-            return ERROR_CODE(E_BUSY);
-        }
+        XX_Free(p_ModifyKeyParams);
+        return ERROR_CODE(E_BUSY);
     }
 
     err = BuildNewNodeModifyNextEngine(h_FmPcd,
@@ -4621,7 +4624,7 @@ t_Error FmPcdCcAddKey(t_Handle              h_FmPcd,
                        p_FmPcdCcKeyParams->p_Mask,
                        &tmpKeyIndex);
     if (GET_ERROR_TYPE(err) != E_NOT_FOUND)
-        RETURN_ERROR(MINOR, E_ALREADY_EXISTS,
+        RETURN_ERROR(MAJOR, E_ALREADY_EXISTS,
                      ("The received key and mask pair was already found in the match table of the provided node"));
 
     p_FmPcd = (t_FmPcd *)p_CcNode->h_FmPcd;
@@ -4629,7 +4632,7 @@ t_Error FmPcdCcAddKey(t_Handle              h_FmPcd,
     INIT_LIST(&h_OldPointersLst);
     INIT_LIST(&h_NewPointersLst);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_CcNode,
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_CcNode,
                                              keyIndex,
                                              e_MODIFY_STATE_ADD,
                                              TRUE,
@@ -4725,7 +4728,7 @@ t_Error FmPcdCcModifyKeyAndNextEngine(t_Handle              h_FmPcd,
     INIT_LIST(&h_OldPointersLst);
     INIT_LIST(&h_NewPointersLst);
 
-    p_ModifyKeyParams = ModifyKeyCommonPart1(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, TRUE, TRUE, FALSE);
+    p_ModifyKeyParams = ModifyNodeCommonPart(p_CcNode, keyIndex, e_MODIFY_STATE_CHANGE, TRUE, TRUE, FALSE);
     if (!p_ModifyKeyParams)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
 
@@ -5676,10 +5679,10 @@ t_Handle FM_PCD_MatchTableSet(t_Handle h_FmPcd, t_FmPcdCcNodeParams *p_CcNodePar
         /* If manipulation will be initialized before this node, it will use the table
            descriptor in the AD table of previous node and this node will need an extra
            AD as his table descriptor. */
-        p_CcNode->h_Ad = (t_Handle)FM_MURAM_AllocMem(h_FmMuram,
+        p_CcNode->h_TmpAd = (t_Handle)FM_MURAM_AllocMem(h_FmMuram,
                                                      FM_PCD_CC_AD_ENTRY_SIZE,
                                                      FM_PCD_CC_AD_TABLE_ALIGN);
-        if (!p_CcNode->h_Ad)
+        if (!p_CcNode->h_TmpAd)
         {
             DeleteNode(p_CcNode);
             REPORT_ERROR(MAJOR, E_NO_MEMORY, ("MURAM allocation for CC action descriptor"));
@@ -5932,6 +5935,7 @@ t_Handle FM_PCD_MatchTableSet(t_Handle h_FmPcd, t_FmPcdCcNodeParams *p_CcNodePar
     }
 
     FmPcdLockUnlockAll(h_FmPcd);
+
     return p_CcNode;
 }
 
@@ -5944,6 +5948,8 @@ t_Error FM_PCD_MatchTableDelete(t_Handle h_CcNode)
     SANITY_CHECK_RETURN_ERROR(p_CcNode, E_INVALID_HANDLE);
     p_FmPcd = (t_FmPcd *)p_CcNode->h_FmPcd;
     SANITY_CHECK_RETURN_ERROR(p_FmPcd, E_INVALID_HANDLE);
+
+    UNUSED(p_FmPcd);
 
     if (p_CcNode->owners)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, ("This node cannot be removed because it is occupied; first unbind this node"));
@@ -6732,7 +6738,10 @@ t_Handle FM_PCD_HashTableSet(t_Handle h_FmPcd, t_FmPcdHashTableParams *p_Param)
     p_IndxHashCcNodeParam->keysParams.keySize        = 2;
 
     p_CcNodeHashTbl = FM_PCD_MatchTableSet(h_FmPcd, p_IndxHashCcNodeParam);
-
+ 
+    if (p_CcNodeHashTbl)
+        p_CcNodeHashTbl->kgHashShift = p_Param->kgHashShift;
+ 
     XX_Free(p_IndxHashCcNodeParam);
     XX_Free(p_ExactMatchCcNodeParam);
 
@@ -6790,7 +6799,7 @@ t_Error FM_PCD_HashTableAddKey(t_Handle            h_HashTbl,
     err = FM_PCD_MatchTableGetIndexedHashBucket(p_HashTbl,
                                                 keySize,
                                                 p_KeyParams->p_Key,
-                                                p_HashTbl->userOffset,
+                                                p_HashTbl->kgHashShift,
                                                 &h_HashBucket,
                                                 &bucketIndex,
                                                 &lastIndex);
@@ -6819,7 +6828,7 @@ t_Error FM_PCD_HashTableRemoveKey(t_Handle h_HashTbl,
     err = FM_PCD_MatchTableGetIndexedHashBucket(p_HashTbl,
                                                 keySize,
                                                 p_Key,
-                                                p_HashTbl->userOffset,
+                                                p_HashTbl->kgHashShift,
                                                 &h_HashBucket,
                                                 &bucketIndex,
                                                 &lastIndex);
@@ -6850,7 +6859,7 @@ t_Error FM_PCD_HashTableModifyNextEngine(t_Handle                  h_HashTbl,
     err = FM_PCD_MatchTableGetIndexedHashBucket(p_HashTbl,
                                                 keySize,
                                                 p_Key,
-                                                p_HashTbl->userOffset,
+                                                p_HashTbl->kgHashShift,
                                                 &h_HashBucket,
                                                 &bucketIndex,
                                                 &lastIndex);
@@ -6925,7 +6934,7 @@ t_Error FM_PCD_HashTableFindNGetKeyStatistics(t_Handle                 h_HashTbl
     err = FM_PCD_MatchTableGetIndexedHashBucket(p_HashTbl,
                                                 keySize,
                                                 p_Key,
-                                                p_HashTbl->userOffset,
+                                                p_HashTbl->kgHashShift,
                                                 &h_HashBucket,
                                                 &bucketIndex,
                                                 &lastIndex);

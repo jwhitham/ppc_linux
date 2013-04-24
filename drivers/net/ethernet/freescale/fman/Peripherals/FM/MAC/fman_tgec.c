@@ -34,7 +34,7 @@
 #include "fsl_fman_tgec.h"
 
 
-void tgec_set_mac_address(struct tgec_regs *regs, uint8_t *adr)
+void fman_tgec_set_mac_address(struct tgec_regs *regs, uint8_t *adr)
 {
 	uint32_t tmp0, tmp1;
 
@@ -47,7 +47,7 @@ void tgec_set_mac_address(struct tgec_regs *regs, uint8_t *adr)
 	iowrite32be(tmp1, &regs->mac_addr_1);
 }
 
-void tgec_reset_stat(struct tgec_regs *regs)
+void fman_tgec_reset_stat(struct tgec_regs *regs)
 {
 	uint32_t tmp;
 
@@ -57,14 +57,14 @@ void tgec_reset_stat(struct tgec_regs *regs)
 
 	iowrite32be(tmp, &regs->command_config);
 
-	while (ioread32be(&regs->command_config) & CMD_CFG_STAT_CLR);
+	while (ioread32be(&regs->command_config) & CMD_CFG_STAT_CLR) ;
 }
 
 #define GET_TGEC_CNTR_64(bn) \
 	(((uint64_t)ioread32be(&regs->bn ## _u) << 32) | \
 			ioread32be(&regs->bn ## _l))
 
-uint64_t tgec_get_counter(struct tgec_regs *regs, enum tgec_counters reg_name)
+uint64_t fman_tgec_get_counter(struct tgec_regs *regs, enum tgec_counters reg_name)
 {
 	uint64_t ret_val;
 
@@ -154,7 +154,7 @@ uint64_t tgec_get_counter(struct tgec_regs *regs, enum tgec_counters reg_name)
 	return ret_val;
 }
 
-void tgec_enable(struct tgec_regs *regs, bool apply_rx, bool apply_tx)
+void fman_tgec_enable(struct tgec_regs *regs, bool apply_rx, bool apply_tx)
 {
 	uint32_t tmp;
 
@@ -166,7 +166,7 @@ void tgec_enable(struct tgec_regs *regs, bool apply_rx, bool apply_tx)
 	iowrite32be(tmp, &regs->command_config);
 }
 
-void tgec_disable(struct tgec_regs *regs, bool apply_rx, bool apply_tx)
+void fman_tgec_disable(struct tgec_regs *regs, bool apply_rx, bool apply_tx)
 {
 	uint32_t tmp_reg_32;
 
@@ -178,31 +178,29 @@ void tgec_disable(struct tgec_regs *regs, bool apply_rx, bool apply_tx)
 	iowrite32be(tmp_reg_32, &regs->command_config);
 }
 
-void tgec_set_promiscuous(struct tgec_regs *regs, bool val)
+void fman_tgec_set_promiscuous(struct tgec_regs *regs, bool val)
 {
 	uint32_t tmp;
 
 	tmp = ioread32be(&regs->command_config);
-
 	if (val)
 		tmp |= CMD_CFG_PROMIS_EN;
 	else
 		tmp &= ~CMD_CFG_PROMIS_EN;
-
 	iowrite32be(tmp, &regs->command_config);
 }
 
-void tgec_set_hash_table(struct tgec_regs *regs, uint32_t value)
+void fman_tgec_set_hash_table(struct tgec_regs *regs, uint32_t value)
 {
 	iowrite32be(value, &regs->hashtable_ctrl);
 }
 
-void tgec_tx_mac_pause(struct tgec_regs *regs, uint16_t pause_time)
+void fman_tgec_set_tx_pause_frames(struct tgec_regs *regs, uint16_t pause_time)
 {
 	iowrite32be((uint32_t)pause_time, &regs->pause_quant);
 }
 
-void tgec_rx_ignore_mac_pause(struct tgec_regs *regs, bool en)
+void fman_tgec_set_rx_ignore_pause_frames(struct tgec_regs *regs, bool en)
 {
 	uint32_t tmp;
 
@@ -214,7 +212,7 @@ void tgec_rx_ignore_mac_pause(struct tgec_regs *regs, bool en)
 	iowrite32be(tmp, &regs->command_config);
 }
 
-void tgec_enable_1588_time_stamp(struct tgec_regs *regs, bool en)
+void fman_tgec_enable_1588_time_stamp(struct tgec_regs *regs, bool en)
 {
 	uint32_t tmp;
 
@@ -226,22 +224,22 @@ void tgec_enable_1588_time_stamp(struct tgec_regs *regs, bool en)
 	iowrite32be(tmp, &regs->command_config);
 }
 
-uint32_t tgec_get_event(struct tgec_regs *regs, uint32_t ev_mask)
+uint32_t fman_tgec_get_event(struct tgec_regs *regs, uint32_t ev_mask)
 {
 	return ioread32be(&regs->ievent) & ev_mask;
 }
 
-void tgec_ack_event(struct tgec_regs *regs, uint32_t ev_mask)
+void fman_tgec_ack_event(struct tgec_regs *regs, uint32_t ev_mask)
 {
 	iowrite32be(ev_mask, &regs->ievent);
 }
 
-uint32_t tgec_get_interrupt_mask(struct tgec_regs *regs)
+uint32_t fman_tgec_get_interrupt_mask(struct tgec_regs *regs)
 {
 	return ioread32be(&regs->imask);
 }
 
-void tgec_add_addr_in_paddr(struct tgec_regs *regs, uint8_t *adr)
+void fman_tgec_add_addr_in_paddr(struct tgec_regs *regs, uint8_t *adr)
 {
 	uint32_t tmp0, tmp1;
 
@@ -254,33 +252,33 @@ void tgec_add_addr_in_paddr(struct tgec_regs *regs, uint8_t *adr)
 	iowrite32be(tmp1, &regs->mac_addr_3);
 }
 
-void tgec_clear_addr_in_paddr(struct tgec_regs *regs)
+void fman_tgec_clear_addr_in_paddr(struct tgec_regs *regs)
 {
 	iowrite32be(0, &regs->mac_addr_2);
 	iowrite32be(0, &regs->mac_addr_3);
 }
 
-uint32_t tgec_get_revision(struct tgec_regs *regs)
+uint32_t fman_tgec_get_revision(struct tgec_regs *regs)
 {
 	return ioread32be(&regs->tgec_id);
 }
 
-void tgec_enable_interrupt(struct tgec_regs *regs, uint32_t ev_mask)
+void fman_tgec_enable_interrupt(struct tgec_regs *regs, uint32_t ev_mask)
 {
 	iowrite32be(ioread32be(&regs->imask) | ev_mask, &regs->imask);
 }
 
-void tgec_disable_interrupt(struct tgec_regs *regs, uint32_t ev_mask)
+void fman_tgec_disable_interrupt(struct tgec_regs *regs, uint32_t ev_mask)
 {
 	iowrite32be(ioread32be(&regs->imask) & ~ev_mask, &regs->imask);
 }
 
-uint16_t tgec_get_max_frame_len(struct tgec_regs *regs)
+uint16_t fman_tgec_get_max_frame_len(struct tgec_regs *regs)
 {
 	return (uint16_t) ioread32be(&regs->maxfrm);
 }
 
-void tgec_defconfig(struct tgec_cfg *cfg)
+void fman_tgec_defconfig(struct tgec_cfg *cfg)
 {
 	cfg->wan_mode_enable = DEFAULT_WAN_MODE_ENABLE;
 	cfg->promiscuous_mode_enable = DEFAULT_PROMISCUOUS_MODE_ENABLE;
@@ -302,7 +300,7 @@ void tgec_defconfig(struct tgec_cfg *cfg)
 #endif /* FM_TX_ECC_FRMS_ERRATA_10GMAC_A004 */
 }
 
-int tgec_init(struct tgec_regs *regs, struct tgec_cfg *cfg,
+int fman_tgec_init(struct tgec_regs *regs, struct tgec_cfg *cfg,
 		uint32_t exception_mask)
 {
 	uint32_t tmp;
@@ -332,18 +330,20 @@ int tgec_init(struct tgec_regs *regs, struct tgec_cfg *cfg,
 	if (cfg->time_stamp_enable)
 		tmp |= CMD_CFG_EN_TIMESTAMP;
 	iowrite32be(tmp, &regs->command_config);
+
 	/* Max Frame Length */
 	iowrite32be((uint32_t)cfg->max_frame_length, &regs->maxfrm);
 	/* Pause Time */
 	iowrite32be(cfg->pause_quant, &regs->pause_quant);
 
 	/* clear all pending events and set-up interrupts */
-	tgec_ack_event(regs, 0xffffffff);
-	tgec_enable_interrupt(regs, exception_mask);
+	fman_tgec_ack_event(regs, 0xffffffff);
+	fman_tgec_enable_interrupt(regs, exception_mask);
+
 	return 0;
 }
 
-void tgec_fm_tx_fifo_corruption_errata_10gmac_a007(struct tgec_regs *regs)
+void fman_tgec_set_erratum_tx_fifo_corruption_10gmac_a007(struct tgec_regs *regs)
 {
 	uint32_t tmp;
 
@@ -351,5 +351,4 @@ void tgec_fm_tx_fifo_corruption_errata_10gmac_a007(struct tgec_regs *regs)
 	tmp = (ioread32be(&regs->tx_ipg_len) & ~TX_IPG_LENGTH_MASK) | 12;
 
 	iowrite32be(tmp, &regs->tx_ipg_len);
-
 }

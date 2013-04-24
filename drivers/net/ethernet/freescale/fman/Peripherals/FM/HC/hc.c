@@ -296,13 +296,6 @@ t_Handle FmHcConfigAndInit(t_FmHcParams *p_FmHcParams)
     return (t_Handle)p_FmHc;
 }
 
-t_Handle FmGcGetHcPortDevH(t_Handle h_FmHc)
-{
-    t_FmHc  *p_FmHc = (t_FmHc *)h_FmHc;
-
-    return (p_FmHc) ? p_FmHc->h_HcPortDev : NULL;
-}
-
 void FmHcFree(t_Handle h_FmHc)
 {
     t_FmHc  *p_FmHc = (t_FmHc*)h_FmHc;
@@ -1186,6 +1179,38 @@ t_Error FmHcPcdCcDoDynamicChange(t_Handle h_FmHc, uint32_t oldAdAddrOffset, uint
 
     if (err != E_OK)
         RETURN_ERROR(MAJOR, err, NO_MSG);
+
+    return E_OK;
+}
+
+t_Error FmHcPcdSync(t_Handle h_FmHc)
+{
+    t_FmHc                  *p_FmHc = (t_FmHc*)h_FmHc;
+    t_HcFrame               *p_HcFrame;
+    t_DpaaFD                fmFd;
+    t_Error                 err = E_OK;
+    uint32_t                seqNum;
+
+    ASSERT_COND(p_FmHc);
+
+    p_HcFrame = GetBuf(p_FmHc, &seqNum);
+    if (!p_HcFrame)
+        RETURN_ERROR(MINOR, E_NO_MEMORY, ("HC Frame object"));
+    memset(p_HcFrame, 0, sizeof(t_HcFrame));
+    /* first read SP register */
+    p_HcFrame->opcode = (uint32_t)(HC_HCOR_GBL | HC_HCOR_OPCODE_SYNC);
+    p_HcFrame->actionReg = 0;
+    p_HcFrame->extraReg = 0;
+    p_HcFrame->commandSequence = seqNum;
+
+    BUILD_FD(sizeof(t_HcFrame));
+
+    err = EnQFrm(p_FmHc, &fmFd, seqNum);
+
+    PutBuf(p_FmHc, p_HcFrame, seqNum);
+
+    if (err != E_OK)
+        RETURN_ERROR(MINOR, err, NO_MSG);
 
     return E_OK;
 }

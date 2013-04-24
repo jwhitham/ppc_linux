@@ -47,7 +47,7 @@
 
 #include "dpaa_eth-common.h"
 
-#include "fsl_fman.h"
+#include "lnxwrp_fsl_fman.h"
 #include "fm_ext.h"
 #include "fm_port_ext.h" /* FM_PORT_FRM_ERR_* */
 

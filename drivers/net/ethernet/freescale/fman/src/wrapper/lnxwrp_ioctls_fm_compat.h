@@ -292,6 +292,7 @@ typedef struct ioc_compat_fm_pcd_cc_node_params_t {
 typedef struct ioc_compat_fm_pcd_hash_table_params_t {
     uint16_t                    max_num_of_keys;
     ioc_fm_pcd_cc_stats_mode    statistics_mode;
+    uint8_t                     kg_hash_shift;
     uint16_t                    hash_res_mask;
     uint8_t                     hash_shift;
     uint8_t                     match_key_size;

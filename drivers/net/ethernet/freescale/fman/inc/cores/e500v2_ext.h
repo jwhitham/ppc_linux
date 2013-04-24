@@ -59,6 +59,8 @@ void        L1DCache_Disable(void);
 void        L1ICache_Disable(void);
 void        L1DCache_Flush(void);
 void        L1ICache_Flush(void);
+uint32_t    L1ICache_IsEnabled(void);
+uint32_t    L1DCache_IsEnabled(void);
 /*
  *
  */

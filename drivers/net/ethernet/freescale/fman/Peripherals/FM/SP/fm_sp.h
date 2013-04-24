@@ -49,52 +49,6 @@
 
 #define __ERR_MODULE__  MODULE_FM_SP
 
-
-
-/***********************************************************************/
-/*          Memory map                                                 */
-/***********************************************************************/
-#if defined(__MWERKS__) && !defined(__GNUC__)
-#pragma pack(push,1)
-#endif /* defined(__MWERKS__) && ... */
-
-typedef _Packed struct {
-    volatile uint32_t   fm_sp_ebmpi[FM_PORT_MAX_NUM_OF_EXT_POOLS];
-                                         /*offset 0 - 0xc*/
-                                         /**< Buffer Manager pool Information-*/
-
-    volatile uint32_t   res[8-FM_PORT_MAX_NUM_OF_EXT_POOLS];
-                                         /*offset 0x10 - 0xc*/
-    volatile uint32_t   fm_sp_acnt;      /*offset 0x20*/
-    volatile uint32_t   fm_sp_ebm;       /*offset 0x24*/
-    volatile uint32_t   fm_sp_da;        /*offset 0x28*/
-    volatile uint32_t   fm_sp_icp;       /*offset 0x2c*/
-    volatile uint32_t   fm_sp_mpd;       /*offset 0x30*/
-    volatile uint32_t   res1[2];         /*offset 0x34 - 0x38*/
-    volatile uint32_t   fm_sp_spliodn;   /*offset 0x3c*/
-} _PackedType fm_pcd_storage_profile_regs;
-
-#if defined(__MWERKS__) && !defined(__GNUC__)
-#pragma pack(pop)
-#endif /* defined(__MWERKS__) && ... */
-
-
-typedef struct fm_storage_profile_params {
-    t_FmExtPools                *fm_ext_pools;
-    t_FmBackupBmPools           *backup_pools;
-    t_FmSpIntContextDataCopy    *int_context;
-    t_FmSpBufMargins            *buf_margins;
-
-    e_FmDmaSwapOption           dma_swap_data;
-    e_FmDmaCacheOption          int_context_cache_attr;
-    e_FmDmaCacheOption          header_cache_attr;
-    e_FmDmaCacheOption          scatter_gather_cache_attr;
-    bool                        dma_write_optimize;
-    uint16_t                    liodn_offset;
-    bool                        no_scather_gather;
-    t_FmBufPoolDepletion        *buf_pool_depletion;
-} fm_storage_profile_params;
-
 typedef struct {
     t_FmBufferPrefixContent             bufferPrefixContent;
     e_FmDmaSwapOption                   dmaSwapData;
@@ -122,7 +76,7 @@ typedef struct {
     e_FmPortType                portType;           /**< Port type */
     uint8_t                     portId;             /**< Port Id - relative to type */
     uint8_t                     relativeProfileId;
-    fm_pcd_storage_profile_regs *p_FmSpRegsBase;
+    struct fm_pcd_storage_profile_regs *p_FmSpRegsBase;
     t_FmExtPools                extBufPools;
     t_FmVspEntryDriverParams    *p_FmVspEntryDriverParams;
 } t_FmVspEntry;

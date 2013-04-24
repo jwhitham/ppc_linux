@@ -183,7 +183,7 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
 #ifdef FM_NO_TNUM_AGING
     if ((p_Fm->p_FmStateStruct->revInfo.majorRev != 4) &&
         (p_Fm->p_FmStateStruct->revInfo.majorRev < 6))
-        if (p_Fm->p_FmDriverParam->tnumAgingPeriod)
+        if (p_Fm->tnumAgingPeriod)
         RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Tnum aging!"));
 #endif /* FM_NO_TNUM_AGING */
 
@@ -1307,6 +1307,16 @@ t_Error Fm10GTxEccWorkaround(t_Handle h_Fm, uint8_t macId)
 }
 #endif /* FM_TX_ECC_FRMS_ERRATA_10GMAC_A004 */
 
+uint16_t FmGetTnumAgingPeriod(t_Handle h_Fm)
+{
+    t_Fm *p_Fm = (t_Fm *)h_Fm;
+
+    SANITY_CHECK_RETURN_VALUE(p_Fm, E_INVALID_HANDLE, 0);
+    SANITY_CHECK_RETURN_VALUE(!p_Fm->p_FmDriverParam, E_INVALID_STATE, 0);
+
+    return p_Fm->tnumAgingPeriod;
+}
+
 t_Error FmSetCongestionGroupPFCpriority(t_Handle     h_Fm,
                                         uint32_t     congestionGroupId,
                                         uint8_t      priorityBitMap)
@@ -1333,14 +1343,23 @@ t_Error FmSetCongestionGroupPFCpriority(t_Handle     h_Fm,
 
         tmpReg = GET_UINT32(p_Cpg[reg_num]);
 
-        if (priorityBitMap)//adding priority
+        /* Adding priorities*/
+        if (priorityBitMap)
         {
             if (tmpReg & (0xFF<<(offset*8)))
                 RETURN_ERROR(MAJOR, E_INVALID_STATE,
                              ("PFC priority for the congestion group is already set!"));
         }
+        else /* Deleting priorities */
+        {
+            uint32_t mask;
+
+            mask = 0xFF<<(offset*8);
+            tmpReg &= ~mask;
+        }
+
         tmpReg |= (uint32_t)priorityBitMap << (offset*8);
-            WRITE_UINT32(p_Cpg[reg_num], tmpReg);
+        WRITE_UINT32(p_Cpg[reg_num], tmpReg);
     }
 
     else if (p_Fm->h_IpcSessions[0])
@@ -2267,11 +2286,6 @@ void FmFreePortParams(t_Handle h_Fm,t_FmInterModulePortFreeParams *p_PortParams)
                 (((tmpReg & BMI_FIFO_SIZE_MASK) + 1) * BMI_FIFO_UNITS));
     p_Fm->p_FmStateStruct->accumulatedFifoSize -=
         (((tmpReg & BMI_FIFO_SIZE_MASK) + 1) * BMI_FIFO_UNITS);
-
-    /* clear registers */
-    WRITE_UINT32(p_Fm->p_FmBmiRegs->fmbm_pp[hardwarePortId-1], 0);
-    WRITE_UINT32(p_Fm->p_FmBmiRegs->fmbm_pfs[hardwarePortId-1], 0);
-    /* WRITE_UINT32(p_Fm->p_FmBmiRegs->fmbm_spliodn[hardwarePortId-1], 0); */
 
 #ifdef FM_QMI_NO_DEQ_OPTIONS_SUPPORT
     if (p_Fm->p_FmStateStruct->revInfo.majorRev != 4)
@@ -3564,15 +3578,21 @@ static t_Error InitFmDma(t_Fm *p_Fm)
 
     /* configure thresholds register */
     tmpReg = GET_UINT32(p_Fm->p_FmDmaRegs->fmdmtr);
-    tmpReg |= ((uint32_t)p_FmDriverParam->dmaCommQThresholds.assertEmergency << DMA_THRESH_COMMQ_SHIFT) |
-              ((uint32_t)p_FmDriverParam->dmaReadBufThresholds.assertEmergency << DMA_THRESH_READ_INT_BUF_SHIFT) |
-              ((uint32_t)p_FmDriverParam->dmaWriteBufThresholds.assertEmergency);
+    tmpReg &= ~DMA_THRESH_COMMQ_MASK;
+    tmpReg |= ((uint32_t)p_FmDriverParam->dmaCommQThresholds.assertEmergency << DMA_THRESH_COMMQ_SHIFT);
+#if (DPAA_VERSION < 11)
+    tmpReg &= ~(DMA_THRESH_READ_INT_BUF_MASK | DMA_THRESH_WRITE_INT_BUF_MASK);
+    tmpReg |= ((uint32_t)p_FmDriverParam->dmaReadBufThresholds.assertEmergency << DMA_THRESH_READ_INT_BUF_SHIFT) |
+               ((uint32_t)p_FmDriverParam->dmaWriteBufThresholds.assertEmergency);
+#endif /* (DPAA_VERSION < 11) */
     WRITE_UINT32(p_Fm->p_FmDmaRegs->fmdmtr, tmpReg);
 
     /* configure hysteresis register */
-    tmpReg = ((uint32_t)p_FmDriverParam->dmaCommQThresholds.clearEmergency << DMA_THRESH_COMMQ_SHIFT) |
-              ((uint32_t)p_FmDriverParam->dmaReadBufThresholds.clearEmergency << DMA_THRESH_READ_INT_BUF_SHIFT) |
+    tmpReg = ((uint32_t)p_FmDriverParam->dmaCommQThresholds.clearEmergency << DMA_THRESH_COMMQ_SHIFT);
+#if (DPAA_VERSION < 11)
+    tmpReg |= ((uint32_t)p_FmDriverParam->dmaReadBufThresholds.clearEmergency << DMA_THRESH_READ_INT_BUF_SHIFT) |
               ((uint32_t)p_FmDriverParam->dmaWriteBufThresholds.clearEmergency);
+#endif /* (DPAA_VERSION < 11) */
     WRITE_UINT32(p_Fm->p_FmDmaRegs->fmdmhy, tmpReg);
 
     /* configure emergency threshold */
@@ -3771,13 +3791,13 @@ static t_Error InitFmQmi(t_Fm *p_Fm)
     /* enable events */
     WRITE_UINT32(p_Fm->p_FmQmiRegs->fmqm_eien, tmpReg);
 
-    if (p_Fm->p_FmDriverParam->tnumAgingPeriod)
+    if (p_Fm->tnumAgingPeriod)
     {
         uint16_t                periodInFmClocks;
         uint8_t                 remainder;
 
         /* tnumAgingPeriod is in units of microseconds, p_FmClockFreq is in Mhz */
-        periodInFmClocks = (uint16_t)(p_Fm->p_FmDriverParam->tnumAgingPeriod*p_Fm->p_FmStateStruct->fmClkFreq);
+        periodInFmClocks = (uint16_t)(p_Fm->tnumAgingPeriod * p_Fm->p_FmStateStruct->fmClkFreq);
         /* periodInFmClocks must be a 64 multiply */
         remainder = (uint8_t)(periodInFmClocks % 64);
         if (remainder > 64)
@@ -4063,7 +4083,6 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
     p_Fm->p_FmStateStruct->extraFifoPoolSize    = 0;
     p_Fm->p_FmStateStruct->exceptions           = DEFAULT_exceptions;
     /*p_Fm->p_FmDriverParam->numOfPartitions                    = p_FmParam->numOfPartitions;    */
-    p_Fm->p_FmDriverParam->tnumAgingPeriod                      = 0;
     p_Fm->p_FmDriverParam->resetOnInit                          = DEFAULT_resetOnInit;
 
     p_Fm->p_FmDriverParam->catastrophicErr                      = DEFAULT_catastrophicErr;
@@ -4107,25 +4126,30 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
         p_Fm->p_FmDriverParam->dmaAidMode                       = e_FM_DMA_AID_OUT_PORT_ID;
 #endif /* FM_AID_MODE_NO_TNUM_SW005 */
 #ifdef FM_NO_GUARANTEED_RESET_VALUES
-
     if (1)//p_Fm->p_FmStateStruct->revInfo.majorRev < 6)
     {
         p_Fm->p_FmStateStruct->totalFifoSize        = 0;
-        p_Fm->p_FmStateStruct->totalNumOfTasks      = BMI_MAX_NUM_OF_TASKS;
+        p_Fm->p_FmStateStruct->totalNumOfTasks      = DEFAULT_totalNumOfTasks;
+#ifdef FM_HAS_TOTAL_DMAS
         p_Fm->p_FmStateStruct->maxNumOfOpenDmas     = BMI_MAX_NUM_OF_DMAS;
+#endif
         p_Fm->p_FmDriverParam->dmaCommQThresholds.clearEmergency        = DEFAULT_dmaCommQLow;
         p_Fm->p_FmDriverParam->dmaCommQThresholds.assertEmergency       = DEFAULT_dmaCommQHigh;
+#if (DPAA_VERSION < 11)
         p_Fm->p_FmDriverParam->dmaReadBufThresholds.clearEmergency      = DEFAULT_dmaReadIntBufLow;
         p_Fm->p_FmDriverParam->dmaReadBufThresholds.assertEmergency     = DEFAULT_dmaReadIntBufHigh;
         p_Fm->p_FmDriverParam->dmaWriteBufThresholds.clearEmergency     = DEFAULT_dmaWriteIntBufLow;
         p_Fm->p_FmDriverParam->dmaWriteBufThresholds.assertEmergency    = DEFAULT_dmaWriteIntBufHigh;
+        p_Fm->p_FmDriverParam->dmaAxiDbgNumOfBeats                      = DEFAULT_axiDbgNumOfBeats;
+#endif /* (DPAA_VERSION < 11) */
         p_Fm->p_FmDriverParam->dmaCacheOverride                     = DEFAULT_cacheOverride;
         p_Fm->p_FmDriverParam->dmaCamNumOfEntries                   = DEFAULT_dmaCamNumOfEntries;
         p_Fm->p_FmDriverParam->dmaDbgCntMode                        = DEFAULT_dmaDbgCntMode;
-        p_Fm->p_FmDriverParam->dmaEnEmergency                       = FALSE;
-        p_Fm->p_FmDriverParam->dmaAxiDbgNumOfBeats                  = DEFAULT_axiDbgNumOfBeats;
+        p_Fm->p_FmDriverParam->dmaEnEmergency                       = DEFAULT_dmaEnEmergency;
         p_Fm->p_FmDriverParam->dmaSosEmergency                      = DEFAULT_dmaSosEmergency;
         p_Fm->p_FmDriverParam->dmaWatchdog                          = DEFAULT_dmaWatchdog;
+        p_Fm->p_FmDriverParam->dmaEnEmergencySmoother               = DEFAULT_dmaEnEmergencySmoother;
+        p_Fm->p_FmDriverParam->dmaEmergencySwitchCounter            = DEFAULT_dmaEmergencySwitchCounter;
         p_Fm->p_FmDriverParam->thresholds.dispLimit                 = DEFAULT_dispLimit;
         p_Fm->p_FmDriverParam->thresholds.prsDispTh                 = DEFAULT_prsDispTh;
         p_Fm->p_FmDriverParam->thresholds.plcrDispTh                = DEFAULT_plcrDispTh;
@@ -4135,7 +4159,6 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
         p_Fm->p_FmDriverParam->thresholds.qmiDeqDispTh              = DEFAULT_qmiDeqDispTh;
         p_Fm->p_FmDriverParam->thresholds.fmCtl1DispTh              = DEFAULT_fmCtl1DispTh;
         p_Fm->p_FmDriverParam->thresholds.fmCtl2DispTh              = DEFAULT_fmCtl2DispTh;
-        p_Fm->p_FmDriverParam->dmaEnEmergencySmoother               = FALSE;
     }
     else
 #endif /* FM_NO_GUARANTEED_RESET_VALUES */
@@ -4174,16 +4197,16 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
         p_Fm->p_FmDriverParam->thresholds.dispLimit                 = (uint8_t)((tmpReg & FPM_DISP_LIMIT_MASK) << FPM_DISP_LIMIT_SHIFT);
 
         tmpReg = GET_UINT32(p_Fm->p_FmFpmRegs->fmfp_dis1);
-        p_Fm->p_FmDriverParam->thresholds.prsDispTh                 = (uint8_t)((tmpReg & FPM_THR1_PRS_MASK ) << FPM_THR1_PRS_SHIFT);
-        p_Fm->p_FmDriverParam->thresholds.plcrDispTh                = (uint8_t)((tmpReg & FPM_THR1_KG_MASK ) << FPM_THR1_KG_SHIFT);
-        p_Fm->p_FmDriverParam->thresholds.kgDispTh                  = (uint8_t)((tmpReg & FPM_THR1_PLCR_MASK ) << FPM_THR1_PLCR_SHIFT);
-        p_Fm->p_FmDriverParam->thresholds.bmiDispTh                 = (uint8_t)((tmpReg & FPM_THR1_BMI_MASK ) << FPM_THR1_BMI_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.prsDispTh                 = (uint8_t)((tmpReg & FPM_THR1_PRS_MASK ) >> FPM_THR1_PRS_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.plcrDispTh                = (uint8_t)((tmpReg & FPM_THR1_KG_MASK ) >> FPM_THR1_KG_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.kgDispTh                  = (uint8_t)((tmpReg & FPM_THR1_PLCR_MASK ) >> FPM_THR1_PLCR_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.bmiDispTh                 = (uint8_t)((tmpReg & FPM_THR1_BMI_MASK ) >> FPM_THR1_BMI_SHIFT);
 
         tmpReg = GET_UINT32(p_Fm->p_FmFpmRegs->fmfp_dis2);
-        p_Fm->p_FmDriverParam->thresholds.qmiEnqDispTh              = (uint8_t)((tmpReg & FPM_THR2_QMI_ENQ_MASK ) << FPM_THR2_QMI_ENQ_SHIFT);
-        p_Fm->p_FmDriverParam->thresholds.qmiDeqDispTh              = (uint8_t)((tmpReg & FPM_THR2_QMI_DEQ_MASK ) << FPM_THR2_QMI_DEQ_SHIFT);
-        p_Fm->p_FmDriverParam->thresholds.fmCtl1DispTh              = (uint8_t)((tmpReg & FPM_THR2_FM_CTL1_MASK ) << FPM_THR2_FM_CTL1_SHIFT);
-        p_Fm->p_FmDriverParam->thresholds.fmCtl2DispTh              = (uint8_t)((tmpReg & FPM_THR2_FM_CTL2_MASK ) << FPM_THR2_FM_CTL2_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.qmiEnqDispTh              = (uint8_t)((tmpReg & FPM_THR2_QMI_ENQ_MASK ) >> FPM_THR2_QMI_ENQ_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.qmiDeqDispTh              = (uint8_t)((tmpReg & FPM_THR2_QMI_DEQ_MASK ) >> FPM_THR2_QMI_DEQ_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.fmCtl1DispTh              = (uint8_t)((tmpReg & FPM_THR2_FM_CTL1_MASK ) >> FPM_THR2_FM_CTL1_SHIFT);
+        p_Fm->p_FmDriverParam->thresholds.fmCtl2DispTh              = (uint8_t)((tmpReg & FPM_THR2_FM_CTL2_MASK ) >> FPM_THR2_FM_CTL2_SHIFT);
 
         tmpReg = GET_UINT32(p_Fm->p_FmDmaRegs->fmdmsetr);
         p_Fm->p_FmDriverParam->dmaSosEmergency                        = tmpReg;
@@ -4807,7 +4830,7 @@ t_Error FM_ConfigTnumAgingPeriod(t_Handle h_Fm, uint16_t tnumAgingPeriod)
     SANITY_CHECK_RETURN_ERROR(p_Fm->p_FmDriverParam, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
 
-    p_Fm->p_FmDriverParam->tnumAgingPeriod = tnumAgingPeriod;
+    p_Fm->tnumAgingPeriod = tnumAgingPeriod;
 
     return E_OK;
 }
@@ -5879,6 +5902,9 @@ t_Error FM_GetSpecialOperationCoding(t_Handle               h_Fm,
             case (FM_SP_OP_DCL4C):
                     *p_SpOperCoding = 7;
                     break;
+            case (FM_SP_OP_CLEAR_RPD):
+                    *p_SpOperCoding = 8;
+                    break;
             default:
                 RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
         }
@@ -5895,6 +5921,9 @@ t_Error FM_CtrlMonStart(t_Handle h_Fm)
     SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Fm->p_FmDriverParam, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR((p_Fm->guestId == NCSW_MASTER_ID), E_NOT_SUPPORTED);
+
+    WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc,
+                 GET_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc) | FPM_BRKC_RDBG);
 
     for (i = 0; i < FM_NUM_OF_CTRL; i++)
     {
@@ -5930,6 +5959,9 @@ t_Error FM_CtrlMonStop(t_Handle h_Fm)
         p_MonRegs = (t_FmTrbRegs *)UINT_TO_PTR(p_Fm->baseAddr + FM_MM_TRB(i));
         WRITE_UINT32(p_MonRegs->tcrh, TRB_TCRH_DISABLE_COUNTERS);
     }
+
+    WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc,
+                 GET_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc) & ~FPM_BRKC_RDBG);
 
     return E_OK;
 }

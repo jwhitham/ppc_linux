@@ -66,7 +66,7 @@
                 and the policer global and common registers.
                 In addition, the FM PCD SW module will initialize all required
                 key generator schemes, coarse classification flows, and policer
-                profiles. When a FM module is configured to work with one of these
+                profiles. When FM module is configured to work with one of these
                 entities, it will register to it using the FM PORT API. The PCD
                 module will manage the PCD resources - i.e. resource management of
                 KeyGen schemes, etc.
@@ -275,8 +275,6 @@ typedef struct t_FmPcdParams {
 *//***************************************************************************/
 t_Handle FM_PCD_Config(t_FmPcdParams *p_FmPcdParams);
 
-t_Handle FM_PCD_GetHcDevH(t_Handle h_FmPcd);
-
 /**************************************************************************//**
  @Function      FM_PCD_Init
 
@@ -314,7 +312,7 @@ t_Error FM_PCD_Free(t_Handle h_FmPcd);
 
  @Description   Calling this routine changes the internal driver data base
                 from its default selection of exceptions enabling.
-                [4].
+                [DEFAULT_numOfSharedPlcrProfiles].
 
  @Param[in]     h_FmPcd         FM PCD module descriptor.
  @Param[in]     exception       The exception to be selected.
@@ -349,7 +347,7 @@ t_Error FM_PCD_ConfigHcFramesDataMemory(t_Handle h_FmPcd, uint8_t memId);
 
  @Description   Calling this routine changes the internal driver data base
                 from its default selection of exceptions enablement.
-                [4].
+                [DEFAULT_numOfSharedPlcrProfiles].
 
  @Param[in]     h_FmPcd                     FM PCD module descriptor.
  @Param[in]     numOfSharedPlcrProfiles     Number of profiles to
@@ -364,7 +362,7 @@ t_Error FM_PCD_ConfigPlcrNumOfSharedProfiles(t_Handle h_FmPcd, uint16_t numOfSha
 
  @Description   Calling this routine changes the internal driver data base
                 from its default selection of exceptions enablement.
-                By default auto-refresh is [disabled].
+                By default auto-refresh is [DEFAULT_plcrAutoRefresh].
 
  @Param[in]     h_FmPcd         FM PCD module descriptor.
  @Param[in]     enable          TRUE to enable, FALSE to disable
@@ -381,7 +379,7 @@ t_Error FM_PCD_ConfigPlcrAutoRefreshMode(t_Handle h_FmPcd, bool enable);
 
  @Description   Calling this routine changes the internal data structure for
                 the maximum parsing time from its default value
-                [0].
+                [DEFAULT_MAX_PRS_CYC_LIM].
 
  @Param[in]     h_FmPcd         FM PCD module descriptor.
  @Param[in]     value           0 to disable the mechanism, or new
@@ -812,7 +810,6 @@ t_Error     FM_PCD_HcDumpRegs(t_Handle h_FmPcd);
 #define FM_PCD_MAX_SIZE_OF_KEY                  56
 #define FM_PCD_MAX_NUM_OF_CC_ENTRIES_IN_GRP     16
 #define FM_PCD_LAST_KEY_INDEX                   0xffff
-#define FM_PCD_MANIP_DSCP_VALUES                64
 
 #define FM_PCD_MAX_NUM_OF_CC_NODES              255 /* Obsolete, not used - will be removed in the future */
 /* @} */
@@ -1341,7 +1338,6 @@ typedef union u_FmPcdHdrProtocolOpt {
                     HEADER_TYPE_UDP:
                         NET_HEADER_FIELD_UDP_PORT_SRC
                         NET_HEADER_FIELD_UDP_PORT_DST
-
 
                     HEADER_TYPE_UDP_LITE: - relevant only if FM_CAPWAP_SUPPORT define
                         NET_HEADER_FIELD_UDP_LITE_PORT_SRC
@@ -1937,6 +1933,8 @@ typedef struct t_FmPcdHashTableParams {
     uint16_t                    maxNumOfKeys;               /**< Maximum Number Of Keys that will (ever) be used in this Hash-table */
     e_FmPcdCcStatsMode          statisticsMode;             /**< If not e_FM_PCD_CC_STATS_MODE_NONE, the required structures for the
                                                                  requested statistics mode will be allocated according to maxNumOfKeys. */
+    uint8_t                     kgHashShift;                /**< KG-Hash-shift as it was configured in the KG-scheme
+                                                                 that leads to this hash-table. */
     uint16_t                    hashResMask;                /**< Mask that will be used on the hash-result;
                                                                  The number-of-sets for this hash will be calculated
                                                                  as (2^(number of bits set in 'hashResMask'));
@@ -2260,7 +2258,7 @@ typedef struct t_FmPcdManipReassemIpParams {
                                                                  relativeSchemeId[1] -  Relative scheme ID for IPV6 Reassembly manipulation;
                                                                  NOTE: The following comment is relevant only for FMAN v2 devices:
                                                                  Relative scheme ID for IPv4/IPv6 Reassembly manipulation must be smaller than
-                                                                 the user schemes id to ensure that the reassembly's schemes will be first match;
+                                                                 the user schemes id to ensure that the reassembly schemes will be first match;
                                                                  Rest schemes, if defined, should have higher relative scheme ID. */
 #if (DPAA_VERSION >= 11)
     uint32_t                        nonConsistentSpFqid;    /**< In case that other fragments of the frame corresponds to different storage
@@ -2286,7 +2284,8 @@ typedef struct t_FmPcdManipReassemIpParams {
                                                                  In the case numOfFramesPerHashEntry == e_FM_PCD_MANIP_EIGHT_WAYS_HASH,
                                                                  maxNumFramesInProcess has to be in the range of 8 - 2048. */
     e_FmPcdManipReassemTimeOutMode  timeOutMode;            /**< Expiration delay initialized by Reassembly process */
-    uint32_t                        fqidForTimeOutFrames;   /**< FQID in which time out frames will enqueue during Time Out Process  */
+    uint32_t                        fqidForTimeOutFrames;   /**< FQID in which time out frames will enqueue during Time Out Process;
+                                                                 Recommended value for this field is 0; in this way timed-out frames will be discarded */
     uint32_t                        timeoutThresholdForReassmProcess;
                                                             /**< Represents the time interval in microseconds which defines
                                                                  if opened frame (at least one fragment was processed but not all the fragments)is found as too old*/
@@ -2583,6 +2582,10 @@ typedef struct t_FmPcdManipReassemIpStats {
     uint32_t        externalBufferBusy;         /**< Counts the number of times external buffer busy occurred */
     uint32_t        sgFragments;                /**< Counts the number of Scatter/Gather fragments */
     uint32_t        dmaSemaphoreDepletion;      /**< Counts the number of failed attempts to allocate a DMA semaphore */
+#if (DPAA_VERSION >= 11)
+    uint32_t        nonConsistentSp;            /**< Counts the number of Non Consistent Storage Profile events for
+                                                     successfully reassembled frames */
+#endif /* (DPAA_VERSION >= 11) */
     struct {
         uint32_t    successfullyReassembled;    /**< Counts the number of successfully reassembled frames */
         uint32_t    validFragments;             /**< Counts the total number of valid fragments that
@@ -3587,6 +3590,8 @@ t_Handle FM_PCD_StatisticsSetNode(t_Handle h_FmPcd, t_FmPcdStatsParams *p_FmPcds
 #define FM_PCD_MAX_NUM_OF_INTERCHANGABLE_HDRS   FM_PCD_MAX_NUM_OF_INTERCHANGEABLE_HDRS
 #define e_FM_PCD_MANIP_ONE_WAYS_HASH            e_FM_PCD_MANIP_ONE_WAY_HASH
 #define e_FM_PCD_MANIP_TOW_WAYS_HASH            e_FM_PCD_MANIP_TWO_WAYS_HASH
+
+#define e_FM_PCD_MANIP_FRAGMENT_PACKECT         e_FM_PCD_MANIP_FRAGMENT_PACKET /* Feb13 */
 
 #define FM_PCD_SetNetEnvCharacteristics(_pcd, _params)  \
     FM_PCD_NetEnvCharacteristicsSet(_pcd, _params)

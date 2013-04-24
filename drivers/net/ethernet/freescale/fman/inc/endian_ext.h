@@ -444,3 +444,4 @@ static __inline__ void SwapUint64P(uint64_t *p_Val)
 
 
 #endif /* __ENDIAN_EXT_H */
+

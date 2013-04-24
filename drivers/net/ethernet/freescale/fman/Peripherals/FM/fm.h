@@ -170,24 +170,7 @@ switch (exception){                                         \
                                             FM_EX_QMI_DOUBLE_ECC            |\
                                             FM_EX_QMI_SINGLE_ECC)
 
-
-#define DEFAULT_totalFifoSize(major)                    \
-    (((major == 2) || (major == 5)) ?                   \
-     (100*KILOBYTE) : ((major == 6) ?                   \
-                       (288*KILOBYTE) : ((major == 4) ? \
-                                         (46*KILOBYTE) : (122*KILOBYTE))))
-
 #define DEFAULT_eccEnable                   FALSE
-#define DEFAULT_dispLimit                   0
-#define DEFAULT_prsDispTh                   16
-#define DEFAULT_plcrDispTh                  16
-#define DEFAULT_kgDispTh                    16
-#define DEFAULT_bmiDispTh                   16
-#define DEFAULT_qmiEnqDispTh                16
-#define DEFAULT_qmiDeqDispTh                16
-#define DEFAULT_fmCtl1DispTh                16
-#define DEFAULT_fmCtl2DispTh                16
-#define DEFAULT_cacheOverride               e_FM_DMA_NO_CACHE_OR
 #ifdef FM_PEDANTIC_DMA
 #define DEFAULT_aidOverride                 TRUE
 #else
@@ -197,15 +180,10 @@ switch (exception){                                         \
 #define DEFAULT_dmaStopOnBusError           FALSE
 #define DEFAULT_stopAtBusError              FALSE
 #define DEFAULT_axiDbgNumOfBeats            1
-#define DEFAULT_dmaCamNumOfEntries          32
-#define DEFAULT_dmaCommQLow                 ((DMA_THRESH_MAX_COMMQ+1)/2)
-#define DEFAULT_dmaCommQHigh                ((DMA_THRESH_MAX_COMMQ+1)*3/4)
 #define DEFAULT_dmaReadIntBufLow            ((DMA_THRESH_MAX_BUF+1)/2)
 #define DEFAULT_dmaReadIntBufHigh           ((DMA_THRESH_MAX_BUF+1)*3/4)
 #define DEFAULT_dmaWriteIntBufLow           ((DMA_THRESH_MAX_BUF+1)/2)
 #define DEFAULT_dmaWriteIntBufHigh          ((DMA_THRESH_MAX_BUF+1)*3/4)
-#define DEFAULT_dmaSosEmergency             0
-#define DEFAULT_dmaDbgCntMode               e_FM_DMA_DBG_NO_CNT
 #define DEFAULT_catastrophicErr             e_FM_CATASTROPHIC_ERR_STALL_PORT
 #define DEFAULT_dmaErr                      e_FM_DMA_ERR_CATASTROPHIC
 #define DEFAULT_resetOnInit                 FALSE
@@ -214,7 +192,62 @@ switch (exception){                                         \
 #define DEFAULT_externalEccRamsEnable       FALSE
 #define DEFAULT_VerifyUcode                 FALSE
 #define DEFAULT_tnumAgingPeriod             0
+
+#if (DPAA_VERSION < 11)
+#define DEFAULT_totalFifoSize(major)    \
+    (((major == 2) || (major == 5)) ?   \
+     (100*KILOBYTE) : ((major == 4) ?   \
+     (46*KILOBYTE) : (122*KILOBYTE)))
+#define DEFAULT_totalNumOfTasks             BMI_MAX_NUM_OF_TASKS
+
+#define DEFAULT_dmaCommQLow                 ((DMA_THRESH_MAX_COMMQ+1)/2)
+#define DEFAULT_dmaCommQHigh                ((DMA_THRESH_MAX_COMMQ+1)*3/4)
+#define DEFAULT_cacheOverride               e_FM_DMA_NO_CACHE_OR
+#define DEFAULT_dmaCamNumOfEntries          32
+#define DEFAULT_dmaDbgCntMode               e_FM_DMA_DBG_NO_CNT
+#define DEFAULT_dmaEnEmergency              FALSE
+#define DEFAULT_dmaSosEmergency             0
 #define DEFAULT_dmaWatchdog                 0 /* disabled */
+#define DEFAULT_dmaEnEmergencySmoother      FALSE
+#define DEFAULT_dmaEmergencySwitchCounter   0
+
+#define DEFAULT_dispLimit                   0
+#define DEFAULT_prsDispTh                   16
+#define DEFAULT_plcrDispTh                  16
+#define DEFAULT_kgDispTh                    16
+#define DEFAULT_bmiDispTh                   16
+#define DEFAULT_qmiEnqDispTh                16
+#define DEFAULT_qmiDeqDispTh                16
+#define DEFAULT_fmCtl1DispTh                16
+#define DEFAULT_fmCtl2DispTh                16
+
+#else  /* (DPAA_VERSION < 11) */
+/* Defaults are registers' reset values */
+#define DEFAULT_totalFifoSize(major)        (295 * KILOBYTE )
+#define DEFAULT_totalNumOfTasks             124
+
+#define DEFAULT_dmaCommQLow                 0x2A
+#define DEFAULT_dmaCommQHigh                0x3F
+#define DEFAULT_cacheOverride               e_FM_DMA_NO_CACHE_OR
+#define DEFAULT_dmaCamNumOfEntries          64
+#define DEFAULT_dmaDbgCntMode               e_FM_DMA_DBG_NO_CNT
+#define DEFAULT_dmaEnEmergency              FALSE
+#define DEFAULT_dmaSosEmergency             0
+#define DEFAULT_dmaWatchdog                 0 /* disabled */
+#define DEFAULT_dmaEnEmergencySmoother      FALSE
+#define DEFAULT_dmaEmergencySwitchCounter   0
+
+#define DEFAULT_dispLimit                   0
+#define DEFAULT_prsDispTh                   16
+#define DEFAULT_plcrDispTh                  16
+#define DEFAULT_kgDispTh                    16
+#define DEFAULT_bmiDispTh                   16
+#define DEFAULT_qmiEnqDispTh                16
+#define DEFAULT_qmiDeqDispTh                16
+#define DEFAULT_fmCtl1DispTh                16
+#define DEFAULT_fmCtl2DispTh                16
+#endif /* (DPAA_VERSION < 11) */
+
 
 #define FM_TIMESTAMP_1_USEC_BIT             8
 
@@ -529,6 +562,10 @@ typedef _Packed struct t_FmTrbRegs
 
 #define DMA_EMSR_EMSTR_MASK                 0x0000FFFF
 
+#define DMA_THRESH_COMMQ_MASK               0xFF000000
+#define DMA_THRESH_READ_INT_BUF_MASK        0x007F0000
+#define DMA_THRESH_WRITE_INT_BUF_MASK       0x0000007F
+
 /* shifts */
 #define DMA_MODE_CACHE_OR_SHIFT             30
 #define DMA_MODE_BUS_PRI_SHIFT              16
@@ -623,6 +660,8 @@ typedef _Packed struct t_FmTrbRegs
 #define FPM_THR2_QMI_DEQ_MASK           0x000000FF
 #define FPM_THR2_FM_CTL1_MASK           0x00FF0000
 #define FPM_THR2_FM_CTL2_MASK           0x0000FF00
+
+#define FPM_BRKC_RDBG                   0x00000200
 
 /* shifts */
 #define FPM_DISP_LIMIT_SHIFT            24
@@ -767,7 +806,6 @@ typedef struct
     bool                        enMuramTestMode;
     bool                        enIramTestMode;
     bool                        externalEccRamsEnable;
-    uint16_t                    tnumAgingPeriod;
     t_FmFirmwareParams          firmware;
     bool                        fwVerify;
     uint32_t                    userSetExceptions;
@@ -872,6 +910,7 @@ typedef struct t_Fm
     t_Handle                    h_Spinlock;
     bool                        recoveryMode;
     t_FmStateStruct             *p_FmStateStruct;
+    uint16_t                    tnumAgingPeriod;
 #if (DPAA_VERSION >= 11)
     t_FmSp                      *p_FmSp;
     uint8_t                     partNumOfVSPs;

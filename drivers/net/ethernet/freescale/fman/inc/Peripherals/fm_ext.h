@@ -42,7 +42,7 @@
 #include "error_ext.h"
 #include "std_ext.h"
 #include "dpaa_ext.h"
-
+#include "fsl_fman_sp.h"
 
 /**************************************************************************//**
  @Group         FM_grp Frame Manager API
@@ -55,7 +55,7 @@
 /**************************************************************************//**
  @Group         FM_lib_grp FM library
 
- @Description   FM API functions, definitions and enums
+ @Description   FM API functions, definitions and enums.
 
                 The FM module is the main driver module and is a mandatory module
                 for FM driver users. This module must be initialized first prior
@@ -235,6 +235,7 @@ typedef uint32_t fmSpecialOperations_t;                 /**< typedef for definin
 #define  FM_SP_OP_RPD                       0x10000000  /**< Set the RPD bit */
 #define  FM_SP_OP_DCL4C                     0x08000000  /**< Set the DCL4C bit */
 #define  FM_SP_OP_CHECK_SEC_ERRORS          0x04000000  /**< Check SEC errors */
+#define  FM_SP_OP_CLEAR_RPD                 0x02000000  /**< Clear the RPD bit */
 /* @} */
 
 /**************************************************************************//**
@@ -309,19 +310,19 @@ typedef enum e_FmExceptions {
  @Description   Enum for defining port DMA swap mode
 *//***************************************************************************/
 typedef enum e_FmDmaSwapOption {
-    e_FM_DMA_NO_SWP,           /**< No swap, transfer data as is.*/
-    e_FM_DMA_SWP_PPC_LE,       /**< The transferred data should be swapped
-                                    in PowerPc Little Endian mode. */
-    e_FM_DMA_SWP_BE            /**< The transferred data should be swapped
-                                    in Big Endian mode */
+    e_FM_DMA_NO_SWP = FMAN_DMA_NO_SWP, 			/**< No swap, transfer data as is.*/
+    e_FM_DMA_SWP_PPC_LE = FMAN_DMA_SWP_PPC_LE, 	/**< The transferred data should be swapped
+                                    			in PowerPc Little Endian mode. */
+    e_FM_DMA_SWP_BE = FMAN_DMA_SWP_BE 			/**< The transferred data should be swapped
+                                    			in Big Endian mode */
 } e_FmDmaSwapOption;
 
 /**************************************************************************//**
  @Description   Enum for defining port DMA cache attributes
 *//***************************************************************************/
 typedef enum e_FmDmaCacheOption {
-    e_FM_DMA_NO_STASH = 0,     /**< Cacheable, no Allocate (No Stashing) */
-    e_FM_DMA_STASH = 1         /**< Cacheable and Allocate (Stashing on) */
+    e_FM_DMA_NO_STASH = FMAN_DMA_NO_STASH,     	/**< Cacheable, no Allocate (No Stashing) */
+    e_FM_DMA_STASH = FMAN_DMA_STASH         	/**< Cacheable and Allocate (Stashing on) */
 } e_FmDmaCacheOption;
 
 
@@ -391,7 +392,7 @@ typedef struct t_FmBufferPrefixContent {
                                          get the parser-result from a buffer. */
     bool        passAllOtherPCDInfo;/**< Add all other Internal-Context information:
                                          AD, hash-result, key, etc. */
-    uint16_t    dataAlign;          /**< 0 to use driver's default alignment [64],
+    uint16_t    dataAlign;          /**< 0 to use driver's default alignment [DEFAULT_FM_SP_bufferPrefixContent_dataAlign],
                                          other value for selecting a data alignment (must be a power of 2);
                                          if write optimization is used, must be >= 16. */
     uint8_t     manipExtraSpace;    /**< Maximum extra size needed (insertion-size minus removal-size);
@@ -684,7 +685,7 @@ typedef struct t_FmDmaThresholds {
  @Function      FM_ConfigResetOnInit
 
  @Description   Define whether to reset the FM before initialization.
-                Change the default configuration [FALSE].
+                Change the default configuration [DEFAULT_resetOnInit].
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     enable              When TRUE, FM will be reset before any initialization.
@@ -702,7 +703,7 @@ t_Error FM_ConfigResetOnInit(t_Handle h_Fm, bool enable);
 
  @Description   Define Total FIFO size for the whole FM.
                 Calling this routine changes the total Fifo size in the internal driver
-                data base from its default configuration [major]
+                data base from its default configuration [DEFAULT_totalFifoSize]
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     totalFifoSize       The selected new value.
@@ -720,7 +721,7 @@ t_Error FM_ConfigTotalFifoSize(t_Handle h_Fm, uint32_t totalFifoSize);
 
  @Description   Define cache override mode.
                 Calling this routine changes the cache override mode
-                in the internal driver data base from its default configuration [e_FM_DMA_NO_CACHE_OR]
+                in the internal driver data base from its default configuration [DEFAULT_cacheOverride]
 
  @Param[in]     h_Fm            A handle to an FM Module.
  @Param[in]     cacheOverride   The selected new value.
@@ -738,7 +739,7 @@ t_Error FM_ConfigDmaCacheOverride(t_Handle h_Fm, e_FmDmaCacheOverride cacheOverr
 
  @Description   Define DMA AID override mode.
                 Calling this routine changes the AID override mode
-                in the internal driver data base from its default configuration  [TRUE]
+                in the internal driver data base from its default configuration  [DEFAULT_aidOverride]
 
  @Param[in]     h_Fm            A handle to an FM Module.
  @Param[in]     aidOverride     The selected new value.
@@ -756,7 +757,7 @@ t_Error FM_ConfigDmaAidOverride(t_Handle h_Fm, bool aidOverride);
 
  @Description   Define DMA AID  mode.
                 Calling this routine changes the AID  mode in the internal
-                driver data base from its default configuration [e_FM_DMA_AID_OUT_TNUM]
+                driver data base from its default configuration [DEFAULT_aidMode]
 
  @Param[in]     h_Fm            A handle to an FM Module.
  @Param[in]     aidMode         The selected new value.
@@ -774,7 +775,7 @@ t_Error FM_ConfigDmaAidMode(t_Handle h_Fm, e_FmDmaAidMode aidMode);
 
  @Description   Define DMA AXI number of beats.
                 Calling this routine changes the AXI number of beats in the internal
-                driver data base from its default configuration [1]
+                driver data base from its default configuration [DEFAULT_axiDbgNumOfBeats]
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     axiDbgNumOfBeats    The selected new value.
@@ -792,7 +793,7 @@ t_Error FM_ConfigDmaAxiDbgNumOfBeats(t_Handle h_Fm, uint8_t axiDbgNumOfBeats);
 
  @Description   Define number of CAM entries.
                 Calling this routine changes the number of CAM entries in the internal
-                driver data base from its default configuration [32].
+                driver data base from its default configuration [DEFAULT_dmaCamNumOfEntries].
 
  @Param[in]     h_Fm            A handle to an FM Module.
  @Param[in]     numOfEntries    The selected new value.
@@ -821,7 +822,7 @@ t_Error FM_ConfigEnableCounters(t_Handle h_Fm);
 
  @Description   Define DMA debug counter.
                 Calling this routine changes the number of the DMA debug counter in the internal
-                driver data base from its default configuration [e_FM_DMA_DBG_NO_CNT].
+                driver data base from its default configuration [DEFAULT_dmaDbgCntMode].
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     fmDmaDbgCntMode     An enum selecting the debug counter mode.
@@ -840,7 +841,7 @@ t_Error FM_ConfigDmaDbgCounter(t_Handle h_Fm, e_FmDmaDbgCntMode fmDmaDbgCntMode)
  @Description   Define bus error behavior.
                 Calling this routine changes the bus error behavior definition
                 in the internal driver data base from its default
-                configuration [FALSE].
+                configuration [DEFAULT_dmaStopOnBusError].
 
  @Param[in]     h_Fm    A handle to an FM Module.
  @Param[in]     stop    TRUE to stop on bus error, FALSE to continue.
@@ -879,7 +880,7 @@ t_Error FM_ConfigDmaEmergency(t_Handle h_Fm, t_FmDmaEmergency *p_Emergency);
  @Description   DMA error treatment.
                 Calling this routine changes the DMA error treatment
                 in the internal driver data base from its default
-                configuration [e_FM_DMA_ERR_CATASTROPHIC].
+                configuration [DEFAULT_dmaErr].
 
  @Param[in]     h_Fm    A handle to an FM Module.
  @Param[in]     dmaErr  The selected new choice.
@@ -898,7 +899,7 @@ t_Error FM_ConfigDmaErr(t_Handle h_Fm, e_FmDmaErr dmaErr);
  @Description   Define FM behavior on catastrophic error.
                 Calling this routine changes the FM behavior on catastrophic
                 error in the internal driver data base from its default
-                [e_FM_CATASTROPHIC_ERR_STALL_PORT].
+                [DEFAULT_catastrophicErr].
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     catastrophicErr     The selected new choice.
@@ -953,7 +954,7 @@ t_Error FM_ConfigEnableIramTestMode(t_Handle h_Fm);
  @Description   Define FM behavior on external halt activation.
                 Calling this routine changes the FM behavior on external halt
                 activation in the internal driver data base from its default
-                [FALSE].
+                [DEFAULT_haltOnExternalActivation].
 
  @Param[in]     h_Fm            A handle to an FM Module.
  @Param[in]     enable          TRUE to enable halt on external halt
@@ -973,7 +974,7 @@ t_Error FM_ConfigHaltOnExternalActivation(t_Handle h_Fm, bool enable);
  @Description   Define FM behavior on external halt activation.
                 Calling this routine changes the FM behavior on unrecoverable
                 ECC error in the internal driver data base from its default
-                [FALSE].
+                [DEFAULT_haltOnUnrecoverableEccError].
                 This routine is only avaiable on old FM revisions (FMan v2).
 
  @Param[in]     h_Fm            A handle to an FM Module.
@@ -1011,7 +1012,7 @@ t_Error FM_ConfigException(t_Handle h_Fm, e_FmExceptions exception, bool enable)
 
  @Description   Select external ECC enabling.
                 Calling this routine changes the ECC enabling control in the internal
-                driver data base from its default [FALSE].
+                driver data base from its default [DEFAULT_externalEccRamsEnable].
                 When this option is enabled Rams ECC enabling is not effected
                 by FM_EnableRamsEcc/FM_DisableRamsEcc, but by a JTAG.
 
@@ -1030,9 +1031,9 @@ t_Error FM_ConfigExternalEccRamsEnable(t_Handle h_Fm, bool enable);
  @Function      FM_ConfigTnumAgingPeriod
 
  @Description   Define Tnum aging period.
-                Calling this routine changes the Tnum aging of dequeue TNUM's
+                Calling this routine changes the Tnum aging of dequeue TNUMs
                 in the QMI in the internal driver data base from its default
-                [0].
+                [DEFAULT_tnumAgingPeriod].
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     tnumAgingPeriod     Tnum Aging Period in microseconds.
@@ -1045,6 +1046,8 @@ t_Error FM_ConfigExternalEccRamsEnable(t_Handle h_Fm, bool enable);
  @Cautions      Allowed only following FM_Config() and before FM_Init().
                 This routine should NOT be called from guest-partition
                 (i.e. guestId != NCSW_MASTER_ID)
+                NOTE that if some MAC is configured for PFC, '0' value is NOT
+                allowed.
 *//***************************************************************************/
 t_Error FM_ConfigTnumAgingPeriod(t_Handle h_Fm, uint16_t tnumAgingPeriod);
 
@@ -1073,15 +1076,15 @@ t_Error FM_ConfigDmaEmergencySmoother(t_Handle h_Fm, uint32_t emergencyCnt);
 
  @Description   Calling this routine changes the internal driver data base
                 from its default FM threshold configuration:
-                    dispLimit:    [0]
-                    prsDispTh:    [16]
-                    plcrDispTh:   [16]
-                    kgDispTh:     [16]
-                    bmiDispTh:    [16]
-                    qmiEnqDispTh: [16]
-                    qmiDeqDispTh: [16]
-                    fmCtl1DispTh: [16]
-                    fmCtl2DispTh: [16]
+                    dispLimit:    [DEFAULT_dispLimit]
+                    prsDispTh:    [DEFAULT_prsDispTh]
+                    plcrDispTh:   [DEFAULT_plcrDispTh]
+                    kgDispTh:     [DEFAULT_kgDispTh]
+                    bmiDispTh:    [DEFAULT_bmiDispTh]
+                    qmiEnqDispTh: [DEFAULT_qmiEnqDispTh]
+                    qmiDeqDispTh: [DEFAULT_qmiDeqDispTh]
+                    fmCtl1DispTh: [DEFAULT_fmCtl1DispTh]
+                    fmCtl2DispTh: [DEFAULT_fmCtl2DispTh]
 
 
  @Param[in]     h_Fm            A handle to an FM Module.
@@ -1099,7 +1102,7 @@ t_Error FM_ConfigThresholds(t_Handle h_Fm, t_FmThresholds *p_FmThresholds);
  @Function      FM_ConfigDmaSosEmergencyThreshold
 
  @Description   Calling this routine changes the internal driver data base
-                from its default dma SOS emergency configuration [0]
+                from its default dma SOS emergency configuration [DEFAULT_dmaSosEmergency]
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     dmaSosEmergency     The selected new value.
@@ -1117,8 +1120,8 @@ t_Error FM_ConfigDmaSosEmergencyThreshold(t_Handle h_Fm, uint32_t dmaSosEmergenc
 
  @Description   Calling this routine changes the internal driver data base
                 from its default configuration of DMA write buffer threshold
-                assertEmergency: [DMA_THRESH_MAX_BUF]
-                clearEmergency:  [DMA_THRESH_MAX_BUF]
+                assertEmergency: [DEFAULT_dmaWriteIntBufLow]
+                clearEmergency:  [DEFAULT_dmaWriteIntBufHigh]
                 This routine is only avaiable on old FM revisions (FMan v2).
 
  @Param[in]     h_Fm                A handle to an FM Module.
@@ -1139,8 +1142,8 @@ t_Error FM_ConfigDmaWriteBufThresholds(t_Handle h_Fm, t_FmDmaThresholds *p_FmDma
 
  @Description   Calling this routine changes the internal driver data base
                 from its default configuration of DMA command queue threshold
-                assertEmergency: [DMA_THRESH_MAX_COMMQ]
-                clearEmergency:  [DMA_THRESH_MAX_COMMQ]
+                assertEmergency: [DEFAULT_dmaCommQLow]
+                clearEmergency:  [DEFAULT_dmaCommQHigh]
 
  @Param[in]     h_Fm                A handle to an FM Module.
  @Param[in]     p_FmDmaThresholds   A structure of thresholds to define emergency behavior -
@@ -1160,8 +1163,8 @@ t_Error FM_ConfigDmaCommQThresholds(t_Handle h_Fm, t_FmDmaThresholds *p_FmDmaThr
 
  @Description   Calling this routine changes the internal driver data base
                 from its default configuration of DMA read buffer threshold
-                assertEmergency: [DMA_THRESH_MAX_BUF]
-                clearEmergency:  [DMA_THRESH_MAX_BUF]
+                assertEmergency: [DEFAULT_dmaReadIntBufLow]
+                clearEmergency:  [DEFAULT_dmaReadIntBufHigh]
                 This routine is only avaiable on old FM revisions (FMan v2).
 
  @Param[in]     h_Fm                A handle to an FM Module.
@@ -1182,7 +1185,7 @@ t_Error FM_ConfigDmaReadBufThresholds(t_Handle h_Fm, t_FmDmaThresholds *p_FmDmaT
 
  @Description   Calling this routine changes the internal driver data base
                 from its default watchdog configuration, which is disabled
-                [0].
+                [DEFAULT_dmaWatchdog].
 
  @Param[in]     h_Fm            A handle to an FM Module.
  @Param[in]     watchDogValue   The selected new value - in microseconds.

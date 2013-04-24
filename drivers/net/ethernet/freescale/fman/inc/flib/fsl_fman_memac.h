@@ -68,6 +68,12 @@
 #define IF_MODE_GMII		0x00000002 /* 30-31 GMII (1G) interface */
 #define IF_MODE_RGMII		0x00000004
 #define IF_MODE_RGMII_AUTO	0x00008000
+#define IF_MODE_RGMII_1000  0x00004000 /* 10 - 1000Mbps RGMII */
+#define IF_MODE_RGMII_100   0x00000000 /* 00 - 100Mbps RGMII */
+#define IF_MODE_RGMII_10    0x00002000 /* 01 - 10Mbps RGMII */
+#define IF_MODE_RGMII_SP_MASK 0x00006000 /* Setsp mask bits */
+#define IF_MODE_RGMII_FD    0x00001000 /* Full duplex RGMII */
+#define IF_MODE_HD          0x00000040 /* Half duplex operation */
 
 /* Hash table Control Register (HASHTABLE_CTRL) */
 #define HASH_CTRL_MCAST_SHIFT	26
@@ -86,12 +92,13 @@
 #define STATS_CFG_SATURATE	0x00000001 /* 31 Saturate at the maximum val */
 
 /* Interrupt Mask Register (IMASK) */
-#define MEMAC_IMASK_MGI		0x40000000 /* 1 Magic pkt detec indication */
+#define MEMAC_IMASK_MGI		0x40000000 /* 1 Magic pkt detect indication */
+#define MEMAC_IMASK_TSECC_ER 0x20000000 /* 2 Timestamp FIFO ECC error evnt */
 #define MEMAC_IMASK_TECC_ER	0x02000000 /* 6 Transmit frame ECC error evnt */
 #define MEMAC_IMASK_RECC_ER	0x01000000 /* 7 Receive frame ECC error evnt */
 
-#define MEMAC_ALL_IMASKS			\
-		((uint32_t)(MEMAC_IMASK_MGI	| \
+#define MEMAC_ALL_ERRS_IMASK			\
+		((uint32_t)(MEMAC_IMASK_TSECC_ER	| \
 			MEMAC_IMASK_TECC_ER	| \
 			MEMAC_IMASK_RECC_ER))
 
@@ -99,6 +106,7 @@
 #define MEMAC_IEVNT_AN			0x40000000 /* Auto-negotiation */
 #define MEMAC_IEVNT_LT			0x20000000 /* Link Training/New page */
 #define MEMAC_IEVNT_MGI			0x00004000 /* Magic pkt detection */
+#define MEMAC_IEVNT_TS_ECC_ER   0x00002000 /* Timestamp FIFO ECC error */
 #define MEMAC_IEVNT_RX_FIFO_OVFL	0x00001000 /* Rx FIFO overflow */
 #define MEMAC_IEVNT_TX_FIFO_UNFL	0x00000800 /* Tx FIFO underflow */
 #define MEMAC_IEVNT_TX_FIFO_OVFL	0x00000400 /* Tx FIFO overflow */
@@ -111,24 +119,6 @@
 #define MEMAC_IEVNT_PHY_LOS		0x00000004 /* Phy loss of signal */
 #define MEMAC_IEVNT_REM_FAULT		0x00000002 /* Remote fault (XGMII) */
 #define MEMAC_IEVNT_LOC_FAULT		0x00000001 /* Local fault (XGMII) */
-
-#define MEMAC_EVENTS_MASK					\
-		((uint32_t)(MEMAC_IEVNT_PCS			| \
-				MEMAC_IEVNT_AN			| \
-				MEMAC_IEVNT_LT			| \
-				MEMAC_IEVNT_MGI			| \
-				MEMAC_IEVNT_RX_FIFO_OVFL	| \
-				MEMAC_IEVNT_TX_FIFO_UNFL	| \
-				MEMAC_IEVNT_TX_FIFO_OVFL	| \
-				MEMAC_IEVNT_TX_ECC_ER		| \
-				MEMAC_IEVNT_RX_ECC_ER		| \
-				MEMAC_IEVNT_LI_FAULT		| \
-				MEMAC_IEVNT_RX_EMPTY		| \
-				MEMAC_IEVNT_TX_EMPTY		| \
-				MEMAC_IEVNT_RX_LOWP		| \
-				MEMAC_IEVNT_PHY_LOS		| \
-				MEMAC_IEVNT_REM_FAULT		| \
-				MEMAC_IEVNT_LOC_FAULT))
 
 enum memac_counters {
 	E_MEMAC_COUNTER_R64,
@@ -337,45 +327,66 @@ struct memac_cfg {
 	uint32_t	tx_ipg_length;
 };
 
+
 /**
- * memac_defconfig() - Get default MEMAC configuration
+ * fman_memac_defconfig() - Get default MEMAC configuration
  * @cfg:    pointer to configuration structure.
  *
  * Call this function to obtain a default set of configuration values for
  * initializing MEMAC. The user can overwrite any of the values before calling
- * memac_init(), if specific configuration needs to be applied.
+ * fman_memac_init(), if specific configuration needs to be applied.
  */
-void memac_defconfig(struct memac_cfg *cfg);
-void memac_set_promiscuous(struct memac_regs *regs, bool val);
-void memac_hardware_add_addr_in_paddr(struct memac_regs *regs,
-					uint8_t *adr,
-					uint8_t paddr_num);
-void memac_hardware_clear_addr_in_paddr(struct memac_regs *regs,
-					uint8_t paddr_num);
-void memac_enable(struct memac_regs *regs, bool apply_rx, bool apply_tx);
-void memac_disable(struct memac_regs *regs, bool apply_rx, bool apply_tx);
-uint64_t memac_get_counter(struct memac_regs *regs,
-				enum memac_counters reg_name);
-void memac_set_tx_pause_frames(struct memac_regs *regs,
-				uint8_t priority,
-				uint16_t pauseTime,
-				uint16_t threshTime);
-uint16_t memac_get_max_frame_length(struct memac_regs *regs);
-void memac_init(struct memac_regs *regs,
-		struct memac_cfg *cfg,
-		enum enet_interface enet_interface,
-		enum enet_speed enet_speed,
-		uint32_t exceptions);
-void memac_set_exception(struct memac_regs *regs, uint32_t val, bool enable);
-void memac_reset_counter(struct memac_regs *regs);
-void memac_reset(struct memac_regs *regs);
-void memac_set_hash_table(struct memac_regs *regs, uint32_t val);
-void memac_set_rx_ignore_pause_frames(struct memac_regs  *regs,bool enable);
-void memac_set_loopback(struct memac_regs *regs, bool enable);
-void memac_reset_counter(struct memac_regs *regs);
-uint32_t memac_get_event(struct memac_regs *regs, uint32_t ev_mask);
-void memac_ack_event(struct memac_regs *regs, uint32_t ev_mask);
-uint32_t memac_get_interrupt_mask(struct memac_regs *regs);
+void fman_memac_defconfig(struct memac_cfg *cfg);
+
+int fman_memac_init(struct memac_regs *regs,
+	struct memac_cfg *cfg,
+	enum enet_interface enet_interface,
+	enum enet_speed enet_speed,
+	uint32_t exceptions);
+
+void fman_memac_enable(struct memac_regs *regs, bool apply_rx, bool apply_tx);
+
+void fman_memac_disable(struct memac_regs *regs, bool apply_rx, bool apply_tx);
+
+void fman_memac_set_promiscuous(struct memac_regs *regs, bool val);
+
+void fman_memac_add_addr_in_paddr(struct memac_regs *regs,
+	uint8_t *adr,
+	uint8_t paddr_num);
+
+void fman_memac_clear_addr_in_paddr(struct memac_regs *regs,
+	uint8_t paddr_num);
+
+uint64_t fman_memac_get_counter(struct memac_regs *regs,
+	enum memac_counters reg_name);
+
+void fman_memac_set_tx_pause_frames(struct memac_regs *regs,
+	uint8_t priority,
+	uint16_t pauseTime,
+	uint16_t threshTime);
+
+uint16_t fman_memac_get_max_frame_len(struct memac_regs *regs);
+
+void fman_memac_set_exception(struct memac_regs *regs, uint32_t val, bool enable);
+
+void fman_memac_reset_stat(struct memac_regs *regs);
+
+void fman_memac_reset(struct memac_regs *regs);
+
+void fman_memac_set_hash_table(struct memac_regs *regs, uint32_t val);
+
+void fman_memac_set_rx_ignore_pause_frames(struct memac_regs  *regs,bool enable);
+
+uint32_t fman_memac_get_event(struct memac_regs *regs, uint32_t ev_mask);
+
+void fman_memac_ack_event(struct memac_regs *regs, uint32_t ev_mask);
+
+uint32_t fman_memac_get_interrupt_mask(struct memac_regs *regs);
+
+void fman_memac_adjust_link(struct memac_regs *regs,
+        enum enet_interface iface_mode,
+        enum enet_speed speed, bool full_dx);
+
 
 
 #endif /*__FSL_FMAN_MEMAC_H*/

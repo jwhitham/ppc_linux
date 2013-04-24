@@ -34,31 +34,31 @@
 #include "fsl_fman_dtsec.h"
 
 
-void dtsec_stop_rx(struct dtsec_regs *regs)
+void fman_dtsec_stop_rx(struct dtsec_regs *regs)
 {
 	/* Assert the graceful stop bit */
 	iowrite32be(ioread32be(&regs->rctrl) | RCTRL_GRS, &regs->rctrl);
 }
 
-void dtsec_stop_tx(struct dtsec_regs *regs)
+void fman_dtsec_stop_tx(struct dtsec_regs *regs)
 {
 	/* Assert the graceful stop bit */
 	iowrite32be(ioread32be(&regs->tctrl) | DTSEC_TCTRL_GTS, &regs->tctrl);
 }
 
-void dtsec_start_tx(struct dtsec_regs *regs)
+void fman_dtsec_start_tx(struct dtsec_regs *regs)
 {
 	/* clear the graceful stop bit */
 	iowrite32be(ioread32be(&regs->tctrl) & ~DTSEC_TCTRL_GTS, &regs->tctrl);
 }
 
-void dtsec_start_rx(struct dtsec_regs *regs)
+void fman_dtsec_start_rx(struct dtsec_regs *regs)
 {
 	/* clear the graceful stop bit */
 	iowrite32be(ioread32be(&regs->rctrl) & ~RCTRL_GRS, &regs->rctrl);
 }
 
-void dtsec_defconfig(struct dtsec_cfg *cfg)
+void fman_dtsec_defconfig(struct dtsec_cfg *cfg)
 {
 	cfg->halfdup_on = DEFAULT_HALFDUP_ON;
 	cfg->halfdup_retransmit = DEFAULT_HALFDUP_RETRANSMIT;
@@ -98,7 +98,7 @@ void dtsec_defconfig(struct dtsec_cfg *cfg)
 	cfg->tbi_phy_addr = DEFAULT_TBI_PHY_ADDR;
 }
 
-int dtsec_init(struct dtsec_regs *regs, struct dtsec_cfg *cfg,
+int fman_dtsec_init(struct dtsec_regs *regs, struct dtsec_cfg *cfg,
 		enum enet_interface iface_mode,
 		enum enet_speed iface_speed,
 		uint8_t *macaddr,
@@ -334,22 +334,22 @@ UNUSED(fm_rev_maj);UNUSED(fm_rev_min);
 		iowrite32be(0, &regs->gaddr[i]);
 	}
 
-	dtsec_reset_stat(regs);
+	fman_dtsec_reset_stat(regs);
 
 	return 0;
 }
 
-uint16_t dtsec_get_max_frame_len(struct dtsec_regs *regs)
+uint16_t fman_dtsec_get_max_frame_len(struct dtsec_regs *regs)
 {
 	return (uint16_t)ioread32be(&regs->maxfrm);
 }
 
-void dtsec_set_max_frame_len(struct dtsec_regs *regs, uint16_t length)
+void fman_dtsec_set_max_frame_len(struct dtsec_regs *regs, uint16_t length)
 {
 	iowrite32be(length, &regs->maxfrm);
 }
 
-void dtsec_set_mac_address(struct dtsec_regs *regs, uint8_t *adr)
+void fman_dtsec_set_mac_address(struct dtsec_regs *regs, uint8_t *adr)
 {
 	uint32_t tmp;
 
@@ -364,7 +364,7 @@ void dtsec_set_mac_address(struct dtsec_regs *regs, uint8_t *adr)
 	iowrite32be(tmp, &regs->macstnaddr2);
 }
 
-void dtsec_get_mac_address(struct dtsec_regs *regs, uint8_t *macaddr)
+void fman_dtsec_get_mac_address(struct dtsec_regs *regs, uint8_t *macaddr)
 {
 	uint32_t tmp1, tmp2;
 
@@ -379,7 +379,7 @@ void dtsec_get_mac_address(struct dtsec_regs *regs, uint8_t *macaddr)
 	macaddr[5] = (uint8_t)((tmp1 & 0xff000000) >> 24);
 }
 
-void dtsec_set_bucket(struct dtsec_regs *regs, int bucket, bool enable)
+void fman_dtsec_set_bucket(struct dtsec_regs *regs, int bucket, bool enable)
 {
 	int reg_idx = (bucket >> 5) & 0xf;
 	int bit_idx = bucket & 0x1f;
@@ -397,7 +397,7 @@ void dtsec_set_bucket(struct dtsec_regs *regs, int bucket, bool enable)
 		iowrite32be(ioread32be(reg) & (~bit_mask), reg);
 }
 
-void dtsec_reset_filter_table(struct dtsec_regs *regs, bool mcast, bool ucast)
+void fman_dtsec_reset_filter_table(struct dtsec_regs *regs, bool mcast, bool ucast)
 {
 	int		i;
 	bool	ghtx;
@@ -414,7 +414,7 @@ void dtsec_reset_filter_table(struct dtsec_regs *regs, bool mcast, bool ucast)
 	}
 }
 
-int dtsec_set_tbi_phy_addr(struct dtsec_regs *regs,
+int fman_dtsec_set_tbi_phy_addr(struct dtsec_regs *regs,
 		uint8_t addr)
 {
 	if (addr > 0 && addr < 32)
@@ -425,7 +425,7 @@ int dtsec_set_tbi_phy_addr(struct dtsec_regs *regs,
 	return 0;
 }
 
-int dtsec_adjust_link(struct dtsec_regs *regs,
+int fman_dtsec_adjust_link(struct dtsec_regs *regs,
 		enum enet_interface iface_mode,
 		enum enet_speed speed, bool full_dx)
 {
@@ -457,7 +457,7 @@ int dtsec_adjust_link(struct dtsec_regs *regs,
 	return 0;
 }
 
-void dtsec_set_uc_promisc(struct dtsec_regs *regs, bool enable)
+void fman_dtsec_set_uc_promisc(struct dtsec_regs *regs, bool enable)
 {
 	uint32_t		tmp;
 
@@ -471,7 +471,7 @@ void dtsec_set_uc_promisc(struct dtsec_regs *regs, bool enable)
 	iowrite32be(tmp, &regs->rctrl);
 }
 
-void dtsec_set_mc_promisc(struct dtsec_regs *regs, bool enable)
+void fman_dtsec_set_mc_promisc(struct dtsec_regs *regs, bool enable)
 {
 	uint32_t		tmp;
 
@@ -485,7 +485,7 @@ void dtsec_set_mc_promisc(struct dtsec_regs *regs, bool enable)
 	iowrite32be(tmp, &regs->rctrl);
 }
 
-bool dtsec_get_clear_carry_regs(struct dtsec_regs *regs,
+bool fman_dtsec_get_clear_carry_regs(struct dtsec_regs *regs,
 				uint32_t *car1, uint32_t *car2)
 {
 	/* read carry registers */
@@ -501,14 +501,14 @@ bool dtsec_get_clear_carry_regs(struct dtsec_regs *regs,
 }
 
 
-void dtsec_reset_stat(struct dtsec_regs *regs)
+void fman_dtsec_reset_stat(struct dtsec_regs *regs)
 {
 	/* clear HW counters */
 	iowrite32be(ioread32be(&regs->ecntrl) |
 			DTSEC_ECNTRL_CLRCNT, &regs->ecntrl);
 }
 
-int dtsec_set_stat_level(struct dtsec_regs *regs, enum mac_stat_level level)
+int fman_dtsec_set_stat_level(struct dtsec_regs *regs, enum mac_stat_level level)
 {
 	switch (level) {
 	case E_MAC_STAT_NONE:
@@ -550,7 +550,7 @@ int dtsec_set_stat_level(struct dtsec_regs *regs, enum mac_stat_level level)
 	return 0;
 }
 
-void dtsec_set_ts(struct dtsec_regs *regs, bool en)
+void fman_dtsec_set_ts(struct dtsec_regs *regs, bool en)
 {
 	if (en) {
 		iowrite32be(ioread32be(&regs->rctrl) | RCTRL_RTSE,
@@ -565,7 +565,7 @@ void dtsec_set_ts(struct dtsec_regs *regs, bool en)
 	}
 }
 
-void dtsec_enable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx)
+void fman_dtsec_enable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx)
 {
 	uint32_t tmp;
 
@@ -580,13 +580,13 @@ void dtsec_enable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx)
 	iowrite32be(tmp, &regs->maccfg1);
 }
 
-void dtsec_clear_addr_in_paddr(struct dtsec_regs *regs, uint8_t paddr_num)
+void fman_dtsec_clear_addr_in_paddr(struct dtsec_regs *regs, uint8_t paddr_num)
 {
     iowrite32be(0, &regs->macaddr[paddr_num].exact_match1);
     iowrite32be(0, &regs->macaddr[paddr_num].exact_match2);
 }
 
-void dtsec_add_addr_in_paddr(struct dtsec_regs *regs,
+void fman_dtsec_add_addr_in_paddr(struct dtsec_regs *regs,
 				uint64_t addr,
 				uint8_t paddr_num)
 {
@@ -609,7 +609,7 @@ void dtsec_add_addr_in_paddr(struct dtsec_regs *regs,
 	iowrite32be(tmp, &regs->macaddr[paddr_num].exact_match2);
 }
 
-void dtsec_disable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx)
+void fman_dtsec_disable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx)
 {
 	uint32_t tmp;
 
@@ -624,7 +624,7 @@ void dtsec_disable(struct dtsec_regs *regs, bool apply_rx, bool apply_tx)
 	iowrite32be(tmp, &regs->maccfg1);
 }
 
-void dtsec_set_tx_pause_time(struct dtsec_regs *regs, uint16_t time)
+void fman_dtsec_set_tx_pause_frames(struct dtsec_regs *regs, uint16_t time)
 {
 	uint32_t ptv = 0;
 
@@ -644,7 +644,7 @@ void dtsec_set_tx_pause_time(struct dtsec_regs *regs, uint16_t time)
 				&regs->maccfg1);
 }
 
-void dtsec_handle_rx_pause(struct dtsec_regs *regs, bool en)
+void fman_dtsec_handle_rx_pause(struct dtsec_regs *regs, bool en)
 {
 	uint32_t tmp;
 
@@ -658,32 +658,32 @@ void dtsec_handle_rx_pause(struct dtsec_regs *regs, bool en)
 	iowrite32be(tmp, &regs->maccfg1);
 }
 
-uint32_t dtsec_get_rctrl(struct dtsec_regs *regs)
+uint32_t fman_dtsec_get_rctrl(struct dtsec_regs *regs)
 {
 	return ioread32be(&regs->rctrl);
 }
 
-uint32_t dtsec_get_revision(struct dtsec_regs *regs)
+uint32_t fman_dtsec_get_revision(struct dtsec_regs *regs)
 {
 	return ioread32be(&regs->tsec_id);
 }
 
-uint32_t dtsec_get_event(struct dtsec_regs *regs, uint32_t ev_mask)
+uint32_t fman_dtsec_get_event(struct dtsec_regs *regs, uint32_t ev_mask)
 {
 	return ioread32be(&regs->ievent) & ev_mask;
 }
 
-void dtsec_ack_event(struct dtsec_regs *regs, uint32_t ev_mask)
+void fman_dtsec_ack_event(struct dtsec_regs *regs, uint32_t ev_mask)
 {
 	iowrite32be(ev_mask, &regs->ievent);
 }
 
-uint32_t dtsec_get_interrupt_mask(struct dtsec_regs *regs)
+uint32_t fman_dtsec_get_interrupt_mask(struct dtsec_regs *regs)
 {
 	return ioread32be(&regs->imask);
 }
 
-uint32_t dtsec_check_and_clear_tmr_event(struct dtsec_regs *regs)
+uint32_t fman_dtsec_check_and_clear_tmr_event(struct dtsec_regs *regs)
 {
 	uint32_t event;
 
@@ -695,29 +695,29 @@ uint32_t dtsec_check_and_clear_tmr_event(struct dtsec_regs *regs)
 	return event;
 }
 
-void dtsec_enable_tmr_interrupt(struct dtsec_regs *regs)
+void fman_dtsec_enable_tmr_interrupt(struct dtsec_regs *regs)
 {
 	iowrite32be(ioread32be(&regs->tmr_pemask) | TMR_PEMASK_TSREEN,
 			&regs->tmr_pemask);
 }
 
-void dtsec_disable_tmr_interrupt(struct dtsec_regs *regs)
+void fman_dtsec_disable_tmr_interrupt(struct dtsec_regs *regs)
 {
 	iowrite32be(ioread32be(&regs->tmr_pemask) & ~TMR_PEMASK_TSREEN,
 			&regs->tmr_pemask);
 }
 
-void dtsec_enable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask)
+void fman_dtsec_enable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask)
 {
 	iowrite32be(ioread32be(&regs->imask) | ev_mask, &regs->imask);
 }
 
-void dtsec_disable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask)
+void fman_dtsec_disable_interrupt(struct dtsec_regs *regs, uint32_t ev_mask)
 {
 	iowrite32be(ioread32be(&regs->imask) & ~ev_mask, &regs->imask);
 }
 
-uint32_t dtsec_get_stat_counter(struct dtsec_regs *regs,
+uint32_t fman_dtsec_get_stat_counter(struct dtsec_regs *regs,
 		enum dtsec_stat_counters reg_name)
 {
 	uint32_t ret_val;

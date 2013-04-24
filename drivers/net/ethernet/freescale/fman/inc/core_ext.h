@@ -83,3 +83,4 @@ void CORE_MemoryBarrier(void);
 #define fsl_mem_core_barrier() CORE_MemoryBarrier()
 
 #endif /* __CORE_EXT_H */
+
