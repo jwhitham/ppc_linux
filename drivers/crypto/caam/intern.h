@@ -70,6 +70,9 @@ struct caam_drv_private {
 
 	struct device *dev;
 	struct device **jrdev; /* Alloc'ed array per sub-device */
+#ifdef CONFIG_FSL_QMAN
+	struct device *qidev;
+#endif
 	spinlock_t jr_alloc_lock;
 	struct platform_device *pdev;
 
