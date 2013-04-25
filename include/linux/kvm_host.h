@@ -380,6 +380,7 @@ struct kvm {
 	long mmu_notifier_count;
 #endif
 	long tlbs_dirty;
+	struct list_head devices;
 };
 
 #define kvm_err(fmt, ...) \
@@ -1000,8 +1001,8 @@ struct kvm_device_ops;
 struct kvm_device {
 	struct kvm_device_ops *ops;
 	struct kvm *kvm;
-	atomic_t users;
 	void *private;
+	struct list_head vm_node;
 };
 
 /* create, destroy, and name are mandatory */
