@@ -184,7 +184,8 @@ void kvmppc_map_magic(struct kvm_vcpu *vcpu)
 		       MAS3_SW | MAS3_SR | MAS3_UW | MAS3_UR;
 	magic.mas8 = 0;
 
-	__write_host_tlbe(&magic, MAS0_TLBSEL(1) | MAS0_ESEL(tlbcam_index));
+	__write_host_tlbe(&magic, MAS0_TLBSEL(1) | MAS0_ESEL(tlbcam_index),
+			  &magic.mas8);
 	preempt_enable();
 }
 #endif
