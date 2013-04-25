@@ -251,8 +251,8 @@ config P3041_DS
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
         select HAS_FSL_QBMAN
-	select MDIO_BUS_MUX if DPA_ETH
-	select MDIO_BUS_MUX_MMIOREG if DPA_ETH
+	select MDIO_BUS_MUX if FSL_DPAA_ETH
+	select MDIO_BUS_MUX_MMIOREG if FSL_DPAA_ETH
 	help
 	  This option enables support for the P3041 DS board
 
@@ -267,7 +267,7 @@ config P4080_DS
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
         select HAS_FSL_QBMAN
-	select MDIO_BUS_MUX if DPA_ETH
+	select MDIO_BUS_MUX if FSL_DPAA_ETH
 	select MDIO_BUS_MUX_GPIO
 	help
 	  This option enables support for the P4080 DS board
@@ -286,8 +286,8 @@ config P5020_DS
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
         select HAS_FSL_QBMAN
-	select MDIO_BUS_MUX if DPA_ETH
-	select MDIO_BUS_MUX_MMIOREG if DPA_ETH
+	select MDIO_BUS_MUX if FSL_DPAA_ETH
+	select MDIO_BUS_MUX_MMIOREG if FSL_DPAA_ETH
 	help
 	  This option enables support for the P5020 DS board
 
@@ -303,8 +303,8 @@ config P5040_DS
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
         select HAS_FSL_QBMAN
-	select MDIO_BUS_MUX if DPA_ETH
-	select MDIO_BUS_MUX_MMIOREG if DPA_ETH
+	select MDIO_BUS_MUX if FSL_DPAA_ETH
+	select MDIO_BUS_MUX_MMIOREG if FSL_DPAA_ETH
 	help
 	  This option enables support for the P5040 DS board
 
@@ -337,8 +337,8 @@ config T4240_QDS
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
 	select HAS_FSL_QBMAN
-	select MDIO_BUS_MUX if DPA_ETH
-	select MDIO_BUS_MUX_MMIOREG if DPA_ETH
+	select MDIO_BUS_MUX if FSL_DPAA_ETH
+	select MDIO_BUS_MUX_MMIOREG if FSL_DPAA_ETH
 	help
 	  This option enables support for the T4240 QDS board
 
@@ -353,8 +353,8 @@ config B4_QDS
 	select ARCH_REQUIRE_GPIOLIB
 	select HAS_RAPIDIO
 	select PPC_EPAPR_HV_PIC
-	select MDIO_BUS_MUX if DPA_ETH
-	select MDIO_BUS_MUX_MMIOREG if DPA_ETH
+	select MDIO_BUS_MUX if FSL_DPAA_ETH
+	select MDIO_BUS_MUX_MMIOREG if FSL_DPAA_ETH
 	help
 	  This option enables support for the B4 QDS board
 	  The B4 application development system B4 QDS is a complete
