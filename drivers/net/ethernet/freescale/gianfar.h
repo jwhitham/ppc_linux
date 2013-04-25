@@ -315,8 +315,6 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define DMACTRL_INIT_SETTINGS   0x000000c3
 #define DMACTRL_GRS             0x00000010
 #define DMACTRL_GTS             0x00000008
-#define TSTAT_TXF_MASK_ALL	0x0000FF00
-#define TSTAT_TXF0_MASK		0x00008000
 
 #define TSTAT_CLEAR_THALT_ALL	0xFF000000
 #define TSTAT_CLEAR_THALT	0x80000000
