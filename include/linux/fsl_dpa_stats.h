@@ -463,11 +463,13 @@ struct dpa_stats_cnt_traffic_mng {
 	enum dpa_stats_cnt_traffic_mng_src src;
 
 	/*
-	 * Depending on the Traffic Manager source, the 'src_id' has a
-	 * different meaning: it represents the 'class id' or the
-	 * 'congestion group id'
+	 * Depending on the Traffic Manager source, the 'traffic_obj' has a
+	 * different meaning: it represents a pointer to a structure of type
+	 * 'qm_ceetm_cq' in case the traffic source is a "Class Queue" or a
+	 * pointer to a structure of type 'qm_ceetm_ccg' in case the traffic
+	 * source is a "Class Congestion Group"
 	 */
-	uint8_t src_id;
+	void *traffic_mng;
 
 	/*
 	 * Traffic Manager Class: Number of bytes/frames dequeued from a Class
@@ -666,11 +668,13 @@ struct dpa_stats_cls_cnt_traffic_mng {
 	enum dpa_stats_cnt_traffic_mng_src src;
 
 	/*
-	 * Depending on the Traffic Manager source, the 'src_id' has a
-	 * different meaning: it represents the array of 'class ids' or the
-	 * array of 'congestion group ids'
+	 * Depending on the Traffic Manager source, the 'traffic_obj' has a
+	 * different meaning: it represents an array of pointers to structures
+	 * of type 'qm_ceetm_cq' in case the traffic source is a "Class Queue"
+	 * or an array of pointers to structures of type 'qm_ceetm_ccg' in case
+	 * the traffic source is a "Class Congestion Group"
 	 */
-	uint8_t *src_id;
+	void **traffic_mng;
 
 	/*
 	 * Traffic Manager Class: Number of bytes/frames dequeued from a Class
