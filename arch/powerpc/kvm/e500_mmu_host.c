@@ -133,15 +133,21 @@ static inline void write_host_tlbe(struct kvmppc_vcpu_e500 *vcpu_e500,
 		int tlbsel, int sesel, struct kvm_book3e_206_tlb_entry *stlbe)
 {
 	u32 mas0;
+	/* We use a pointer here bacause LPID value can change dynamically */
+	uint32_t *lpid = NULL;
+
+#ifdef CONFIG_KVM_BOOKE_HV
+	lpid = &vcpu_e500->vcpu.arch.lpid;
+#endif
 
 	if (tlbsel == 0) {
 		mas0 = get_host_mas0(stlbe->mas2);
-		__write_host_tlbe(stlbe, mas0, &vcpu_e500->vcpu.arch.lpid);
+		__write_host_tlbe(stlbe, mas0, lpid);
 	} else {
 		__write_host_tlbe(stlbe,
 				  MAS0_TLBSEL(1) |
 				  MAS0_ESEL(to_htlb1_esel(sesel)),
-				  &vcpu_e500->vcpu.arch.lpid);
+				  lpid);
 	}
 }
 
@@ -185,7 +191,7 @@ void kvmppc_map_magic(struct kvm_vcpu *vcpu)
 	magic.mas8 = 0;
 
 	__write_host_tlbe(&magic, MAS0_TLBSEL(1) | MAS0_ESEL(tlbcam_index),
-			  &magic.mas8);
+			  NULL);
 	preempt_enable();
 }
 #endif
