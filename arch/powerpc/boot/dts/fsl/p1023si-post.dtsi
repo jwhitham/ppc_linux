@@ -292,6 +292,11 @@
 		fsl,has-rstcr;
 	};
 
+/include/ "pq3-power.dtsi"
+	power@e0070 {
+		compatible = "fsl,p1023-pmc", "fsl,mpc8548-pmc";
+	};
+
 	fman0: fman@100000 {
 		#address-cells = <1>;
 		#size-cells = <1>;
