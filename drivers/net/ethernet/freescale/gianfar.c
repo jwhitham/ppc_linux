@@ -2084,13 +2084,9 @@ static void free_skb_resources(struct gfar_private *priv)
 
 	/* Go through all the buffer descriptors and free their data buffers */
 	for (i = 0; i < priv->num_tx_queues; i++) {
-		struct netdev_queue *txq;
-
 		tx_queue = priv->tx_queue[i];
-		txq = netdev_get_tx_queue(tx_queue->dev, tx_queue->qindex);
 		if (tx_queue->tx_skbuff)
 			free_skb_tx_queue(tx_queue);
-		netdev_tx_reset_queue(txq);
 	}
 
 	for (i = 0; i < priv->num_rx_queues; i++) {
@@ -2735,8 +2731,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 #ifndef CONFIG_RX_TX_BUFF_XCHG
-	netdev_tx_sent_queue(txq, skb->len);
-
 	/* We can work in parallel with gfar_clean_tx_ring(), except
 	 * when modifying num_txbdfree. Note that we didn't grab the lock
 	 * when we were reading the num_txbdfree and checking for available
@@ -2911,8 +2905,6 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 	lstatus |= BD_LFLAG(TXBD_CRC | TXBD_READY) | skb_headlen(skb);
 
 #ifndef CONFIG_RX_TX_BUFF_XCHG
-	netdev_tx_sent_queue(txq, skb->len);
-
 	/* We can work in parallel with gfar_clean_tx_ring(), except
 	 * when modifying num_txbdfree. Note that we didn't grab the lock
 	 * when we were reading the num_txbdfree and checking for available
@@ -3210,7 +3202,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 	int i;
 	int howmany = 0;
 	int tqi = tx_queue->qindex;
-	unsigned int bytes_sent = 0;
 	u32 lstatus;
 	size_t buflen;
 
@@ -3297,8 +3288,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 			bdp = next_txbd(bdp, base, tx_ring_size);
 		}
 
-		bytes_sent += skb->len;
-
 		gfar_recycle_skb(priv, skb);
 
 		tx_queue->tx_skbuff[skb_dirtytx] = NULL;
@@ -3319,8 +3308,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 	/* Update dirty indicators */
 	tx_queue->skb_dirtytx = skb_dirtytx;
 	tx_queue->dirty_tx = bdp;
-
-	netdev_tx_completed_queue(txq, howmany, bytes_sent);
 }
 
 static void gfar_schedule_tx_cleanup(struct gfar_priv_grp *grp)
