@@ -862,6 +862,7 @@ static void __cold setup_memac(struct mac_device *mac_dev)
 	mac_dev->change_addr    = change_addr;
 	mac_dev->set_multi      = set_multi;
 	mac_dev->uninit		= uninit;
+	mac_dev->get_mac_handle		= get_mac_handle;
 	mac_dev->set_tx_pause		= set_tx_pause;
 	mac_dev->set_rx_pause		= set_rx_pause;
 	mac_dev->fm_rtc_enable		= fm_rtc_enable;
