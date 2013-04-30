@@ -48,7 +48,7 @@
 #include "fm_common.h"
 #include "dtsec.h"
 #include "fsl_fman_dtsec.h"
-
+#include "fsl_fman_dtsec_mii_acc.h"
 
 /*****************************************************************************/
 /*                      Internal routines                                    */
@@ -1109,7 +1109,10 @@ static t_Error DtsecRestartAutoneg(t_Handle h_Dtsec)
     SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
 
     DTSEC_MII_ReadPhyReg(p_Dtsec, p_Dtsec->tbi_phy_addr, 0, &tmpReg16);
-    tmpReg16 |= (PHY_CR_RESET_AN);
+
+    tmpReg16 &= ~( PHY_CR_SPEED0 | PHY_CR_SPEED1 );
+    tmpReg16 |= (PHY_CR_ANE | PHY_CR_RESET_AN | PHY_CR_FULLDUPLEX | PHY_CR_SPEED1);
+
     DTSEC_MII_WritePhyReg(p_Dtsec, p_Dtsec->tbi_phy_addr, 0, tmpReg16);
 
     return E_OK;

@@ -57,14 +57,22 @@
 
 
 /* PHY Control Register */
+
+#define PHY_CR_PHY_RESET    0x8000
 #define PHY_CR_LOOPBACK     0x4000
 #define PHY_CR_SPEED0       0x2000
 #define PHY_CR_ANE          0x1000
+#define PHY_CR_RESET_AN     0x0200
 #define PHY_CR_FULLDUPLEX   0x0100
 #define PHY_CR_SPEED1       0x0040
 
+
 #define PHY_TBICON_SRESET   0x8000
-#define PHY_TBICON_SPEED2   0x0020
+#define PHY_TBICON_CLK_SEL  0x0020
+
+#define PHY_TBIANA_SGMII    0x4001
+#define PHY_TBIANA_1000X    0x01a0
+
 
 /* register map */
 

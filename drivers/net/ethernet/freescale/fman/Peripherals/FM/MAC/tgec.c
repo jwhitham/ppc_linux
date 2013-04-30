@@ -730,7 +730,7 @@ static t_Error TgecTxEccWorkaround(t_Tgec *p_Tgec)
     fman_tgec_set_promiscuous(p_Tgec->p_MemMap, FALSE);
     fman_tgec_enable(p_Tgec->p_MemMap, FALSE, FALSE);
     fman_tgec_reset_stat(p_Tgec->p_MemMap);
-	fman_tgec_ack_event(p_Tgec->p_MemMap, 0xffffffff);
+    fman_tgec_ack_event(p_Tgec->p_MemMap, 0xffffffff);
 #if defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0)
     if (err)
         XX_Print("FAILED!\n");

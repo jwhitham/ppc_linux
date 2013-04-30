@@ -135,22 +135,6 @@ typedef  uint32_t t_ErrorDisable;
 #define     VAL16BIT    0x00010000
 #define     VAL12BIT    0x00001000
 
-/* PHY Control Register */
-#define PHY_CR_PHY_RESET    0x8000
-#define PHY_CR_LOOPBACK     0x4000
-#define PHY_CR_SPEED0       0x2000
-#define PHY_CR_ANE          0x1000
-#define PHY_CR_RESET_AN     0x0200
-#define PHY_CR_FULLDUPLEX   0x0100
-#define PHY_CR_SPEED1       0x0040
-
-#define PHY_TBICON_SRESET   0x8000
-#define PHY_TBICON_CLK_SEL  0x0020
-
-#define PHY_TBIANA_SGMII    0x4001
-#define PHY_TBIANA_1000X    0x01a0
-
-
 /* CAR1/2 bits */
 #define CAR1_TR64   0x80000000
 #define CAR1_TR127  0x40000000
