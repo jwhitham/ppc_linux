@@ -65,13 +65,6 @@
 	};
 };
 
-&bportals {
-/include/ "qoriq-bman2-portals.dtsi"
-};
-&qportals {
-/include/ "qoriq-qman2-portals.dtsi"
-};
-
 &dcsr {
 	#address-cells = <1>;
 	#size-cells = <1>;
