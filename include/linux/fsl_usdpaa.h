@@ -177,7 +177,6 @@ struct usdpaa_ioctl_portal_map {
 	/* Qman-specific return values */
 	uint16_t channel;
 	uint32_t pools;
-	uint32_t irq;
 };
 
 #ifdef CONFIG_COMPAT
@@ -193,7 +192,6 @@ struct compat_usdpaa_ioctl_portal_map {
 	/* Qman-specific return values */
 	uint16_t channel;
 	uint32_t pools;
-	uint32_t irq;
 };
 #define USDPAA_IOCTL_PORTAL_MAP_COMPAT \
 	_IOWR(USDPAA_IOCTL_MAGIC, 0x07, struct compat_usdpaa_ioctl_portal_map)
@@ -206,8 +204,25 @@ struct compat_usdpaa_ioctl_portal_map {
 #define USDPAA_IOCTL_PORTAL_UNMAP \
 	_IOW(USDPAA_IOCTL_MAGIC, 0x08, struct usdpaa_portal_map)
 
+struct usdpaa_ioctl_irq_map {
+	enum usdpaa_portal_type type; /* Type of portal to map */
+	int fd; /* File descriptor that contains the portal */
+	void *portal_cinh; /* Cache inhibited area to identify the portal */
+};
+
 #define USDPAA_IOCTL_PORTAL_IRQ_MAP \
-	_IOW(USDPAA_IOCTL_MAGIC, 0x09, uint32_t)
+	_IOW(USDPAA_IOCTL_MAGIC, 0x09, struct usdpaa_ioctl_irq_map)
+
+#ifdef CONFIG_COMPAT
+
+struct compat_ioctl_irq_map {
+	enum usdpaa_portal_type type; /* Type of portal to map */
+	compat_int_t fd; /* File descriptor that contains the portal */
+	compat_uptr_t portal_cinh; /* Used identify the portal */};
+
+#define USDPAA_IOCTL_PORTAL_IRQ_MAP_COMPAT \
+	_IOW(USDPAA_IOCTL_MAGIC, 0x09, struct compat_ioctl_irq_map)
+#endif
 
 /* ioctl to query the amount of DMA memory used in the system */
 struct usdpaa_ioctl_dma_used {

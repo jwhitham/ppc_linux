@@ -190,7 +190,9 @@ static int qpool_cleanup(u32 qp)
 void qman_release_pool_range(u32 qp, u32 count)
 {
 	u32 total_invalid = release_id_range(&qpalloc, qp,
-					     count, qpool_cleanup);
+					     count, NULL);
+	/* Temporarly disable QMan Pool recovery due to a frequent
+	   hang in qpool_cleanup() */
 	if (total_invalid) {
 		/* Pool channels are almost always used individually */
 		if (count == 1)

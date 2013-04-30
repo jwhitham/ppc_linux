@@ -235,6 +235,12 @@ int qman_testwrite_cgr(struct qman_cgr *cgr, u64 i_bcnt,
 int qman_setup_fq_lookup_table(size_t num_entries);
 #endif
 
+/* Lookup a QMan portal associated with an FD */
+struct qm_portal_config *usdpaa_get_qm_portal_config(struct file *filp,
+						     void *cinh);
+
+
+
 /*************************************************/
 /*   QMan s/w corenet portal, low-level i/face   */
 /*************************************************/

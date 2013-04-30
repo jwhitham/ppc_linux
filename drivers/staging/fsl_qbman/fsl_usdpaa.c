@@ -1054,7 +1054,6 @@ static long ioctl_portal_map(struct file *fp, struct ctx *ctx,
 		mapping->phys = &mapping->qportal->addr_phys[0];
 		mapping->user.channel = mapping->qportal->public_cfg.channel;
 		mapping->user.pools = mapping->qportal->public_cfg.pools;
-		mapping->user.irq = mapping->qportal->public_cfg.irq;
 	} else if (mapping->user.type == usdpaa_portal_bman) {
 		mapping->bportal = bm_get_unused_portal();
 		if (!mapping->bportal) {
@@ -1062,7 +1061,6 @@ static long ioctl_portal_map(struct file *fp, struct ctx *ctx,
 			goto err_get_portal;
 		}
 		mapping->phys = &mapping->bportal->addr_phys[0];
-		mapping->user.irq = mapping->bportal->public_cfg.irq;
 	} else {
 		ret = -EINVAL;
 		goto err_copy_from_user;
@@ -1261,7 +1259,6 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 		input.addr.cena = ptr_to_compat(converted.addr.cena);
 		input.channel = converted.channel;
 		input.pools = converted.pools;
-		input.irq = converted.irq;
 		if (copy_to_user(a, &input, sizeof(input)))
 			return -EFAULT;
 		return ret;
@@ -1282,6 +1279,58 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 		return usdpaa_ioctl(fp, cmd, arg);
 	}
 	return -EINVAL;
+}
+
+struct qm_portal_config *usdpaa_get_qm_portal_config(struct file *filp,
+						     void *hint)
+{
+	/* Walk the list of portals for filp and return the config
+	   for the portal that matches the hint */
+
+	struct ctx *context;
+	struct portal_mapping *portal;
+
+	/* First sanitize the filp */
+	if (filp->f_op->open != usdpaa_open)
+		return NULL;
+	context = filp->private_data;
+	spin_lock(&context->lock);
+	list_for_each_entry(portal, &context->portals, list) {
+		if (portal->user.type == usdpaa_portal_qman &&
+		    portal->user.addr.cinh == hint) {
+			spin_unlock(&context->lock);
+			return portal->qportal;
+		}
+	}
+	spin_unlock(&context->lock);
+	return NULL;
+}
+
+struct bm_portal_config *usdpaa_get_bm_portal_config(struct file *filp,
+						     void *hint)
+{
+	/* Walk the list of portals for filp and return the config
+	   for the portal that matches the hint */
+
+	struct ctx *context;
+	struct portal_mapping *portal;
+
+	/* First sanitize the filp */
+	if (filp->f_op->open != usdpaa_open)
+		return NULL;
+
+	context = filp->private_data;
+
+	spin_lock(&context->lock);
+	list_for_each_entry(portal, &context->portals, list) {
+		if (portal->user.type == usdpaa_portal_bman &&
+		    portal->user.addr.cinh == hint) {
+			spin_unlock(&context->lock);
+			return portal->bportal;
+		}
+	}
+	spin_unlock(&context->lock);
+	return NULL;
 }
 
 static const struct file_operations usdpaa_fops = {

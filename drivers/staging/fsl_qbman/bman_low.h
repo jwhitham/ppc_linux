@@ -42,6 +42,7 @@
 #define BM_REG_CFG		0x0100
 #define BM_REG_SCN(n)		(0x0200 + ((n) << 2))
 #define BM_REG_ISR		0x0e00
+#define BM_REG_IIR              0x0e0c
 
 /* Cache-enabled register offsets */
 #define BM_CL_CR		0x0000

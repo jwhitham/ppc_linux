@@ -83,6 +83,11 @@ struct bm_portal_config *bm_get_unused_portal(void);
 void bm_put_unused_portal(struct bm_portal_config *pcfg);
 void bm_set_liodns(struct bm_portal_config *pcfg);
 
+/* Lookup a BMan portal associated with an FD */
+struct bm_portal_config *usdpaa_get_bm_portal_config(struct file *filp,
+						     void *cinh);
+
+
 /* Pool logic in the portal driver, during initialisation, needs to know if
  * there's access to CCSR or not (if not, it'll cripple the pool allocator). */
 #ifdef CONFIG_FSL_BMAN_CONFIG

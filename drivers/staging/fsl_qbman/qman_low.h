@@ -51,6 +51,7 @@
 #define QM_REG_MR_ITR		0x0088
 #define QM_REG_CFG		0x0100
 #define QM_REG_ISR		0x0e00
+#define QM_REG_IIR              0x0e0c
 #define QM_REG_ITPR		0x0e14
 
 /* Cache-enabled register offsets */
