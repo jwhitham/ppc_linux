@@ -413,15 +413,6 @@ static void dpaa_eth_refill_bpools(struct dpa_priv_s *priv,
 	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
 		count += _dpa_bp_add_8_pages(dpa_bp);
 	*countptr = count;
-
-	/* Add skbs to the percpu skb list, reuse var count */
-	count = percpu_priv->skb_count;
-	if (unlikely(count < DEFAULT_SKB_COUNT / 4)) {
-		int skb_size = priv->tx_headroom + dpa_get_rx_extra_headroom() +
-				DPA_COPIED_HEADERS_SIZE;
-		dpa_list_add_skbs(percpu_priv, DEFAULT_SKB_COUNT - count,
-				  skb_size);
-	}
 #endif
 }
 
@@ -1403,10 +1394,8 @@ static void _dpa_tx_error(struct net_device		*net_dev,
  *		headers' length.
  */
 void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
-	const struct qm_fd *fd,
-	struct sk_buff *skb,
-	int *use_gro,
-	unsigned int *hdr_size __maybe_unused)
+				      const struct qm_fd *fd,
+				      struct sk_buff *skb, int *use_gro)
 {
 	if (fd->status & FM_FD_STAT_L4CV) {
 		/*
@@ -1428,13 +1417,6 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 		if (!fm_l4_frame_is_tcp(parse_results))
 			*use_gro = 0;
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-		/*
-		 * If the L4 HXS Parser has successfully run, we can reduce the
-		 * number of bytes we'll memcopy into skb->data.
-		 */
-		*hdr_size = parse_results->nxthdr_off;
-#endif
 		return;
 	}
 
@@ -1444,18 +1426,6 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 	 * checksum zero or an L4 proto other than TCP/UDP
 	 */
 	skb->ip_summed = CHECKSUM_NONE;
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-	/*
-	 * Even if checksum was not verified, it's still possible L4 parser
-	 * has run, in which case we know the headers size.
-	 * Otherwise we fall back to a safe default.
-	 */
-	if (fm_l4_hxs_has_run(parse_results))
-		*hdr_size = parse_results->nxthdr_off;
-	else
-		*hdr_size = min((ssize_t)DPA_COPIED_HEADERS_SIZE,
-				dpa_fd_length(fd));
-#endif
 
 	/* Bypass GRO for unknown traffic or if no PCDs are applied */
 	*use_gro = 0;
@@ -1475,7 +1445,6 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	u32 fd_status = fd->status;
 	unsigned int skb_len;
 	t_FmPrsResult *parse_result;
-	unsigned int hdr_size_unused;
 	int use_gro = net_dev->features & NETIF_F_GRO;
 
 	skbh = (struct sk_buff **)phys_to_virt(addr);
@@ -1531,8 +1500,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	/* Validate the skb csum and figure out whether GRO is appropriate */
 	parse_result = (t_FmPrsResult *)((u8 *)skbh + DPA_RX_PRIV_DATA_SIZE);
-	_dpa_process_parse_results(parse_result, fd, skb, &use_gro,
-					 &hdr_size_unused);
+	_dpa_process_parse_results(parse_result, fd, skb, &use_gro);
 
 #ifdef CONFIG_FSL_DPAA_TS
 	if (priv->ts_rx_en)
@@ -3869,17 +3837,6 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		percpu_priv->net_dev = net_dev;
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-		/* init the percpu list and add some skbs */
-		skb_queue_head_init(&percpu_priv->skb_list);
-
-		/* Skbs must accomodate the headroom and enough space
-		 * for the frame headers.
-		 */
-		dpa_list_add_skbs(percpu_priv, DEFAULT_SKB_COUNT,
-				  priv->tx_headroom + DPA_COPIED_HEADERS_SIZE +
-				  dpa_get_rx_extra_headroom());
-#endif
 		netif_napi_add(net_dev, &percpu_priv->napi, dpaa_eth_poll,
 			       DPA_NAPI_WEIGHT);
 	}

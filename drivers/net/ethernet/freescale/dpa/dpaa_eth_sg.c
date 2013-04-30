@@ -149,52 +149,6 @@ void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu)
 	*count_ptr += _dpa_bp_add_8_pages(dpa_bp);
 }
 
-void dpa_list_add_skb(struct dpa_percpu_priv_s *cpu_priv,
-		      struct sk_buff *new_skb)
-{
-	struct sk_buff_head *list_ptr;
-
-	if (cpu_priv->skb_count > DEFAULT_SKB_COUNT) {
-		dev_kfree_skb(new_skb);
-		return;
-	}
-
-	list_ptr = &cpu_priv->skb_list;
-	skb_queue_head(list_ptr, new_skb);
-
-	cpu_priv->skb_count += 1;
-}
-
-static struct sk_buff *dpa_list_get_skb(struct dpa_percpu_priv_s *cpu_priv)
-{
-	struct sk_buff_head *list_ptr;
-	struct sk_buff *new_skb;
-
-	list_ptr = &cpu_priv->skb_list;
-
-	new_skb = skb_dequeue(list_ptr);
-	if (new_skb)
-		cpu_priv->skb_count -= 1;
-
-	return new_skb;
-}
-
-void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count, int size)
-{
-	struct sk_buff *new_skb;
-	int i;
-
-	for (i = 0; i < count; i++) {
-		new_skb = dev_alloc_skb(size);
-		if (unlikely(!new_skb)) {
-			pr_err("dev_alloc_skb() failed\n");
-			break;
-		}
-
-		dpa_list_add_skb(cpu_priv, new_skb);
-	}
-}
-
 void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 {
 	int i;
@@ -307,23 +261,18 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 }
 
 /*
- * Move the first DPA_COPIED_HEADERS_SIZE bytes to the skb linear buffer to
- * provide the networking stack the headers it requires in the linear buffer.
- *
- * If the entire frame fits in the skb linear buffer, the page holding the
- * received data is recycled as it is no longer required.
+ * Build a linear skb around the received buffer.
+ * We are guaranteed there is enough room at the end of the data buffer to
+ * accomodate the shared info area of the skb.
  */
-static void __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
-	const struct qm_fd *fd, struct sk_buff *skb, int *use_gro)
+static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
+	const struct qm_fd *fd, int *use_gro)
 {
-	unsigned int copy_size = DPA_COPIED_HEADERS_SIZE;
 	dma_addr_t addr = qm_fd_addr(fd);
 	void *vaddr;
-	struct page *page;
-	int frag_offset, page_offset;
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
-	unsigned char *tailptr;
 	const t_FmPrsResult *parse_results;
+	struct sk_buff *skb = NULL;
 
 	vaddr = phys_to_virt(addr);
 
@@ -333,53 +282,38 @@ static void __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 		dpa_ptp_store_rxstamp(priv, skb, vaddr);
 #endif
 
-	/* Peek at the parse results for csum validation and headers size */
+	/* Build the skb and adjust data and tail pointers */
+	skb = build_skb(vaddr, dpa_bp->size + DPA_SKB_TAILROOM);
+	if (unlikely(!skb))
+		return NULL;
+
+	/* Make sure forwarded skbs will have enough space on Tx,
+	 * if extra headers are added.
+	 */
+	skb_reserve(skb, priv->tx_headroom + dpa_get_rx_extra_headroom());
+	skb_put(skb, dpa_fd_length(fd));
+
+	/* Peek at the parse results for csum validation */
 	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
-	_dpa_process_parse_results(parse_results, fd, skb, use_gro, &copy_size);
+	_dpa_process_parse_results(parse_results, fd, skb, use_gro);
 
 #ifdef CONFIG_FSL_DPAA_TS
 	if (priv->ts_rx_en)
 		dpa_get_ts(priv, RX, skb_hwtstamps(skb), vaddr);
 #endif /* CONFIG_FSL_DPAA_TS */
 
-	tailptr = skb_put(skb, copy_size);
-
-	/* Copy (at least) the headers in the linear portion */
-	memcpy(tailptr, vaddr + dpa_fd_offset(fd), copy_size);
-
-	/*
-	 * If frame is longer than the amount we copy in the linear
-	 * buffer, add the page as fragment,
-	 * otherwise recycle the page
-	 */
-	page = pfn_to_page(addr >> PAGE_SHIFT);
-
-	if (copy_size < dpa_fd_length(fd)) {
-		/* add the page as a fragment in the skb */
-		page_offset = (unsigned long)vaddr & (PAGE_SIZE - 1);
-		frag_offset = page_offset + dpa_fd_offset(fd) + copy_size;
-		skb_add_rx_frag(skb, 0, page, frag_offset,
-		                dpa_fd_length(fd) - copy_size,
-		                /* TODO kernel 3.8 fixup; we might want
-		                 * to better account for the truesize */
-				dpa_fd_length(fd) - copy_size);
-	} else {
-		/* recycle the page */
-		dpa_bp_add_page(dpa_bp, (unsigned long)vaddr);
-	}
+	return skb;
 }
 
 
 /*
- * Move the first bytes of the frame to the skb linear buffer to
- * provide the networking stack the headers it requires in the linear buffer,
- * and add the rest of the frame as skb fragments.
+ * Build an skb with the data of the first S/G entry in the linear portion and
+ * the rest of the frame as skb fragments.
  *
  * The page holding the S/G Table is recycled here.
  */
-static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
-			       const struct qm_fd *fd, struct sk_buff *skb,
-			       int *use_gro)
+static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
+			       const struct qm_fd *fd, int *use_gro)
 {
 	const struct qm_sg_entry *sgt;
 	dma_addr_t addr = qm_fd_addr(fd);
@@ -390,31 +324,21 @@ static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int frag_offset, frag_len;
 	int page_offset;
 	int i;
-	unsigned int copy_size = DPA_COPIED_HEADERS_SIZE;
 	const t_FmPrsResult *parse_results;
+	struct sk_buff *skb = NULL;
 
 	vaddr = phys_to_virt(addr);
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(priv, skb, vaddr);
 #endif
-	/*
-	 * In the case of a SG frame, FMan stores the Internal Context
-	 * in the buffer containing the sgt.
-	 */
-	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
-	/* Inspect the parse results before anything else. */
-	_dpa_process_parse_results(parse_results, fd, skb, use_gro, &copy_size);
 
 #ifdef CONFIG_FSL_DPAA_TS
 	if (priv->ts_rx_en)
 		dpa_get_ts(priv, RX, skb_hwtstamps(skb), vaddr);
 #endif /* CONFIG_FSL_DPAA_TS */
 
-	/*
-	 * Iterate through the SGT entries and add the data buffers as
-	 * skb fragments
-	 */
+	/* Iterate through the SGT entries and add data buffers to the skb */
 	sgt = vaddr + dpa_fd_offset(fd);
 	for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
 		/* Extension bit is not supported */
@@ -427,39 +351,48 @@ static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 		sg_vaddr = phys_to_virt(sg_addr);
 
 		dpa_bp_removed_one_page(dpa_bp, sg_addr);
-		page = pfn_to_page(sg_addr >> PAGE_SHIFT);
-
-		/*
-		 * Padding at the beginning of the page
-		 * (offset in page from where BMan buffer begins)
-		 */
-		page_offset = (unsigned long)sg_vaddr & (PAGE_SIZE - 1);
 
 		if (i == 0) {
-			/* This is the first fragment */
-			/* Move the network headers in the skb linear portion */
-			memcpy(skb_put(skb, copy_size),
-				sg_vaddr + sgt[i].offset,
-				copy_size);
+			/* This is the first S/G entry, so build the skb
+			 * around its data buffer
+			 */
+			skb = build_skb(sg_vaddr,
+					dpa_bp->size + DPA_SKB_TAILROOM);
+			if (unlikely(!skb))
+				return NULL;
 
-			/* Adjust offset/length for the remaining data */
-			frag_offset = sgt[i].offset + page_offset + copy_size;
-			frag_len = sgt[i].length - copy_size;
+			/* In the case of a SG frame, FMan stores the Internal
+			 * Context in the buffer containing the sgt.
+			 * Inspect the parse results before anything else.
+			 */
+			parse_results = (const t_FmPrsResult *)(vaddr +
+						DPA_RX_PRIV_DATA_SIZE);
+			_dpa_process_parse_results(parse_results, fd, skb,
+						   use_gro);
+
+			/* Make sure forwarded skbs will have enough space
+			 * on Tx, if extra headers are added.
+			 */
+			skb_reserve(skb, priv->tx_headroom +
+				dpa_get_rx_extra_headroom());
+			skb_put(skb, sgt[i].length);
 		} else {
 			/*
-			 * Not the first fragment; all data from buferr will
-			 * be added in an skb fragment
+			 * Not the first S/G entry; all data from buffer will
+			 * be added in an skb fragment; fragment index is offset
+			 * by one since first S/G entry was incorporated in the
+			 * linear part of the skb.
 			 */
+			page = pfn_to_page(sg_addr >> PAGE_SHIFT);
+			page_offset = (unsigned long)sg_vaddr & (PAGE_SIZE - 1);
 			frag_offset = sgt[i].offset + page_offset;
 			frag_len = sgt[i].length;
+			/* TODO kernel 3.8 fixup; we might want to account for
+			 * the true-truesize.
+			 */
+			skb_add_rx_frag(skb, i - 1, page, frag_offset, frag_len,
+					frag_len);
 		}
-		/*
-		 * Add data buffer to the skb
-		 *
-		 * TODO kernel 3.8 fixup; we might want to account for
-		 * the true-truesize.
-		 */
-		skb_add_rx_frag(skb, i, page, frag_offset, frag_len, frag_len);
 
 		if (sgt[i].final)
 			break;
@@ -469,6 +402,7 @@ static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(IS_ERR(dpa_bp));
 	dpa_bp_add_page(dpa_bp, (unsigned long)vaddr);
+	return skb;
 }
 
 void __hot _dpa_rx(struct net_device *net_dev,
@@ -495,41 +429,20 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	}
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	skb = dpa_list_get_skb(percpu_priv);
-
-	if (unlikely(skb == NULL)) {
-		/* List is empty, so allocate a new skb */
-		skb = dev_alloc_skb(priv->tx_headroom +
-			dpa_get_rx_extra_headroom() + DPA_COPIED_HEADERS_SIZE);
-		if (unlikely(skb == NULL)) {
-			if (netif_msg_rx_err(priv) && net_ratelimit())
-				netdev_err(net_dev,
-						"Could not alloc skb\n");
-			percpu_stats->rx_dropped++;
-			goto _release_frame;
-		}
-	}
-
-	/* TODO We might want to do some prefetches here (skb, shinfo, data) */
-
-	/*
-	 * Make sure forwarded skbs will have enough space on Tx,
-	 * if extra headers are added.
-	 */
-	skb_reserve(skb, priv->tx_headroom + dpa_get_rx_extra_headroom());
-
 	dpa_bp_removed_one_page(dpa_bp, addr);
 
 	/* prefetch the first 64 bytes of the frame or the SGT start */
 	prefetch(phys_to_virt(addr) + dpa_fd_offset(fd));
 
 	if (likely(fd->format == qm_fd_contig))
-		contig_fd_to_skb(priv, fd, skb, &use_gro);
+		skb = contig_fd_to_skb(priv, fd, &use_gro);
 	else if (fd->format == qm_fd_sg)
-		sg_fd_to_skb(priv, fd, skb, &use_gro);
+		skb = sg_fd_to_skb(priv, fd, &use_gro);
 	else
 		/* The only FD types that we may receive are contig and S/G */
 		BUG();
+	if (unlikely(!skb))
+		goto _release_frame;
 
 	skb->protocol = eth_type_trans(skb, net_dev);
 

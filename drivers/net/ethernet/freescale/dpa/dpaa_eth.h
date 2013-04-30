@@ -74,10 +74,12 @@
 
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-/* We may want this value configurable. Must be <= PAGE_SIZE
- * A lower value may help with recycling rates, at least on forwarding
+/* We may want this value configurable. Must be <= PAGE_SIZE minus a reserved
+ * area where skb shared info can reside
+ * A lower value may help with recycling rates, at least on forwarding.
  */
-#define dpa_bp_size(buffer_layout)	PAGE_SIZE
+#define DPA_SKB_TAILROOM	SKB_DATA_ALIGN(sizeof(struct skb_shared_info))
+#define dpa_bp_size(buffer_layout)	(PAGE_SIZE - DPA_SKB_TAILROOM)
 #else
 
 /* Default buffer size is based on L2 MAX_FRM value, minus the FCS which
@@ -164,16 +166,6 @@ struct dpaa_eth_hooks_s {
 void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
-
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-#define DEFAULT_SKB_COUNT 64 /* maximum number of SKBs in each percpu list */
-/*
- * Default amount data to be copied from the beginning of a frame into the
- * linear part of the skb, in case we aren't using the hardware parser.
- */
-#define DPA_COPIED_HEADERS_SIZE 128
-
-#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /*
  * Largest value that the FQD's OAL field can hold.
@@ -329,12 +321,6 @@ struct dpa_percpu_priv_s {
 	int *dpa_bp_count;
 	struct dpa_bp *dpa_bp;
 	struct napi_struct napi;
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-	/* a list of preallocated SKBs for this CPU */
-	struct sk_buff_head skb_list;
-	/* current number of skbs in the CPU's list */
-	int skb_count;
-#endif
 	u64 in_interrupt;
 	u64 tx_returned;
 	u64 tx_confirm;
@@ -428,17 +414,13 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				   const struct qm_fd *fd);
 
 void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
-				     const struct qm_fd *fd,
-				     struct sk_buff *skb,
-				     int *use_gro,
-				     unsigned int *hdr_size __maybe_unused);
+				      const struct qm_fd *fd,
+				      struct sk_buff *skb,
+				      int *use_gro);
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu_id);
 int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp);
-
-void dpa_list_add_skbs(struct dpa_percpu_priv_s *cpu_priv, int count,
-		int skb_size);
 #endif
 
 /*
