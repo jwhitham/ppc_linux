@@ -385,7 +385,7 @@ static void attach_device(struct fsl_dma_domain *dma_domain, int liodn, struct d
 		spin_lock(&device_domain_lock);
 	}
 
-	info = kmem_cache_zalloc(iommu_devinfo_cache, GFP_KERNEL);
+	info = kmem_cache_zalloc(iommu_devinfo_cache, GFP_ATOMIC);
 
 	info->dev = dev;
 	info->liodn = liodn;
@@ -1087,7 +1087,7 @@ static int fsl_pamu_set_windows(struct iommu_domain *domain, u32 w_count)
 		if (dma_domain->win_arr)
 			kfree(dma_domain->win_arr);
 		dma_domain->win_arr = kzalloc(sizeof(struct dma_window) *
-							  w_count, GFP_KERNEL);
+							  w_count, GFP_ATOMIC);
 		if (!dma_domain->win_arr) {
 			spin_unlock_irqrestore(&dma_domain->domain_lock, flags);
 			return -ENOMEM;
