@@ -1562,8 +1562,10 @@ static void try_to_wake_up_local(struct task_struct *p)
 {
 	struct rq *rq = task_rq(p);
 
-	BUG_ON(rq != this_rq());
-	BUG_ON(p == current);
+	if (WARN_ON_ONCE(rq != this_rq()) ||
+	    WARN_ON_ONCE(p == current))
+		return;
+
 	lockdep_assert_held(&rq->lock);
 
 	if (!raw_spin_trylock(&p->pi_lock)) {
@@ -2883,7 +2885,7 @@ static noinline void __schedule_bug(struct task_struct *prev)
 	print_modules();
 	if (irqs_disabled())
 		print_irqtrace_events(prev);
-#ifdef DEBUG_PREEMPT
+#ifdef CONFIG_DEBUG_PREEMPT
 	if (in_atomic_preempt_off()) {
 		pr_err("Preemption disabled at:");
 		print_ip_sym(current->preempt_disable_ip);
@@ -5324,7 +5326,7 @@ static void sd_free_ctl_entry(struct ctl_table **tablep)
 }
 
 static int min_load_idx = 0;
-static int max_load_idx = CPU_LOAD_IDX_MAX;
+static int max_load_idx = CPU_LOAD_IDX_MAX-1;
 
 static void
 set_table_entry(struct ctl_table *entry,
@@ -7410,7 +7412,7 @@ void __might_sleep(const char *file, int line, int preempt_offset)
 	debug_show_held_locks(current);
 	if (irqs_disabled())
 		print_irqtrace_events(current);
-#ifdef DEBUG_PREEMPT
+#ifdef CONFIG_DEBUG_PREEMPT
 	if (!preempt_count_equals(preempt_offset)) {
 		pr_err("Preemption disabled at:");
 		print_ip_sym(current->preempt_disable_ip);
