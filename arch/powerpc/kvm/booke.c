@@ -370,7 +370,7 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 		keep_irq = true;
 	}
 
-	if ((priority == BOOKE_IRQPRIO_EXTERNAL) && vcpu->arch.epr_flags)
+	if ((priority == BOOKE_IRQPRIO_EXTERNAL) && vcpu->arch.epr_enabled)
 		update_epr = true;
 
 	switch (priority) {
@@ -451,16 +451,8 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 			set_guest_esr(vcpu, vcpu->arch.queued_esr);
 		if (update_dear == true)
 			set_guest_dear(vcpu, vcpu->arch.queued_dear);
-		if (update_epr == true) {
-			if (vcpu->arch.epr_flags & KVMPPC_EPR_USER)
-				kvm_make_request(KVM_REQ_EPR_EXIT, vcpu);
-#ifdef CONFIG_KVM_MPIC
-			else if (vcpu->arch.epr_flags & KVMPPC_EPR_KERNEL) {
-				BUG_ON(vcpu->arch.irq_type != KVMPPC_IRQ_MPIC);
-				kvmppc_mpic_set_epr(vcpu);
-			}
-#endif
-		}
+		if (update_epr == true)
+			kvm_make_request(KVM_REQ_EPR_EXIT, vcpu);
 
 		new_msr &= msr_mask;
 #if defined(CONFIG_64BIT)

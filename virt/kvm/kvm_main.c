@@ -2133,123 +2133,6 @@ out:
 }
 #endif
 
-static int kvm_device_ioctl_attr(struct kvm_device *dev,
-				 int (*accessor)(struct kvm_device *dev,
-						 struct kvm_device_attr *attr),
-				 unsigned long arg)
-{
-	struct kvm_device_attr attr;
-
-	if (!accessor)
-		return -EPERM;
-
-	if (copy_from_user(&attr, (void __user *)arg, sizeof(attr)))
-		return -EFAULT;
-
-	return accessor(dev, &attr);
-}
-
-static long kvm_device_ioctl(struct file *filp, unsigned int ioctl,
-			     unsigned long arg)
-{
-	struct kvm_device *dev = filp->private_data;
-
-	switch (ioctl) {
-	case KVM_SET_DEVICE_ATTR:
-		return kvm_device_ioctl_attr(dev, dev->ops->set_attr, arg);
-	case KVM_GET_DEVICE_ATTR:
-		return kvm_device_ioctl_attr(dev, dev->ops->get_attr, arg);
-	case KVM_HAS_DEVICE_ATTR:
-		return kvm_device_ioctl_attr(dev, dev->ops->has_attr, arg);
-	default:
-		if (dev->ops->ioctl)
-			return dev->ops->ioctl(dev, ioctl, arg);
-
-		return -ENOTTY;
-	}
-}
-
-void kvm_device_get(struct kvm_device *dev)
-{
-	atomic_inc(&dev->users);
-}
-
-void kvm_device_put(struct kvm_device *dev)
-{
-	if (atomic_dec_and_test(&dev->users))
-		dev->ops->destroy(dev);
-}
-
-static int kvm_device_release(struct inode *inode, struct file *filp)
-{
-	struct kvm_device *dev = filp->private_data;
-	struct kvm *kvm = dev->kvm;
-
-	kvm_device_put(dev);
-	kvm_put_kvm(kvm);
-	return 0;
-}
-
-static const struct file_operations kvm_device_fops = {
-	.unlocked_ioctl = kvm_device_ioctl,
-	.release = kvm_device_release,
-};
-
-struct kvm_device *kvm_device_from_filp(struct file *filp)
-{
-	if (filp->f_op != &kvm_device_fops)
-		return NULL;
-
-	return filp->private_data;
-}
-
-static int kvm_ioctl_create_device(struct kvm *kvm,
-				   struct kvm_create_device *cd)
-{
-	struct kvm_device_ops *ops = NULL;
-	struct kvm_device *dev;
-	bool test = cd->flags & KVM_CREATE_DEVICE_TEST;
-	int ret;
-
-	switch (cd->type) {
-#ifdef CONFIG_KVM_MPIC
-	case KVM_DEV_TYPE_FSL_MPIC_20:
-	case KVM_DEV_TYPE_FSL_MPIC_42:
-		ops = &kvm_mpic_ops;
-		break;
-#endif
-	default:
-		return -ENODEV;
-	}
-
-	if (test)
-		return 0;
-
-	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
-	if (!dev)
-		return -ENOMEM;
-
-	dev->ops = ops;
-	dev->kvm = kvm;
-	atomic_set(&dev->users, 1);
-
-	ret = ops->create(dev, cd->type);
-	if (ret < 0) {
-		kfree(dev);
-		return ret;
-	}
-
-	ret = anon_inode_getfd(ops->name, &kvm_device_fops, dev, O_RDWR);
-	if (ret < 0) {
-		ops->destroy(dev);
-		return ret;
-	}
-
-	kvm_get_kvm(kvm);
-	cd->fd = ret;
-	return 0;
-}
-
 static long kvm_vm_ioctl(struct file *filp,
 			   unsigned int ioctl, unsigned long arg)
 {
@@ -2364,54 +2247,6 @@ static long kvm_vm_ioctl(struct file *filp,
 		break;
 	}
 #endif
-#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
-	case KVM_SET_GSI_ROUTING: {
-		struct kvm_irq_routing routing;
-		struct kvm_irq_routing __user *urouting;
-		struct kvm_irq_routing_entry *entries;
-
-		r = -EFAULT;
-		if (copy_from_user(&routing, argp, sizeof(routing)))
-			goto out;
-		r = -EINVAL;
-		if (routing.nr >= KVM_MAX_IRQ_ROUTES)
-			goto out;
-		if (routing.flags)
-			goto out;
-		r = -ENOMEM;
-		entries = vmalloc(routing.nr * sizeof(*entries));
-		if (!entries)
-			goto out;
-		r = -EFAULT;
-		urouting = argp;
-		if (copy_from_user(entries, urouting->entries,
-				   routing.nr * sizeof(*entries)))
-			goto out_free_irq_routing;
-		r = kvm_set_irq_routing(kvm, entries, routing.nr,
-					routing.flags);
-	out_free_irq_routing:
-		vfree(entries);
-		break;
-	}
-#endif /* CONFIG_HAVE_KVM_IRQ_ROUTING */
-	case KVM_CREATE_DEVICE: {
-		struct kvm_create_device cd;
-
-		r = -EFAULT;
-		if (copy_from_user(&cd, argp, sizeof(cd)))
-			goto out;
-
-		r = kvm_ioctl_create_device(kvm, &cd);
-		if (r)
-			goto out;
-
-		r = -EFAULT;
-		if (copy_to_user(argp, &cd, sizeof(cd)))
-			goto out;
-
-		r = 0;
-		break;
-	}
 	default:
 		r = kvm_arch_vm_ioctl(filp, ioctl, arg);
 		if (r == -ENOTTY)
@@ -2541,11 +2376,8 @@ static long kvm_dev_ioctl_check_extension_generic(long arg)
 #ifdef CONFIG_HAVE_KVM_MSI
 	case KVM_CAP_SIGNAL_MSI:
 #endif
-#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
-	case KVM_CAP_IRQFD_RESAMPLE:
-#endif
 		return 1;
-#ifdef CONFIG_HAVE_KVM_IRQ_ROUTING
+#ifdef KVM_CAP_IRQ_ROUTING
 	case KVM_CAP_IRQ_ROUTING:
 		return KVM_MAX_IRQ_ROUTES;
 #endif

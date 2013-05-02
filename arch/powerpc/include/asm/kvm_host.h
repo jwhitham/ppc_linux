@@ -46,10 +46,6 @@
 #define KVM_COALESCED_MMIO_PAGE_OFFSET 1
 #endif
 
-/* These values are internal and can be increased later */
-#define KVM_NR_IRQCHIPS          1
-#define KVM_IRQCHIP_NUM_PINS     256
-
 #if !defined(CONFIG_KVM_440)
 #include <linux/mmu_notifier.h>
 
@@ -267,9 +263,6 @@ struct kvm_arch {
 #ifdef CONFIG_PPC_BOOK3S_64
 	struct list_head spapr_tce_tables;
 #endif
-#ifdef CONFIG_KVM_MPIC
-	void *mpic;
-#endif
 };
 
 /*
@@ -373,11 +366,6 @@ struct kvmppc_slb {
 #define KVMPPC_BOOKE_MAX_IAC	4
 #define KVMPPC_BOOKE_MAX_DAC	2
 
-/* KVMPPC_EPR_USER takes precedence over KVMPPC_EPR_KERNEL */
-#define KVMPPC_EPR_NONE		0 /* EPR not supported */
-#define KVMPPC_EPR_USER		1 /* exit to userspace to fill EPR */
-#define KVMPPC_EPR_KERNEL	2 /* in-kernel irqchip */
-
 struct kvmppc_booke_debug_reg {
 	u32 dbcr0;
 	u32 dbcr1;
@@ -388,11 +376,6 @@ struct kvmppc_booke_debug_reg {
 	u64 iac[KVMPPC_BOOKE_MAX_IAC];
 	u64 dac[KVMPPC_BOOKE_MAX_DAC];
 };
-
-#define KVMPPC_IRQ_DEFAULT	0
-#define KVMPPC_IRQ_MPIC		1
-
-struct openpic;
 
 struct kvm_vcpu_arch {
 	ulong host_stack;
@@ -556,7 +539,7 @@ struct kvm_vcpu_arch {
 	u8 sane;
 	u8 cpu_type;
 	u8 hcall_needed;
-	u8 epr_flags; /* KVMPPC_EPR_xxx */
+	u8 epr_enabled;
 	u8 epr_needed;
 
 	u32 cpr0_cfgaddr; /* holds the last set cpr0_cfgaddr */
@@ -582,10 +565,6 @@ struct kvm_vcpu_arch {
 	struct kvm_vcpu_arch_shared *shared;
 	unsigned long magic_page_pa; /* phys addr to map the magic page to */
 	unsigned long magic_page_ea; /* effect. addr to map the magic page to */
-
-	int irq_type;		/* one of KVM_IRQ_* */
-	int irq_cpu_id;
-	struct openpic *mpic;	/* KVM_IRQ_MPIC */
 
 #ifdef CONFIG_KVM_BOOK3S_64_HV
 	struct kvm_vcpu_arch_shared shregs;
@@ -627,6 +606,5 @@ struct kvm_vcpu_arch {
 #define KVM_MMIO_REG_FQPR	0x0060
 
 #define __KVM_HAVE_ARCH_WQP
-#define __KVM_HAVE_CREATE_DEVICE
 
 #endif /* __POWERPC_KVM_HOST_H__ */

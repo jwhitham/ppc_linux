@@ -103,9 +103,6 @@ kvm-book3s_32-objs := \
 	book3s_32_mmu.o
 kvm-objs-$(CONFIG_KVM_BOOK3S_32) := $(kvm-book3s_32-objs)
 
-kvm-objs-$(CONFIG_KVM_MPIC) += mpic.o
-kvm-objs-$(CONFIG_HAVE_KVM_IRQ_ROUTING) += $(addprefix ../../../virt/kvm/, irqchip.o)
-
 kvm-objs := $(kvm-objs-m) $(kvm-objs-y)
 
 obj-$(CONFIG_KVM_440) += kvm.o
