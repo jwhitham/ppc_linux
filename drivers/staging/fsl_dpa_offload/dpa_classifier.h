@@ -531,9 +531,6 @@ static int remove_hm_chain(struct list_head	*chain_head,
 /* Removes a low level (FMD) header manipulation node */
 static void remove_hm_node(struct dpa_cls_hm_node *node);
 
-/* Display a lookup key and its mask */
-static void dump_lookup_key(const struct dpa_offload_lookup_key *key);
-
 /*
  * Creates a new classifier header manipulation object and links it to an
  * existing object if needed.
@@ -662,6 +659,8 @@ static int mpls_hm_update_params(struct dpa_cls_hm *pmpls_hm);
 
 #endif /*__DPA_CLASSIFIER_C */
 
+/* Display a lookup key and its mask */
+void dump_lookup_key(const struct dpa_offload_lookup_key *key);
 
 /*
  * Imports a header manipulation defined using the low level driver (FMD) API,

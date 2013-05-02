@@ -889,7 +889,7 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 }
 EXPORT_SYMBOL(dpa_classif_table_modify_entry_by_key);
 
-static void dump_lookup_key(const struct dpa_offload_lookup_key *key)
+void dump_lookup_key(const struct dpa_offload_lookup_key *key)
 {
 	int i, offset;
 	char data[3 * FM_PCD_MAX_SIZE_OF_KEY + 10];
