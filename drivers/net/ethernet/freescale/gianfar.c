@@ -2864,6 +2864,8 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 			    DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)) {
 				if (tx_queue->tx_skbuff[skb_curtx]->pkt_type == PACKET_FASTROUTE)
 					gfar_asf_reclaim_skb(tx_queue->tx_skbuff[skb_curtx]);
+				else
+					skb_recycle(tx_queue->tx_skbuff[skb_curtx]);
 				gfar_align_skb(tx_queue->tx_skbuff[skb_curtx]);
 			} else {
 				dev_kfree_skb_any(tx_queue->tx_skbuff[skb_curtx]);
