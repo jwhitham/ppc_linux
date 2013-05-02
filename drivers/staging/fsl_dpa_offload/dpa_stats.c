@@ -1181,6 +1181,15 @@ static int set_cnt_eth_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	if (cnt_sel == DPA_STATS_CNT_ETH_ALL)
 		cnt_sel -= 1;
 
+	if (params->eth_params.src.eth_id < DPA_STATS_ETH_1G_PORT0 ||
+	    params->eth_params.src.eth_id > DPA_STATS_ETH_10G_PORT1) {
+		log_err("Parameter src.eth_id %d must be in range (%d - %d) "
+			"for counter id %d\n", params->eth_params.src.eth_id,
+			DPA_STATS_ETH_1G_PORT0, DPA_STATS_ETH_10G_PORT1,
+			cnt_cb->id);
+		return -EINVAL;
+	}
+
 	/* Get FM MAC handle */
 	err = get_fm_mac(params->eth_params.src, &fm_mac);
 	if (err != 0) {
@@ -1229,6 +1238,12 @@ static int set_cnt_reass_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			DPA_STATS_CNT_REASS_IPv6_FRAMES,
 			DPA_STATS_CNT_REASS_IPv6_ALL, cnt_cb->id);
 		return -EINVAL;
+	}
+
+	if (!params->reass_params.reass) {
+		log_err("Parameter Reassembly handle cannot be NULL for counter"
+			" id %d\n", cnt_cb->id);
+		return -EFAULT;
 	}
 
 	cnt_cb->gen_cb.objs[0] = params->reass_params.reass;
@@ -1283,6 +1298,12 @@ static int set_cnt_frag_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EINVAL;
 	}
 
+	if (!params->frag_params.frag) {
+		log_err("Parameter Fragmentation handle cannot be NULL for "
+			"counter id %d\n", cnt_cb->id);
+		return -EFAULT;
+	}
+
 	cnt_cb->gen_cb.objs[0] = params->frag_params.frag;
 	cnt_cb->members_num = 1;
 
@@ -1325,6 +1346,12 @@ static int set_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			"counter id %d\n", cnt_sel, DPA_STATS_CNT_PLCR_ALL,
 			cnt_cb->id);
 		return -EINVAL;
+	}
+
+	if (!params->plcr_params.plcr) {
+		log_err("Parameter Policer handle cannot be NULL for counter id"
+			" %d\n", cnt_cb->id);
+		return -EFAULT;
 	}
 
 	cnt_cb->gen_cb.objs[0] = params->plcr_params.plcr;
@@ -1385,6 +1412,11 @@ static int set_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EINVAL;
 	}
 
+	if (prm.td == DPA_OFFLD_DESC_NONE) {
+		log_err("Invalid table descriptor %d for counter id %d\n",
+			prm.td, cnt_cb->id);
+		return -EINVAL;
+	}
 	err = dpa_classif_table_get_params(prm.td, &cls_tbl);
 	if (err != 0) {
 		log_err("Invalid table descriptor %d for counter id %d\n",
@@ -1455,6 +1487,12 @@ static int set_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			"counter id %d\n", prm.cnt_sel,
 			DPA_STATS_CNT_CLASSIF_ALL, cnt_cb->id);
 		return -EINVAL;
+	}
+
+	if (!params->classif_node_params.cc_node) {
+		log_err("Parameter classification CC Node handle cannot be NULL"
+			" for counter id %d\n", cnt_cb->id);
+		return -EFAULT;
 	}
 
 	/* Copy the key descriptor */
@@ -1622,6 +1660,11 @@ static int set_cls_cnt_reass_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	cnt_cb->members_num = params->class_members;
 
 	for (i = 0; i < params->class_members; i++) {
+		if (!params->reass_params.reass[i]) {
+			log_err("Parameter Reassembly handle cannot be NULL for"
+				" member %d, counter id %d\n", i, cnt_cb->id);
+			return -EFAULT;
+		}
 		cnt_cb->gen_cb.objs[i] = params->reass_params.reass[i];
 
 		/* Check the user-provided reassembly manip */
@@ -1677,6 +1720,11 @@ static int set_cls_cnt_frag_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	cnt_cb->members_num = params->class_members;
 
 	for (i = 0; i < params->class_members; i++) {
+		if (!params->frag_params.frag[i]) {
+			log_err("Parameter Fragmentation handle cannot be NULL "
+				"for member %d, counter id %d\n", i, cnt_cb->id);
+			return -EFAULT;
+		}
 		cnt_cb->gen_cb.objs[i] = params->frag_params.frag[i];
 
 		/* Check the user-provided fragmentation handle */
@@ -1725,6 +1773,11 @@ static int set_cls_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	cnt_cb->members_num = params->class_members;
 
 	for (i = 0; i < params->class_members; i++) {
+		if (!params->plcr_params.plcr[i]) {
+			log_err("Parameter Policer handle cannot be NULL for "
+				"member %d, counter id %d\n", i, cnt_cb->id);
+			return -EFAULT;
+		}
 		cnt_cb->gen_cb.objs[i] = params->plcr_params.plcr[i];
 		/* Check the user-provided policer handle */
 		FM_PCD_PlcrProfileGetCounter(cnt_cb->gen_cb.objs[i],
@@ -1983,6 +2036,12 @@ static int set_cls_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			"counter id %d\n", prm.cnt_sel,
 			DPA_STATS_CNT_CLASSIF_ALL, cnt_cb->id);
 		return -EINVAL;
+	}
+
+	if (!params->classif_node_params.cc_node) {
+		log_err("Parameter classification CC Node handle cannot be NULL"
+			" for counter id %d\n", cnt_cb->id);
+		return -EFAULT;
 	}
 
 	cnt_cb->ccnode_cb.cc_node = prm.cc_node;
@@ -2750,6 +2809,11 @@ int dpa_stats_create_counter(int dpa_stats_id,
 	}
 	*dpa_stats_cnt_id = DPA_OFFLD_INVALID_OBJECT_ID;
 
+	if (!params) {
+		log_err("Parameter params cannot be NULL\n");
+		return -EFAULT;
+	}
+
 	dpa_stats = gbl_dpa_stats;
 
 	err = get_new_cnt(dpa_stats, &cnt_cb);
@@ -2900,6 +2964,11 @@ int dpa_stats_create_class_counter(int dpa_stats_id,
 		return -EINVAL;
 	}
 	*dpa_stats_cnt_id = DPA_OFFLD_INVALID_OBJECT_ID;
+
+	if (!params) {
+		log_err("Parameter params cannot be NULL\n");
+		return -EFAULT;
+	}
 
 	if (params->class_members > DPA_STATS_MAX_NUM_OF_CLASS_MEMBERS) {
 		log_err("Parameter class_members %d exceeds maximum number of "
@@ -3058,6 +3127,11 @@ int dpa_stats_modify_class_counter(int dpa_stats_cnt_id,
 			")\n", dpa_stats_cnt_id,
 			dpa_stats->config.max_counters - 1);
 		return -EINVAL;
+	}
+
+	if (!params) {
+		log_err("Parameter params cannot be NULL\n");
+		return -EFAULT;
 	}
 
 	/* Counter scheduled for the retrieve mechanism can't be modified */
