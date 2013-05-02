@@ -54,6 +54,21 @@
 #define DPA_OFFLD_DESC_NONE					-1
 #define DPA_OFFLD_INVALID_OBJECT_ID				-1
 
+#define log_err(...) \
+		do { \
+			pr_err("Error - %s:%d (%s)\n", \
+					__FILE__, __LINE__, __func__); \
+			pr_err(__VA_ARGS__); \
+		} while (0);
+
+#define log_warn(...) \
+		do { \
+			pr_warn("Warning - %s:%d (%s)\n", \
+					__FILE__, __LINE__, __func__); \
+			pr_warn(__VA_ARGS__); \
+		} while (0);
+
+
 /* Description of lookup key */
 struct dpa_offload_lookup_key {
 
