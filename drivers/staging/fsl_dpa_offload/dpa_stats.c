@@ -33,6 +33,7 @@
  * DPA Statistics Application Programming Interface implementation
  */
 
+#include <linux/module.h>
 #include <linux/of_platform.h>
 #include "lnxwrp_fm.h"
 #include "dpaa_eth.h"
