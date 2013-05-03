@@ -101,6 +101,9 @@
 #define FMAN_PCD_TESTS_MAX_NUM_RANGES	20
 #endif
 
+#define DPAA_ETH_PCD_FQ_BASE(device_addr) \
+	(((device_addr) & 0x1fffff) >> 6)
+
 /* return codes for the dpaa-eth hooks */
 enum dpaa_eth_hook_result {
 	/* fd/skb was retained by the hook.
@@ -394,6 +397,13 @@ struct dpa_priv_s {
 	u8 macless_idx;
 };
 
+struct fm_port_fqs {
+	struct dpa_fq *tx_defq;
+	struct dpa_fq *tx_errq;
+	struct dpa_fq *rx_defq;
+	struct dpa_fq *rx_errq;
+};
+
 extern const struct ethtool_ops dpa_ethtool_ops;
 
 void __attribute__((nonnull))
@@ -590,6 +600,7 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 {
 	switch (fq->fq_type) {
 	case FQ_TYPE_TX_CONFIRM:
+	case FQ_TYPE_TX_CONF_MQ:
 		fq->wq = 1;
 		break;
 	case FQ_TYPE_RX_DEFAULT:

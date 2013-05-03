@@ -95,7 +95,10 @@ static ssize_t dpaa_eth_show_fqids(struct device *dev,
 			str = "Rx PCD";
 			break;
 		case FQ_TYPE_TX_CONFIRM:
-			str = "Tx confirmation";
+			str = "Tx default confirmation";
+			break;
+		case FQ_TYPE_TX_CONF_MQ:
+			str = "Tx confirmation (mq)";
 			break;
 		case FQ_TYPE_TX_ERROR:
 			str = "Tx error";
