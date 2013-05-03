@@ -150,6 +150,8 @@ u64 fsl_pci_immrbar_base(struct pci_controller *hose);
 
 extern struct device_node *fsl_pci_primary;
 
+extern unsigned int qemu_e500_pci;
+
 #ifdef CONFIG_PCI
 void fsl_pci_assign_primary(void);
 #else

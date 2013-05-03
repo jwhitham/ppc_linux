@@ -26,6 +26,17 @@
 #include "smp.h"
 #include "mpc85xx.h"
 
+/*
+ * Flag to indicate a qemu emulated PCI controller.
+ * This flag would be checked in the fsl PCI controller
+ * driver code, while setting the inbound windows. In
+ * case of identity mapped memory (1:1 guest physical to
+ * host physical) this would allow the inbound window
+ * to map till end of DDR memory, in case the address
+ * is not power of 2 aligned.
+ */
+unsigned int qemu_e500_pci;
+
 void __init qemu_e500_pic_init(void)
 {
 	struct mpic *mpic;
@@ -45,6 +56,8 @@ static void __init qemu_e500_setup_arch(void)
 	fsl_pci_assign_primary();
 	swiotlb_detect_4g();
 	mpc85xx_smp_init();
+
+	qemu_e500_pci = 1;
 }
 
 /*
