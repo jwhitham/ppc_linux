@@ -274,10 +274,31 @@ static inline void kvmppc_set_epr(struct kvm_vcpu *vcpu, u32 epr)
 #endif
 }
 
+#ifdef CONFIG_KVM_MPIC
+
 void kvmppc_mpic_set_epr(struct kvm_vcpu *vcpu);
 int kvmppc_mpic_connect_vcpu(struct kvm_device *dev, struct kvm_vcpu *vcpu,
 			     u32 cpu);
 void kvmppc_mpic_disconnect_vcpu(struct openpic *opp, struct kvm_vcpu *vcpu);
+
+#else
+
+static inline void kvmppc_mpic_set_epr(struct kvm_vcpu *vcpu)
+{
+}
+
+static inline int kvmppc_mpic_connect_vcpu(struct kvm_device *dev,
+		struct kvm_vcpu *vcpu, u32 cpu)
+{
+	return -EINVAL;
+}
+
+static inline void kvmppc_mpic_disconnect_vcpu(struct openpic *opp,
+		struct kvm_vcpu *vcpu)
+{
+}
+
+#endif /* CONFIG_KVM_MPIC */
 
 int kvm_vcpu_ioctl_config_tlb(struct kvm_vcpu *vcpu,
 			      struct kvm_config_tlb *cfg);

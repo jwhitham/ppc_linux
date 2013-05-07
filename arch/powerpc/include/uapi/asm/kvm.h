@@ -25,9 +25,9 @@
 /* Select powerpc specific features in <linux/kvm.h> */
 #define __KVM_HAVE_SPAPR_TCE
 #define __KVM_HAVE_PPC_SMT
+#define __KVM_HAVE_GUEST_DEBUG
 #define __KVM_HAVE_IRQCHIP
 #define __KVM_HAVE_IRQ_LINE
-#define __KVM_HAVE_GUEST_DEBUG
 
 struct kvm_regs {
 	__u64 pc;
@@ -398,6 +398,14 @@ struct kvm_get_htab_header {
 	__u16	n_invalid;
 };
 
+/* Device control API: PPC-specific devices */
+#define KVM_DEV_MPIC_GRP_MISC		1
+#define   KVM_DEV_MPIC_BASE_ADDR	0	/* 64-bit */
+
+#define KVM_DEV_MPIC_GRP_REGISTER	2	/* 32-bit */
+#define KVM_DEV_MPIC_GRP_IRQ_ACTIVE	3	/* 32-bit */
+
+/* One-Reg API: PPC-specific registers */
 #define KVM_REG_PPC_HIOR	(KVM_REG_PPC | KVM_REG_SIZE_U64 | 0x1)
 #define KVM_REG_PPC_IAC1	(KVM_REG_PPC | KVM_REG_SIZE_U64 | 0x2)
 #define KVM_REG_PPC_IAC2	(KVM_REG_PPC | KVM_REG_SIZE_U64 | 0x3)
@@ -486,12 +494,5 @@ struct kvm_get_htab_header {
 #define KVM_REG_PPC_TLB2PS	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x99)
 #define KVM_REG_PPC_TLB3PS	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x9a)
 #define KVM_REG_PPC_EPTCFG	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x9b)
-
-/* Device control API: PPC-specific devices */
-#define KVM_DEV_MPIC_GRP_MISC		1
-#define KVM_DEV_MPIC_BASE_ADDR		0	/* 64-bit */
-
-#define KVM_DEV_MPIC_GRP_REGISTER	2	/* 32-bit */
-#define KVM_DEV_MPIC_GRP_IRQ_ACTIVE	3	/* 32-bit */
 
 #endif /* __LINUX_KVM_POWERPC_H */

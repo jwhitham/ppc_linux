@@ -268,7 +268,7 @@ struct kvm_arch {
 	struct list_head spapr_tce_tables;
 #endif
 #ifdef CONFIG_KVM_MPIC
-	void *mpic;
+	struct openpic *mpic;
 #endif
 };
 

@@ -639,6 +639,8 @@ struct kvm_ppc_smmu_info {
 #define KVM_CAP_PPC_BOOKE_WATCHDOG 83
 #define KVM_CAP_PPC_HTAB_FD 84
 #define KVM_CAP_PPC_EPR 86
+#define KVM_CAP_ARM_PSCI 87
+#define KVM_CAP_ARM_SET_DEVICE_ADDR 88
 #define KVM_CAP_DEVICE_CTRL 89
 #define KVM_CAP_IRQ_MPIC 90
 
@@ -784,6 +786,27 @@ struct kvm_msi {
 };
 
 /*
+ * Device control API, available with KVM_CAP_DEVICE_CTRL
+ */
+#define KVM_CREATE_DEVICE_TEST		1
+
+struct kvm_create_device {
+	__u32	type;	/* in: KVM_DEV_TYPE_xxx */
+	__u32	fd;	/* out: device handle */
+	__u32	flags;	/* in: KVM_CREATE_DEVICE_xxx */
+};
+
+struct kvm_device_attr {
+	__u32	flags;		/* no flags currently defined */
+	__u32	group;		/* device-defined */
+	__u64	attr;		/* group-defined */
+	__u64	addr;		/* userspace address of attr data */
+};
+
+#define KVM_DEV_TYPE_FSL_MPIC_20	1
+#define KVM_DEV_TYPE_FSL_MPIC_42	2
+
+/*
  * ioctls for VM fds
  */
 #define KVM_SET_MEMORY_REGION     _IOW(KVMIO,  0x40, struct kvm_memory_region)
@@ -868,27 +891,6 @@ struct kvm_s390_ucas_mapping {
 #define KVM_ALLOCATE_RMA	  _IOR(KVMIO,  0xa9, struct kvm_allocate_rma)
 /* Available with KVM_CAP_PPC_HTAB_FD */
 #define KVM_PPC_GET_HTAB_FD	  _IOW(KVMIO,  0xaa, struct kvm_get_htab_fd)
-
-/*
- * Device control API, available with KVM_CAP_DEVICE_CTRL
- */
-#define KVM_CREATE_DEVICE_TEST		1
-
-struct kvm_create_device {
-	__u32	type;	/* in: KVM_DEV_TYPE_xxx */
-	__u32	fd;	/* out: device handle */
-	__u32	flags;	/* in: KVM_CREATE_DEVICE_xxx */
-};
-
-struct kvm_device_attr {
-	__u32	flags;		/* no flags currently defined */
-	__u32	group;		/* device-defined */
-	__u64	attr;		/* group-defined */
-	__u64	addr;		/* userspace address of attr data */
-};
-
-#define KVM_DEV_TYPE_FSL_MPIC_20	1
-#define KVM_DEV_TYPE_FSL_MPIC_42	2
 
 /* ioctl for vm fd */
 #define KVM_CREATE_DEVICE	  _IOWR(KVMIO,  0xe0, struct kvm_create_device)

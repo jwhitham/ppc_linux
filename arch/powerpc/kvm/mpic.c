@@ -113,8 +113,13 @@ static struct fsl_mpic_info fsl_mpic_42 = {
 
 static int get_current_cpu(void)
 {
+#if defined(CONFIG_KVM) && defined(CONFIG_BOOKE)
 	struct kvm_vcpu *vcpu = current->thread.kvm_vcpu;
 	return vcpu ? vcpu->arch.irq_cpu_id : -1;
+#else
+	/* XXX */
+	return -1;
+#endif
 }
 
 static int openpic_cpu_write_internal(void *opaque, gpa_t addr,
@@ -179,13 +184,14 @@ struct irq_dest {
 	uint32_t outputs_active[NUM_OUTPUTS];
 };
 
+#define MAX_MMIO_REGIONS 10
+
 struct openpic {
 	struct kvm *kvm;
 	struct kvm_device *dev;
 	struct kvm_io_device mmio;
-	struct list_head mmio_regions;
-	atomic_t users;
-	bool mmio_mapped;
+	const struct mem_reg *mmio_regions[MAX_MMIO_REGIONS];
+	int num_mmio_regions;
 
 	gpa_t reg_base;
 	spinlock_t lock;
@@ -239,8 +245,8 @@ static void mpic_irq_raise(struct openpic *opp, struct irq_dest *dst,
 	};
 
 	if (!dst->vcpu) {
-		pr_debug("%s: destination cpu %td does not exist\n",
-			 __func__, dst - &opp->dst[0]);
+		pr_debug("%s: destination cpu %d does not exist\n",
+			 __func__, (int)(dst - &opp->dst[0]));
 		return;
 	}
 
@@ -257,8 +263,8 @@ static void mpic_irq_lower(struct openpic *opp, struct irq_dest *dst,
 			   int output)
 {
 	if (!dst->vcpu) {
-		pr_debug("%s: destination cpu %td does not exist\n",
-			 __func__, dst - &opp->dst[0]);
+		pr_debug("%s: destination cpu %d does not exist\n",
+			 __func__, (int)(dst - &opp->dst[0]));
 		return;
 	}
 
@@ -1071,7 +1077,9 @@ static int openpic_cpu_write_internal(void *opaque, gpa_t addr,
 	case 0xA0:		/* IACK */
 		/* Read-only register */
 		break;
-	case 0xB0:		/* EOI */
+	case 0xB0: {		/* EOI */
+		int notify_eoi;
+
 		pr_debug("EOI\n");
 		s_IRQ = IRQ_get_next(opp, &dst->servicing);
 
@@ -1083,7 +1091,7 @@ static int openpic_cpu_write_internal(void *opaque, gpa_t addr,
 
 		IRQ_resetbit(&dst->servicing, s_IRQ);
 		/* Notify listeners that the IRQ is over */
-		kvm_notify_acked_irq(opp->kvm, 0, s_IRQ);
+		notify_eoi = s_IRQ;
 		/* Set up next servicing IRQ */
 		s_IRQ = IRQ_get_next(opp, &dst->servicing);
 		/* Check queued interrupts. */
@@ -1096,7 +1104,13 @@ static int openpic_cpu_write_internal(void *opaque, gpa_t addr,
 				idx, n_IRQ);
 			mpic_irq_raise(opp, dst, ILR_INTTGT_INT);
 		}
+
+		spin_unlock(&opp->lock);
+		kvm_notify_acked_irq(opp->kvm, 0, notify_eoi);
+		spin_lock(&opp->lock);
+
 		break;
+	}
 	default:
 		break;
 	}
@@ -1226,62 +1240,71 @@ static int openpic_cpu_read(void *opaque, gpa_t addr, u32 *ptr)
 }
 
 struct mem_reg {
-	struct list_head list;
 	int (*read)(void *opaque, gpa_t addr, u32 *ptr);
 	int (*write)(void *opaque, gpa_t addr, u32 val);
 	gpa_t start_addr;
 	int size;
 };
 
-static struct mem_reg openpic_gbl_mmio = {
+static const struct mem_reg openpic_gbl_mmio = {
 	.write = openpic_gbl_write,
 	.read = openpic_gbl_read,
 	.start_addr = OPENPIC_GLB_REG_START,
 	.size = OPENPIC_GLB_REG_SIZE,
 };
 
-static struct mem_reg openpic_tmr_mmio = {
+static const struct mem_reg openpic_tmr_mmio = {
 	.write = openpic_tmr_write,
 	.read = openpic_tmr_read,
 	.start_addr = OPENPIC_TMR_REG_START,
 	.size = OPENPIC_TMR_REG_SIZE,
 };
 
-static struct mem_reg openpic_cpu_mmio = {
+static const struct mem_reg openpic_cpu_mmio = {
 	.write = openpic_cpu_write,
 	.read = openpic_cpu_read,
 	.start_addr = OPENPIC_CPU_REG_START,
 	.size = OPENPIC_CPU_REG_SIZE,
 };
 
-static struct mem_reg openpic_src_mmio = {
+static const struct mem_reg openpic_src_mmio = {
 	.write = openpic_src_write,
 	.read = openpic_src_read,
 	.start_addr = OPENPIC_SRC_REG_START,
 	.size = OPENPIC_SRC_REG_SIZE,
 };
 
-static struct mem_reg openpic_msi_mmio = {
+static const struct mem_reg openpic_msi_mmio = {
 	.read = openpic_msi_read,
 	.write = openpic_msi_write,
 	.start_addr = OPENPIC_MSI_REG_START,
 	.size = OPENPIC_MSI_REG_SIZE,
 };
 
-static struct mem_reg openpic_summary_mmio = {
+static const struct mem_reg openpic_summary_mmio = {
 	.read = openpic_summary_read,
 	.write = openpic_summary_write,
 	.start_addr = OPENPIC_SUMMARY_REG_START,
 	.size = OPENPIC_SUMMARY_REG_SIZE,
 };
 
+static void add_mmio_region(struct openpic *opp, const struct mem_reg *mr)
+{
+	if (opp->num_mmio_regions >= MAX_MMIO_REGIONS) {
+		WARN(1, "kvm mpic: too many mmio regions\n");
+		return;
+	}
+
+	opp->mmio_regions[opp->num_mmio_regions++] = mr;
+}
+
 static void fsl_common_init(struct openpic *opp)
 {
 	int i;
 	int virq = MAX_SRC;
 
-	list_add(&openpic_msi_mmio.list, &opp->mmio_regions);
-	list_add(&openpic_summary_mmio.list, &opp->mmio_regions);
+	add_mmio_region(opp, &openpic_msi_mmio);
+	add_mmio_region(opp, &openpic_summary_mmio);
 
 	opp->vid = VID_REVISION_1_2;
 	opp->vir = VIR_GENERIC;
@@ -1318,10 +1341,10 @@ static void fsl_common_init(struct openpic *opp)
 
 static int kvm_mpic_read_internal(struct openpic *opp, gpa_t addr, u32 *ptr)
 {
-	struct list_head *node;
+	int i;
 
-	list_for_each(node, &opp->mmio_regions) {
-		struct mem_reg *mr = list_entry(node, struct mem_reg, list);
+	for (i = 0; i < opp->num_mmio_regions; i++) {
+		const struct mem_reg *mr = opp->mmio_regions[i];
 
 		if (mr->start_addr > addr || addr >= mr->start_addr + mr->size)
 			continue;
@@ -1334,10 +1357,10 @@ static int kvm_mpic_read_internal(struct openpic *opp, gpa_t addr, u32 *ptr)
 
 static int kvm_mpic_write_internal(struct openpic *opp, gpa_t addr, u32 val)
 {
-	struct list_head *node;
+	int i;
 
-	list_for_each(node, &opp->mmio_regions) {
-		struct mem_reg *mr = list_entry(node, struct mem_reg, list);
+	for (i = 0; i < opp->num_mmio_regions; i++) {
+		const struct mem_reg *mr = opp->mmio_regions[i];
 
 		if (mr->start_addr > addr || addr >= mr->start_addr + mr->size)
 			continue;
@@ -1415,24 +1438,13 @@ static int kvm_mpic_write(struct kvm_io_device *this, gpa_t addr,
 	return ret;
 }
 
-static void kvm_mpic_dtor(struct kvm_io_device *this)
-{
-	struct openpic *opp = container_of(this, struct openpic, mmio);
-
-	opp->mmio_mapped = false;
-}
-
 static const struct kvm_io_device_ops mpic_mmio_ops = {
 	.read = kvm_mpic_read,
 	.write = kvm_mpic_write,
-	.destructor = kvm_mpic_dtor,
 };
 
 static void map_mmio(struct openpic *opp)
 {
-	BUG_ON(opp->mmio_mapped);
-	opp->mmio_mapped = true;
-
 	kvm_iodevice_init(&opp->mmio, &mpic_mmio_ops);
 
 	kvm_io_bus_register_dev(opp->kvm, KVM_MMIO_BUS,
@@ -1442,10 +1454,7 @@ static void map_mmio(struct openpic *opp)
 
 static void unmap_mmio(struct openpic *opp)
 {
-	if (opp->mmio_mapped) {
-		opp->mmio_mapped = false;
-		kvm_io_bus_unregister_dev(opp->kvm, KVM_MMIO_BUS, &opp->mmio);
-	}
+	kvm_io_bus_unregister_dev(opp->kvm, KVM_MMIO_BUS, &opp->mmio);
 }
 
 static int set_base_addr(struct openpic *opp, struct kvm_device_attr *attr)
@@ -1477,8 +1486,8 @@ static int set_base_addr(struct openpic *opp, struct kvm_device_attr *attr)
 
 	map_mmio(opp);
 
-	mutex_unlock(&opp->kvm->slots_lock);
 out:
+	mutex_unlock(&opp->kvm->slots_lock);
 	return 0;
 }
 
@@ -1624,40 +1633,20 @@ static void mpic_destroy(struct kvm_device *dev)
 {
 	struct openpic *opp = dev->private;
 
-	if (opp->mmio_mapped) {
-		/*
-		 * Normally we get unmapped by kvm_io_bus_destroy(),
-		 * which happens before the VCPUs release their references.
-		 *
-		 * Thus, we should only get here if no VCPUs took a reference
-		 * to us in the first place.
-		 */
-		WARN_ON(opp->nb_cpus != 0);
-		unmap_mmio(opp);
-	}
-
 	dev->kvm->arch.mpic = NULL;
 	kfree(opp);
 }
 
 static int mpic_set_default_irq_routing(struct openpic *opp)
 {
-	int i;
 	struct kvm_irq_routing_entry *routing;
 
-	/* XXX be more dynamic if we ever want to support multiple MPIC chips */
-	routing = kzalloc((sizeof(*routing) * opp->nb_irqs), GFP_KERNEL);
+	/* Create a nop default map, so that dereferencing it still works */
+	routing = kzalloc((sizeof(*routing)), GFP_KERNEL);
 	if (!routing)
 		return -ENOMEM;
 
-	for (i = 0; i < opp->nb_irqs; i++) {
-		routing[i].gsi = i;
-		routing[i].type = KVM_IRQ_ROUTING_IRQCHIP;
-		routing[i].u.irqchip.irqchip = 0;
-		routing[i].u.irqchip.pin = i;
-	}
-
-	kvm_set_irq_routing(opp->kvm, routing, opp->nb_irqs, 0);
+	kvm_set_irq_routing(opp->kvm, routing, 0, 0);
 
 	kfree(routing);
 	return 0;
@@ -1682,11 +1671,10 @@ static int mpic_create(struct kvm_device *dev, u32 type)
 	opp->model = type;
 	spin_lock_init(&opp->lock);
 
-	INIT_LIST_HEAD(&opp->mmio_regions);
-	list_add(&openpic_gbl_mmio.list, &opp->mmio_regions);
-	list_add(&openpic_tmr_mmio.list, &opp->mmio_regions);
-	list_add(&openpic_src_mmio.list, &opp->mmio_regions);
-	list_add(&openpic_cpu_mmio.list, &opp->mmio_regions);
+	add_mmio_region(opp, &openpic_gbl_mmio);
+	add_mmio_region(opp, &openpic_tmr_mmio);
+	add_mmio_region(opp, &openpic_src_mmio);
+	add_mmio_region(opp, &openpic_cpu_mmio);
 
 	switch (opp->model) {
 	case KVM_DEV_TYPE_FSL_MPIC_20:
@@ -1716,18 +1704,18 @@ static int mpic_create(struct kvm_device *dev, u32 type)
 		goto err;
 	}
 
-	dev->kvm->arch.mpic = opp;
-
 	ret = mpic_set_default_irq_routing(opp);
 	if (ret)
 		goto err;
 
 	openpic_reset(opp);
 
+	smp_wmb();
+	dev->kvm->arch.mpic = opp;
+
 	return 0;
 
 err:
-	dev->kvm->arch.mpic = NULL;
 	kfree(opp);
 	return ret;
 }
@@ -1776,7 +1764,6 @@ int kvmppc_mpic_connect_vcpu(struct kvm_device *dev, struct kvm_vcpu *vcpu,
 	if (opp->mpic_mode_mask == GCR_MODE_PROXY)
 		vcpu->arch.epr_flags |= KVMPPC_EPR_KERNEL;
 
-	kvm_device_get(dev);
 out:
 	spin_unlock_irq(&opp->lock);
 	return ret;
@@ -1792,7 +1779,6 @@ void kvmppc_mpic_disconnect_vcpu(struct openpic *opp, struct kvm_vcpu *vcpu)
 	BUG_ON(!opp->dst[vcpu->arch.irq_cpu_id].vcpu);
 
 	opp->dst[vcpu->arch.irq_cpu_id].vcpu = NULL;
-	kvm_device_put(opp->dev);
 }
 
 /*
@@ -1806,10 +1792,11 @@ static int mpic_set_irq(struct kvm_kernel_irq_routing_entry *e,
 {
 	u32 irq = e->irqchip.pin;
 	struct openpic *opp = kvm->arch.mpic;
+	unsigned long flags;
 
-	spin_lock_irq(&opp->lock);
+	spin_lock_irqsave(&opp->lock, flags);
 	openpic_set_irq(opp, irq, level);
-	spin_unlock_irq(&opp->lock);
+	spin_unlock_irqrestore(&opp->lock, flags);
 
 	/* All code paths we care about don't check for the return value */
 	return 0;
@@ -1819,14 +1806,16 @@ int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
 		struct kvm *kvm, int irq_source_id, int level)
 {
 	struct openpic *opp = kvm->arch.mpic;
-	spin_lock_irq(&opp->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&opp->lock, flags);
 
 	/*
 	 * XXX We ignore the target address for now, as we only support
 	 *     a single MSI bank.
 	 */
 	openpic_msi_write(kvm->arch.mpic, MSIIR_OFFSET, e->msi.data);
-	spin_unlock_irq(&opp->lock);
+	spin_unlock_irqrestore(&opp->lock, flags);
 
 	/* All code paths we care about don't check for the return value */
 	return 0;

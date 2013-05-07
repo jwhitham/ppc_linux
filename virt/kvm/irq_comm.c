@@ -313,7 +313,6 @@ int kvm_set_routing_entry(struct kvm_irq_routing_table *rt,
 		goto out;
 	}
 
-	hlist_add_head(&e->link, &rt->map[e->gsi]);
 	r = 0;
 out:
 	return r;
