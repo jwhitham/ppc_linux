@@ -247,15 +247,19 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		 * The sgt page is guaranteed to reside in lowmem.
 		 */
 		sgt = phys_to_virt(addr + dpa_fd_offset(fd));
-
+#ifdef CONFIG_FSL_DPAA_1588
+		if (priv->tsu && priv->tsu->valid &&
+				priv->tsu->hwts_tx_en_ioctl)
+			dpa_ptp_store_txstamp(priv, skb, (void *)skbh);
+#endif
 #ifdef CONFIG_FSL_DPAA_TS
-	if (unlikely(priv->ts_tx_en &&
+		if (unlikely(priv->ts_tx_en &&
 			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
-		struct skb_shared_hwtstamps shhwtstamps;
+			struct skb_shared_hwtstamps shhwtstamps;
 
-		dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh);
-		skb_tstamp_tx(skb, &shhwtstamps);
-	}
+			dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh);
+			skb_tstamp_tx(skb, &shhwtstamps);
+		}
 #endif /* CONFIG_FSL_DPAA_TS */
 
 		/* sgt[0] is from lowmem, was dma_map_single()-ed */
@@ -279,9 +283,15 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		/* Free separately the pages that we allocated on Tx */
 		free_page((unsigned long)phys_to_virt(addr));
 	}
-#ifdef CONFIG_FSL_DPAA_TS
+#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
 	else {
 		/* get the timestamp for non-SG frames */
+#ifdef CONFIG_FSL_DPAA_1588
+		if (priv->tsu && priv->tsu->valid &&
+						priv->tsu->hwts_tx_en_ioctl)
+			dpa_ptp_store_txstamp(priv, skb, (void *)skbh);
+#endif
+#ifdef CONFIG_FSL_DPAA_TS
 		if (unlikely(priv->ts_tx_en &&
 				skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
 			struct skb_shared_hwtstamps shhwtstamps;
@@ -289,8 +299,9 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 			dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh);
 			skb_tstamp_tx(skb, &shhwtstamps);
 		}
+#endif
 	}
-#endif /* CONFIG_FSL_DPAA_TS */
+#endif
 
 	return skb;
 }
@@ -319,7 +330,7 @@ static void __hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	/* do we need the timestamp for bad frames? */
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
-		dpa_ptp_store_rxstamp(priv->net_dev, skb, fd);
+		dpa_ptp_store_rxstamp(priv, skb, vaddr);
 #endif
 
 	/* Peek at the parse results for csum validation and headers size */
@@ -383,6 +394,10 @@ static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	const t_FmPrsResult *parse_results;
 
 	vaddr = phys_to_virt(addr);
+#ifdef CONFIG_FSL_DPAA_1588
+	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
+		dpa_ptp_store_rxstamp(priv, skb, vaddr);
+#endif
 	/*
 	 * In the case of a SG frame, FMan stores the Internal Context
 	 * in the buffer containing the sgt.
@@ -449,11 +464,6 @@ static void __hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 		if (sgt[i].final)
 			break;
 	}
-
-#ifdef CONFIG_FSL_DPAA_1588
-	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
-		dpa_ptp_store_rxstamp(priv->net_dev, skb, fd);
-#endif
 
 	/* recycle the SGT page */
 	dpa_bp = dpa_bpid2pool(fd->bpid);

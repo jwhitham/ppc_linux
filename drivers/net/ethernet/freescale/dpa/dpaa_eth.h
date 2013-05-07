@@ -641,7 +641,10 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 #define dpa_get_queue_mapping(skb) \
 	skb_get_queue_mapping(skb)
 #endif
-
+#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv,
+			enum port_type rx_tx, const void *data);
+#endif
 #ifdef CONFIG_FSL_DPAA_TS
 /* Updates the skb shared hw timestamp from the hardware timestamp */
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,

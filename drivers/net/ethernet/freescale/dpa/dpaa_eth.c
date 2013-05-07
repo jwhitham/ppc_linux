@@ -956,6 +956,10 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 	}
 /* on some error paths this might not be necessary: */
+#ifdef CONFIG_FSL_DPAA_1588
+	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
+		dpa_ptp_store_txstamp(priv, skb, (void *)skbh);
+#endif
 #ifdef CONFIG_FSL_DPAA_TS
 	if (unlikely(priv->ts_tx_en &&
 			skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
@@ -1100,26 +1104,36 @@ static void dpa_set_rx_mode(struct net_device *net_dev)
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }
 
+#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
+			const void *data)
+{
+	u64 *ts, ns;
+
+	ts = FM_PORT_GetBufferTimeStamp(
+		fm_port_get_handle(priv->mac_dev->port_dev[rx_tx]), data);
+
+	if (!ts || *ts == 0)
+		return 0;
+
+	/* multiple DPA_PTP_NOMINAL_FREQ_PERIOD_NS for case of non power of 2 */
+	ns = *ts << DPA_PTP_NOMINAL_FREQ_PERIOD_SHIFT;
+
+	return ns;
+}
+#endif
 #ifdef CONFIG_FSL_DPAA_TS
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
 	struct skb_shared_hwtstamps *shhwtstamps, const void *data)
 {
-	u64 *ts, ns;
+	u64 ns;
 
-	/* this will be replaced by a new FMD wrapper API */
-	ts = FM_PORT_GetBufferTimeStamp(
-			fm_port_get_handle(priv->mac_dev->port_dev[rx_tx]),
-			(char *)data);
+	ns = dpa_get_timestamp_ns(priv, rx_tx, data);
 
-	memset(shhwtstamps, 0, sizeof(*shhwtstamps));
-
-	/* was the timestamping performed? */
-	if (!ts || *ts == 0)
+	if (ns == 0)
 		return -EINVAL;
 
-	/* The timestamp unit was found to be 0.4 ns */
-	ns = *ts * 10;
-	do_div(ns, 4);
+	memset(shhwtstamps, 0, sizeof(*shhwtstamps));
 	shhwtstamps->hwtstamp = ns_to_ktime(ns);
 
 	return 0;
@@ -1500,10 +1514,9 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	prefetch(skb_shinfo(skb));
 
-/* Shouldn't we store the timestamp after we validate the mtu? */
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
-		dpa_ptp_store_rxstamp(net_dev, skb, fd);
+		dpa_ptp_store_rxstamp(priv, skb, (void *)skbh);
 #endif
 
 	skb->protocol = eth_type_trans(skb, net_dev);
@@ -1629,10 +1642,6 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 
 	skb = _dpa_cleanup_tx_fd(priv, fd);
 
-#ifdef CONFIG_FSL_DPAA_1588
-	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_tx_en_ioctl)
-		dpa_ptp_store_txstamp(net_dev, skb, fd);
-#endif
 	dev_kfree_skb(skb);
 }
 
@@ -1655,14 +1664,9 @@ static void dpa_set_buffer_layout(struct dpa_priv_s *priv, struct fm_port *port,
 			DPA_RX_PRIV_DATA_SIZE : DPA_TX_PRIV_DATA_SIZE);
 	layout->parse_results = true;
 	layout->hash_results = true;
-#ifdef CONFIG_FSL_DPAA_1588
-	if (priv && priv->tsu && priv->tsu->valid)
-		layout->time_stamp = true;
-#endif
-#ifdef CONFIG_FSL_DPAA_TS
+#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
 	layout->time_stamp = true;
 #endif
-
 	fm_port_get_buff_layout_ext_params(port, &params);
 	layout->manip_extra_space = params.manip_extra_space;
 	layout->data_align = params.data_align;
