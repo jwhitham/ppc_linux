@@ -58,7 +58,7 @@
 	bp9: buffer-pool@9 {
 		compatible = "fsl,p5040-bpool", "fsl,bpool";
 		fsl,bpid = <9>;
-		fsl,bpool-ethernet-cfg = <0 0 0 1600 0 0xfeedabba>;
+		fsl,bpool-ethernet-cfg = <0 0 0 1728 0 0xfeedabba>;
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 
