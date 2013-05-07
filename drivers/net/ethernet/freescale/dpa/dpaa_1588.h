@@ -87,9 +87,6 @@ enum {
 #define DPA_PTP_HEADER_SZE		34
 #define DPA_ETYPE_LEN			2
 #define DPA_VLAN_TAG_LEN		4
-
-#define DPA_PTP_TIMESTAMP_OFFSET	0x30
-#define DPA_PTP_NOMINAL_FREQ_PERIOD	5  /* 5ns -> 200M */
 #define NANOSEC_PER_SECOND		1000000000
 
 /* The threshold between the current found one and the oldest one */
@@ -136,9 +133,9 @@ struct dpa_ptp_tsu {
 
 extern int dpa_ptp_init(struct dpa_priv_s *priv);
 extern void dpa_ptp_cleanup(struct dpa_priv_s *priv);
-extern void dpa_ptp_store_txstamp(struct net_device *dev, struct sk_buff *skb,
-				  const struct qm_fd *fd);
-extern void dpa_ptp_store_rxstamp(struct net_device *dev, struct sk_buff *skb,
-				  const struct qm_fd *fd);
+extern void dpa_ptp_store_txstamp(const struct dpa_priv_s *priv,
+				struct sk_buff *skb, void *data);
+extern void dpa_ptp_store_rxstamp(const struct dpa_priv_s *priv,
+				struct sk_buff *skb, void *data);
 extern int dpa_ioctl_1588(struct net_device *dev, struct ifreq *ifr, int cmd);
 #endif

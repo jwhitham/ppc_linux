@@ -166,24 +166,6 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	return 0;
 }
 
-static int dpa_ptp_get_time(dma_addr_t fd_addr, u32 *high, u32 *low)
-{
-	u8 *ts_addr = (u8 *)phys_to_virt(fd_addr);
-	u32 sec, nsec, mod;
-	u64 tmp;
-
-	ts_addr += DPA_PTP_TIMESTAMP_OFFSET;
-	sec = *((u32 *)ts_addr);
-	nsec = *(((u32 *)ts_addr) + 1);
-	tmp = ((u64)sec << 32 | nsec) * DPA_PTP_NOMINAL_FREQ_PERIOD;
-
-	mod = do_div(tmp, NANOSEC_PER_SECOND);
-	*high = (u32)tmp;
-	*low = mod;
-
-	return 0;
-}
-
 /*
  * Parse the PTP packets
  *
@@ -295,10 +277,12 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 	return ptp_loc;
 }
 
-static int dpa_ptp_store_stamp(struct net_device *dev, struct sk_buff *skb,
-		dma_addr_t fd_addr, struct dpa_ptp_data *ptp_data)
+static int dpa_ptp_store_stamp(const struct dpa_priv_s *priv,
+		struct sk_buff *skb, void *data, enum port_type rx_tx,
+		struct dpa_ptp_data *ptp_data)
 {
-	u32 sec, nsec;
+	u64 nsec;
+	u32 mod;
 	u8 *ptp_loc;
 	u16 eth_type;
 
@@ -331,42 +315,35 @@ static int dpa_ptp_store_stamp(struct net_device *dev, struct sk_buff *skb,
 	memcpy(ptp_data->ident.snd_port_id, ptp_loc + PTP_OFFS_SRCPRTID,
 			DPA_PTP_SOURCE_PORT_LENGTH);
 
-	dpa_ptp_get_time(fd_addr, &sec, &nsec);
-	ptp_data->ts.sec = (u64)sec;
-	ptp_data->ts.nsec = nsec;
+	nsec = dpa_get_timestamp_ns(priv, rx_tx, data);
+	mod = do_div(nsec, NANOSEC_PER_SECOND);
+	ptp_data->ts.sec = nsec;
+	ptp_data->ts.nsec = mod;
 
 	return 0;
 }
 
-void dpa_ptp_store_txstamp(struct net_device *dev, struct sk_buff *skb,
-			   const struct qm_fd *fd)
+void dpa_ptp_store_txstamp(const struct dpa_priv_s *priv,
+				struct sk_buff *skb, void *data)
 {
-	struct dpa_priv_s *priv = netdev_priv(dev);
 	struct dpa_ptp_tsu *tsu = priv->tsu;
 	struct dpa_ptp_data ptp_tx_data;
-	dma_addr_t fd_addr = qm_fd_addr(fd);
-	int ret;
 
-	ret = dpa_ptp_store_stamp(dev, skb, fd_addr, &ptp_tx_data);
-	if (ret)
+	if (dpa_ptp_store_stamp(priv, skb, data, TX, &ptp_tx_data))
 		return;
+
 	dpa_ptp_insert(&tsu->tx_timestamps, &ptp_tx_data);
 }
 
-void dpa_ptp_store_rxstamp(struct net_device *dev, struct sk_buff *skb,
-			   const struct qm_fd *fd)
+void dpa_ptp_store_rxstamp(const struct dpa_priv_s *priv,
+				struct sk_buff *skb, void *data)
 {
-	struct dpa_priv_s *priv = netdev_priv(dev);
 	struct dpa_ptp_tsu *tsu = priv->tsu;
 	struct dpa_ptp_data ptp_rx_data;
-	dma_addr_t fd_addr = qm_fd_addr(fd);
-	int ret;
 
-	ret = dpa_ptp_store_stamp(dev, skb,
-					fd_addr + fm_get_rx_extra_headroom(),
-					&ptp_rx_data);
-	if (ret)
+	if (dpa_ptp_store_stamp(priv, skb, data, RX, &ptp_rx_data))
 		return;
+
 	dpa_ptp_insert(&tsu->rx_timestamps, &ptp_rx_data);
 }
 
@@ -417,7 +394,7 @@ static void dpa_set_fiper_alarm(struct dpa_ptp_tsu *tsu,
 
 	/* TMR_FIPER1 will pulse every second after ALARM1 expired */
 	tmp = (u64)cnt_time->sec * NANOSEC_PER_SECOND + (u64)cnt_time->nsec;
-	fiper = NANOSEC_PER_SECOND - DPA_PTP_NOMINAL_FREQ_PERIOD;
+	fiper = NANOSEC_PER_SECOND - DPA_PTP_NOMINAL_FREQ_PERIOD_NS;
 	if (mac_dev->fm_rtc_set_alarm)
 		mac_dev->fm_rtc_set_alarm(tsu->dpa_priv->net_dev, 0, tmp);
 	if (mac_dev->fm_rtc_set_fiper)
@@ -589,7 +566,7 @@ int dpa_ptp_init(struct dpa_priv_s *priv)
 	if (!tsu)
 		return -ENOMEM;
 
-	tsu->valid = FALSE;
+	tsu->valid = TRUE;
 	tsu->dpa_priv = priv;
 
 	dpa_ptp_init_circ(&tsu->rx_timestamps, DEFAULT_PTP_RX_BUF_SZ);
