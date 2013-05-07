@@ -343,5 +343,8 @@ int fm_port_del_rate_limit(struct fm_port *port);
 /** @} */ /* end of FM_LnxKern_ctrl_grp group */
 /** @} */ /* end of FM_LnxKern_grp group */
 
+/* default values for initializing PTP 1588 timer clock */
+#define DPA_PTP_NOMINAL_FREQ_PERIOD_SHIFT 2 /* power of 2 for better performance */
+#define DPA_PTP_NOMINAL_FREQ_PERIOD_NS (1 << DPA_PTP_NOMINAL_FREQ_PERIOD_SHIFT) /* 4ns,250MHz */
 
 #endif /* __LNXWRP_FSL_FMAN_H */

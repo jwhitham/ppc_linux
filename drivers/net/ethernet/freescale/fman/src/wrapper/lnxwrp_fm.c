@@ -922,7 +922,7 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
         if(!(p_LnxWrpFmDev->h_RtcDev = FM_RTC_Config(&fmRtcParam)))
             RETURN_ERROR(MAJOR, E_INVALID_HANDLE, ("FM-RTC"));
 
-	if (FM_RTC_ConfigPeriod(p_LnxWrpFmDev->h_RtcDev, 5) != E_OK)
+	if (FM_RTC_ConfigPeriod(p_LnxWrpFmDev->h_RtcDev, DPA_PTP_NOMINAL_FREQ_PERIOD_NS) != E_OK)
 	    RETURN_ERROR(MAJOR, E_INVALID_STATE, ("FM-RTC"));
 
         if (FM_RTC_Init(p_LnxWrpFmDev->h_RtcDev) != E_OK)
