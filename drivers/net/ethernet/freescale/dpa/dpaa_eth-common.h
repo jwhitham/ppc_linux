@@ -71,14 +71,15 @@ struct dpa_buffer_layout_s {
 #define DPA_HASH_RESULTS_SIZE 8
 
 
-#define dpaa_eth_init_port(type, port, param, errq_id, defq_id, buf_layout) \
+#define dpaa_eth_init_port(type, port, param, errq_id, defq_id, buf_layout,\
+			   frag_enabled) \
 { \
 	param.errq = errq_id; \
 	param.defq = defq_id; \
 	param.priv_data_size = buf_layout->priv_data_size; \
 	param.parse_results = buf_layout->parse_results; \
 	param.hash_results = buf_layout->hash_results; \
-	param.frag_enable = false; \
+	param.frag_enable = frag_enabled; \
 	param.time_stamp = buf_layout->time_stamp; \
 	param.manip_extra_space = buf_layout->manip_extra_space; \
 	param.data_align = buf_layout->data_align; \

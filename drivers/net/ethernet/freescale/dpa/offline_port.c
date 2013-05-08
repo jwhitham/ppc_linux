@@ -47,6 +47,12 @@
 #include "dpaa_eth-common.h"
 
 #define OH_MOD_DESCRIPTION	"FSL FMan Offline Parsing port driver"
+/*
+ * Manip extra space and data alignment for fragmentation
+ */
+#define FRAG_MANIP_SPACE 128
+#define FRAG_DATA_ALIGN 64
+
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Bogdan Hamciuc <bogdan.hamciuc@freescale.com>");
@@ -117,23 +123,29 @@ oh_port_probe(struct platform_device *_of_dev)
 {
 	struct device		*dpa_oh_dev;
 	struct device_node	*dpa_oh_node;
-	int			 lenp, _errno = 0, fq_idx;
-	const phandle		*oh_port_handle;
+	int			 lenp, _errno = 0, fq_idx, n_size, i;
+	const phandle		*oh_port_handle, *bpool_handle;
 	struct platform_device	*oh_of_dev;
-	struct device_node	*oh_node;
+	struct device_node	*oh_node, *bpool_node = NULL, *root_node;
 	struct device		*oh_dev;
 	struct dpa_oh_config_s	*oh_config;
 	uint32_t		*oh_all_queues;
 	uint32_t		 queues_count;
 	uint32_t		 crt_fqid_base;
 	uint32_t		 crt_fq_count;
-	struct fm_port_params	 oh_port_tx_params;
+	bool			frag_enabled = FALSE;
+	struct fm_port_params	oh_port_tx_params;
 	struct fm_port_pcd_param	oh_port_pcd_params;
 	struct dpa_buffer_layout_s buf_layout;
 	/* True if the current partition owns the OH port. */
 	bool init_oh_port;
 	const struct of_device_id *match;
+	uint32_t crt_ext_pools_count, ext_pool_size;
+	const unsigned int *port_id;
+	const uint32_t		*bpool_cfg;
+	const uint32_t		*bpid;
 
+	memset(&oh_port_tx_params, 0, sizeof(oh_port_tx_params));
 	dpa_oh_dev = &_of_dev->dev;
 	dpa_oh_node = dpa_oh_dev->of_node;
 	BUG_ON(dpa_oh_node == NULL);
@@ -175,10 +187,19 @@ oh_port_probe(struct platform_device *_of_dev)
 	dev_info(dpa_oh_dev, "Found OH node handle compatible with %s.\n",
 		match->compatible);
 
+	port_id = of_get_property(oh_node, "cell-index", &lenp);
+
+	if (port_id == NULL) {
+		dev_err(dpa_oh_dev, "No port id found in node %s\n",
+			dpa_oh_node->full_name);
+		_errno = -EINVAL;
+		goto return_kfree;
+	}
+
+	BUG_ON(lenp % sizeof(*port_id));
 	oh_of_dev = of_find_device_by_node(oh_node);
 	BUG_ON(oh_of_dev == NULL);
 	oh_dev = &oh_of_dev->dev;
-	of_node_put(oh_node);
 
 	/*
 	 * The OH port must be initialized exactly once.
@@ -199,6 +220,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	if (!init_oh_port) {
 		dev_dbg(dpa_oh_dev, "Not owning the shared OH port %s, "
 			"will not initialize it.\n", oh_node->full_name);
+		of_node_put(oh_node);
 		return 0;
 	}
 
@@ -208,7 +230,8 @@ oh_port_probe(struct platform_device *_of_dev)
 		dev_err(dpa_oh_dev, "Can't allocate private data for "
 			"OH node %s referenced from node %s!\n",
 			oh_node->full_name, dpa_oh_node->full_name);
-		return -ENOMEM;
+		_errno = -ENOMEM;
+		goto return_kfree;
 	}
 
 	/*
@@ -280,10 +303,81 @@ oh_port_probe(struct platform_device *_of_dev)
 	}
 
 	oh_set_buffer_layout(oh_config->oh_port, &buf_layout);
+	bpool_handle = of_get_property(dpa_oh_node,
+			"fsl,bman-buffer-pools", &lenp);
+
+	if (bpool_handle == NULL) {
+		dev_info(dpa_oh_dev, "OH port %s has no buffer pool. Fragmentation will not be enabled\n",
+			oh_node->full_name);
+		goto init_port;
+	}
+
+	/* used for reading ext_pool_size*/
+	root_node = of_find_node_by_path("/");
+	if (root_node == NULL) {
+		dev_err(dpa_oh_dev, "of_find_node_by_path(/) failed\n");
+		_errno = -EINVAL;
+		goto return_kfree;
+	}
+
+	n_size = of_n_size_cells(root_node);
+	of_node_put(root_node);
+
+	crt_ext_pools_count = lenp / sizeof(phandle);
+	dev_dbg(dpa_oh_dev, "OH port number of pools = %u\n",
+					crt_ext_pools_count);
+
+	oh_port_tx_params.num_pools = crt_ext_pools_count;
+
+	for (i = 0; i < crt_ext_pools_count; i++) {
+		bpool_node = of_find_node_by_phandle(bpool_handle[i]);
+		if (bpool_node == NULL) {
+			dev_err(dpa_oh_dev, "Invalid Buffer pool node\n");
+			_errno = -EINVAL;
+			goto return_kfree;
+		}
+
+		bpid = of_get_property(bpool_node, "fsl,bpid", &lenp);
+		if ((bpid == NULL) || (lenp != sizeof(*bpid))) {
+			dev_err(dpa_oh_dev, "Invalid Buffer pool Id\n");
+			_errno = -EINVAL;
+			goto return_kfree;
+		}
+
+		oh_port_tx_params.pool_param[i].id = *bpid;
+		dev_dbg(dpa_oh_dev, "OH port bpool id = %u\n", *bpid);
+
+		bpool_cfg = of_get_property(bpool_node,
+				"fsl,bpool-ethernet-cfg", &lenp);
+		if (bpool_cfg == NULL) {
+			dev_err(dpa_oh_dev, "Invalid Buffer pool config params\n");
+			_errno = -EINVAL;
+			goto return_kfree;
+		}
+
+		of_read_number(bpool_cfg, n_size);
+		ext_pool_size = of_read_number(bpool_cfg + n_size, n_size);
+		oh_port_tx_params.pool_param[i].size = ext_pool_size;
+		dev_dbg(dpa_oh_dev, "OH port bpool size = %u\n",
+			ext_pool_size);
+		of_node_put(bpool_node);
+
+	}
+
+	if (buf_layout.data_align != FRAG_DATA_ALIGN ||
+	    buf_layout.manip_extra_space != FRAG_MANIP_SPACE)
+		goto init_port;
+
+	frag_enabled = TRUE;
+	dev_info(dpa_oh_dev, "IP Fragmentation enabled for OH port %d",
+		     *port_id);
+
+init_port:
+	of_node_put(oh_node);
 	/* Set Tx params */
-	memset(&oh_port_tx_params, 0, sizeof(oh_port_tx_params));
 	dpaa_eth_init_port(tx, oh_config->oh_port, oh_port_tx_params,
-		oh_config->error_fqid, oh_config->default_fqid, (&buf_layout));
+		oh_config->error_fqid, oh_config->default_fqid, (&buf_layout),
+		frag_enabled);
 	/* Set PCD params */
 	oh_port_pcd_params.cba = oh_alloc_pcd_fqids;
 	oh_port_pcd_params.cbf = oh_free_pcd_fqids;
@@ -299,6 +393,10 @@ oh_port_probe(struct platform_device *_of_dev)
 	return 0;
 
 return_kfree:
+	if (bpool_node)
+		of_node_put(bpool_node);
+	if (oh_node)
+		of_node_put(oh_node);
 	devm_kfree(dpa_oh_dev, oh_config);
 	return _errno;
 }

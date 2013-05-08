@@ -59,7 +59,7 @@
 #include <asm/smp.h>		/* get_hard_smp_processor_id() */
 #include <linux/fsl_bman.h>
 
-#include "lnxwrp_fsl_fman.h"
+#include "fsl_fman.h"
 #include "fm_ext.h"
 #include "fm_port_ext.h"
 
@@ -3682,10 +3682,11 @@ dpaa_eth_init_tx_port(struct fm_port *port, struct dpa_fq *errq,
 		struct dpa_fq *defq, struct dpa_buffer_layout_s *buf_layout)
 {
 	struct fm_port_params tx_port_param;
+	bool frag_enabled = false;
 
 	memset(&tx_port_param, 0, sizeof(tx_port_param));
 	dpaa_eth_init_port(tx, port, tx_port_param, errq->fqid, defq->fqid,
-			   buf_layout);
+			   buf_layout, frag_enabled);
 }
 
 static void
@@ -3695,6 +3696,7 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 {
 	struct fm_port_params rx_port_param;
 	int i;
+	bool frag_enabled = false;
 
 	memset(&rx_port_param, 0, sizeof(rx_port_param));
 	count = min(ARRAY_SIZE(rx_port_param.pool_param), count);
@@ -3707,7 +3709,7 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 	}
 
 	dpaa_eth_init_port(rx, port, rx_port_param, errq->fqid, defq->fqid,
-			   buf_layout);
+			   buf_layout, frag_enabled);
 }
 
 static void dpa_rx_fq_init(struct dpa_priv_s *priv, struct list_head *head,
