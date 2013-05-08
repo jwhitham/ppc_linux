@@ -48,6 +48,7 @@
 	bus-range = <0x0 0xff>;
 	interrupts = <20 2 0 0>;
 	pcie@0 {
+		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
@@ -73,6 +74,7 @@
 	bus-range = <0 0xff>;
 	interrupts = <21 2 0 0>;
 	pcie@0 {
+		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
@@ -98,6 +100,7 @@
 	bus-range = <0x0 0xff>;
 	interrupts = <22 2 0 0>;
 	pcie@0 {
+		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
@@ -123,6 +126,7 @@
 	bus-range = <0x0 0xff>;
 	interrupts = <23 2 0 0>;
 	pcie@0 {
+		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
