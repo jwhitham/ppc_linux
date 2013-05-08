@@ -37,6 +37,8 @@ static struct of_device_id __initdata mpc85xx_common_ids[] = {
 	{ .compatible = "fsl,qoriq-pcie-v2.4", },
 	{ .compatible = "fsl,qoriq-pcie-v2.3", },
 	{ .compatible = "fsl,qoriq-pcie-v2.2", },
+	/* For the FMan driver */
+	{ .compatible = "fsl,dpaa", },
 	{},
 };
 
