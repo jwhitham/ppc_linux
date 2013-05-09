@@ -117,6 +117,7 @@ EXPORT_SYMBOL_GPL(mpc85xx_pmc_set_lossless_ethernet);
 static int pmc_suspend_enter(suspend_state_t state)
 {
 	int ret = 0;
+	int result;
 
 	switch (state) {
 #ifdef CONFIG_PPC_85xx
@@ -143,13 +144,13 @@ static int pmc_suspend_enter(suspend_state_t state)
 		/* At this point, the CPU is asleep. */
 
 		/* Upon resume, wait for SLP bit to be clear. */
-		ret = spin_event_timeout(
+		result = spin_event_timeout(
 			(in_be32(&pmc_regs->powmgtcsr) & POWMGTCSR_SLP) == 0,
 			10000, 10);
-		if (!ret) {
+		if (!result) {
 			pr_err("%s: timeout waiting for SLP bit "
 				"to be cleared\n", __func__);
-			ret = -EINVAL;
+			ret = -ETIMEDOUT;
 		}
 		break;
 

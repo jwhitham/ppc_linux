@@ -26,6 +26,7 @@ struct ccsr_rcpm_v2 __iomem *rcpm2_regs;
 static int rcpm_suspend_enter(suspend_state_t state)
 {
 	int ret = 0;
+	int result;
 
 	switch (state) {
 	case PM_SUSPEND_STANDBY:
@@ -37,13 +38,13 @@ static int rcpm_suspend_enter(suspend_state_t state)
 		/* At this point, the device is in sleep mode. */
 
 		/* Upon resume, wait for SLP bit to be clear. */
-		ret = spin_event_timeout(
+		result = spin_event_timeout(
 		  (in_be32(&rcpm1_regs->powmgtcsr) & RCPM_POWMGTCSR_SLP) == 0,
 		  10000, 10);
-		if (!ret) {
+		if (!result) {
 			pr_err("%s: timeout waiting for SLP bit "
 				"to be cleared\n", __func__);
-			ret = -EINVAL;
+			ret = -ETIMEDOUT;
 		}
 		break;
 
@@ -57,6 +58,7 @@ static int rcpm_suspend_enter(suspend_state_t state)
 static int rcpm_v2_suspend_enter(suspend_state_t state)
 {
 	int ret = 0;
+	int result;
 
 	switch (state) {
 	case PM_SUSPEND_STANDBY:
@@ -69,13 +71,13 @@ static int rcpm_v2_suspend_enter(suspend_state_t state)
 		/* At this point, the device is in LPM20 status. */
 
 		/* resume ... */
-		ret = spin_event_timeout(
+		result = spin_event_timeout(
 		      (in_be32(&rcpm2_regs->powmgtcsr) & RCPM_POWMGTCSR_LPM20_ST)
 		      == 0, 10000, 10);
-		if (!ret) {
+		if (!result) {
 			pr_err("%s: timeout waiting for LPM20 bit to be cleared\n",
 				__func__);
-			ret = -EINVAL;
+			ret = -ETIMEDOUT;
 		}
 
 		break;
