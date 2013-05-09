@@ -23,6 +23,7 @@
 
 #define VFIO_TYPE1_IOMMU		1
 #define VFIO_FSL_PAMU_IOMMU		2
+#define VFIO_IOMMU_DUMMY		3
 
 /*
  * The IOCTL interface is designed for extensibility by embedding the

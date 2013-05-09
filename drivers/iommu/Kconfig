@@ -25,6 +25,18 @@ config FSL_PAMU
 	help
 	  Freescale PAMU support.
 
+config  DUMMY_IOMMU
+	bool "Dummy IOMMU support for VFIO (UNSAFE)"
+	select IOMMU_API
+	help
+	  WARNING: Dummy IOMMU driver, only for platforms that don't have a
+	  hardware IOMMU. This option does allow you to use VFIO device
+	  assignment, but does not provide DMA memory isolation.
+	  Only use this if you trust all VFIO users completely.
+	  The dummy vfio iommu driver can be enabled via
+	  /sys/kernel/vfio_iommu_dummy/enable_iommu_dummy attribute.
+	  If unsure, say N.
+
 # MSM IOMMU support
 config MSM_IOMMU
 	bool "MSM IOMMU Support"
