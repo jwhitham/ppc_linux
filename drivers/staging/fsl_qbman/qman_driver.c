@@ -32,6 +32,7 @@
 #include "qman_private.h"
 
 #include <linux/iommu.h>
+#include <asm/smp.h>	/* hard_smp_processor_id() if !CONFIG_SMP */
 
 /* Global variable containing revision id (even on non-control plane systems
  * where CCSR isn't available) */
