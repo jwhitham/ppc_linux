@@ -655,8 +655,10 @@ static int __init topology_init(void)
 		 * CPU.  For instance, the boot cpu might never be valid
 		 * for hotplugging.
 		 */
-		if (ppc_md.cpu_die)
+		if (ppc_md.cpu_die && cpu != boot_cpuid)
 			c->hotpluggable = 1;
+		else
+			c->hotpluggable = 0;
 
 		if (cpu_online(cpu) || c->hotpluggable) {
 			register_cpu(c, cpu);
