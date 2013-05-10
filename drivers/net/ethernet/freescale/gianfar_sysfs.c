@@ -91,6 +91,51 @@ static ssize_t gfar_set_bd_stash(struct device *dev,
 
 static DEVICE_ATTR(bd_stash, 0644, gfar_show_bd_stash, gfar_set_bd_stash);
 
+static ssize_t gfar_show_bd_l2sram(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct gfar_private *priv = netdev_priv(to_net_dev(dev));
+
+	return sprintf(buf, "%s\n", priv->bd_l2sram_en ? "on" : "off");
+}
+
+static ssize_t gfar_set_bd_l2sram(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	struct net_device *ndev = to_net_dev(dev);
+	struct gfar_private *priv = netdev_priv(ndev);
+	int new_setting = 0;
+
+	if (!gfar_l2sram_en)
+		return count;
+
+	/* Find out the new setting */
+	if (!strncmp("on", buf, count - 1) || !strncmp("1", buf, count - 1))
+		new_setting = 1;
+	else if (!strncmp("off", buf, count - 1) ||
+		 !strncmp("0", buf, count - 1))
+		new_setting = 0;
+	else
+		return count;
+
+	if (new_setting == priv->bd_l2sram_en)
+		/* nothing to do */
+		return count;
+
+	if (ndev->flags & IFF_UP)
+		stop_gfar(ndev);
+
+	priv->bd_l2sram_en = new_setting;
+
+	if (ndev->flags & IFF_UP)
+		startup_gfar(ndev);
+
+	return count;
+}
+
+static DEVICE_ATTR(bd_l2sram, 0644, gfar_show_bd_l2sram, gfar_set_bd_l2sram);
+
 static ssize_t gfar_show_rx_stash_size(struct device *dev,
 				       struct device_attribute *attr, char *buf)
 {
@@ -453,6 +498,7 @@ void gfar_init_sysfs(struct net_device *dev)
 
 	/* Create our sysfs files */
 	rc = device_create_file(&dev->dev, &dev_attr_bd_stash);
+	rc |= device_create_file(&dev->dev, &dev_attr_bd_l2sram);
 	rc |= device_create_file(&dev->dev, &dev_attr_rx_stash_size);
 	rc |= device_create_file(&dev->dev, &dev_attr_rx_stash_index);
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_threshold);

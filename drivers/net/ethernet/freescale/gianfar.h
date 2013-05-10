@@ -1336,7 +1336,9 @@ struct gfar_private {
 		/* Wake-on-LAN enabled */
 		wol_en:1,
 		/* Enable priorty based Tx scheduling in Hw */
-		prio_sched_en:1;
+		prio_sched_en:1,
+		/* L2 SRAM alloc of BDs enabled */
+		bd_l2sram_en:1;
 
 	struct net_device *recycle_ndev;
 	struct list_head recycle_node;
@@ -1373,6 +1375,9 @@ struct gfar_private {
 	unsigned int ftp_rqfcr[MAX_FILER_IDX + 1];
 };
 
+#define BD_RING_REG_SZ(priv) ( \
+	sizeof(struct txbd8) * (priv)->total_tx_ring_size + \
+	sizeof(struct rxbd8) * (priv)->total_rx_ring_size)
 
 static inline int gfar_has_errata(struct gfar_private *priv,
 				  enum gfar_errata err)
@@ -1442,6 +1447,7 @@ extern void gfar_vlan_mode(struct net_device *dev, netdev_features_t features);
 extern const struct ethtool_ops gfar_ethtool_ops;
 extern struct list_head gfar_recycle_queues;
 extern bool gfar_skb_recycling_en;
+extern bool gfar_l2sram_en;
 
 #define MAX_FILER_CACHE_IDX (2*(MAX_FILER_IDX))
 

@@ -102,6 +102,7 @@
 #include <linux/of_net.h>
 
 #include "gianfar.h"
+#include <asm/fsl_85xx_cache_sram.h>
 
 #ifdef CONFIG_AS_FASTPATH
 devfp_hook_t	devfp_rx_hook;
@@ -181,6 +182,10 @@ module_param(gfar_skb_recycling_en, bool, 0444);
 MODULE_PARM_DESC(gfar_skb_recycling_en,
 	"Enable buffer recycling.");
 
+bool gfar_l2sram_en = true;
+module_param(gfar_l2sram_en, bool, 0444);
+MODULE_PARM_DESC(gfar_l2sram_en,
+	"Enable allocation to L2 SRAM.");
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
@@ -266,8 +271,9 @@ static int gfar_init_bds(struct net_device *ndev)
 
 static int gfar_alloc_skb_resources(struct net_device *ndev)
 {
-	void *vaddr;
+	void *vaddr = NULL;
 	dma_addr_t addr;
+	phys_addr_t paddr;
 	int i, j, k;
 	struct gfar_private *priv = netdev_priv(ndev);
 	struct device *dev = priv->dev;
@@ -283,10 +289,23 @@ static int gfar_alloc_skb_resources(struct net_device *ndev)
 		priv->total_rx_ring_size += priv->rx_queue[i]->rx_ring_size;
 
 	/* Allocate memory for the buffer descriptors */
-	vaddr = dma_alloc_coherent(dev,
-			sizeof(struct txbd8) * priv->total_tx_ring_size +
-			sizeof(struct rxbd8) * priv->total_rx_ring_size,
-			&addr, GFP_KERNEL);
+	if (priv->bd_l2sram_en) {
+		vaddr = mpc85xx_cache_sram_alloc(BD_RING_REG_SZ(priv),
+						 &paddr, L1_CACHE_BYTES);
+		if (vaddr)
+			addr = phys_to_dma(dev, paddr);
+		else {
+			netif_info(priv, ifup, ndev, "%s, %s\n",
+				   "Could not allocate BDs to SRAM",
+				   "fallback to DDR");
+			priv->bd_l2sram_en = 0;
+		}
+	}
+
+	if (!priv->bd_l2sram_en)
+		vaddr = dma_alloc_coherent(dev, BD_RING_REG_SZ(priv),
+					   &addr, GFP_KERNEL);
+
 	if (!vaddr) {
 		netif_err(priv, ifup, ndev,
 			  "Could not allocate buffer descriptors!\n");
@@ -463,6 +482,10 @@ static void gfar_init_mac(struct net_device *ndev)
 	 * depending on the approprate variables
 	 */
 	attrs = ATTR_INIT_SETTINGS;
+
+	if (priv->bd_l2sram_en)
+		/* disable BD stashing to L2 */
+		priv->bd_stash_en = 0;
 
 	if (priv->bd_stash_en)
 		attrs |= ATTR_BDSTASH;
@@ -826,6 +849,10 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 		priv->bd_stash_en = 1;
 	}
 
+	if (gfar_l2sram_en)
+		/* try to alloc the BD rings to L2 SRAM */
+		priv->bd_l2sram_en = 1;
+
 	stash_len = of_get_property(np, "rx-stash-len", NULL);
 
 	if (stash_len)
@@ -845,13 +872,13 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 		memcpy(dev->dev_addr, mac_addr, ETH_ALEN);
 
 	if (model && !strcasecmp(model, "TSEC"))
-		priv->device_flags = FSL_GIANFAR_DEV_HAS_GIGABIT |
+		priv->device_flags |= FSL_GIANFAR_DEV_HAS_GIGABIT |
 				     FSL_GIANFAR_DEV_HAS_COALESCE |
 				     FSL_GIANFAR_DEV_HAS_RMON |
 				     FSL_GIANFAR_DEV_HAS_MULTI_INTR;
 
 	if (model && !strcasecmp(model, "eTSEC"))
-		priv->device_flags = FSL_GIANFAR_DEV_HAS_GIGABIT |
+		priv->device_flags |= FSL_GIANFAR_DEV_HAS_GIGABIT |
 				     FSL_GIANFAR_DEV_HAS_COALESCE |
 				     FSL_GIANFAR_DEV_HAS_RMON |
 				     FSL_GIANFAR_DEV_HAS_MULTI_INTR |
@@ -2132,11 +2159,12 @@ static void free_skb_resources(struct gfar_private *priv)
 			free_skb_rx_queue(rx_queue);
 	}
 
-	dma_free_coherent(priv->dev,
-			  sizeof(struct txbd8) * priv->total_tx_ring_size +
-			  sizeof(struct rxbd8) * priv->total_rx_ring_size,
-			  priv->tx_queue[0]->tx_bd_base,
-			  priv->tx_queue[0]->tx_bd_dma_base);
+	if (priv->bd_l2sram_en)
+		mpc85xx_cache_sram_free(priv->tx_queue[0]->tx_bd_base);
+	else
+		dma_free_coherent(priv->dev, BD_RING_REG_SZ(priv),
+				  priv->tx_queue[0]->tx_bd_base,
+				  priv->tx_queue[0]->tx_bd_dma_base);
 
 	/* purge the skb recycle queue */
 	free_skb_recycle_q(&priv->recycle);

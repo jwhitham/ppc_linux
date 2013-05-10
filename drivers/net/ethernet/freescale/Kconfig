@@ -87,6 +87,7 @@ config UGETH_TX_ON_DEMAND
 config GIANFAR
 	tristate "Gianfar Ethernet"
 	depends on FSL_SOC
+	select FSL_85XX_CACHE_SRAM
 	select FSL_PQ_MDIO
 	select PHYLIB
 	select CRC32
