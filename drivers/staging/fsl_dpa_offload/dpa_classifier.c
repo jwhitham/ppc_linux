@@ -7654,6 +7654,7 @@ int dpa_classif_mcast_add_member(int grpd,
 	lock_desc_table(&mcast_grp_array);
 	pgroup = desc_to_object(&mcast_grp_array, grpd);
 	if (!pgroup) {
+		release_desc_table(&mcast_grp_array);
 		pr_err("ERROR: %s, %s (%d): Invalid group descriptor "
 			"(grpd=%d).\n", __FILE__, __func__, __LINE__, grpd);
 		return -EINVAL;
@@ -7847,8 +7848,8 @@ int dpa_classif_mcast_remove_member(int grpd, int md)
 
 	lock_desc_table(&mcast_grp_array);
 	pgroup = desc_to_object(&mcast_grp_array, grpd);
-	release_desc_table(&mcast_grp_array);
 	if (!pgroup) {
+		release_desc_table(&mcast_grp_array);
 		pr_err("ERROR: %s, %s (%d): Invalid group descriptor "
 			"(grpd=%d).\n", __FILE__, __func__, __LINE__, grpd);
 		return -EINVAL;
