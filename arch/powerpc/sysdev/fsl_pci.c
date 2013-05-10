@@ -325,7 +325,11 @@ static void setup_pci_atmu(struct pci_controller *hose)
 	mem_log = __ilog2_u64(sz);
 
 	/* PCIe can overmap inbound & outbound since RX & TX are separated */
+#ifdef CONFIG_PPC_QEMU_E500
 	if (early_find_capability(hose, 0, 0, PCI_CAP_ID_EXP) || qemu_e500_pci) {
+#else
+	if (early_find_capability(hose, 0, 0, PCI_CAP_ID_EXP)) {
+#endif
 		/* Size window to exact size if power-of-two or one size up */
 		if ((1ull << mem_log) != mem) {
 			if ((1ull << mem_log) > mem)
