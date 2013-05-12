@@ -4187,10 +4187,10 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	if (mac_dev) {
 		struct fm_port_pcd_param rx_port_pcd_param;
 
-		dpaa_eth_init_rx_port(rxport, dpa_bp, count, rxerror,
-				      rxdefault, &buf_layout[RX]);
 		dpaa_eth_init_tx_port(txport, txerror, txdefault,
 				      &buf_layout[TX]);
+		dpaa_eth_init_rx_port(rxport, dpa_bp, count, rxerror,
+				      rxdefault, &buf_layout[RX]);
 
 		rx_port_pcd_param.cba = dpa_alloc_pcd_fqids;
 		rx_port_pcd_param.cbf = dpa_free_pcd_fqids;
