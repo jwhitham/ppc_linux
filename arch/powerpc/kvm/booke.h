@@ -35,23 +35,25 @@
 #define BOOKE_IRQPRIO_SPE_UNAVAIL 5
 #define BOOKE_IRQPRIO_SPE_FP_DATA 6
 #define BOOKE_IRQPRIO_SPE_FP_ROUND 7
-#define BOOKE_IRQPRIO_SYSCALL 8
-#define BOOKE_IRQPRIO_AP_UNAVAIL 9
-#define BOOKE_IRQPRIO_DTLB_MISS 10
-#define BOOKE_IRQPRIO_ITLB_MISS 11
-#define BOOKE_IRQPRIO_MACHINE_CHECK 12
-#define BOOKE_IRQPRIO_DEBUG 13
-#define BOOKE_IRQPRIO_CRITICAL 14
-#define BOOKE_IRQPRIO_WATCHDOG 15
-#define BOOKE_IRQPRIO_EXTERNAL 16
-#define BOOKE_IRQPRIO_FIT 17
-#define BOOKE_IRQPRIO_DECREMENTER 18
-#define BOOKE_IRQPRIO_PERFORMANCE_MONITOR 19
+#define BOOKE_IRQPRIO_ALTIVEC_UNAVAIL 8
+#define BOOKE_IRQPRIO_ALTIVEC_ASSIST 9
+#define BOOKE_IRQPRIO_SYSCALL 10
+#define BOOKE_IRQPRIO_AP_UNAVAIL 11
+#define BOOKE_IRQPRIO_DTLB_MISS 12
+#define BOOKE_IRQPRIO_ITLB_MISS 13
+#define BOOKE_IRQPRIO_MACHINE_CHECK 14
+#define BOOKE_IRQPRIO_DEBUG 15
+#define BOOKE_IRQPRIO_CRITICAL 16
+#define BOOKE_IRQPRIO_WATCHDOG 17
+#define BOOKE_IRQPRIO_EXTERNAL 18
+#define BOOKE_IRQPRIO_FIT 19
+#define BOOKE_IRQPRIO_DECREMENTER 20
+#define BOOKE_IRQPRIO_PERFORMANCE_MONITOR 21
 /* Internal pseudo-irqprio for level triggered externals */
-#define BOOKE_IRQPRIO_EXTERNAL_LEVEL 20
-#define BOOKE_IRQPRIO_DBELL 21
-#define BOOKE_IRQPRIO_DBELL_CRIT 22
-#define BOOKE_IRQPRIO_MAX 23
+#define BOOKE_IRQPRIO_EXTERNAL_LEVEL 22
+#define BOOKE_IRQPRIO_DBELL 23
+#define BOOKE_IRQPRIO_DBELL_CRIT 24
+#define BOOKE_IRQPRIO_MAX 25
 
 #define BOOKE_IRQMASK_EE ((1 << BOOKE_IRQPRIO_EXTERNAL_LEVEL) | \
 			  (1 << BOOKE_IRQPRIO_PERFORMANCE_MONITOR) | \
@@ -127,6 +129,37 @@ static inline void kvmppc_save_guest_fp(struct kvm_vcpu *vcpu)
 #ifdef CONFIG_PPC_FPU
 	if (vcpu->fpu_active && (current->thread.regs->msr & MSR_FP))
 		giveup_fpu(current);
+#endif
+}
+
+/*
+ * Load up guest vcpu VEC state if it's needed.
+ * It also set the MSR_VEC in thread so that host know
+ * we're holding VEC, and then host can help to save
+ * guest vcpu VEC state if other threads require to use FPU.
+ * This simulates an VEC unavailable fault.
+ *
+ * It requires to be called with preemption disabled.
+ */
+static inline void kvmppc_load_guest_altivec(struct kvm_vcpu *vcpu)
+{
+#ifdef CONFIG_ALTIVEC
+	if (vcpu->arch.vec_active && !(current->thread.regs->msr & MSR_VEC)) {
+		load_up_altivec(NULL);
+		current->thread.regs->msr |= MSR_VEC;
+	}
+#endif
+}
+
+/*
+ * Save guest vcpu VEC state into thread.
+ * It requires to be called with preemption disabled.
+ */
+static inline void kvmppc_save_guest_altivec(struct kvm_vcpu *vcpu)
+{
+#ifdef CONFIG_ALTIVEC
+	if (vcpu->arch.vec_active && (current->thread.regs->msr & MSR_VEC))
+		giveup_altivec(current);
 #endif
 }
 

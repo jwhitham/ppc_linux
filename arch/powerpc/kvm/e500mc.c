@@ -158,6 +158,7 @@ void kvmppc_core_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	}
 
 	kvmppc_load_guest_fp(vcpu);
+	kvmppc_load_guest_altivec(vcpu);
 }
 
 void kvmppc_core_vcpu_put(struct kvm_vcpu *vcpu)

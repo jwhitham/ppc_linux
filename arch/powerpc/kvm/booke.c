@@ -390,6 +390,8 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 	case BOOKE_IRQPRIO_SPE_FP_DATA:
 	case BOOKE_IRQPRIO_SPE_FP_ROUND:
 	case BOOKE_IRQPRIO_AP_UNAVAIL:
+	case BOOKE_IRQPRIO_ALTIVEC_UNAVAIL:
+	case BOOKE_IRQPRIO_ALTIVEC_ASSIST:
 		allowed = 1;
 		msr_mask = MSR_CE | MSR_ME | MSR_DE;
 		int_class = INT_CLASS_NONCRIT;
@@ -725,6 +727,12 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	u64 fpr[32];
 #endif
 
+#ifdef CONFIG_ALTIVEC
+	vector128 vr[32];
+	vector128 vscr;
+	int used_vr;
+#endif
+
 	if (!vcpu->arch.sane) {
 		kvm_run->exit_reason = KVM_EXIT_INTERNAL_ERROR;
 		return -EINVAL;
@@ -763,6 +771,22 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	kvmppc_load_guest_fp(vcpu);
 #endif
 
+#ifdef CONFIG_ALTIVEC
+	/* Save userspace VEC state in stack */
+	enable_kernel_altivec();
+	memcpy(vr, current->thread.vr, sizeof(current->thread.vr));
+	vscr = current->thread.vscr;
+	used_vr = current->thread.used_vr;
+
+	/* Restore guest VEC state to thread */
+	memcpy(current->thread.vr, vcpu->arch.vr, sizeof(vcpu->arch.vr));
+	current->thread.vscr = vcpu->arch.vscr;
+
+	vcpu->arch.vec_active = 1;
+
+	kvmppc_load_guest_altivec(vcpu);
+#endif
+
 	/*
 	 * Clear current->thread.dbcr0 so that kernel does not
 	 * restore h/w registers on context switch in vcpu running state.
@@ -795,6 +819,21 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	memcpy(current->thread.fpr, fpr, sizeof(current->thread.fpr));
 	current->thread.fpscr.val = fpscr;
 	current->thread.fpexc_mode = fpexc_mode;
+#endif
+
+#ifdef CONFIG_ALTIVEC
+	kvmppc_save_guest_altivec(vcpu);
+
+	vcpu->arch.vec_active = 0;
+
+	/* Save guest VEC state from thread */
+	memcpy(vcpu->arch.vr, current->thread.vr, sizeof(vcpu->arch.vr));
+	vcpu->arch.vscr = current->thread.vscr;
+
+	/* Restore userspace VEC state from stack */
+	memcpy(current->thread.vr, vr, sizeof(current->thread.vr));
+	current->thread.vscr = vscr;
+	current->thread.used_vr = used_vr;
 #endif
 
 out:
@@ -1077,6 +1116,28 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 	case BOOKE_INTERRUPT_SPE_FP_ROUND:
 		printk(KERN_CRIT "%s: unexpected SPE interrupt %u at %08lx\n",
 		       __func__, exit_nr, vcpu->arch.pc);
+		run->hw.hardware_exit_reason = exit_nr;
+		r = RESUME_HOST;
+		break;
+#endif
+
+#ifdef CONFIG_ALTIVEC
+	case BOOKE_INTERRUPT_ALTIVEC_UNAVAIL:
+		kvmppc_booke_queue_irqprio(vcpu,
+					   BOOKE_IRQPRIO_ALTIVEC_UNAVAIL);
+		r = RESUME_GUEST;
+		break;
+
+	case BOOKE_INTERRUPT_ALTIVEC_ASSIST:
+		kvmppc_booke_queue_irqprio(vcpu,
+					   BOOKE_IRQPRIO_ALTIVEC_ASSIST);
+		r = RESUME_GUEST;
+		break;
+#else
+	case BOOKE_INTERRUPT_ALTIVEC_UNAVAIL:
+	case BOOKE_INTERRUPT_ALTIVEC_ASSIST:
+		printk(KERN_CRIT "%s: unexpected AltiVec interrupt %u \
+			at %08lx\n", __func__, exit_nr, vcpu->arch.pc);
 		run->hw.hardware_exit_reason = exit_nr;
 		r = RESUME_HOST;
 		break;

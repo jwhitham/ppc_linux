@@ -231,9 +231,11 @@ int kvmppc_core_emulate_mtspr(struct kvm_vcpu *vcpu, int sprn, ulong spr_val)
 	/* extra exceptions */
 	case SPRN_IVOR32:
 		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_UNAVAIL] = spr_val;
+		vcpu->arch.ivor[BOOKE_IRQPRIO_ALTIVEC_UNAVAIL] = spr_val;
 		break;
 	case SPRN_IVOR33:
 		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA] = spr_val;
+		vcpu->arch.ivor[BOOKE_IRQPRIO_ALTIVEC_ASSIST] = spr_val;
 		break;
 	case SPRN_IVOR34:
 		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_ROUND] = spr_val;
@@ -348,9 +350,13 @@ int kvmppc_core_emulate_mfspr(struct kvm_vcpu *vcpu, int sprn, ulong *spr_val)
 
 	/* extra exceptions */
 	case SPRN_IVOR32:
+		WARN_ON_ONCE(vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_UNAVAIL] !=
+			     vcpu->arch.ivor[BOOKE_IRQPRIO_ALTIVEC_UNAVAIL]);
 		*spr_val = vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_UNAVAIL];
 		break;
 	case SPRN_IVOR33:
+		WARN_ON_ONCE(vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA] !=
+			     vcpu->arch.ivor[BOOKE_IRQPRIO_ALTIVEC_ASSIST]);
 		*spr_val = vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA];
 		break;
 	case SPRN_IVOR34:

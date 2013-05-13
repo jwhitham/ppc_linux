@@ -416,6 +416,7 @@ struct kvm_vcpu_arch {
 	u64 acc;
 #endif
 #ifdef CONFIG_ALTIVEC
+	int vec_active;
 	vector128 vr[32];
 	vector128 vscr;
 #endif
