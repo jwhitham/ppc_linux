@@ -64,12 +64,14 @@ int kvmppc_prepare_to_enter(struct kvm_vcpu *vcpu)
 {
 	int r = 1;
 
-	WARN_ON_ONCE(!irqs_disabled());
+	WARN_ON(irqs_disabled());
+	hard_irq_disable();
+
 	while (true) {
 		if (need_resched()) {
 			local_irq_enable();
 			cond_resched();
-			local_irq_disable();
+			hard_irq_disable();
 			continue;
 		}
 
@@ -95,7 +97,7 @@ int kvmppc_prepare_to_enter(struct kvm_vcpu *vcpu)
 			local_irq_enable();
 			trace_kvm_check_requests(vcpu);
 			r = kvmppc_core_check_requests(vcpu);
-			local_irq_disable();
+			hard_irq_disable();
 			if (r > 0)
 				continue;
 			break;
@@ -108,21 +110,16 @@ int kvmppc_prepare_to_enter(struct kvm_vcpu *vcpu)
 		}
 
 #ifdef CONFIG_PPC64
-		/* lazy EE magic */
-		hard_irq_disable();
-		if (lazy_irq_pending()) {
-			/* Got an interrupt in between, try again */
-			local_irq_enable();
-			local_irq_disable();
-			kvm_guest_exit();
-			continue;
-		}
+		WARN_ON(lazy_irq_pending());
 #endif
+		/* Can't use irqs_disabled() because we want hard irq state */
+		WARN_ON(mfmsr() & MSR_EE);
 
 		kvm_guest_enter();
-		break;
+		return r;
 	}
 
+	local_irq_enable();
 	return r;
 }
 #endif /* CONFIG_KVM_BOOK3S_64_HV */
