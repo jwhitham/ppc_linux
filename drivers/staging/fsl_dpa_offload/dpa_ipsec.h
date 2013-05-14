@@ -456,4 +456,12 @@ static inline void rekey_err_report(dpa_ipsec_rekey_event_cb rekey_event_cb,
 		rekey_event_cb(dpa_ipsec_id, sa_id, err);
 }
 
+/* If index table is invalid the IPsec action per inbound SA will be ignored  */
+static inline int ignore_post_ipsec_action(struct dpa_ipsec *dpa_ipsec)
+{
+	if (dpa_ipsec->config.post_sec_in_params.dpa_cls_td > 0)
+		return FALSE;
+	return TRUE;
+}
+
 #endif	/* __DPA_IPSEC_H__ */

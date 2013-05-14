@@ -270,10 +270,17 @@ static int check_ipsec_params(const struct dpa_ipsec_params *prms)
 		return -EINVAL;
 	}
 
-	/* post decryption SA classification table */
+	/*
+	 * In classification base on SA that decrypted traffic is not required
+	 * than the post decryption classification table could be invalid.
+	 * In this case inbound policy verification is not supported.
+	 */
 	if (prms->post_sec_in_params.dpa_cls_td == DPA_OFFLD_DESC_NONE) {
-		pr_err("Specify a valid table for post decryption classification\n");
-		return -EINVAL;
+		if (prms->post_sec_in_params.do_pol_check) {
+			pr_err("Index table required policy check enabled\n");
+			return -EINVAL;
+		}
+		goto skip_post_decryption_check;
 	}
 
 	/* get post decryption table parameters */
@@ -300,6 +307,7 @@ static int check_ipsec_params(const struct dpa_ipsec_params *prms)
 		return -EINVAL;
 	}
 
+skip_post_decryption_check:
 	/* check pre decryption SA lookup tables */
 	valid_tables = 0;
 	pre_sec_in_prms = &prms->pre_sec_in_params;
@@ -909,10 +917,19 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 		sa[i].inbound_sa_td = DPA_OFFLD_DESC_NONE;
 	}
 
-	err = create_inbound_flowid_cq(dpa_ipsec);
-	if (err < 0) {
-		pr_err("Could not create inbound policy flow id cq\n");
-		return err;
+	/*
+	 * Inbound flow id circular queue is required only if a valid index
+	 * table is set.
+	 */
+	if (!ignore_post_ipsec_action(dpa_ipsec)) {
+		err = create_inbound_flowid_cq(dpa_ipsec);
+		if (err < 0) {
+			pr_err("Could not create inbound policy flow id cq\n");
+			return err;
+		}
+	} else {
+		/* Not required */
+		dpa_ipsec->sa_mng.inbound_flowid_cq = NULL;
 	}
 
 	/*
@@ -1966,7 +1983,6 @@ static inline int remove_inbound_flow_id_classif(struct dpa_ipsec_sa *sa)
 
 	memset(&action, 0, sizeof(action));
 	action.type = DPA_CLS_TBL_ACTION_DROP;
-
 	err = set_flow_id_action(sa, &action);
 	if (err < 0) {
 		pr_err("Could not remove SA entry in indexed table\n");
@@ -1976,9 +1992,6 @@ static inline int remove_inbound_flow_id_classif(struct dpa_ipsec_sa *sa)
 	if (dpa_ipsec->config.post_sec_in_params.do_pol_check)
 		put_free_inbpol_tbl(dpa_ipsec, sa->em_inpol_td);
 
-	err = put_inbound_flowid(dpa_ipsec, sa->inbound_flowid);
-	if (err < 0)
-		return err;
 	sa->valid_flowid_entry = false;
 
 	return 0;
@@ -2465,7 +2478,7 @@ static int copy_sa_params_to_in_sa(struct dpa_ipsec_sa *sa,
 	BUG_ON(!dpa_ipsec);
 
 	/* reserve a FlowID for this SA only if we are not rekeying */
-	if (!rekeying) {
+	if (!ignore_post_ipsec_action(dpa_ipsec) && !rekeying) {
 		err = get_inbound_flowid(dpa_ipsec, &sa->inbound_flowid);
 		if (err < 0) {
 			pr_err("Can't get valid inbound flow id\n");
@@ -3166,8 +3179,15 @@ remove_fq_pair:
 
 	/* Free the SA id and FlowID (for inbound SAs only).*/
 	if (sa_is_inbound(sa) &&
-	    sa->inbound_flowid != INVALID_INB_FLOW_ID)
-		put_inbound_flowid(dpa_ipsec, sa->inbound_flowid);
+	    !ignore_post_ipsec_action(dpa_ipsec) &&
+	    sa->inbound_flowid != INVALID_INB_FLOW_ID) {
+		err_rb = put_inbound_flowid(dpa_ipsec, sa->inbound_flowid);
+		if (err_rb < 0) {
+			pr_err("Could not put flow id in circular queue.\n");
+			return err_rb;
+		}
+		sa->inbound_flowid = INVALID_INB_FLOW_ID;
+	}
 
 	err_rb = put_sa(sa);
 
@@ -3428,6 +3448,9 @@ int dpa_ipsec_create_sa(int dpa_ipsec_id,
 				goto create_sa_err;
 			}
 		} else {
+			if (ignore_post_ipsec_action(sa->dpa_ipsec))
+				goto sa_done;
+
 			/* Set the post decryption default action */
 			err = set_flow_id_action(sa, &sa->def_sa_action);
 			if (err < 0) {
@@ -3438,6 +3461,7 @@ int dpa_ipsec_create_sa(int dpa_ipsec_id,
 	}
 
 	/* SA done OK. Return the SA id */
+sa_done:
 	*sa_id = id;
 
 	/* Unlock the SA structure */
@@ -3615,7 +3639,8 @@ static int remove_inbound_sa(struct dpa_ipsec_sa *sa)
 	}
 
 	/* Remove the flow id classification after decryption */
-	if (sa->valid_flowid_entry) {
+	if (!ignore_post_ipsec_action(sa->dpa_ipsec) &&
+	    sa->valid_flowid_entry) {
 		err = remove_inbound_flow_id_classif(sa);
 		if (err < 0)
 			return err;
