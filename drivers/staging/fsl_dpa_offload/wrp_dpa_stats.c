@@ -67,6 +67,8 @@ static const struct file_operations dpa_stats_fops = {
 DECLARE_CRC8_TABLE(crc8_table);
 
 static int dpa_stats_cdev_major = -1;
+static struct class *stats_class;
+static struct device *stats_dev;
 
 struct wrp_dpa_stats_cb wrp_dpa_stats;
 
@@ -177,6 +179,24 @@ int wrp_dpa_stats_init(void)
 		return dpa_stats_cdev_major;
 	}
 
+	stats_class = class_create(THIS_MODULE, DPA_STATS_CDEV);
+	if (IS_ERR(stats_class)) {
+		log_err("Cannot create DPA Stats class device\n");
+		unregister_chrdev(dpa_stats_cdev_major, DPA_STATS_CDEV);
+		dpa_stats_cdev_major = -1;
+		return PTR_ERR(stats_class);
+	}
+
+	stats_dev = device_create(stats_class, NULL,
+			MKDEV(dpa_stats_cdev_major, 0), NULL, DPA_STATS_CDEV);
+	if (IS_ERR(stats_dev)) {
+		log_err("Cannot create DPA Stats device\n");
+		class_destroy(stats_class);
+		unregister_chrdev(dpa_stats_cdev_major, DPA_STATS_CDEV);
+		dpa_stats_cdev_major = -1;
+		return PTR_ERR(stats_dev);
+	}
+
 	/* Initialize the event queue */
 	wrp_dpa_stats_event_queue_init(&wrp_dpa_stats.ev_queue);
 
@@ -187,6 +207,8 @@ int wrp_dpa_stats_exit(void)
 {
 	if (dpa_stats_cdev_major < 0)
 		return 0;
+	device_destroy(stats_class, MKDEV(dpa_stats_cdev_major, 0));
+	class_destroy(stats_class);
 	unregister_chrdev(dpa_stats_cdev_major, DPA_STATS_CDEV);
 	dpa_stats_cdev_major = -1;
 
