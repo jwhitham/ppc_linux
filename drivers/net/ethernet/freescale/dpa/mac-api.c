@@ -649,13 +649,13 @@ static int __cold set_tx_pause(struct mac_device *mac_dev, bool en)
 	if (en)
 		err = FM_MAC_SetTxPauseFrames(
 				((struct mac_priv_s *)macdev_priv(mac_dev))->mac,
-				TX_PAUSE_PRIO_ENABLE,
+				TX_PAUSE_PRIO_DEFAULT,
 				TX_PAUSE_TIME_ENABLE,
 				TX_PAUSE_THRESH_DEFAULT);
 	else
 		err = FM_MAC_SetTxPauseFrames(
 				((struct mac_priv_s *)macdev_priv(mac_dev))->mac,
-				TX_PAUSE_PRIO_DISABLE,
+				TX_PAUSE_PRIO_DEFAULT,
 				TX_PAUSE_TIME_DISABLE,
 				TX_PAUSE_THRESH_DEFAULT);
 
