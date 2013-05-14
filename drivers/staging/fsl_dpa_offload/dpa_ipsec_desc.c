@@ -70,39 +70,30 @@ static const struct of_device_id sec_jr_match[] = {
 int get_sec_info(struct dpa_ipsec *dpa_ipsec)
 {
 	struct device_node *sec_node;
-	struct platform_device *sec_of_dev;
-	int sec_era = -EINVAL;
+	const u32 *sec_era;
+	int prop_size;
 
 	sec_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v5.3");
 	if (sec_node)
 		dpa_ipsec->sec_ver = SEC_VER_5_3;
 	else {
 		dpa_ipsec->sec_ver = SEC_DEF_VER;
-
 		sec_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
-		if (sec_node == NULL) {
-			pr_err("Can't find device_node for SEC! Check device tree!\n");
-			goto def_sec_era;
+		if (!sec_node) {
+			pr_err("Can't find device node for SEC! Check device tree!\n");
+			return -ENODEV;
 		}
 	}
 
-	sec_of_dev = of_find_device_by_node(sec_node);
-	if (sec_of_dev == NULL) {
-		pr_err(KERN_ERR "SEC platform_device null!\n");
-		goto def_sec_era;
-	}
+	sec_era = of_get_property(sec_node, "fsl,sec-era", &prop_size);
+	if (sec_era && prop_size == sizeof(*sec_era) && *sec_era > 0)
+		dpa_ipsec->sec_era = *sec_era;
+	else
+		dpa_ipsec->sec_era = SEC_DEF_ERA;
 
-	sec_era = caam_get_era(sec_of_dev);
-
-def_sec_era:
-	if (sec_era < 0)
-		/* Unknown ERA - use default */
-		sec_era = SEC_DEF_ERA;
-
-	dpa_ipsec->sec_era = sec_era;
 	dpa_ipsec->jrdev = get_jrdev(dpa_ipsec);
 	if (!dpa_ipsec->jrdev)
-		return -EINVAL;
+		return -ENODEV;
 
 	return 0;
 }
@@ -112,32 +103,23 @@ static struct device *get_jrdev(struct dpa_ipsec *dpa_ipsec)
 {
 	struct device_node *sec_jr_node;
 	struct platform_device *sec_of_jr_dev;
-	struct device *sec_jr_dev;
 
 	if (dpa_ipsec->jrdev)
 		return dpa_ipsec->jrdev;
 
 	sec_jr_node = of_find_matching_node(NULL, &sec_jr_match[0]);
-	if (sec_jr_node == NULL) {
-		pr_err("Couln't find the device_node SEC job-ring, check the device tree\n");
-		return NULL;
-	}
-
-	sec_jr_node = of_find_matching_node(sec_jr_node, &sec_jr_match[0]);
-	if (sec_jr_node == NULL) {
+	if (!sec_jr_node) {
 		pr_err("Couln't find the device_node SEC job-ring, check the device tree\n");
 		return NULL;
 	}
 
 	sec_of_jr_dev = of_find_device_by_node(sec_jr_node);
-	if (sec_of_jr_dev == NULL) {
-		pr_err(KERN_ERR "SEC job-ring of_device null\n");
+	if (!sec_of_jr_dev) {
+		pr_err("SEC job-ring of_device null\n");
 		return NULL;
 	}
 
-	sec_jr_dev = &sec_of_jr_dev->dev;
-
-	return sec_jr_dev;
+	return &sec_of_jr_dev->dev;
 }
 
 static inline u32 get_ipsec_op_type(enum dpa_ipsec_direction sa_dir)
