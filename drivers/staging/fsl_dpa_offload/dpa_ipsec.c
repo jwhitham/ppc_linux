@@ -3880,6 +3880,17 @@ int dpa_ipsec_sa_add_policy(int sa_id,
 		return -EBUSY;
 	}
 
+	BUG_ON(!sa->dpa_ipsec);
+	mutex_lock(&sa->dpa_ipsec->lock);
+	if (sa_is_inbound(sa) &&
+	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
+		pr_err("Inbound policy verification is disabled.\n");
+		mutex_unlock(&sa->dpa_ipsec->lock);
+		mutex_unlock(&sa->lock);
+		return -EPERM;
+	}
+	mutex_unlock(&sa->dpa_ipsec->lock);
+
 	ret = check_policy_params(sa, policy_params);
 	if (ret < 0) {
 		mutex_unlock(&sa->lock);
@@ -3956,6 +3967,13 @@ int dpa_ipsec_sa_remove_policy(int sa_id,
 	if (ret == 0) {
 		pr_err("Failed to acquire lock for SA %d\n", sa->id);
 		return -EBUSY;
+	}
+
+	if (sa_is_inbound(sa) &&
+	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
+		pr_err("Inbound policy verification is disabled.\n");
+		mutex_unlock(&sa->lock);
+		return -EPERM;
 	}
 
 	if (sa_is_parent(sa) && sa_is_outbound(sa)) {
@@ -4678,6 +4696,13 @@ int dpa_ipsec_sa_get_policies(int sa_id,
 		return -EBUSY;
 	}
 
+	if (sa_is_inbound(sa) &&
+	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
+		pr_err("Inbound policy verification is disabled.\n");
+		mutex_unlock(&sa->lock);
+		return -EPERM;
+	}
+
 	if (!policy_params) {
 		/* get the number of policies for SA with id sa_id */
 		*num_pol = get_policy_count_for_sa(sa);
@@ -4731,6 +4756,13 @@ int dpa_ipsec_sa_flush_policies(int sa_id)
 	if (ret == 0) {
 		pr_err("Failed to acquire lock for SA %d\n", sa->id);
 		return -EBUSY;
+	}
+
+	if (sa_is_inbound(sa) &&
+	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
+		pr_err("Inbound policy verification is disabled.\n");
+		mutex_unlock(&sa->lock);
+		return -EPERM;
 	}
 
 	ret = sa_flush_policies(sa);
