@@ -198,7 +198,6 @@ struct ioc_dpa_cls_mcast_remove_params {
 #ifdef CONFIG_COMPAT
 
 struct dpa_cls_compat_tbl_params {
-	compat_uptr_t			fm_pcd;
 	compat_uptr_t			cc_node;
 	compat_uptr_t			distribution;
 	compat_uptr_t                   classification;
