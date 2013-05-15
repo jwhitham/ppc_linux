@@ -359,33 +359,29 @@
 			reg = <0x800>;
 			compatible = "fsl,core-pll-clock";
 			clocks = <&clockgen>;
-			clock-output-names = "pll0", "pll0-div2", "pll0-div4";
+			clock-output-names = "pll0", "pll0-div2";
 		};
 		pll1: pll1@820 {
 			#clock-cells = <1>;
 			reg = <0x820>;
 			compatible = "fsl,core-pll-clock";
 			clocks = <&clockgen>;
-			clock-output-names = "pll1", "pll1-div2", "pll1-div4";
+			clock-output-names = "pll1", "pll1-div2";
 		};
 		mux0: mux0@0 {
 			#clock-cells = <0>;
 			reg = <0x0>;
 			compatible = "fsl,core-mux-clock";
-			clocks = <&pll0 0>, <&pll0 1>, <&pll0 2>,
-				 <&pll1 0>, <&pll1 1>, <&pll1 2>;
-			clock-names = "pll0_0", "pll0_1", "pll0_2",
-				"pll1_0", "pll1_1", "pll1_2";
+			clocks = <&pll0 0>, <&pll0 1>, <&pll1 0>, <&pll1 1>;
+			clock-names = "pll0_0", "pll0_1", "pll1_0", "pll1_1";
 			clock-output-names = "cmux0";
 		};
 		mux1: mux1@20 {
 			#clock-cells = <0>;
 			reg = <0x20>;
 			compatible = "fsl,core-mux-clock";
-			clocks = <&pll0 0>, <&pll0 1>, <&pll0 2>,
-				 <&pll1 0>, <&pll1 1>, <&pll1 2>;
-			clock-names = "pll0_0", "pll0_1", "pll0_2",
-				"pll1_0", "pll1_1", "pll1_2";
+			clocks = <&pll0 0>, <&pll0 1>, <&pll1 0>, <&pll1 1>;
+			clock-names = "pll0_0", "pll0_1", "pll1_0", "pll1_1";
 			clock-output-names = "cmux1";
 		};
 	};
