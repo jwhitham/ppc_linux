@@ -191,14 +191,16 @@ int __cold dpa_set_pauseparam(struct net_device *net_dev, struct ethtool_pausepa
 	}
 
 	en = et_pauseparam->rx_pause ? true : false;
-	_errno = priv->mac_dev->set_rx_pause(priv->mac_dev, en);
+	_errno = priv->mac_dev->set_rx_pause(
+			priv->mac_dev->get_mac_handle(priv->mac_dev), en);
 	if (unlikely(_errno < 0)) {
 		netdev_err(net_dev, "set_rx_pause() = %d\n", _errno);
 		return _errno;
 	}
 
 	en = et_pauseparam->tx_pause ? true : false;
-	_errno = priv->mac_dev->set_tx_pause(priv->mac_dev, en);
+	_errno = priv->mac_dev->set_tx_pause(
+			priv->mac_dev->get_mac_handle(priv->mac_dev), en);
 	if (unlikely(_errno < 0)) {
 		netdev_err(net_dev, "set_tx_pause() = %d\n", _errno);
 		return _errno;

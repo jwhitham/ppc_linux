@@ -390,18 +390,20 @@ static void dpa_set_fiper_alarm(struct dpa_ptp_tsu *tsu,
 	u64 tmp, fiper;
 
 	if (mac_dev->fm_rtc_disable)
-		mac_dev->fm_rtc_disable(tsu->dpa_priv->net_dev);
+		mac_dev->fm_rtc_disable(get_fm_handle(tsu->dpa_priv->net_dev));
 
 	/* TMR_FIPER1 will pulse every second after ALARM1 expired */
 	tmp = (u64)cnt_time->sec * NANOSEC_PER_SECOND + (u64)cnt_time->nsec;
 	fiper = NANOSEC_PER_SECOND - DPA_PTP_NOMINAL_FREQ_PERIOD_NS;
 	if (mac_dev->fm_rtc_set_alarm)
-		mac_dev->fm_rtc_set_alarm(tsu->dpa_priv->net_dev, 0, tmp);
+		mac_dev->fm_rtc_set_alarm(get_fm_handle(tsu->dpa_priv->net_dev),
+					  0, tmp);
 	if (mac_dev->fm_rtc_set_fiper)
-		mac_dev->fm_rtc_set_fiper(tsu->dpa_priv->net_dev, 0, fiper);
+		mac_dev->fm_rtc_set_fiper(get_fm_handle(tsu->dpa_priv->net_dev),
+					  0, fiper);
 
 	if (mac_dev->fm_rtc_enable)
-		mac_dev->fm_rtc_enable(tsu->dpa_priv->net_dev);
+		mac_dev->fm_rtc_enable(get_fm_handle(tsu->dpa_priv->net_dev));
 }
 
 static void dpa_get_curr_cnt(struct dpa_ptp_tsu *tsu,
@@ -412,7 +414,8 @@ static void dpa_get_curr_cnt(struct dpa_ptp_tsu *tsu,
 	u32 mod;
 
 	if (mac_dev->fm_rtc_get_cnt)
-		mac_dev->fm_rtc_get_cnt(tsu->dpa_priv->net_dev, &tmp);
+		mac_dev->fm_rtc_get_cnt(get_fm_handle(tsu->dpa_priv->net_dev),
+					&tmp);
 
 	mod = do_div(tmp, NANOSEC_PER_SECOND);
 	curr_time->sec = (u32)tmp;
@@ -428,7 +431,8 @@ static void dpa_set_1588cnt(struct dpa_ptp_tsu *tsu,
 	tmp = (u64)cnt_time->sec * NANOSEC_PER_SECOND + (u64)cnt_time->nsec;
 
 	if (mac_dev->fm_rtc_set_cnt)
-		mac_dev->fm_rtc_set_cnt(tsu->dpa_priv->net_dev, tmp);
+		mac_dev->fm_rtc_set_cnt(get_fm_handle(tsu->dpa_priv->net_dev),
+					tmp);
 
 	/* Restart fiper two seconds later */
 	cnt_time->sec += 2;
@@ -442,7 +446,8 @@ static void dpa_get_drift(struct dpa_ptp_tsu *tsu, u32 *addend)
 	u32 drift;
 
 	if (mac_dev->fm_rtc_get_drift)
-		mac_dev->fm_rtc_get_drift(tsu->dpa_priv->net_dev, &drift);
+		mac_dev->fm_rtc_get_drift(get_fm_handle(tsu->dpa_priv->net_dev),
+					  &drift);
 
 	*addend = drift;
 }
@@ -452,7 +457,8 @@ static void dpa_set_drift(struct dpa_ptp_tsu *tsu, u32 addend)
 	struct mac_device *mac_dev = tsu->dpa_priv->mac_dev;
 
 	if (mac_dev->fm_rtc_set_drift)
-		mac_dev->fm_rtc_set_drift(tsu->dpa_priv->net_dev, addend);
+		mac_dev->fm_rtc_set_drift(get_fm_handle(tsu->dpa_priv->net_dev),
+					  addend);
 }
 
 static void dpa_flush_timestamp(struct dpa_ptp_tsu *tsu)
@@ -479,16 +485,16 @@ int dpa_ioctl_1588(struct net_device *dev, struct ifreq *ifr, int cmd)
 	case PTP_ENBL_TXTS_IOCTL:
 		tsu->hwts_tx_en_ioctl = 1;
 		if (mac_dev->fm_rtc_enable)
-			mac_dev->fm_rtc_enable(dev);
+			mac_dev->fm_rtc_enable(get_fm_handle(dev));
 		if (mac_dev->ptp_enable)
-			mac_dev->ptp_enable(mac_dev);
+			mac_dev->ptp_enable(mac_dev->get_mac_handle(mac_dev));
 		break;
 	case PTP_DSBL_TXTS_IOCTL:
 		tsu->hwts_tx_en_ioctl = 0;
 		if (mac_dev->fm_rtc_disable)
-			mac_dev->fm_rtc_disable(dev);
+			mac_dev->fm_rtc_disable(get_fm_handle(dev));
 		if (mac_dev->ptp_disable)
-			mac_dev->ptp_disable(mac_dev);
+			mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
 		break;
 	case PTP_ENBL_RXTS_IOCTL:
 		tsu->hwts_rx_en_ioctl = 1;

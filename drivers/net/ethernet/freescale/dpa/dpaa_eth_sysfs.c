@@ -170,7 +170,7 @@ static ssize_t dpaa_eth_show_mac_regs(struct device *dev,
 	struct mac_device *mac_dev = priv->mac_dev;
 
 	if (mac_dev)
-		fm_mac_dump_regs(mac_dev);
+		fm_mac_dump_regs(mac_dev->get_mac_handle(mac_dev));
 	else
 		return sprintf(buf, "no mac registers\n");
 

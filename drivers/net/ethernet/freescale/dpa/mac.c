@@ -116,7 +116,7 @@ static int __cold free_macdev(struct mac_device *mac_dev)
 {
 	dev_set_drvdata(mac_dev->dev, NULL);
 
-	return mac_dev->uninit(mac_dev);
+	return mac_dev->uninit(mac_dev->get_mac_handle(mac_dev));
 }
 
 static const struct of_device_id mac_match[] = {
@@ -197,7 +197,7 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 		goto _return_of_node_put;
 	}
 
-    mac_dev->fm = (void *)fm_get_handle(mac_dev->fm_dev);
+	mac_dev->fm = (void *)fm_get_handle(mac_dev->fm_dev);
 	of_node_put(dev_node);
 
 	/* Get the address of the memory mapped registers */
