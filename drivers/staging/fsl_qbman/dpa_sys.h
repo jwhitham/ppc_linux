@@ -73,12 +73,6 @@
 #define DPA_PORTAL_CE 0
 #define DPA_PORTAL_CI 1
 
-/* These stubs are re-mapped to hypervisor+failover features in kernel trees
- * that contain that support. */
-static inline int pamu_enable_liodn(struct device_node *n, int i)
-{
-	return 0;
-}
 /***********************/
 /* Misc inline assists */
 /***********************/
