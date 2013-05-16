@@ -166,14 +166,16 @@ config PPC_E500MC
 	  such as e5500/e6500), and must be disabled for running on
 	  e500v1 or e500v2.
 
-config PPC_E6500_REV1_BUGS
-	bool "Work around e6500 rev1 bugs"
+config FSL_ERRATUM_A_005337
+	bool "Work around erratum A-005337 (no hw tablewalk)"
 	depends on PPC_E500MC
+	default y
 	help
-	  Define this if you need to be able to run on rev1 silicon.
+	  This works around erratum A-005337 by not using hardware tablewalk,
+	  even if the hardware advertises it as present.
 
-          Do not define this if you are running on a simulator or rev2,
-          and want features like hardware tablewalk.
+	  Say Y if if you need to be able to run on rev1 silicon, otherwise
+	  say N for better performance.
 
 config FSL_ERRATUM_A_006184
 	bool "Work around erratum A-006184"

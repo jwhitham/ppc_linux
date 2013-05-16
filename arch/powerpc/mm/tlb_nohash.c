@@ -465,7 +465,7 @@ static void setup_page_sizes(void)
 		tlb1ps = mfspr(SPRN_TLB1PS);
 		eptcfg = mfspr(SPRN_EPTCFG);
 
-#ifndef CONFIG_PPC_E6500_REV1_BUGS
+#ifndef CONFIG_FSL_ERRATUM_A_005337
 		if ((tlb1cfg & TLBnCFG_IND) && (tlb0cfg & TLBnCFG_PT))
 			book3e_htw_mode = PPC_HTW_FSL;
 
