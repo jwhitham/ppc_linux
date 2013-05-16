@@ -1064,7 +1064,7 @@ static t_Error UpdateInitCapwapFragmentation(t_Handle       h_FmPort,
             RETURN_ERROR(MAJOR, E_INVALID_STATE, ("in this stage parameters from Port has not be updated"));
         fmPortGetSetCcParams.getCcParams.type = p_Manip->updateParams;
         fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNEN | UPDATE_FMFP_PRC_WITH_ONE_RISC_ONLY;
-        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_FRAG | NIA_ENG_FM_CTL;
+        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
         /* For CAPWAP Rassembly used FMAN_CTRL2 hardcoded - so for fragmentation its better to use FMAN_CTRL1 */
         fmPortGetSetCcParams.setCcParams.orFmanCtrl = FPM_PORT_FM_CTL1;
 
@@ -1091,7 +1091,7 @@ static t_Error UpdateInitCapwapFragmentation(t_Handle       h_FmPort,
             RETURN_ERROR(MAJOR, E_INVALID_STATE, ("in this stage parameters from Port has be updated"));
         fmPortGetSetCcParams.getCcParams.type = p_Manip->shadowUpdateParams;
         fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNEN | UPDATE_FMFP_PRC_WITH_ONE_RISC_ONLY;
-        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_FRAG | NIA_ENG_FM_CTL;
+        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
         err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
         if (err)
             RETURN_ERROR(MAJOR, err, NO_MSG);
@@ -1163,7 +1163,7 @@ static t_Error UpdateInitCapwapReasm(t_Handle      h_FmPcd,
 
         fmPortGetSetCcParams.getCcParams.type = p_Manip->updateParams;
         fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNEN;
-        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_FRAG | NIA_ENG_FM_CTL;
+        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
 
         err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
         if (err)
@@ -1192,7 +1192,7 @@ static t_Error UpdateInitCapwapReasm(t_Handle      h_FmPcd,
 
         fmPortGetSetCcParams.getCcParams.type = p_Manip->shadowUpdateParams;
         fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNEN;
-        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_FRAG | NIA_ENG_FM_CTL;
+        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
 
         err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams);
         if (err)
@@ -1612,7 +1612,7 @@ static t_Error UpdateInitIpReasm(t_Handle       h_FmPcd,
     t_Error                     err;
     t_FmPortPcdParams           *p_PcdParams = (t_FmPortPcdParams *)h_PcdParams;
 #if (DPAA_VERSION >= 11)
-    uint8_t                     *p_Ptr;
+    t_FmPcdCtrlParamsPage       *p_ParamsPage;
 #endif /* (DPAA_VERSION >= 11) */
 
     SANITY_CHECK_RETURN_ERROR(p_Manip, E_INVALID_HANDLE);
@@ -1718,7 +1718,7 @@ static t_Error UpdateInitIpReasm(t_Handle       h_FmPcd,
 
     if (fmPortGetSetCcParams.getCcParams.revInfo.majorRev >= 6)
     {
-        if ((err = FmPortSetGprFunc(h_FmPort, e_FM_PORT_GPR_MURAM_PAGE, (void**)&p_Ptr)) != E_OK)
+        if ((err = FmPortSetGprFunc(h_FmPort, e_FM_PORT_GPR_MURAM_PAGE, (void**)&p_ParamsPage)) != E_OK)
             RETURN_ERROR(MAJOR, err, NO_MSG);
 
         tmpReg32 = NIA_ENG_KG;
@@ -1727,7 +1727,7 @@ static t_Error UpdateInitIpReasm(t_Handle       h_FmPcd,
             tmpReg32 |= NIA_KG_DIRECT;
             tmpReg32 |= NIA_KG_CC_EN;
             tmpReg32 |= FmPcdKgGetSchemeId(p_Manip->ipReassmParams.h_Ipv4Scheme);
-            WRITE_UINT32(*(uint32_t*)PTR_MOVE(p_Ptr, NIA_IPR_DIRECT_SCHEME_IPV4_OFFSET), tmpReg32);
+            WRITE_UINT32(p_ParamsPage->iprIpv4Nia, tmpReg32);
         }
         if (p_Manip->ipReassmParams.h_Ipv6Scheme)
         {
@@ -1735,7 +1735,7 @@ static t_Error UpdateInitIpReasm(t_Handle       h_FmPcd,
             tmpReg32 |= NIA_KG_DIRECT;
             tmpReg32 |= NIA_KG_CC_EN;
             tmpReg32 |= FmPcdKgGetSchemeId(p_Manip->ipReassmParams.h_Ipv6Scheme);
-            WRITE_UINT32(*(uint32_t*)PTR_MOVE(p_Ptr, NIA_IPR_DIRECT_SCHEME_IPV6_OFFSET), tmpReg32);
+            WRITE_UINT32(p_ParamsPage->iprIpv6Nia, tmpReg32);
         }
     }
 #endif /* (DPAA_VERSION >= 11) */

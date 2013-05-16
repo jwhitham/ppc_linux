@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -52,14 +52,16 @@ t_Error DTSEC_MII_WritePhyReg(t_Handle    h_Dtsec,
 {
     t_Dtsec              *p_Dtsec = (t_Dtsec *)h_Dtsec;
     struct dtsec_mii_reg *miiregs;
+    uint16_t              dtsec_freq;
     t_Error               err;
 
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(p_Dtsec->p_MiiMemMap, E_INVALID_HANDLE);
 
+    dtsec_freq = (uint16_t)(p_Dtsec->fmMacControllerDriver.clkFreq >> 1);
     miiregs = p_Dtsec->p_MiiMemMap;
 
-    err = (t_Error)dtsec_mii_write_reg(miiregs, phyAddr, reg, data);
+    err = (t_Error)fman_dtsec_mii_write_reg(miiregs, phyAddr, reg, data, dtsec_freq);
 
     return err;
 }
@@ -72,14 +74,16 @@ t_Error DTSEC_MII_ReadPhyReg(t_Handle h_Dtsec,
 {
     t_Dtsec               *p_Dtsec = (t_Dtsec *)h_Dtsec;
     struct dtsec_mii_reg  *miiregs;
+    uint16_t               dtsec_freq;
     t_Error                err;
 
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(p_Dtsec->p_MiiMemMap, E_INVALID_HANDLE);
 
+    dtsec_freq = (uint16_t)(p_Dtsec->fmMacControllerDriver.clkFreq >> 1);
     miiregs = p_Dtsec->p_MiiMemMap;
 
-    err = (t_Error)dtsec_mii_read_reg(miiregs, phyAddr, reg, p_Data);
+    err = (t_Error)fman_dtsec_mii_read_reg(miiregs, phyAddr, reg, p_Data, dtsec_freq);
 
     if (*p_Data == 0xffff)
         RETURN_ERROR(MINOR, E_NO_DEVICE,
@@ -91,19 +95,3 @@ t_Error DTSEC_MII_ReadPhyReg(t_Handle h_Dtsec,
     return err;
 }
 
-t_Error DTSEC_MII_Init(t_Handle h_Dtsec)
-{
-    t_Dtsec                *p_Dtsec = (t_Dtsec *)h_Dtsec;
-    struct dtsec_mii_reg  *miiregs;
-    uint16_t dtsec_freq;
-
-    SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_Dtsec->p_MiiMemMap, E_INVALID_HANDLE);
-
-    miiregs = p_Dtsec->p_MiiMemMap;
-    dtsec_freq = (uint16_t)(p_Dtsec->fmMacControllerDriver.clkFreq >> 1);
-
-    dtsec_mii_init(miiregs, dtsec_freq);
-
-    return E_OK;
-}

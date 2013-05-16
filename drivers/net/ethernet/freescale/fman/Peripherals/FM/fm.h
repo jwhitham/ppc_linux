@@ -917,6 +917,8 @@ typedef struct t_Fm
     uint8_t                     partVSPBase;
     uintptr_t                   vspBaseAddr;
 #endif /* (DPAA_VERSION >= 11) */
+    bool                        portsPreFetchConfigured[FM_MAX_NUM_OF_HW_PORT_IDS]; /* Prefetch configration per Tx-port */
+    bool                        portsPreFetchValue[FM_MAX_NUM_OF_HW_PORT_IDS];      /* Prefetch value per Tx-port */
 
 /* un-needed for recovery */
     t_Handle                    h_FmMuram;

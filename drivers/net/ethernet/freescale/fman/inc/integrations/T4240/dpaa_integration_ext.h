@@ -260,10 +260,12 @@ typedef enum
 #define FM_HEAVY_TRAFFIC_HANG_ERRATA_FMAN_A005669
 #define FM_WRONG_RESET_VALUES_ERRATA_FMAN_A005127
 #define FM_RX_FIFO_CORRUPT_ERRATA_10GMAC_A006320
+#define FM_OP_NO_VSP_NO_RELEASE_ERRATA_FMAN_A006675
 
 #define FM_BCB_ERRATA_BMI_SW001
 #define FM_LEN_CHECK_ERRATA_FMAN_SW002
 #define FM_AID_MODE_NO_TNUM_SW005 /* refer to pdm TKT068794 - only support of port_id on aid */
+#define FM_ERROR_VSP_NO_MATCH_SW006 /* refer to pdm TKT174304 - no match between errorQ and VSP */
 
 /*****************************************************************************
  RMan INTEGRATION-SPECIFIC DEFINITIONS

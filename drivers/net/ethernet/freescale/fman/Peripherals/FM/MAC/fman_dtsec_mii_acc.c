@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -40,7 +40,8 @@
  * @dtsec_freq:		dtsec clock frequency (in Mhz)
  *
  * This function calculates the dtsec mii clock divider that determines
- * the MII MDC clock. MII MDC clock can work in the range of 2.5 to 12.5 Mhz.
+ * the MII MDC clock. MII MDC clock will be set to work in the range
+ * of 1.5 to 2.5Mhz
  * The output of this function is the value of MIIMCFG[MgmtClk] which
  * implicitly determines the divider value.
  * Note: the dTSEC system clock is equal to 1/2 of the FMan clock.
@@ -49,31 +50,35 @@
  * shows the relations among dtsec_freq, MgmtClk, actual divider
  * and the MII frequency:
  *
- * dtsec freq   MgmtClk     div         MII freq
- * [80..159]      0      (1/4)(1/8)   [2.5 to 5.0]
- * [160..319]     1      (1/4)(1/8)   [5.0 to 10.0]
- * [320..479]     2      (1/6)(1/8)   [6.7 to 10.0]
- * [480..639]     3      (1/8)(1/8)   [7.5 to 10.0]
- * [640..799]     4      (1/10)(1/8)  [8.0 to 10.0]
- * [800..959]     5      (1/14)(1/8)  [7.1 to 8.5]
- * [960..1119]    6      (1/20)(1/8)  [6.0 to 7.0]
- * [1120..1279]   7      (1/28)(1/8)  [5.0 to 5.7]
- * [1280..2800]   7      (1/28)(1/8)  [5.7 to 12.5]
+ * dtsec freq   MgmtClk     div        MII freq Mhz
+ * [0.....80]     1      (1/4)(1/8)    [0   to 2.5]
+ * [81...120]     2      (1/6)(1/8)    [1.6 to 2.5]
+ * [121..160]     3      (1/8)(1/8)    [1.8 to 2.5]
+ * [161..200]     4      (1/10)(1/8)   [2.0 to 2.5]
+ * [201..280]     5      (1/14)(1/8)   [1.8 to 2.5]
+ * [281..400]     6      (1/20)(1/8)   [1.1 to 2.5]
+ * [401..560]     7      (1/28)(1/8)   [1.8 to 2.5]
+ * [560..frq]     7      (1/28)(1/8)   [frq/224]
  *
  * Returns: the MIIMCFG[MgmtClk] appropriate value
  */
 
 static uint8_t dtsec_mii_get_div(uint16_t dtsec_freq)
 {
-	uint16_t mgmt_clk = (uint16_t)(dtsec_freq / 160);
+	uint16_t mgmt_clk;
 
-	if (mgmt_clk > 7)
-		mgmt_clk = 7;
+	if (dtsec_freq < 80) mgmt_clk = 1;
+	else if (dtsec_freq < 120) mgmt_clk = 2;
+	else if (dtsec_freq < 160) mgmt_clk = 3;
+	else if (dtsec_freq < 200) mgmt_clk = 4;
+	else if (dtsec_freq < 280) mgmt_clk = 5;
+	else if (dtsec_freq < 400) mgmt_clk = 6;
+	else mgmt_clk = 7;
 
 	return (uint8_t)mgmt_clk;
 }
 
-void dtsec_mii_reset(struct dtsec_mii_reg *regs)
+void fman_dtsec_mii_reset(struct dtsec_mii_reg *regs)
 {
 	/* Reset the management interface */
 	iowrite32be(ioread32be(&regs->miimcfg) | MIIMCFG_RESET_MGMT,
@@ -82,30 +87,32 @@ void dtsec_mii_reset(struct dtsec_mii_reg *regs)
 			&regs->miimcfg);
 }
 
-void dtsec_mii_init(struct dtsec_mii_reg *regs, uint16_t dtsec_freq)
-{
-	/* Setup the MII Mgmt clock speed */
-	iowrite32be((uint32_t)dtsec_mii_get_div(dtsec_freq), &regs->miimcfg);
-}
 
-int dtsec_mii_write_reg(struct dtsec_mii_reg *regs, uint8_t addr,
-		uint8_t reg, uint16_t data)
+int fman_dtsec_mii_write_reg(struct dtsec_mii_reg *regs, uint8_t addr,
+		uint8_t reg, uint16_t data, uint16_t dtsec_freq)
 {
 	uint32_t	tmp;
+
+	/* Setup the MII Mgmt clock speed */
+	iowrite32be((uint32_t)dtsec_mii_get_div(dtsec_freq), &regs->miimcfg);
+	wmb();
 
 	/* Stop the MII management read cycle */
 	iowrite32be(0, &regs->miimcom);
 	/* Dummy read to make sure MIIMCOM is written */
 	tmp = ioread32be(&regs->miimcom);
+	wmb();
 
 	/* Setting up MII Management Address Register */
 	tmp = (uint32_t)((addr << MIIMADD_PHY_ADDR_SHIFT) | reg);
 	iowrite32be(tmp, &regs->miimadd);
+	wmb();
 
 	/* Setting up MII Management Control Register with data */
 	iowrite32be((uint32_t)data, &regs->miimcon);
 	/* Dummy read to make sure MIIMCON is written */
 	tmp = ioread32be(&regs->miimcon);
+	wmb();
 
 	/* Wait untill MII management write is complete */
 	/* todo: a timeout could be useful here */
@@ -115,19 +122,25 @@ int dtsec_mii_write_reg(struct dtsec_mii_reg *regs, uint8_t addr,
 	return 0;
 }
 
-int dtsec_mii_read_reg(struct dtsec_mii_reg *regs, uint8_t  addr,
-		uint8_t reg, uint16_t *data)
+int fman_dtsec_mii_read_reg(struct dtsec_mii_reg *regs, uint8_t  addr,
+		uint8_t reg, uint16_t *data, uint16_t dtsec_freq)
 {
 	uint32_t	tmp;
+
+	/* Setup the MII Mgmt clock speed */
+	iowrite32be((uint32_t)dtsec_mii_get_div(dtsec_freq), &regs->miimcfg);
+	wmb();
 
 	/* Setting up the MII Management Address Register */
 	tmp = (uint32_t)((addr << MIIMADD_PHY_ADDR_SHIFT) | reg);
 	iowrite32be(tmp, &regs->miimadd);
+	wmb();
 
 	/* Perform an MII management read cycle */
 	iowrite32be(MIIMCOM_READ_CYCLE, &regs->miimcom);
 	/* Dummy read to make sure MIIMCOM is written */
 	tmp = ioread32be(&regs->miimcom);
+	wmb();
 
 	/* Wait until MII management read is complete */
 	/* todo: a timeout could be useful here */
@@ -136,6 +149,7 @@ int dtsec_mii_read_reg(struct dtsec_mii_reg *regs, uint8_t  addr,
 
 	/* Read MII management status  */
 	*data = (uint16_t)ioread32be(&regs->miimstat);
+	wmb();
 
 	iowrite32be(0, &regs->miimcom);
 	/* Dummy read to make sure MIIMCOM is written */

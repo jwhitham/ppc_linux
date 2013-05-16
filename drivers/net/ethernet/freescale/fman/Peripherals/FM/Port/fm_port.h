@@ -927,13 +927,15 @@ typedef struct {
     t_FmPortRsrc                tasks;
     t_FmPortRsrc                fifoBufs;
     t_FmPortRxPoolsParams       rxPoolsParams;
+//    bool                        explicitUserSizeOfFifo;
     t_Handle                    h_IpReassemblyManip;
     t_Handle                    h_IpReassemblyTree;
     uint64_t                    fmMuramPhysBaseAddr;
 #if (DPAA_VERSION >= 11)
     bool                        vspe;
+    uint8_t                     dfltRelativeId;
     e_FmPortGprFuncType         gprFunc;
-    void                        *p_MuramPage;
+    t_FmPcdCtrlParamsPage       *p_ParamsPage;
 #endif /* (DPAA_VERSION >= 11) */
 
     t_FmPortDriverParam         *p_FmPortDriverParam;

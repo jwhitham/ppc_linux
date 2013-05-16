@@ -415,9 +415,29 @@ static t_Error MemacSetTxPauseFrames(t_Handle h_Memac,
                                      uint16_t threshTime)
 {
     t_Memac     *p_Memac = (t_Memac *)h_Memac;
+    t_Error     err = E_OK;
 
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
+
+    if (priority != 0xFF)
+    {
+        bool   PortConfigured, PreFetchEnabled;
+
+        if (FmGetTnumAgingPeriod(p_Memac->fmMacControllerDriver.h_Fm) == 0)
+            RETURN_ERROR(MAJOR, E_CONFLICT, ("For PFC operation, TNUM aging must be enabled"));
+
+        FmGetPortPreFetchConfiguration(p_Memac->fmMacControllerDriver.h_Fm,
+                                       p_Memac->fmMacControllerDriver.macId,
+                                       &PortConfigured,
+                                       &PreFetchEnabled);
+
+        if ((ENET_SPEED_FROM_MODE(p_Memac->fmMacControllerDriver.enetMode) == e_ENET_SPEED_1000) && !PortConfigured)
+            DBG(INFO, ("For PFC correct operation, prefetch must be configured on the FM Tx PORT"));
+
+        if ((ENET_SPEED_FROM_MODE(p_Memac->fmMacControllerDriver.enetMode) == e_ENET_SPEED_1000) && PortConfigured && !PreFetchEnabled)
+            DBG(WARNING, ("For PFC correct operation, prefetch must be configured on the FM Tx PORT"));
+    }
 
     fman_memac_set_tx_pause_frames(p_Memac->p_MemMap, priority, pauseTime, threshTime);
 

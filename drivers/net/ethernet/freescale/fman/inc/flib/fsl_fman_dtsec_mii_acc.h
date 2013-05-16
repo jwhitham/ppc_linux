@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -57,7 +57,6 @@
 
 
 /* PHY Control Register */
-
 #define PHY_CR_PHY_RESET    0x8000
 #define PHY_CR_LOOPBACK     0x4000
 #define PHY_CR_SPEED0       0x2000
@@ -66,14 +65,11 @@
 #define PHY_CR_FULLDUPLEX   0x0100
 #define PHY_CR_SPEED1       0x0040
 
-
 #define PHY_TBICON_SRESET   0x8000
+#define PHY_TBICON_SPEED2   0x0020
 #define PHY_TBICON_CLK_SEL  0x0020
-
 #define PHY_TBIANA_SGMII    0x4001
 #define PHY_TBIANA_1000X    0x01a0
-
-
 /* register map */
 
 /* MII Configuration Control Memory Map Registers */
@@ -90,20 +86,22 @@ struct dtsec_mii_reg {
 /* dTSEC MII API */
 
 /* functions to access the mii registers for phy configuration.
- * this functionality may not be available for all dTSECs in the system.
+ * this functionality may not be available for all dtsecs in the system.
  * consult the reference manual for details */
-void dtsec_mii_reset(struct dtsec_mii_reg *regs);
+void fman_dtsec_mii_reset(struct dtsec_mii_reg *regs);
 /* frequency is in MHz.
  * note that dtsec clock is 1/2 of fman clock */
-void dtsec_mii_init(struct dtsec_mii_reg *regs, uint16_t dtsec_freq);
-int dtsec_mii_write_reg(struct dtsec_mii_reg *regs,
+void fman_dtsec_mii_init(struct dtsec_mii_reg *regs, uint16_t dtsec_freq);
+int fman_dtsec_mii_write_reg(struct dtsec_mii_reg *regs,
 			uint8_t addr,
 			uint8_t reg,
-			uint16_t data);
+			uint16_t data,
+			uint16_t dtsec_freq);
 
-int dtsec_mii_read_reg(struct dtsec_mii_reg *regs,
+int fman_dtsec_mii_read_reg(struct dtsec_mii_reg *regs,
 			uint8_t addr,
 			uint8_t reg,
-			uint16_t *data);
+			uint16_t *data,
+			uint16_t dtsec_freq);
 
 #endif /* __FSL_FMAN_DTSEC_MII_ACC_H */

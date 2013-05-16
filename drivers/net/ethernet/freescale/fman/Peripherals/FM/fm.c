@@ -1317,25 +1317,67 @@ uint16_t FmGetTnumAgingPeriod(t_Handle h_Fm)
     return p_Fm->tnumAgingPeriod;
 }
 
-t_Error FmSetCongestionGroupPFCpriority(t_Handle     h_Fm,
-                                        uint32_t     congestionGroupId,
-                                        uint8_t      priorityBitMap)
+t_Error FmSetPortPreFetchConfiguration(t_Handle h_Fm,
+                                       uint8_t  portNum,
+                                       bool     preFetchConfigured)
 {
-    t_Fm         *p_Fm  = (t_Fm *)h_Fm;
+    t_Fm *p_Fm = (t_Fm*)h_Fm;
+
+    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
+    SANITY_CHECK_RETURN_ERROR(!p_Fm->p_FmDriverParam, E_INVALID_STATE);
+
+    p_Fm->portsPreFetchConfigured[portNum] = TRUE;
+    p_Fm->portsPreFetchValue[portNum] = preFetchConfigured;
+
+    return E_OK;
+}
+
+t_Error FmGetPortPreFetchConfiguration(t_Handle h_Fm,
+                                       uint8_t  portNum,
+                                       bool     *p_PortConfigured,
+                                       bool     *p_PreFetchConfigured)
+{
+    t_Fm *p_Fm = (t_Fm*)h_Fm;
+
+    SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
+    SANITY_CHECK_RETURN_ERROR(!p_Fm->p_FmDriverParam, E_INVALID_STATE);
+
+    /* If the prefetch wasn't configured yet (not enable or disabled)
+       we return the value TRUE as it was already configured */
+    if (!p_Fm->portsPreFetchConfigured[portNum])
+    {
+        *p_PortConfigured = FALSE;
+        *p_PreFetchConfigured = FALSE;
+    }
+    else
+    {
+        *p_PortConfigured = TRUE;
+        *p_PreFetchConfigured = (p_Fm->portsPreFetchConfigured[portNum]);
+    }
+
+    return E_OK;
+}
+
+t_Error FmSetCongestionGroupPFCpriority(t_Handle    h_Fm,
+                                        uint32_t    congestionGroupId,
+                                        uint8_t     priorityBitMap)
+{
+    t_Fm    *p_Fm  = (t_Fm *)h_Fm;
 
     ASSERT_COND(h_Fm);
 
     if (congestionGroupId > FM_PORT_NUM_OF_CONGESTION_GRPS)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                     ("Congestion group ID bigger than %d \n!",
+                     ("Congestion group ID bigger than %d",
                       FM_PORT_NUM_OF_CONGESTION_GRPS));
 
     if (p_Fm->guestId == NCSW_MASTER_ID)
     {
-        uint32_t      *p_Cpg = (uint32_t*)(p_Fm->baseAddr+FM_MM_CGP);
-        uint32_t      tmpReg;
-        uint32_t      reg_num;
-        uint32_t      offset;
+        uint32_t    *p_Cpg = (uint32_t*)(p_Fm->baseAddr+FM_MM_CGP);
+        uint32_t    tmpReg;
+        uint32_t    reg_num;
+        uint32_t    offset;
+        uint32_t    mask;
 
         ASSERT_COND(p_Fm->baseAddr);
         reg_num = (FM_PORT_NUM_OF_CONGESTION_GRPS-1-(congestionGroupId))/4;
@@ -1346,15 +1388,13 @@ t_Error FmSetCongestionGroupPFCpriority(t_Handle     h_Fm,
         /* Adding priorities*/
         if (priorityBitMap)
         {
-            if (tmpReg & (0xFF<<(offset*8)))
+            if (tmpReg & (0xFF << (offset*8)))
                 RETURN_ERROR(MAJOR, E_INVALID_STATE,
                              ("PFC priority for the congestion group is already set!"));
         }
         else /* Deleting priorities */
         {
-            uint32_t mask;
-
-            mask = 0xFF<<(offset*8);
+            mask = (uint32_t)(0xFF << (offset*8));
             tmpReg &= ~mask;
         }
 
@@ -2317,6 +2357,10 @@ void FmFreePortParams(t_Handle h_Fm,t_FmInterModulePortFreeParams *p_PortParams)
     }
 
     HW_PORT_ID_TO_SW_PORT_ID(macId, hardwarePortId);
+
+    /* Delete prefetch configuration*/
+    p_Fm->portsPreFetchConfigured[macId] = FALSE;
+    p_Fm->portsPreFetchValue[macId]      = FALSE;
 
 #if defined(FM_MAX_NUM_OF_10G_MACS) && (FM_MAX_NUM_OF_10G_MACS)
     if ((p_PortParams->portType == e_FM_PORT_TYPE_TX_10G) ||
@@ -4119,6 +4163,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
     p_Fm->p_FmStateStruct->revInfo.minorRev = (uint8_t)((tmpReg & FPM_REV1_MINOR_MASK) >> FPM_REV1_MINOR_SHIFT);
     /* Chip dependent, will be configured in Init */
 
+    p_Fm->tnumAgingPeriod                                       = DEFAULT_tnumAgingPeriod;
     p_Fm->p_FmDriverParam->dmaAidOverride                       = DEFAULT_aidOverride;
     p_Fm->p_FmDriverParam->dmaAidMode                           = DEFAULT_aidMode;
 #ifdef FM_AID_MODE_NO_TNUM_SW005

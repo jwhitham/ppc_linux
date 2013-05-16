@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,11 +30,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 /******************************************************************************
  @File          dtsec.c
 
- @Description   FM dTSEC ...
+ @Description   FMan dTSEC driver
 *//***************************************************************************/
 
 #include "std_ext.h"
@@ -410,7 +409,8 @@ static t_Error GracefulStop(t_Dtsec *p_Dtsec, e_CommMode mode)
     }
 
     if (mode & e_COMM_MODE_TX)
-#if defined(FM_GTS_ERRATA_DTSEC_A004) || defined(FM_GTS_AFTER_MAC_ABORTED_FRAME_ERRATA_DTSEC_A0012)
+#if defined(FM_GTS_ERRATA_DTSEC_A004) || \
+    defined(FM_GTS_AFTER_MAC_ABORTED_FRAME_ERRATA_DTSEC_A0012)
     if (p_Dtsec->fmMacControllerDriver.fmRevInfo.majorRev == 2)
         DBG(INFO, ("GTS not supported due to DTSEC_A004 errata."));
 #else  /* not defined(FM_GTS_ERRATA_DTSEC_A004) ||... */
@@ -1288,8 +1288,6 @@ static t_Error DtsecInit(t_Handle h_Dtsec)
         FreeInitResources(p_Dtsec);
         RETURN_ERROR(MAJOR, err, ("This DTSEC version does not support the required i/f mode"));
     }
-
-    DTSEC_MII_Init(h_Dtsec);
 
     if (ENET_INTERFACE_FROM_MODE(p_Dtsec->enetMode) == e_ENET_IF_SGMII)
     {

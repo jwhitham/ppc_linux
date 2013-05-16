@@ -534,7 +534,7 @@ static t_Error CheckNConfigFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
 
-    uint32_prop = (uint32_t *)of_get_property(port_node, "fifo_size", &lenp);
+    uint32_prop = (uint32_t *)of_get_property(port_node, "fifo-size", &lenp);
     if (uint32_prop) {
     	if (WARN_ON(lenp != sizeof(uint32_t)*2))
             RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
@@ -544,6 +544,16 @@ static t_Error CheckNConfigFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
 
         if ((err = FM_PORT_ConfigSizeOfFifo(p_LnxWrpFmPortDev->h_Dev,
                                             &portRsrc)) != E_OK)
+            RETURN_ERROR(MINOR, err, NO_MSG);
+    }
+
+    uint32_prop = (uint32_t *)of_get_property(port_node, "errors-to-discard", &lenp);
+    if (uint32_prop) {
+    	if (WARN_ON(lenp != sizeof(uint32_t)))
+            RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
+ 
+        if ((err = FM_PORT_ConfigErrorsToDiscard(p_LnxWrpFmPortDev->h_Dev,
+                                                 uint32_prop[0])) != E_OK)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
 
@@ -595,7 +605,6 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
 
         portVSPAllocParams.numOfProfiles = (uint8_t)uint32_prop[0];
         portVSPAllocParams.dfltRelativeId = (uint8_t)uint32_prop[1];
-
         fmVspParams.h_Fm = p_LnxWrpFmDev->h_Dev;
 
         fmVspParams.portParams.portType = p_LnxWrpFmPortDev->settings.param.portType;

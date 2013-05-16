@@ -661,7 +661,7 @@ static t_Error BmiRxPortInit(t_FmPort *p_FmPort)
             tmpReg |= BMI_PORT_RFNE_FRWD_RPD;
         /* L3/L4 checksum verify is enabled by default. */
         /*tmpReg |= BMI_PORT_RFNE_FRWD_DCL4C;*/
-        WRITE_UINT32(p_Regs->fmbm_rfne, tmpReg | (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME));
+        WRITE_UINT32(p_Regs->fmbm_rfne, tmpReg | GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME());
     }
     WRITE_UINT32(p_Regs->fmbm_rfene, NIA_ENG_QMI_ENQ | NIA_ORDER_RESTOR);
 
@@ -893,7 +893,7 @@ static t_Error BmiOhPortInit(t_FmPort *p_FmPort)
         WRITE_UINT32(p_Regs->fmbm_ofsem, errorsToEnq);
 
         /* NIA */
-        WRITE_UINT32(p_Regs->fmbm_ofne, (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME));
+        WRITE_UINT32(p_Regs->fmbm_ofne, GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME());
 
 #ifndef FM_NO_OP_OBSERVED_POOLS
         /* Call the external Buffer routine which also checks fifo
@@ -1029,6 +1029,13 @@ static t_Error QmiInit(t_FmPort *p_FmPort)
             default:
                 RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Invalid dequeue prefetch option"));
         }
+#ifdef FM_QMI_NO_DEQ_OPTIONS_SUPPORT
+        if (p_FmPort->fmRevInfo.majorRev != 4)
+#endif /* FM_QMI_NO_DEQ_OPTIONS_SUPPORT */
+        if (p_Params->deqPrefetchOption == e_FM_PORT_DEQ_NO_PREFETCH)
+            FmSetPortPreFetchConfiguration(p_FmPort->h_Fm, p_FmPort->portId, FALSE);
+        else
+            FmSetPortPreFetchConfiguration(p_FmPort->h_Fm, p_FmPort->portId, TRUE);
 
         tmpReg |= p_Params->deqByteCnt;
         tmpReg |= (uint32_t)p_Params->deqSubPortal << QMI_DEQ_CFG_SUBPORTAL_SHIFT;
@@ -1873,7 +1880,8 @@ static t_Error DeletePcd(t_FmPort *p_FmPort)
             RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Invalid port type"));
     }
 
-    if ((GET_UINT32(*p_BmiNia) & (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME)) != (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME))
+    if ((GET_UINT32(*p_BmiNia) & GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME()) !=
+        GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME())
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION, ("port has to be detached previousely"));
 
     /* "cut" PCD out of the port's flow - go to BMI */
@@ -1925,7 +1933,6 @@ static t_Error AttachPCD(t_FmPort *p_FmPort)
 
     ASSERT_COND(p_FmPort);
 
-
     /* get PCD registers pointers */
     if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
         p_BmiNia = &p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofne;
@@ -1933,7 +1940,7 @@ static t_Error AttachPCD(t_FmPort *p_FmPort)
         p_BmiNia = &p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne;
 
     /* check that current NIA is BMI to BMI */
-    if ((GET_UINT32(*p_BmiNia) & ~BMI_RFNE_FDCS_MASK) != (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME))
+    if ((GET_UINT32(*p_BmiNia) & ~BMI_RFNE_FDCS_MASK) != GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME())
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
                      ("may be called only for ports in BMI-to-BMI state."));
 
@@ -1994,8 +2001,8 @@ static t_Error DetachPCD(t_FmPort *p_FmPort)
     else
         p_BmiNia = &p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne;
 
-    WRITE_UINT32(*p_BmiNia, (p_FmPort->savedBmiNia & BMI_RFNE_FDCS_MASK) | (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME));
-
+    WRITE_UINT32(*p_BmiNia, (p_FmPort->savedBmiNia & BMI_RFNE_FDCS_MASK) |
+                            GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME());
 
     if (FmPcdGetHcHandle(p_FmPort->h_FmPcd))
         FmPcdHcSync(p_FmPort->h_FmPcd);
@@ -2115,14 +2122,14 @@ t_Error FmPortSetGprFunc(t_Handle h_FmPort, e_FmPortGprFuncType gprFunc, void **
         switch (gprFunc)
         {
             case (e_FM_PORT_GPR_MURAM_PAGE):
-                p_FmPort->p_MuramPage = FM_MURAM_AllocMem(p_FmPort->h_FmMuram,
-                                                          256,
-                                                          8);
-                if (!p_FmPort->p_MuramPage)
+                p_FmPort->p_ParamsPage = FM_MURAM_AllocMem(p_FmPort->h_FmMuram,
+                                                           256,
+                                                           8);
+                if (!p_FmPort->p_ParamsPage)
                     RETURN_ERROR(MAJOR, E_NO_MEMORY, ("MURAM alloc for page"));
 
-                IOMemSet32(p_FmPort->p_MuramPage, 0, 256);
-                muramPageOffset = (uint32_t)(XX_VirtToPhys(p_FmPort->p_MuramPage) -
+                IOMemSet32(p_FmPort->p_ParamsPage, 0, 256);
+                muramPageOffset = (uint32_t)(XX_VirtToPhys(p_FmPort->p_ParamsPage) -
                                              p_FmPort->fmMuramPhysBaseAddr);
                 switch (p_FmPort->portType)
                 {
@@ -2146,7 +2153,7 @@ t_Error FmPortSetGprFunc(t_Handle h_FmPort, e_FmPortGprFuncType gprFunc, void **
     switch (p_FmPort->gprFunc)
     {
         case (e_FM_PORT_GPR_MURAM_PAGE):
-            *p_Value = p_FmPort->p_MuramPage;
+            *p_Value = p_FmPort->p_ParamsPage;
             break;
         default:
             RETURN_ERROR(MAJOR, E_INVALID_SELECTION, NO_MSG);
@@ -2787,6 +2794,39 @@ t_Error FM_PORT_Init(t_Handle h_FmPort)
 
     FmPortDriverParamFree(p_FmPort);
 
+#if (DPAA_VERSION >= 11)
+    if ((p_FmPort->portType == e_FM_PORT_TYPE_RX_10G) ||
+        (p_FmPort->portType == e_FM_PORT_TYPE_RX) ||
+        (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING))
+    {
+        t_FmPcdCtrlParamsPage   *p_ParamsPage;
+
+        FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE, (void**)&p_ParamsPage);
+        ASSERT_COND(p_ParamsPage);
+
+        WRITE_UINT32(p_ParamsPage->misc, FM_CTL_PARAMS_PAGE_ALWAYS_ON);
+#ifdef FM_OP_NO_VSP_NO_RELEASE_ERRATA_FMAN_A006675
+        if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
+        {
+            WRITE_UINT32(p_ParamsPage->misc,
+                         (GET_UINT32(p_ParamsPage->misc) | FM_CTL_PARAMS_PAGE_OP_FIX_EN));
+            WRITE_UINT32(p_ParamsPage->discardMask,
+                         GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofsdm));
+        }
+#endif /* FM_OP_NO_VSP_NO_RELEASE_ERRATA_FMAN_A006675 */
+#ifdef FM_ERROR_VSP_NO_MATCH_SW006
+        if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
+            WRITE_UINT32(p_ParamsPage->errorsDiscardMask,
+                         (GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofsdm) |
+                          GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofsem)));
+        else
+            WRITE_UINT32(p_ParamsPage->errorsDiscardMask,
+                         (GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsdm) |
+                          GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsem)));
+#endif /* FM_ERROR_VSP_NO_MATCH_SW006 */
+    }
+#endif /* (DPAA_VERSION >= 11) */
+ 
     return E_OK;
 }
 
@@ -2834,8 +2874,8 @@ t_Error FM_PORT_Free(t_Handle h_FmPort)
                         p_FmPort->portId) != E_OK)
         RETURN_ERROR(MAJOR, E_INVALID_STATE, ("VSP free of port FAILED"));
 
-    if (p_FmPort->p_MuramPage)
-        FM_MURAM_FreeMem(p_FmPort->h_FmMuram, p_FmPort->p_MuramPage);
+    if (p_FmPort->p_ParamsPage)
+        FM_MURAM_FreeMem(p_FmPort->h_FmMuram, p_FmPort->p_ParamsPage);
 #endif /* (DPAA_VERSION >= 11) */
 
     if (p_FmPort->h_Spinlock)
@@ -4080,7 +4120,18 @@ t_Error FM_PORT_SetErrorsRoute(t_Handle h_FmPort, fmPortFrameErrSelect_t errs)
         RETURN_ERROR(MAJOR, E_INVALID_SELECTION, ("Selectd Errors that were configured to cause frame discard."));
 
     WRITE_UINT32(*p_ErrQReg, errs);
+ 
+#ifdef FM_ERROR_VSP_NO_MATCH_SW006
+    if (p_FmPort->fmRevInfo.majorRev >= 6)
+    {
+        t_FmPcdCtrlParamsPage   *p_ParamsPage;
 
+        FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE, (void**)&p_ParamsPage);
+        ASSERT_COND(p_ParamsPage);
+        WRITE_UINT32(p_ParamsPage->errorsDiscardMask, GET_UINT32(*p_ErrDiscard) | errs);
+    }
+#endif /* FM_ERROR_VSP_NO_MATCH_SW006 */
+ 
     return E_OK;
 }
 
@@ -4492,7 +4543,8 @@ t_Error FM_PORT_VSPAlloc(t_Handle h_FmPort, t_FmPortVSPAllocParams *p_VSPParams)
     }
 
     p_FmPort->vspe = TRUE;
-
+    p_FmPort->dfltRelativeId = p_VSPParams->dfltRelativeId;
+ 
     tmpReg = GET_UINT32(*p_BmiStorageProfileId) & ~BMI_SP_ID_MASK;
     tmpReg |= (uint32_t)hwStoragePrflId<<BMI_SP_ID_SHIFT;
     WRITE_UINT32(*p_BmiStorageProfileId, tmpReg);
@@ -4974,9 +5026,6 @@ t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
 
         if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
         {
-#if (DPAA_VERSION >= 11)
-#endif /* (DPAA_VERSION >= 11) */
-
 #ifdef FM_KG_ERASE_FLOW_ID_ERRATA_FMAN_SW004
             if ((p_FmPort->fmRevInfo.majorRev < 6) &&
                 (p_FmPort->pcdEngines & FM_PCD_KG))
@@ -5023,14 +5072,12 @@ t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
         if (p_FmPort->fmRevInfo.majorRev < 6)
         {
             fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_PNEN;
-            fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_FRAG | NIA_ENG_FM_CTL;
+            fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
         }
         else
         {
 #endif /* (DPAA_VERSION == 10) */
         fmPortGetSetCcParams.getCcParams.type = GET_NIA_FPNE;
-        fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_CMNE;
-        fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_FRAG | NIA_ENG_FM_CTL;
 #if (DPAA_VERSION == 10)
         }
 #endif /* (DPAA_VERSION == 10) */
@@ -5095,6 +5142,52 @@ t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
     }
     else
         FmPcdLockUnlockAll(p_FmPort->h_FmPcd);
+
+#if (DPAA_VERSION >= 11)
+    {
+        t_FmPcdCtrlParamsPage   *p_ParamsPage;
+
+        memset(&fmPortGetSetCcParams, 0, sizeof(t_FmPortGetSetCcParams));
+
+        fmPortGetSetCcParams.setCcParams.type = UPDATE_NIA_CMNE;
+        if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd))
+            fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
+        else
+            fmPortGetSetCcParams.setCcParams.nia = NIA_FM_CTL_AC_NO_IPACC_POP_TO_N_STEP | NIA_ENG_FM_CTL;
+        if ((err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams)) != E_OK)
+        {
+            DeletePcd(p_FmPort);
+            if (p_FmPort->h_IpReassemblyTree)
+            {
+                FM_PCD_CcRootDelete(p_FmPort->h_IpReassemblyTree);
+                p_FmPort->h_IpReassemblyTree = NULL;
+            }
+            RELEASE_LOCK(p_FmPort->lock);
+            RETURN_ERROR(MAJOR, err, NO_MSG);
+         }
+ 
+        FmPortSetGprFunc(p_FmPort, e_FM_PORT_GPR_MURAM_PAGE, (void**)&p_ParamsPage);
+        ASSERT_COND(p_ParamsPage);
+
+        if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd))
+            WRITE_UINT32(p_ParamsPage->misc, GET_UINT32(p_ParamsPage->misc) | FM_CTL_PARAMS_PAGE_OFFLOAD_SUPPORT_EN);
+
+        if (p_FmPort->h_IpReassemblyManip)
+        {
+            if (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
+                WRITE_UINT32(p_ParamsPage->discardMask,
+                             GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofsdm));
+            else
+                WRITE_UINT32(p_ParamsPage->discardMask,
+                             GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfsdm));
+        }
+#ifdef FM_ERROR_VSP_NO_MATCH_SW006
+        if (p_FmPort->vspe)
+            WRITE_UINT32(p_ParamsPage->misc,
+                         GET_UINT32(p_ParamsPage->misc) | (p_FmPort->dfltRelativeId & FM_CTL_PARAMS_PAGE_ERROR_VSP_MASK));
+#endif /* FM_ERROR_VSP_NO_MATCH_SW006 */
+    }
+#endif /* (DPAA_VERSION >= 11) */
 
     err = AttachPCD(h_FmPort);
     if (err)
@@ -5415,7 +5508,7 @@ t_Error FM_PORT_DumpRegs(t_Handle h_FmPort)
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofene );
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_orlmts);
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_orlmt);
-
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocmne);
         {
 #ifndef FM_NO_OP_OBSERVED_POOLS
             if (p_FmPort->fmRevInfo.majorRev == 4)
@@ -5480,6 +5573,7 @@ t_Error FM_PORT_DumpRegs(t_Handle h_FmPort)
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfsdm);
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfsem);
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfene);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rcmne);
         DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_ebmpi, ("fmbm_ebmpi"));
         DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_EXT_POOLS)
         {
@@ -5537,6 +5631,7 @@ t_Error FM_PORT_DumpRegs(t_Handle h_FmPort)
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfene);
 #if (DPAA_VERSION >= 11)
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcmne);
 #endif /* (DPAA_VERSION >= 11) */
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_trlmts);
         DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_trlmt);

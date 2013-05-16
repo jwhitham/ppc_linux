@@ -152,6 +152,22 @@ typedef _Packed struct t_FmPcdCcCapwapReassmTimeoutParams {
     volatile uint32_t                       timeoutRequestTime;
 }_PackedType t_FmPcdCcCapwapReassmTimeoutParams;
 
+/**************************************************************************//**
+ @Description   PCD CTRL Parameters Page
+*//***************************************************************************/
+typedef _Packed struct t_FmPcdCtrlParamsPage {
+    volatile uint8_t  reserved0[16];
+    volatile uint32_t iprIpv4Nia;
+    volatile uint32_t iprIpv6Nia;
+    volatile uint8_t  reserved1[24];
+    volatile uint32_t ipfOptionsCounter;
+    volatile uint8_t  reserved2[12];
+    volatile uint32_t misc;
+    volatile uint32_t errorsDiscardMask;
+    volatile uint32_t discardMask;
+    volatile uint8_t  reserved3[180];
+} _PackedType t_FmPcdCtrlParamsPage;
+
 
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
@@ -336,7 +352,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 #define NIA_FM_CTL_AC_HC                        0x0000000C
 #define NIA_FM_CTL_AC_IND_MODE_TX               0x00000008
 #define NIA_FM_CTL_AC_IND_MODE_RX               0x0000000A
-#define NIA_FM_CTL_AC_FRAG                      0x0000000e
+#define NIA_FM_CTL_AC_POP_TO_N_STEP             0x0000000e
 #define NIA_FM_CTL_AC_PRE_BMI_FETCH_HEADER      0x00000010
 #define NIA_FM_CTL_AC_PRE_BMI_FETCH_FULL_FRAME  0x00000018
 #define NIA_FM_CTL_AC_POST_BMI_FETCH            0x00000012
@@ -346,6 +362,10 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 #define NIA_FM_CTL_AC_POST_BMI_ENQ              0x00000022
 #define NIA_FM_CTL_AC_PRE_CC                    0x00000020
 #define NIA_FM_CTL_AC_POST_TX                   0x00000024
+/* V3 only */
+#define NIA_FM_CTL_AC_NO_IPACC_PRE_BMI_ENQ_FRAME        0x00000028
+#define NIA_FM_CTL_AC_NO_IPACC_PRE_BMI_DISCARD_FRAME    0x0000002A
+#define NIA_FM_CTL_AC_NO_IPACC_POP_TO_N_STEP            0x0000002C
 
 #define NIA_BMI_AC_ENQ_FRAME        0x00000002
 #define NIA_BMI_AC_TX_RELEASE       0x000002C0
@@ -362,6 +382,18 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 
 #define NIA_BMI_AC_ENQ_FRAME_WITHOUT_DMA    0x00000202
 
+#if defined(FM_OP_NO_VSP_NO_RELEASE_ERRATA_FMAN_A006675) || defined(FM_ERROR_VSP_NO_MATCH_SW006)
+#define GET_NIA_BMI_AC_ENQ_FRAME(h_FmPcd)   \
+    (uint32_t)((FmPcdIsAdvancedOffloadSupported(h_FmPcd)) ? \
+                (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_PRE_BMI_ENQ_FRAME) : \
+                (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_NO_IPACC_PRE_BMI_ENQ_FRAME))
+#define GET_NIA_BMI_AC_DISCARD_FRAME(h_FmPcd)   \
+    (uint32_t)((FmPcdIsAdvancedOffloadSupported(h_FmPcd)) ? \
+                (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_PRE_BMI_DISCARD_FRAME) : \
+                (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_NO_IPACC_PRE_BMI_DISCARD_FRAME))
+#define GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME()   \
+        (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_NO_IPACC_PRE_BMI_ENQ_FRAME)
+#else
 #define GET_NIA_BMI_AC_ENQ_FRAME(h_FmPcd)   \
     (uint32_t)((FmPcdIsAdvancedOffloadSupported(h_FmPcd)) ? \
                 (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_PRE_BMI_ENQ_FRAME) : \
@@ -370,9 +402,18 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
     (uint32_t)((FmPcdIsAdvancedOffloadSupported(h_FmPcd)) ? \
                 (NIA_ENG_FM_CTL | NIA_FM_CTL_AC_PRE_BMI_DISCARD_FRAME) : \
                 (NIA_ENG_BMI | NIA_BMI_AC_DISCARD))
+#define GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME()   \
+            (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME)
+#endif /* defined(FM_OP_NO_VSP_NO_RELEASE_ERRATA_FMAN_A006675) || ... */
 
-#define NIA_IPR_DIRECT_SCHEME_IPV4_OFFSET       0x10
-#define NIA_IPR_DIRECT_SCHEME_IPV6_OFFSET       0x14
+/**************************************************************************//**
+  @Description        CTRL Parameters Page defines
+*//***************************************************************************/
+#define FM_CTL_PARAMS_PAGE_OP_FIX_EN            0x80000000
+#define FM_CTL_PARAMS_PAGE_OFFLOAD_SUPPORT_EN   0x40000000
+#define FM_CTL_PARAMS_PAGE_ALWAYS_ON            0x00000100
+
+#define FM_CTL_PARAMS_PAGE_ERROR_VSP_MASK       0x0000003f
 
 /**************************************************************************//**
  @Description       Port Id defines
@@ -1058,6 +1099,9 @@ t_Error     FmSetMacMaxFrame(t_Handle h_Fm, e_FmMacType type, uint8_t macId, uin
 bool        FmIsMaster(t_Handle h_Fm);
 uint8_t     FmGetGuestId(t_Handle h_Fm);
 uint16_t    FmGetTnumAgingPeriod(t_Handle h_Fm);
+t_Error     FmSetPortPreFetchConfiguration(t_Handle h_Fm, uint8_t portNum, bool preFetchConfigured);
+t_Error     FmGetPortPreFetchConfiguration(t_Handle h_Fm, uint8_t portNum, bool *p_PortConfigured, bool *p_PreFetchConfigured);
+
 
 #ifdef FM_TX_ECC_FRMS_ERRATA_10GMAC_A004
 t_Error     Fm10GTxEccWorkaround(t_Handle h_Fm, uint8_t macId);
