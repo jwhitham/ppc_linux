@@ -2956,18 +2956,23 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 				next_engine_params->params.plcrParams.
 			newRelativeProfileId = (uint16_t)action->enq_params.
 				policer_params->new_rel_profile_id;
+				next_engine_params->params.plcrParams.
+					overrideParams = action->enq_params.
+					policer_params->modify_policer_params;
+				next_engine_params->params.plcrParams.
+					newFqid = action->enq_params.new_fqid;
 			} else {
 				next_engine_params->nextEngine = e_FM_PCD_DONE;
+				next_engine_params->params.enqueueParams.
+					action = e_FM_PCD_ENQ_FRAME;
+				next_engine_params->params.enqueueParams.
+					newFqid = action->enq_params.new_fqid;
+				if (action->enq_params.override_fqid)
+					next_engine_params->params.
+						enqueueParams.overrideFqid =
+						TRUE;
 			}
 
-			next_engine_params->params.enqueueParams.action =
-				e_FM_PCD_ENQ_FRAME;
-			next_engine_params->params.enqueueParams.newFqid =
-					action->enq_params.new_fqid;
-
-		if (action->enq_params.override_fqid)
-			next_engine_params->params.enqueueParams.overrideFqid =
-				TRUE;
 		if (action->enable_statistics)
 			next_engine_params->statisticsEn =
 				TRUE;
