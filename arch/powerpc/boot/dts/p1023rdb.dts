@@ -65,9 +65,14 @@
 		ranges = <0x0 0x0 0xff600000 0x200000>;
 
 		i2c@3000 {
-			at24@50 {
-				compatible = "at24,24c08";
-				reg = <0x50>;
+			eeprom@53 {
+				compatible = "at24,24c04";
+				reg = <0x53>;
+			};
+
+			rtc@6f {
+				compatible = "microchip,mcp7941x";
+				reg = <0x6f>;
 			};
 		};
 
