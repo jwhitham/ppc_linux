@@ -2508,12 +2508,19 @@ int dpa_cls_tbl_action_params_rcompatcpy(
 				kparam->enq_params.new_fqid;
 		uparam->enq_params.hmd = kparam->enq_params.hmd;
 
-		/*
-		 * Policer params structure address has no meaning in user
-		 * space
-		 */
-		uparam->enq_params.policer_params = 0;
-
+		if (kparam->enq_params.policer_params) {
+			BUG_ON(!compat_ptr(uparam->enq_params.policer_params));
+			if (copy_to_user(
+				compat_ptr(uparam->enq_params.policer_params),
+				kparam->enq_params.policer_params,
+				sizeof(struct dpa_cls_tbl_policer_params))) {
+				pr_err("ERROR: %s, %s (%d): Read failed: "
+					"policer params.\n", __FILE__, __func__,
+					__LINE__);
+				return -EBUSY;
+			}
+		} else
+			uparam->enq_params.policer_params = 0;
 		break;
 	case DPA_CLS_TBL_ACTION_NEXT_TABLE:
 		uparam->next_table_params.next_td =
