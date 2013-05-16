@@ -621,7 +621,8 @@ static int do_init_ioctl(void *args, bool compat)
 			pr_err("FQID range allocation failed!\n");
 			return -EINVAL;
 		}
-		if (copy_from_user(prm.dpa_ipsec_params.fqid_range, fqid_range,
+		if (copy_from_user(fqid_range,
+				   prm.dpa_ipsec_params.fqid_range,
 				   sizeof(*fqid_range))) {
 			pr_err("Could not copy FQID range params!\n");
 			err = -EINVAL;
