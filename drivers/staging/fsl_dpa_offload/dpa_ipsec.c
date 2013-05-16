@@ -2506,6 +2506,20 @@ static int copy_sa_params_to_in_sa(struct dpa_ipsec_sa *sa,
 	       &sa_params->sa_in_params.post_ipsec_action,
 	       sizeof(struct dpa_cls_tbl_action));
 
+	if (sa->def_sa_action.type == DPA_CLS_TBL_ACTION_ENQ &&
+	    sa->def_sa_action.enq_params.policer_params) {
+		struct dpa_cls_tbl_policer_params	*policer_params;
+		policer_params = kzalloc(sizeof(*policer_params), GFP_KERNEL);
+		if (!policer_params) {
+			pr_err("Could not allocate memory for policer parameters\n");
+			return -ENOMEM;
+		}
+		memcpy(policer_params,
+		       sa->def_sa_action.enq_params.policer_params,
+		       sizeof(*policer_params));
+		sa->def_sa_action.enq_params.policer_params = policer_params;
+	}
+
 	sa->sec_desc->pdb_dec.seq_num =
 			sa_params->start_seq_num & SEQ_NUM_LOW_MASK;
 	sa->sec_desc->pdb_dec.options = PDBOPTS_ESP_TUNNEL |
@@ -3578,6 +3592,11 @@ static int remove_inbound_sa(struct dpa_ipsec_sa *sa)
 		if (err < 0)
 			return err;
 	}
+
+	/* Free policer pointer */
+	if (sa->def_sa_action.type == DPA_CLS_TBL_ACTION_ENQ &&
+	    sa->def_sa_action.enq_params.policer_params)
+		kfree(sa->def_sa_action.enq_params.policer_params);
 
 	/* Mark SA as free */
 	err = put_sa(sa);
