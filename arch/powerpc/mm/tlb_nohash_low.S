@@ -320,6 +320,7 @@ ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_USE_TLBILX)
 	blr
 #elif defined(CONFIG_PPC_BOOK3E)
 
+#ifdef CONFIG_FSL_ERRATUM_A_004801
 .macro tlb_lock
 	ld	r7,PACA_TLB_PER_CORE_PTR(r13)
 	mtocrf	0x01,r7
@@ -348,6 +349,13 @@ ALT_MMU_FTR_SECTION_END_IFCLR(MMU_FTR_USE_TLBILX)
 	stb	r9,0(r8)
 1:
 .endm
+#else
+.macro tlb_lock
+.endm
+
+.macro tlb_unlock
+.endm
+#endif
 
 /*
  * New Book3E (>= 2.06) implementation

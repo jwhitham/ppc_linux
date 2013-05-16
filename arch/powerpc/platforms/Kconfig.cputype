@@ -166,6 +166,16 @@ config PPC_E500MC
 	  such as e5500/e6500), and must be disabled for running on
 	  e500v1 or e500v2.
 
+config FSL_ERRATUM_A_004801
+	bool "Work around erratum A-004801"
+	depends on PPC_E500MC
+	default y
+	help
+	  This works around erratum A-004801 by having invalidations
+	  use the same lock as TLB writes.
+
+	  Say Y if if you need to be able to run on rev1 silicon.
+
 config FSL_ERRATUM_A_005337
 	bool "Work around erratum A-005337 (no hw tablewalk)"
 	depends on PPC_E500MC
