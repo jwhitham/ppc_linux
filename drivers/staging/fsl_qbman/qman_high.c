@@ -37,6 +37,17 @@
 #define IRQNAME		"QMan portal %d"
 #define MAX_IRQNAME	16	/* big enough for "QMan portal %d" */
 
+/* Divide 'n' by 'd', rounding down if 'r' is negative, rounding up if it's
+ * positive, and rounding to the closest value if it's zero. NB, this macro
+ * implicitly upgrades parameters to unsigned 64-bit, so feed it with types
+ * that are compatible with this. NB, these arguments should not be expressions
+ * unless it is safe for them to be evaluated multiple times. Eg. do not pass
+ * in "some_value++" as a parameter to the macro! */
+#define ROUNDING(n, d, r) \
+	(((r) < 0) ? div64_u64((n), (d)) : \
+	(((r) > 0) ? div64_u64(((n) + (d) - 1), (d)) : \
+	div64_u64(((n) + ((d) / 2)), (d))))
+
 /* Lock/unlock frame queues, subject to the "LOCKED" flag. This is about
  * inter-processor locking only. Note, FQLOCK() is always called either under a
  * local_irq_save() or from interrupt context - hence there's no need for irq

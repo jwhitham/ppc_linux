@@ -60,6 +60,7 @@
 #include <linux/fsl_hypervisor.h>
 #include <linux/vmalloc.h>
 #include <linux/ctype.h>
+#include <linux/math64.h>
 
 #include <linux/fsl_usdpaa.h>
 

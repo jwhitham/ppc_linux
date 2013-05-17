@@ -2417,17 +2417,6 @@ struct qm_ceetm_lfq {
 	qman_cb_mr ern;
 };
 
-/* Divide 'n' by 'd', rounding down if 'r' is negative, rounding up if
- * it's positive, and rounding to the closest value if it's zero. NB,
- * this macro assumes no particular type, so feed it with types that are
- * appropriate for its use. NB, these arguments should not be expressions
- * unless it is safe for them to be evaluated multiple times. Eg. do not
- * pass in "some_value++" as a parameter to the macro! */
-#define ROUNDING(n, d, r) \
-	(((r) < 0) ? ((n) / (d)) : \
-	(((r) > 0) ? (((n) + (d) - 1) / (d)) : \
-	(((n) + ((d) / 2)) / (d))))
-
 /**
  * qman_ceetm_bps2tokenrate - Given a desired rate 'bps' measured in bps
  * (ie. bits-per-second), compute the 'token_rate' fraction that best
