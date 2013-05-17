@@ -304,7 +304,6 @@ static int usdpaa_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-
 #define DQRR_MAXFILL 15
 
 /* Reset a QMan portal to its default state */
@@ -412,7 +411,6 @@ static int qm_check_and_destroy_fqs(struct qm_portal *portal, void *ctx,
 		++fq_id;
 	}
 	return 0;
-
 }
 
 static bool check_channel_device(void *_ctx, u32 channel)
@@ -440,8 +438,6 @@ static bool check_channel_device(void *_ctx, u32 channel)
 	}
 	return false;
 }
-
-
 
 static int usdpaa_release(struct inode *inode, struct file *filp)
 {
@@ -1210,13 +1206,13 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	return -EINVAL;
 }
 
-
-
 static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 				unsigned long arg)
 {
+#ifdef CONFIG_COMPAT
 	struct ctx *ctx = fp->private_data;
 	void __user *a = (void __user *)arg;
+#endif
 	switch (cmd) {
 #ifdef CONFIG_COMPAT
 	case USDPAA_IOCTL_DMA_MAP_COMPAT:

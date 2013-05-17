@@ -61,14 +61,11 @@ struct usdpaa_irq_ctx {
 	struct file *usdpaa_filp;
 };
 
-
 static int usdpaa_irq_open(struct inode *inode, struct file *filp)
 {
-	struct usdpaa_irq_ctx *ctx = kmalloc(sizeof(struct usdpaa_irq_ctx),
-					     GFP_KERNEL);
+	struct usdpaa_irq_ctx *ctx = kmalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return -ENOMEM;
-
 	ctx->irq_set = 0;
 	ctx->irq_count = 0;
 	ctx->last_irq_count = 0;
@@ -92,8 +89,7 @@ static int usdpaa_irq_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-
-irqreturn_t usdpaa_irq_handler(int irq, void *_ctx)
+static irqreturn_t usdpaa_irq_handler(int irq, void *_ctx)
 {
 	unsigned long flags;
 	struct usdpaa_irq_ctx *ctx = _ctx;
@@ -106,8 +102,6 @@ irqreturn_t usdpaa_irq_handler(int irq, void *_ctx)
 	out_be32(ctx->inhibit_addr, 0x1);
 	return IRQ_HANDLED;
 }
-
-
 
 static int map_irq(struct file *fp, struct usdpaa_ioctl_irq_map *irq_map)
 {
@@ -240,7 +234,9 @@ static unsigned int usdpaa_irq_poll(struct file *filp, poll_table *wait)
 static long usdpaa_irq_ioctl_compat(struct file *fp, unsigned int cmd,
 				unsigned long arg)
 {
+#ifdef CONFIG_COMPAT
 	void __user *a = (void __user *)arg;
+#endif
 	switch (cmd) {
 #ifdef CONFIG_COMPAT
 	case  USDPAA_IOCTL_PORTAL_IRQ_MAP_COMPAT:
