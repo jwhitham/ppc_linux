@@ -981,6 +981,7 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 {
 	int r = RESUME_HOST;
 	int s;
+	int idx;
 
 #ifdef CONFIG_PPC64
 	WARN_ON(local_paca->irq_happened != 0);
@@ -1235,6 +1236,8 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 			break;
 		}
 
+		idx = srcu_read_lock(&vcpu->kvm->srcu);
+
 		gpaddr = kvmppc_mmu_xlate(vcpu, gtlb_index, eaddr);
 		gfn = gpaddr >> PAGE_SHIFT;
 
@@ -1257,6 +1260,7 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 			kvmppc_account_exit(vcpu, MMIO_EXITS);
 		}
 
+		srcu_read_unlock(&vcpu->kvm->srcu, idx);
 		break;
 	}
 
@@ -1280,6 +1284,8 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 
 		kvmppc_account_exit(vcpu, ITLB_VIRT_MISS_EXITS);
 
+		idx = srcu_read_lock(&vcpu->kvm->srcu);
+
 		gpaddr = kvmppc_mmu_xlate(vcpu, gtlb_index, eaddr);
 		gfn = gpaddr >> PAGE_SHIFT;
 
@@ -1296,6 +1302,7 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 			kvmppc_booke_queue_irqprio(vcpu, BOOKE_IRQPRIO_MACHINE_CHECK);
 		}
 
+		srcu_read_unlock(&vcpu->kvm->srcu, idx);
 		break;
 	}
 
