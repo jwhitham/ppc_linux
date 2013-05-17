@@ -562,6 +562,7 @@ static const struct of_device_id mpc85xx_smp_guts_ids[] = {
 	{ .compatible = "fsl,p2020-guts", },
 	{ .compatible = "fsl,qoriq-rcpm-1.0", },
 	{ .compatible = "fsl,qoriq-rcpm-2.0", },
+	{ .compatible = "fsl,bsc9132-guts", },
 	{},
 };
 
