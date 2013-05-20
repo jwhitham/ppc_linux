@@ -50,6 +50,7 @@ config AS_FASTPATH
 	select NF_NAT_TFTP
 	select IP_NF_MANGLE
 	select VLAN_8021Q
+	select INET_AH
 	select PPP
 	select PPPOE
 	---help---
@@ -66,6 +67,7 @@ config ASF_IPV6
 	select IPV6_TUNNEL
 	select INET6_TUNNEL
 	select INET6_ESP
+	select INET6_AH
 	select INET6_XFRM_TUNNEL
 	select NF_CONNTRACK_IPV6
 	select INET6_XFRM_MODE_TUNNEL
