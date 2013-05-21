@@ -730,7 +730,7 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 #ifdef CONFIG_ALTIVEC
 	vector128 vr[32];
 	vector128 vscr;
-	int used_vr;
+	int used_vr = 0;
 #endif
 
 	if (!vcpu->arch.sane) {
@@ -770,19 +770,21 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 #endif
 
 #ifdef CONFIG_ALTIVEC
-	/* Save userspace VEC state in stack */
-	enable_kernel_altivec();
-	memcpy(vr, current->thread.vr, sizeof(current->thread.vr));
-	vscr = current->thread.vscr;
-	used_vr = current->thread.used_vr;
+	if (cpu_has_feature(CPU_FTR_ALTIVEC)) {
+		/* Save userspace VEC state in stack */
+		enable_kernel_altivec();
+		memcpy(vr, current->thread.vr, sizeof(current->thread.vr));
+		vscr = current->thread.vscr;
+		used_vr = current->thread.used_vr;
 
-	/* Restore guest VEC state to thread */
-	memcpy(current->thread.vr, vcpu->arch.vr, sizeof(vcpu->arch.vr));
-	current->thread.vscr = vcpu->arch.vscr;
+		/* Restore guest VEC state to thread */
+		memcpy(current->thread.vr, vcpu->arch.vr, sizeof(vcpu->arch.vr));
+		current->thread.vscr = vcpu->arch.vscr;
 
-	vcpu->arch.vec_active = 1;
+		vcpu->arch.vec_active = 1;
 
-	kvmppc_load_guest_altivec(vcpu);
+		kvmppc_load_guest_altivec(vcpu);
+	}
 #endif
 
 	/*
@@ -820,18 +822,20 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 #endif
 
 #ifdef CONFIG_ALTIVEC
-	kvmppc_save_guest_altivec(vcpu);
+	if (cpu_has_feature(CPU_FTR_ALTIVEC)) {
+		kvmppc_save_guest_altivec(vcpu);
 
-	vcpu->arch.vec_active = 0;
+		vcpu->arch.vec_active = 0;
 
-	/* Save guest VEC state from thread */
-	memcpy(vcpu->arch.vr, current->thread.vr, sizeof(vcpu->arch.vr));
-	vcpu->arch.vscr = current->thread.vscr;
+		/* Save guest VEC state from thread */
+		memcpy(vcpu->arch.vr, current->thread.vr, sizeof(vcpu->arch.vr));
+		vcpu->arch.vscr = current->thread.vscr;
 
-	/* Restore userspace VEC state from stack */
-	memcpy(current->thread.vr, vr, sizeof(current->thread.vr));
-	current->thread.vscr = vscr;
-	current->thread.used_vr = used_vr;
+		/* Restore userspace VEC state from stack */
+		memcpy(current->thread.vr, vr, sizeof(current->thread.vr));
+		current->thread.vscr = vscr;
+		current->thread.used_vr = used_vr;
+	}
 #endif
 
 out:
