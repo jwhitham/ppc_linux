@@ -211,6 +211,8 @@ static const struct file_operations dpa_classif_fops = {
 };
 
 static int dpa_cls_cdev_major = -1;
+static struct class *classifier_class;
+static struct device *classifier_dev;
 
 
 int	wrp_dpa_classif_init(void)
@@ -229,6 +231,27 @@ int	wrp_dpa_classif_init(void)
 		return -EBUSY;
 	}
 
+	classifier_class = class_create(THIS_MODULE, WRP_DPA_CLS_CLASS_NAME);
+	if (IS_ERR(classifier_class)) {
+		log_err("Failed to create the DPA classifier class device\n");
+		unregister_chrdev(dpa_cls_cdev_major, WRP_DPA_CLS_CDEVNAME);
+		dpa_cls_cdev_major = -1;
+		return PTR_ERR(classifier_class);
+	}
+
+	classifier_dev = device_create(	classifier_class,
+					NULL,
+					MKDEV(dpa_cls_cdev_major, 0),
+					NULL,
+					WRP_DPA_CLS_CDEVNAME);
+	if (IS_ERR(classifier_dev)) {
+		log_err("Failed to create the DPA Classifier device\n");
+		class_destroy(classifier_class);
+		unregister_chrdev(dpa_cls_cdev_major, WRP_DPA_CLS_CDEVNAME);
+		dpa_cls_cdev_major = -1;
+		return PTR_ERR(classifier_dev);
+	}
+
 	return 0;
 }
 
@@ -237,6 +260,9 @@ int wrp_dpa_classif_exit(void)
 {
 	if (dpa_cls_cdev_major < 0)
 		return 0;
+
+	device_destroy(classifier_class, MKDEV(dpa_cls_cdev_major, 0));
+	class_destroy(classifier_class);
 
 	unregister_chrdev(dpa_cls_cdev_major, WRP_DPA_CLS_CDEVNAME);
 
