@@ -708,7 +708,7 @@ static int do_add_rem_policy_ioctl(void *args, bool add_pol)
 	if (prm.pol_params.dir_params.type == DPA_IPSEC_POL_DIR_PARAMS_ACT) {
 		err = copy_policer_params(&prm.pol_params.dir_params.in_action);
 		if (err < 0)
-			goto free_pol_memory;
+			return err;
 	}
 
 	if (add_pol)
@@ -716,8 +716,8 @@ static int do_add_rem_policy_ioctl(void *args, bool add_pol)
 	else
 		err = dpa_ipsec_sa_remove_policy(prm.sa_id, &prm.pol_params);
 
-free_pol_memory:
-	kfree(prm.pol_params.dir_params.in_action.enq_params.policer_params);
+	if (prm.pol_params.dir_params.type == DPA_IPSEC_POL_DIR_PARAMS_ACT)
+		kfree(prm.pol_params.dir_params.in_action.enq_params.policer_params);
 
 	return err;
 }
@@ -839,6 +839,7 @@ static int do_sa_get_policies_ioctl(void *args)
 	for (i = 0; i < num_pol; i++) {
 		dir = &policy_params[i].dir_params;
 		if (dir->type == DPA_IPSEC_POL_DIR_PARAMS_ACT &&
+		    dir->in_action.type == DPA_CLS_TBL_ACTION_ENQ &&
 		    dir->in_action.enq_params.policer_params != NULL)
 			kplcr[i] = dir->in_action.enq_params.policer_params;
 	}

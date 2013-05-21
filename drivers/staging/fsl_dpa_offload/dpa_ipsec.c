@@ -2665,6 +2665,7 @@ static int store_policy_param_to_sa_pol_list(struct dpa_ipsec_sa *sa,
 				struct dpa_ipsec_policy_entry **policy_entry)
 {
 	struct dpa_ipsec_policy_entry *pol_entry;
+	struct dpa_ipsec_pol_dir_params *dir = NULL;
 
 	BUG_ON(!sa);
 	BUG_ON(!policy_params);
@@ -2681,6 +2682,24 @@ static int store_policy_param_to_sa_pol_list(struct dpa_ipsec_sa *sa,
 
 	/* copy policy parameters */
 	pol_entry->pol_params = *policy_params;
+
+	/* if necessary, allocate memory to hold policer parameters */
+	dir = &policy_params->dir_params;
+	if (dir->type == DPA_IPSEC_POL_DIR_PARAMS_ACT &&
+	    dir->in_action.type == DPA_CLS_TBL_ACTION_ENQ &&
+	    dir->in_action.enq_params.policer_params) {
+		struct dpa_cls_tbl_policer_params *plcr = NULL;
+
+		plcr = kzalloc(sizeof(*plcr), GFP_KERNEL);
+		if (!plcr) {
+			pr_err("Could not allocate memory for policer\n");
+			return -ENOMEM;
+		}
+		memcpy(plcr, dir->in_action.enq_params.policer_params,
+		       sizeof(*plcr));
+		pol_entry->pol_params.dir_params.in_action.
+		       enq_params.policer_params = plcr;
+	}
 
 	/* add policy to the SA's policy list */
 	list_add(&pol_entry->node, &sa->policy_headlist);
@@ -2830,6 +2849,8 @@ static int remove_policy_from_sa_policy_list(struct dpa_ipsec_sa *sa,
 					     struct dpa_ipsec_policy_entry
 					     *policy_entry)
 {
+	struct dpa_ipsec_pol_dir_params *dir = NULL;
+
 	BUG_ON(!sa);
 	BUG_ON(!policy_entry);
 
@@ -2840,6 +2861,13 @@ static int remove_policy_from_sa_policy_list(struct dpa_ipsec_sa *sa,
 
 	/* unlink this policy from SA's list */
 	list_del(&policy_entry->node);
+
+	/* release memory used for holding policer parameters */
+	dir = &policy_entry->pol_params.dir_params;
+	if (dir->type == DPA_IPSEC_POL_DIR_PARAMS_ACT &&
+	    dir->in_action.type == DPA_CLS_TBL_ACTION_ENQ &&
+	    dir->in_action.enq_params.policer_params)
+		kfree(dir->in_action.enq_params.policer_params);
 
 	/* release memory used for holding policy general parameters */
 	kfree(policy_entry);
