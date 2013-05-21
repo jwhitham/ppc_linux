@@ -119,30 +119,13 @@ static int map_irq(struct file *fp, struct usdpaa_ioctl_irq_map *irq_map)
 		return -EINVAL;
 	}
 
-	if (irq_map->type == usdpaa_portal_qman) {
-		struct qm_portal_config *qportal;
-		qportal = usdpaa_get_qm_portal_config(ctx->usdpaa_filp,
-						   irq_map->portal_cinh);
-		if (!qportal) {
-			pr_debug("Couldn't locate QMan Portal\n");
-			fput(ctx->usdpaa_filp);
-			return -EINVAL;
-		}
-		/* Lookup IRQ number for portal */
-		ctx->irq_num = qportal->public_cfg.irq;
-		ctx->inhibit_addr = qportal->addr_virt[1] + QM_REG_IIR;
-	} else {
-		struct bm_portal_config *bportal;
-		bportal = usdpaa_get_bm_portal_config(ctx->usdpaa_filp,
-					      irq_map->portal_cinh);
-		if (!bportal) {
-			pr_debug("Couldn't locate BMan Portal\n");
-			fput(ctx->usdpaa_filp);
-			return -EINVAL;
-		}
-		/* Lookup IRQ number for portal */
-		ctx->irq_num = bportal->public_cfg.irq;
-		ctx->inhibit_addr = bportal->addr_virt[1] + BM_REG_IIR;
+	ret = usdpaa_get_portal_config(ctx->usdpaa_filp, irq_map->portal_cinh,
+				       irq_map->type, &ctx->irq_num,
+				       &ctx->inhibit_addr);
+	if (ret) {
+		pr_debug("USDPAA IRQ couldn't identify portal\n");
+		fput(ctx->usdpaa_filp);
+		return ret;
 	}
 
 	ctx->irq_set = 1;

@@ -1277,56 +1277,33 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 	return -EINVAL;
 }
 
-struct qm_portal_config *usdpaa_get_qm_portal_config(struct file *filp,
-						     void *hint)
+int usdpaa_get_portal_config(struct file *filp, void *cinh,
+			     enum usdpaa_portal_type ptype, unsigned int *irq,
+			     void **iir_reg)
 {
 	/* Walk the list of portals for filp and return the config
 	   for the portal that matches the hint */
-
 	struct ctx *context;
 	struct portal_mapping *portal;
 
 	/* First sanitize the filp */
 	if (filp->f_op->open != usdpaa_open)
-		return NULL;
+		return -ENODEV;
 	context = filp->private_data;
 	spin_lock(&context->lock);
 	list_for_each_entry(portal, &context->portals, list) {
-		if (portal->user.type == usdpaa_portal_qman &&
-		    portal->user.addr.cinh == hint) {
+		if (portal->user.type == ptype &&
+		    portal->user.addr.cinh == cinh) {
 			spin_unlock(&context->lock);
-			return portal->qportal;
+			*irq = portal->qportal->public_cfg.irq;
+			*iir_reg = portal->qportal->addr_virt[1] +
+				((ptype == usdpaa_portal_qman) ? QM_REG_IIR :
+								 BM_REG_IIR);
+			return 0;
 		}
 	}
 	spin_unlock(&context->lock);
-	return NULL;
-}
-
-struct bm_portal_config *usdpaa_get_bm_portal_config(struct file *filp,
-						     void *hint)
-{
-	/* Walk the list of portals for filp and return the config
-	   for the portal that matches the hint */
-
-	struct ctx *context;
-	struct portal_mapping *portal;
-
-	/* First sanitize the filp */
-	if (filp->f_op->open != usdpaa_open)
-		return NULL;
-
-	context = filp->private_data;
-
-	spin_lock(&context->lock);
-	list_for_each_entry(portal, &context->portals, list) {
-		if (portal->user.type == usdpaa_portal_bman &&
-		    portal->user.addr.cinh == hint) {
-			spin_unlock(&context->lock);
-			return portal->bportal;
-		}
-	}
-	spin_unlock(&context->lock);
-	return NULL;
+	return -EINVAL;
 }
 
 static const struct file_operations usdpaa_fops = {
