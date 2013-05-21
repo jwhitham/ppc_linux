@@ -500,6 +500,10 @@ struct sk_buff {
 
 	sk_buff_data_t		inner_transport_header;
 	sk_buff_data_t		inner_network_header;
+#ifdef CONFIG_RX_TX_BUFF_XCHG
+	__u8			owner;
+	struct sk_buff		*new_skb;
+#endif
 	sk_buff_data_t		transport_header;
 	sk_buff_data_t		network_header;
 	sk_buff_data_t		mac_header;

@@ -110,6 +110,10 @@ EXPORT_SYMBOL(devfp_rx_hook);
 devfp_hook_t	devfp_tx_hook;
 EXPORT_SYMBOL(devfp_tx_hook);
 #endif
+#ifdef CONFIG_RX_TX_BUFF_XCHG
+#define RT_PKT_ID 0xff
+#define KER_PKT_ID 0xfe
+#endif
 #define TX_TIMEOUT      (1*HZ)
 
 const char gfar_driver_version[] = "1.3";
@@ -141,6 +145,8 @@ static void gfar_set_hash_for_addr(struct net_device *dev, u8 *addr);
 static void gfar_configure_serdes(struct net_device *dev);
 static int gfar_poll_rx(struct napi_struct *napi, int budget);
 static int gfar_poll_tx(struct napi_struct *napi, int budget);
+static void gfar_recycle_skb(struct gfar_private *priv, struct sk_buff *skb);
+
 #ifdef CONFIG_NET_POLL_CONTROLLER
 static void gfar_netpoll(struct net_device *dev);
 #endif
@@ -180,11 +186,6 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
 MODULE_LICENSE("GPL");
 
-#ifdef CONFIG_RX_TX_BUFF_XCHG
-static DEFINE_PER_CPU(void*, curr_skb);
-static DEFINE_PER_CPU(void*, recycled_skb);
-static DEFINE_PER_CPU(void*, reserved_skb);
-#endif
 static void gfar_init_rxbdp(struct gfar_priv_rx_q *rx_queue, struct rxbd8 *bdp,
 			    dma_addr_t buf)
 {
@@ -2618,19 +2619,8 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		/* BD is free to be used by s/w */
 		/* Free skb for this BD if not recycled */
 		if (tx_queue->tx_skbuff[skb_curtx]) {
-			if (skb_is_recycleable(tx_queue->tx_skbuff[skb_curtx],
-			    DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)) {
-#ifdef CONFIG_AS_FASTPATH
-				if (tx_queue->tx_skbuff[skb_curtx]->pkt_type == PACKET_FASTROUTE)
-					gfar_asf_reclaim_skb(tx_queue->tx_skbuff[skb_curtx]);
-				else
-#endif
-				skb_recycle(tx_queue->tx_skbuff[skb_curtx]);
-				gfar_align_skb(tx_queue->tx_skbuff[skb_curtx]);
-			} else {
-				dev_kfree_skb_any(tx_queue->tx_skbuff[skb_curtx]);
-				tx_queue->tx_skbuff[skb_curtx] = NULL;
-			}
+			gfar_recycle_skb(priv, tx_queue->tx_skbuff[skb_curtx]);
+			tx_queue->tx_skbuff[skb_curtx] = NULL;
 		}
 
 		txbdp->lstatus &= BD_LFLAG(TXBD_WRAP);
@@ -2739,16 +2729,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		gfar_write(&regs->dfvlan, vlan_ctrl);
 	}
 
-#ifdef CONFIG_RX_TX_BUFF_XCHG
-	new_skb = tx_queue->tx_skbuff[tx_queue->skb_curtx];
-	skb_curtx = tx_queue->skb_curtx;
-	if (new_skb && (__this_cpu_read(curr_skb) != skb)) {
-		/* Packet from Kernel free the skb to recycle poll */
-		new_skb->dev = dev;
-		dev_kfree_skb_any(new_skb);
-		new_skb = NULL;
-	}
-#endif
 	txbdp_start->bufPtr = dma_map_single(priv->dev, skb->data,
 					     skb_headlen(skb), DMA_TO_DEVICE);
 
@@ -2794,7 +2774,11 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	eieio(); /* force lstatus write before tx_skbuff */
 
+#ifndef CONFIG_RX_TX_BUFF_XCHG
 	tx_queue->tx_skbuff[tx_queue->skb_curtx] = skb;
+#else
+	skb_curtx = tx_queue->skb_curtx;
+#endif
 
 	/* Update the current skb pointer to the next entry we will use
 	 * (wrapping if necessary)
@@ -2825,7 +2809,20 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_unlock_irqrestore(&tx_queue->txlock, flags);
 #endif
 #ifdef CONFIG_RX_TX_BUFF_XCHG
-	__this_cpu_write(recycled_skb, new_skb);
+	if ((skb->owner != RT_PKT_ID) ||
+	  (!skb_is_recycleable(skb, DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT))) {
+		tx_queue->tx_skbuff[skb_curtx] = skb;
+		skb->new_skb = NULL;
+	} else {
+#ifdef CONFIG_AS_FASTPATH
+			if (skb->pkt_type == PACKET_FASTROUTE)
+				gfar_asf_reclaim_skb(skb);
+			else
+#endif
+			skb_recycle(skb);
+			gfar_align_skb(skb);
+			skb->new_skb = skb;
+		}
 	txq->trans_start = jiffies;
 #endif
 	return NETDEV_TX_OK;
@@ -2896,17 +2893,8 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 		/* BD is free to be used by s/w */
 		/* Free skb for this BD if not recycled */
 		if (tx_queue->tx_skbuff[skb_curtx]) {
-			if (skb_is_recycleable(tx_queue->tx_skbuff[skb_curtx],
-			    DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)) {
-				if (tx_queue->tx_skbuff[skb_curtx]->pkt_type == PACKET_FASTROUTE)
-					gfar_asf_reclaim_skb(tx_queue->tx_skbuff[skb_curtx]);
-				else
-					skb_recycle(tx_queue->tx_skbuff[skb_curtx]);
-				gfar_align_skb(tx_queue->tx_skbuff[skb_curtx]);
-			} else {
-				dev_kfree_skb_any(tx_queue->tx_skbuff[skb_curtx]);
-				tx_queue->tx_skbuff[skb_curtx] = NULL;
-			}
+			gfar_recycle_skb(priv, tx_queue->tx_skbuff[skb_curtx]);
+			tx_queue->tx_skbuff[skb_curtx] = NULL;
 		}
 
 		txbdp->lstatus &= BD_LFLAG(TXBD_WRAP);
@@ -2927,16 +2915,6 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 		gfar_tx_checksum(skb, fcb, fcb_length);
 	}
 
-#ifdef CONFIG_RX_TX_BUFF_XCHG
-	new_skb = tx_queue->tx_skbuff[tx_queue->skb_curtx];
-	skb_curtx = tx_queue->skb_curtx;
-	if (new_skb && (__this_cpu_read(curr_skb) != skb)) {
-		/* Packet from Kernel free the skb to recycle poll */
-		new_skb->dev = dev;
-		dev_kfree_skb_any(new_skb);
-		new_skb = NULL;
-	}
-#endif
 	txbdp_start->bufPtr = dma_map_single(priv->dev, skb->data,
 					     skb_headlen(skb), DMA_TO_DEVICE);
 
@@ -2970,7 +2948,11 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	eieio(); /* force lstatus write before tx_skbuff */
 
+#ifndef CONFIG_RX_TX_BUFF_XCHG
 	tx_queue->tx_skbuff[tx_queue->skb_curtx] = skb;
+#else
+	skb_curtx = tx_queue->skb_curtx;
+#endif
 
 	/* Update the current skb pointer to the next entry we will use
 	 * (wrapping if necessary)
@@ -3001,7 +2983,15 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_unlock_irqrestore(&tx_queue->txlock, flags);
 #endif
 #ifdef CONFIG_RX_TX_BUFF_XCHG
-	__this_cpu_write(recycled_skb, new_skb);
+	if ((skb->owner != RT_PKT_ID) ||
+	  (!skb_is_recycleable(skb, DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT))) {
+		tx_queue->tx_skbuff[skb_curtx] = skb;
+		skb->new_skb = NULL;
+	} else {
+			gfar_asf_reclaim_skb(skb);
+			gfar_align_skb(skb);
+			skb->new_skb = skb;
+		}
 	txq->trans_start = jiffies;
 #endif
 	return NETDEV_TX_OK;
@@ -3682,16 +3672,13 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 	amount_pull = priv->uses_rxfcb ? GMAC_FCB_LEN : 0;
 
 	while (!((bdp->status & RXBD_EMPTY) || (--rx_work_limit < 0))) {
-		struct sk_buff *newskb;
+		struct sk_buff *newskb = NULL;
 
 		rmb();
 
 #ifndef CONFIG_RX_TX_BUFF_XCHG
 		/* Add another skb for the future */
 		newskb = gfar_new_skb(priv);
-#else
-		if (__this_cpu_read(reserved_skb) == NULL)
-			__this_cpu_write(reserved_skb, gfar_new_skb(priv));
 #endif
 
 		skb = rx_queue->rx_skbuff[rx_queue->skb_currx];
@@ -3714,11 +3701,10 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 			else if (skb)
 				dev_kfree_skb(skb);
 #else
-		if ((__this_cpu_read(reserved_skb) == NULL)
-			|| unlikely(!(bdp->status & RXBD_LAST)
-			|| bdp->status & RXBD_ERR)) {
-				count_errors(bdp->status, dev);
-				newskb = skb;
+		if (unlikely(!(bdp->status & RXBD_LAST) ||
+				bdp->status & RXBD_ERR)) {
+			count_errors(bdp->status, dev);
+			newskb = skb;
 #endif
 		} else {
 			/* Increment the number of packets */
@@ -3732,14 +3718,14 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 				rx_queue->stats.rx_bytes += pkt_len;
 				skb_record_rx_queue(skb, rx_queue->qindex);
 #ifdef CONFIG_RX_TX_BUFF_XCHG
-				__this_cpu_write(curr_skb, skb);
+				skb->owner = RT_PKT_ID;
 #endif
 				gfar_process_frame(dev, skb, amount_pull,
 						   &rx_queue->napi_rx->napi);
 #ifdef CONFIG_RX_TX_BUFF_XCHG
-				newskb =  __this_cpu_read(recycled_skb);
-				__this_cpu_write(curr_skb, NULL);
-				__this_cpu_write(recycled_skb, NULL);
+				newskb = skb->new_skb;
+				skb->owner = 0;
+				skb->new_skb = NULL;
 #endif
 
 			} else {
@@ -3753,9 +3739,11 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 #ifdef CONFIG_RX_TX_BUFF_XCHG
 		if (!newskb) {
 			/* Allocate new skb for Rx ring */
-			newskb = __this_cpu_read(reserved_skb);
-			__this_cpu_write(reserved_skb, NULL);
+			newskb = gfar_new_skb(priv);
 		}
+		if (!newskb)
+			/* All memory Exhausted,a BUG */
+			BUG();
 #endif
 		rx_queue->rx_skbuff[rx_queue->skb_currx] = newskb;
 
