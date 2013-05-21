@@ -377,6 +377,7 @@ int caam_qi_shutdown(struct device *qidev)
 	int i, ret;
 
 	const cpumask_t *cpus = qman_affine_cpus();
+	struct cpumask old_cpumask = *tsk_cpus_allowed(current);
 
 	for_each_cpu(i, cpus) {
 		napi_disable(&per_cpu(pcpu_qipriv.irqtask, i));
@@ -403,6 +404,9 @@ int caam_qi_shutdown(struct device *qidev)
 		dev_err(qidev, "Delete response CGR failed: %d\n", ret);
 	else
 		qman_release_cgrid(priv->rsp_cgr.cgrid);
+
+	/* Now that we're done with the CGRs, restore the cpus allowed mask */
+	set_cpus_allowed_ptr(current, &old_cpumask);
 
 	platform_device_unregister(priv->qi_pdev);
 	return ret;
@@ -628,6 +632,7 @@ int caam_qi_init(struct platform_device *caam_pdev, struct device_node *np)
 	struct caam_drv_private *ctrlpriv;
 	int err, i;
 	const cpumask_t *cpus = qman_affine_cpus();
+	struct cpumask old_cpumask = *tsk_cpus_allowed(current);
 
 	/*
 	 * QMAN requires that CGR must be removed from same CPU+portal from
@@ -694,6 +699,9 @@ int caam_qi_init(struct platform_device *caam_pdev, struct device_node *np)
 
 	/* Hook up QI device to parent controlling caam device */
 	ctrlpriv->qidev = qidev;
+
+	/* Done with the CGRs; restore the cpus allowed mask */
+	set_cpus_allowed_ptr(current, &old_cpumask);
 
 	dev_info(qidev, "Linux CAAM Queue I/F driver initialised\n");
 
