@@ -889,6 +889,7 @@ resume_kernel:
 #ifdef CONFIG_PREEMPT
 	/* check current_thread_info->preempt_count */
 	lwz	r0,TI_PREEMPT(r9)
+	lwz	r8,TI_FLAGS(r9)
 	cmpwi	0,r0,0		/* if non-zero, just restore regs and return */
 	bne	restore
 	andi.	r8,r8,_TIF_NEED_RESCHED
