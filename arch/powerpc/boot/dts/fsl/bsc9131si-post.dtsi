@@ -156,19 +156,12 @@ crypto@30000 {
 };
 
 /include/ "pq3-mpic.dtsi"
-
-timer@41100 {
-	compatible = "fsl,mpic-v1.2-msgr", "fsl,mpic-msg";
-	reg = <0x41400 0x200>;
-	interrupts = <
-		0xb0 2
-		0xb1 2
-		0xb2 2
-		0xb3 2>;
-};
+/include/ "pq3-mpic-timer-B.dtsi"
 
 /include/ "pq3-etsec2-0.dtsi"
 enet0: ethernet@b0000 {
+	fsl,pmc-handle = <&etsec1_clk>;
+
 	queue-group@b0000 {
 		fsl,rx-bit-map = <0xff>;
 		fsl,tx-bit-map = <0xff>;
@@ -178,6 +171,8 @@ enet0: ethernet@b0000 {
 
 /include/ "pq3-etsec2-1.dtsi"
 enet1: ethernet@b1000 {
+	fsl,pmc-handle = <&etsec2_clk>;
+
 	queue-group@b1000 {
 		fsl,rx-bit-map = <0xff>;
 		fsl,tx-bit-map = <0xff>;
@@ -190,4 +185,6 @@ global-utilities@e0000 {
 		reg = <0xe0000 0x1000>;
 		fsl,has-rstcr;
 	};
+
+/include/ "pq3-power.dtsi"
 };
