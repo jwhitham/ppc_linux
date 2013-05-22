@@ -41,9 +41,6 @@
 
 enum {DTSEC, XGMAC, MEMAC};
 
-struct fm_mac_dev;
-struct fm;
-
 struct mac_device {
 	struct device		*dev;
 	void			*priv;
@@ -118,10 +115,5 @@ static inline __attribute((nonnull)) void *macdev_priv(
 extern const char	*mac_driver_description;
 extern const size_t	 mac_sizeof_priv[];
 extern void (*const mac_setup[])(struct mac_device *mac_dev);
-
-#define TX_PAUSE_PRIO_DEFAULT 0xff
-#define TX_PAUSE_TIME_ENABLE 0xf000
-#define TX_PAUSE_TIME_DISABLE 0
-#define TX_PAUSE_THRESH_DEFAULT 0
 
 #endif	/* __MAC_H */

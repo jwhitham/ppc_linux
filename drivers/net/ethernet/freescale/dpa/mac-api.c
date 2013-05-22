@@ -43,10 +43,9 @@
 #include "dpaa_eth-common.h"
 #include "dpaa_eth.h"
 #include "mac.h"
+#include "lnxwrp_fsl_fman.h"
 
 #include "error_ext.h"	/* GET_ERROR_TYPE, E_OK */
-#include "fm_mac_ext.h"
-#include "fm_rtc_ext.h"
 
 #define MAC_DESCRIPTION "FSL FMan MAC API based driver"
 
@@ -100,21 +99,6 @@ macdev2enetinterface(const struct mac_device *mac_dev)
 	}
 }
 
-static int fm_mac_set_exception(struct fm_mac_dev *fm_mac_dev,
-		e_FmMacExceptions exception, bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_SetException(fm_mac_dev, exception, enable);
-
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_SetException() = 0x%08x\n", err);
-
-	return _errno;
-}
-
 static void mac_exception(t_Handle _mac_dev, e_FmMacExceptions exception)
 {
 	struct mac_device	*mac_dev;
@@ -130,110 +114,6 @@ static void mac_exception(t_Handle _mac_dev, e_FmMacExceptions exception)
 
 	dev_dbg(mac_dev->dev, "%s:%s() -> %d\n", KBUILD_BASENAME".c", __func__,
 		exception);
-}
-
-static int fm_mac_free(struct fm_mac_dev *fm_mac_dev)
-{
-	int err;
-	int _error;
-
-	err = FM_MAC_Free(fm_mac_dev);
-	_error = -GET_ERROR_TYPE(err);
-
-	if (unlikely(_error < 0))
-		pr_err("FM_MAC_Free() = 0x%08x\n", err);
-
-	return _error;
-}
-
-struct fm_mac_dev *fm_mac_config(t_FmMacParams *params)
-{
-	struct fm_mac_dev *fm_mac_dev;
-
-	fm_mac_dev = FM_MAC_Config(params);
-	if (unlikely(fm_mac_dev == NULL))
-		pr_err("FM_MAC_Config() failed\n");
-
-	return fm_mac_dev;
-}
-
-int fm_mac_config_max_frame_length(struct fm_mac_dev *fm_mac_dev,
-		int len)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_ConfigMaxFrameLength(fm_mac_dev, len);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_ConfigMaxFrameLength() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-int fm_mac_config_pad_and_crc(struct fm_mac_dev *fm_mac_dev, bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_ConfigPadAndCrc(fm_mac_dev, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_ConfigPadAndCrc() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-int fm_mac_config_half_duplex(struct fm_mac_dev *fm_mac_dev, bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_ConfigHalfDuplex(fm_mac_dev, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_ConfigHalfDuplex() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-int fm_mac_config_reset_on_init(struct fm_mac_dev *fm_mac_dev, bool enable)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_ConfigResetOnInit(fm_mac_dev, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_ConfigResetOnInit() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-int fm_mac_init(struct fm_mac_dev *fm_mac_dev)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_Init(fm_mac_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_Init() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-int fm_mac_get_version(struct fm_mac_dev *fm_mac_dev, uint32_t *version)
-{
-	int err;
-	int _errno;
-
-	err = FM_MAC_GetVesrion(fm_mac_dev, version);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_GetVesrion() = 0x%08x\n", err);
-
-	return _errno;
 }
 
 static int __cold init(struct mac_device *mac_dev)
@@ -377,32 +257,6 @@ _return:
 	return _errno;
 }
 
-static int __cold fm_mac_enable(struct fm_mac_dev *fm_mac_dev)
-{
-	int	 _errno;
-	t_Error	 err;
-
-	err = FM_MAC_Enable(fm_mac_dev, e_COMM_MODE_RX_AND_TX);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_Enable() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_mac_disable(struct fm_mac_dev *fm_mac_dev)
-{
-	int	 _errno;
-	t_Error	 err;
-
-	err = FM_MAC_Disable(fm_mac_dev, e_COMM_MODE_RX_AND_TX);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_Disable() = 0x%08x\n", err);
-
-	return _errno;
-}
-
 static int __cold start(struct mac_device *mac_dev)
 {
 	int	 _errno;
@@ -427,52 +281,6 @@ static int __cold stop(struct mac_device *mac_dev)
 		phy_stop(mac_dev->phy_dev);
 
 	return fm_mac_disable(mac_dev->get_mac_handle(mac_dev));
-}
-
-static int __cold fm_mac_set_promiscuous(struct fm_mac_dev *fm_mac_dev,
-		bool enable)
-{
-	int	_errno;
-	t_Error	err;
-
-	err = FM_MAC_SetPromiscuous(fm_mac_dev, enable);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_SetPromiscuous() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_mac_remove_hash_mac_addr(struct fm_mac_dev *fm_mac_dev,
-		t_EnetAddr *mac_addr)
-{
-	int	_errno;
-	t_Error	err;
-
-	err = FM_MAC_RemoveHashMacAddr(fm_mac_dev, mac_addr);
-	_errno = -GET_ERROR_TYPE(err);
-	if (_errno < 0) {
-		pr_err("FM_MAC_RemoveHashMacAddr() = 0x%08x\n", err);
-		return _errno;
-	}
-
-	return 0;
-}
-
-static int __cold fm_mac_add_hash_mac_addr(struct fm_mac_dev *fm_mac_dev,
-		t_EnetAddr *mac_addr)
-{
-	int	_errno;
-	t_Error	err;
-
-	err = FM_MAC_AddHashMacAddr(fm_mac_dev, mac_addr);
-	_errno = -GET_ERROR_TYPE(err);
-	if (_errno < 0) {
-		pr_err("FM_MAC_AddHashMacAddr() = 0x%08x\n", err);
-		return _errno;
-	}
-
-	return 0;
 }
 
 static int __cold set_multi(struct net_device *net_dev)
@@ -515,41 +323,6 @@ static int __cold set_multi(struct net_device *net_dev)
 		list_add(&tmp->list, &mac_dev->mc_addr_list);
 	}
 	return 0;
-}
-
-static int __cold fm_mac_modify_mac_addr(struct fm_mac_dev *fm_mac_dev,
-					 uint8_t *addr)
-{
-	int	_errno;
-	t_Error err;
-
-	err = FM_MAC_ModifyMacAddr(fm_mac_dev, (t_EnetAddr *)addr);
-	_errno = -GET_ERROR_TYPE(err);
-	if (_errno < 0)
-		pr_err("FM_MAC_ModifyMacAddr() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int fm_mac_adjust_link(struct fm_mac_dev *fm_mac_dev,
-		bool link, int speed, bool duplex)
-{
-	int	 _errno;
-	t_Error	 err;
-
-	if (!link) {
-#if (DPAA_VERSION < 11)
-		FM_MAC_RestartAutoneg(fm_mac_dev);
-#endif
-		return 0;
-	}
-
-	err = FM_MAC_AdjustLink(fm_mac_dev, speed, duplex);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_AdjustLink() = 0x%08x\n", err);
-
-	return _errno;
 }
 
 static void adjust_link(struct net_device *net_dev)
@@ -686,192 +459,6 @@ static struct fm_mac_dev *get_mac_handle(struct mac_device *mac_dev)
 	const struct mac_priv_s	*priv;
 	priv = macdev_priv(mac_dev);
 	return priv->fm_mac;
-}
-
-static int __cold fm_mac_enable_1588_time_stamp(struct fm_mac_dev *fm_mac_dev)
-{
-	int			 _errno;
-	t_Error			 err;
-
-	err = FM_MAC_Enable1588TimeStamp(fm_mac_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_Enable1588TimeStamp() = 0x%08x\n", err);
-	return _errno;
-}
-
-static int __cold fm_mac_disable_1588_time_stamp(struct fm_mac_dev *fm_mac_dev)
-{
-	int			 _errno;
-	t_Error			 err;
-
-	err = FM_MAC_Disable1588TimeStamp(fm_mac_dev);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_MAC_Disable1588TimeStamp() = 0x%08x\n", err);
-	return _errno;
-}
-
-static int __cold fm_mac_set_rx_ignore_pause_frames(
-		struct fm_mac_dev *fm_mac_dev, bool en)
-{
-	int	_errno;
-	t_Error err;
-
-	/* if rx pause is enabled, do NOT ignore pause frames */
-	err = FM_MAC_SetRxIgnorePauseFrames(fm_mac_dev, !en);
-
-	_errno = -GET_ERROR_TYPE(err);
-	if (_errno < 0)
-		pr_err("FM_MAC_SetRxIgnorePauseFrames() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_mac_set_tx_pause_frames(struct fm_mac_dev *fm_mac_dev,
-					     bool en)
-{
-	int	_errno;
-	t_Error err;
-
-	if (en)
-		err = FM_MAC_SetTxPauseFrames(fm_mac_dev,
-				TX_PAUSE_PRIO_DEFAULT,
-				TX_PAUSE_TIME_ENABLE,
-				TX_PAUSE_THRESH_DEFAULT);
-	else
-		err = FM_MAC_SetTxPauseFrames(fm_mac_dev,
-				TX_PAUSE_PRIO_DEFAULT,
-				TX_PAUSE_TIME_DISABLE,
-				TX_PAUSE_THRESH_DEFAULT);
-
-	_errno = -GET_ERROR_TYPE(err);
-	if (_errno < 0)
-		pr_err("FM_MAC_SetTxPauseFrames() = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_enable(struct fm *fm_dev)
-{
-	int			 _errno;
-	t_Error			 err;
-
-	err = FM_RTC_Enable(fm_get_rtc_handle(fm_dev), 0);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_Enable = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_disable(struct fm *fm_dev)
-{
-	int			 _errno;
-	t_Error			 err;
-
-	err = FM_RTC_Disable(fm_get_rtc_handle(fm_dev));
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_Disable = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_get_cnt(struct fm *fm_dev, uint64_t *ts)
-{
-	int _errno;
-	t_Error	err;
-
-	err = FM_RTC_GetCurrentTime(fm_get_rtc_handle(fm_dev), ts);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_GetCurrentTime = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_set_cnt(struct fm *fm_dev, uint64_t ts)
-{
-	int _errno;
-	t_Error	err;
-
-	err = FM_RTC_SetCurrentTime(fm_get_rtc_handle(fm_dev), ts);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_SetCurrentTime = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_get_drift(struct fm *fm_dev, uint32_t *drift)
-{
-	int _errno;
-	t_Error	err;
-
-	err = FM_RTC_GetFreqCompensation(fm_get_rtc_handle(fm_dev),
-			drift);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_GetFreqCompensation = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_set_drift(struct fm *fm_dev, uint32_t drift)
-{
-	int _errno;
-	t_Error	err;
-
-	err = FM_RTC_SetFreqCompensation(fm_get_rtc_handle(fm_dev),
-			drift);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_SetFreqCompensation = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_set_alarm(struct fm *fm_dev, uint32_t id,
-		uint64_t time)
-{
-	t_FmRtcAlarmParams alarm;
-	int _errno;
-	t_Error	err;
-
-	alarm.alarmId = id;
-	alarm.alarmTime = time;
-	alarm.f_AlarmCallback = NULL;
-	err = FM_RTC_SetAlarm(fm_get_rtc_handle(fm_dev),
-			&alarm);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_SetAlarm = 0x%08x\n", err);
-
-	return _errno;
-}
-
-static int __cold fm_rtc_set_fiper(struct fm *fm_dev, uint32_t id,
-		uint64_t fiper)
-{
-	t_FmRtcPeriodicPulseParams pp;
-	int _errno;
-	t_Error	err;
-
-	pp.periodicPulseId = id;
-	pp.periodicPulsePeriod = fiper;
-	pp.f_PeriodicPulseCallback = NULL;
-	err = FM_RTC_SetPeriodicPulse(fm_get_rtc_handle(fm_dev), &pp);
-	_errno = -GET_ERROR_TYPE(err);
-	if (unlikely(_errno < 0))
-		pr_err("FM_RTC_SetPeriodicPulse = 0x%08x\n", err);
-
-	return _errno;
-}
-
-void fm_mac_dump_regs(struct fm_mac_dev *fm_mac_dev)
-{
-	FM_MAC_DumpRegs(fm_mac_dev);
 }
 
 static void __cold setup_dtsec(struct mac_device *mac_dev)

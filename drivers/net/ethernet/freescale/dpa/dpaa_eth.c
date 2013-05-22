@@ -1106,8 +1106,8 @@ u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
 {
 	u64 *ts, ns;
 
-	ts = FM_PORT_GetBufferTimeStamp(
-		fm_port_get_handle(priv->mac_dev->port_dev[rx_tx]), data);
+	ts = fm_port_get_buffer_time_stamp(priv->mac_dev->port_dev[rx_tx],
+					   data);
 
 	if (!ts || *ts == 0)
 		return 0;
