@@ -122,18 +122,6 @@
 			fsl,qman-frame-queues-rx = <0x5a 1 0x5b 1>;
 			fsl,qman-frame-queues-tx = <0x7a 1 0x7b 1>;
 		};
-		ethernet@8 {
-			compatible = "fsl,b4860-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x5c 1 0x5d 1>;
-			fsl,qman-frame-queues-tx = <0x7c 1 0x7d 1>;
-		};
-		ethernet@9 {
-			compatible = "fsl,b4860-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
-			fsl,qman-frame-queues-rx = <0x5e 1 0x5f 1>;
-			fsl,qman-frame-queues-tx = <0x7e 1 0x7f 1>;
-		};
 
                 /* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
                  * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
