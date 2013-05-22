@@ -198,7 +198,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 	if (fd->format == qm_fd_sg) {
 		/*
-		 * The sgt page is guaranteed to reside in lowmem.
+		 * The sgt buffer has been allocated with netdev_alloc_frag(),
+		 * it's from lowmem.
 		 */
 		sgt = phys_to_virt(addr + dpa_fd_offset(fd));
 #ifdef CONFIG_FSL_DPAA_1588
@@ -234,8 +235,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		 * and we know they're not used by anyone else
 		 */
 
-		/* Free separately the pages that we allocated on Tx */
-		free_page((unsigned long)phys_to_virt(addr));
+		/* Free the page frag that we allocated on Tx */
+		put_page(virt_to_head_page(sgt));
 	}
 #if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
 	else {
@@ -539,18 +540,20 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	int err;
 
 	struct qm_sg_entry *sgt;
-	unsigned long sgt_page;
+	void *sgt_buf;
 	void *buffer_start;
 	skb_frag_t *frag;
 	int i, j;
 	const enum dma_data_direction dma_dir = DMA_TO_DEVICE;
+	const int nr_frags = skb_shinfo(skb)->nr_frags;
 
 	fd->format = qm_fd_sg;
 
-	/* get a new page to store the SGTable */
-	sgt_page = __get_free_page(GFP_ATOMIC);
-	if (unlikely(!sgt_page)) {
-		dev_err(dpa_bp->dev, "__get_free_page() failed\n");
+	/* get a page frag to store the SGTable */
+	sgt_buf = netdev_alloc_frag(priv->tx_headroom +
+		sizeof(struct qm_sg_entry) * (1 + nr_frags));
+	if (unlikely(!sgt_buf)) {
+		dev_err(dpa_bp->dev, "netdev_alloc_frag() failed\n");
 		return -ENOMEM;
 	}
 
@@ -561,14 +564,14 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	 * need to write into the skb.
 	 */
 	err = dpa_enable_tx_csum(priv, skb, fd,
-				 (void *)sgt_page + DPA_TX_PRIV_DATA_SIZE);
+				 sgt_buf + DPA_TX_PRIV_DATA_SIZE);
 	if (unlikely(err < 0)) {
 		if (netif_msg_tx_err(priv) && net_ratelimit())
 			netdev_err(net_dev, "HW csum error: %d\n", err);
 		goto csum_failed;
 	}
 
-	sgt = (struct qm_sg_entry *)(sgt_page + priv->tx_headroom);
+	sgt = (struct qm_sg_entry *)(sgt_buf + priv->tx_headroom);
 	sgt[0].bpid = dpa_bp->bpid;
 	sgt[0].offset = 0;
 	sgt[0].length = skb_headlen(skb);
@@ -585,7 +588,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	sgt[0].addr_lo = lower_32_bits(addr);
 
 	/* populate the rest of SGT entries */
-	for (i = 1; i <= skb_shinfo(skb)->nr_frags; i++) {
+	for (i = 1; i <= nr_frags; i++) {
 		frag = &skb_shinfo(skb)->frags[i - 1];
 		sgt[i].bpid = dpa_bp->bpid;
 		sgt[i].offset = 0;
@@ -637,7 +640,7 @@ sg_map_failed:
 			dpa_bp->size, dma_dir);
 sg0_map_failed:
 csum_failed:
-	free_page(sgt_page);
+	put_page(virt_to_head_page(sgt_buf));
 
 	return err;
 }
