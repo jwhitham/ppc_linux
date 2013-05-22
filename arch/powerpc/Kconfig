@@ -723,6 +723,14 @@ config FSL_GTM
 	help
 	  Freescale General-purpose Timers support
 
+config FSL_FMAN_CPC_STASH
+	bool "Enable stashing of FMAN write transactions for ethernet ports"
+	depends on FSL_PAMU
+	default n
+	help
+	  Select this option to enable stashing of incoming ethernet frames
+	  from FMAN ports into platform cache.
+
 config HAS_FSL_QBMAN
         bool "Datapath Acceleration Queue and Buffer management"
         help

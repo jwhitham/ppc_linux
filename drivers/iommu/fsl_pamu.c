@@ -603,17 +603,22 @@ found_cpu_node:
 	return ~(u32)0;
 }
 
-/* Identify if the PAACT table entry belongs to QMAN, BMAN or QMAN Portal */
+/*
+ * Identify if the PAACT table entry belongs to QMAN, BMAN or QMAN Portal or
+ * FMAN ports
+ */
 #define QMAN_PAACE 1
 #define QMAN_PORTAL_PAACE 2
 #define BMAN_PAACE 3
+#define FMAN_PAACE 4
 
 /**
  * Setup operation mapping and stash destinations for QMAN and QMAN portal.
+ * Also set operation mapping and stash destinations for FMAN ports.
  * Memory accesses to QMAN and BMAN private memory need not be coherent, so
  * clear the PAACE entry coherency attribute for them.
  */
-static void setup_qbman_paace(struct paace *ppaace, int  paace_type)
+static void setup_dpaa_paace(struct paace *ppaace, int  paace_type)
 {
 	switch (paace_type) {
 	case QMAN_PAACE:
@@ -633,6 +638,13 @@ static void setup_qbman_paace(struct paace *ppaace, int  paace_type)
 	case BMAN_PAACE:
 		set_bf(ppaace->domain_attr.to_host.coherency_required, PAACE_DA_HOST_CR,
 		       0);
+		break;
+	case FMAN_PAACE:
+		set_bf(ppaace->impl_attr, PAACE_IA_OTM, PAACE_OTM_INDEXED);
+		ppaace->op_encode.index_ot.omi = OMI_FMAN;
+		/*Set frame stashing for the L3 cache */
+		set_bf(ppaace->impl_attr, PAACE_IA_CID,
+		       get_stash_id(IOMMU_ATTR_CACHE_L3, 0));
 		break;
 	}
 }
@@ -661,7 +673,11 @@ static void __init setup_omt(struct ome *omt)
 	/* Configure OMI_FMAN */
 	ome = &omt[OMI_FMAN];
 	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_READI;
+#ifdef CONFIG_FSL_FMAN_CPC_STASH
+	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
+#else
 	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WRITE;
+#endif
 
 	/* Configure OMI_QMAN private */
 	ome = &omt[OMI_QMAN_PRIV];
@@ -762,11 +778,16 @@ static void __init setup_liodns(void)
 			set_bf(ppaace->addr_bitfields, PAACE_AF_AP,
 				PAACE_AP_PERMS_ALL);
 			if (of_device_is_compatible(node, "fsl,qman-portal"))
-				setup_qbman_paace(ppaace, QMAN_PORTAL_PAACE);
+				setup_dpaa_paace(ppaace, QMAN_PORTAL_PAACE);
 			if (of_device_is_compatible(node, "fsl,qman"))
-				setup_qbman_paace(ppaace, QMAN_PAACE);
+				setup_dpaa_paace(ppaace, QMAN_PAACE);
 			if (of_device_is_compatible(node, "fsl,bman"))
-				setup_qbman_paace(ppaace, BMAN_PAACE);
+				setup_dpaa_paace(ppaace, BMAN_PAACE);
+#ifdef CONFIG_FSL_FMAN_CPC_STASH
+			if (of_device_is_compatible(node, "fsl,fman-port-10g-rx") ||
+			    of_device_is_compatible(node, "fsl,fman-port-1g-rx"))
+				setup_dpaa_paace(ppaace, FMAN_PAACE);
+#endif
 			mb();
 			pamu_enable_liodn(liodn);
 		}
