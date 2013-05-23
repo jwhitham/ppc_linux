@@ -485,7 +485,8 @@ static int query_cgr_show(struct seq_file *file, void *offset)
 	int i, j;
 	u32 mask;
 
-	memset(&cgr, 0, sizeof(struct qm_mcr_querycgr));
+	memset(&cgr, 0, sizeof(cgr));
+	memset(&cgrd, 0, sizeof(cgrd));
 	cgr.cgrid = query_cgr_data.cgid;
 	ret = qman_query_cgr(&cgr, &cgrd);
 	if (ret)
