@@ -42,7 +42,7 @@
 
 /* controller at 0xa000 */
 &pci0 {
-	compatible = "fsl,bsc9132-pcie", "fsl,qoriq-pcie-v2.2";
+	compatible = "fsl,bsc9132-pcie", "fsl,qoriq-pcie-v2.2", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;

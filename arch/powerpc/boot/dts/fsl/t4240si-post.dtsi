@@ -41,7 +41,7 @@
 
 /* controller at 0x240000 */
 &pci0 {
-	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0";
+	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;
@@ -67,7 +67,7 @@
 
 /* controller at 0x250000 */
 &pci1 {
-	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0";
+	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;
@@ -93,7 +93,7 @@
 
 /* controller at 0x260000 */
 &pci2 {
-	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0";
+	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;
@@ -119,7 +119,7 @@
 
 /* controller at 0x270000 */
 &pci3 {
-	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0";
+	compatible = "fsl,t4240-pcie", "fsl,qoriq-pcie-v3.0", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;

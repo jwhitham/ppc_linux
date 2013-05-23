@@ -371,7 +371,7 @@
 };
 /* controller at 0x200000 */
 &pci0 {
-	compatible = "fsl,b4860-pcie", "fsl,qoriq-pcie-v2.4";
+	compatible = "fsl,b4860-pcie", "fsl,qoriq-pcie-v2.4", "fsl,qoriq-pcie";
 };
 
 &rio {

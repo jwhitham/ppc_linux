@@ -41,7 +41,7 @@
 
 /* controller at 0x200000 */
 &pci0 {
-	compatible = "fsl,b4-pcie", "fsl,qoriq-pcie-v2.4";
+	compatible = "fsl,b4-pcie", "fsl,qoriq-pcie-v2.4", "fsl,qoriq-pcie";
 	device_type = "pci";
 	#size-cells = <2>;
 	#address-cells = <3>;
