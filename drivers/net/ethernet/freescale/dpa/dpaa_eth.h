@@ -332,22 +332,27 @@ struct dpa_percpu_priv_s {
 };
 
 struct dpa_priv_s {
+	struct dpa_percpu_priv_s	*percpu_priv;
 	struct dpa_bp *dpa_bp;
-	size_t bp_count;
+	/*
+	 * Store here the needed Tx headroom for convenience and speed
+	 * (even though it can be computed based on the fields of buf_layout)
+	 */
+	uint16_t tx_headroom;
 	int shared;
 	struct net_device *net_dev;
+	struct mac_device	*mac_dev;
+	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
+	struct qman_fq		*conf_fqs[DPAA_ETH_TX_QUEUES];
+
+	size_t bp_count;
 
 	uint16_t		 channel;	/* "fsl,qman-channel-id" */
 	struct list_head	 dpa_fq_list;
-	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
-	struct qman_fq		*conf_fqs[DPAA_ETH_TX_QUEUES];
 #ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	struct qman_fq		*recycle_fqs[DPAA_ETH_TX_QUEUES];
 #endif
 
-	struct mac_device	*mac_dev;
-
-	struct dpa_percpu_priv_s	*percpu_priv;
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	struct dentry		*debugfs_file;
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
@@ -385,11 +390,6 @@ struct dpa_priv_s {
 	bool ts_rx_en; /* Rx timestamping enabled */
 #endif /* CONFIG_FSL_DPAA_TS */
 
-	/*
-	 * Store here the needed Tx headroom for convenience and speed
-	 * (even though it can be computed based on the fields of buf_layout)
-	 */
-	uint16_t tx_headroom;
 	struct dpa_buffer_layout_s *buf_layout;
 };
 
