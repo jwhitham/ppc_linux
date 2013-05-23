@@ -529,10 +529,10 @@ static int memac_init_phy(struct net_device *net_dev)
 	mac_dev = priv->mac_dev;
 
 	if (macdev2enetinterface(mac_dev) == e_ENET_MODE_XGMII_10000) {
-		if (!mac_dev->phy_node)
-			phy_dev = phy_attach(net_dev, mac_dev->fixed_bus_id, 0,
-				mac_dev->phy_if);
-		else
+		if (!mac_dev->phy_node) {
+			mac_dev->phy_dev = NULL;
+			return 0;
+		} else
 			phy_dev = of_phy_attach(net_dev, mac_dev->phy_node, 0,
 				mac_dev->phy_if);
 	} else {
