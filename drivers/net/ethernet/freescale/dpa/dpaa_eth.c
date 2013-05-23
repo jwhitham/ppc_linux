@@ -386,8 +386,7 @@ static void dpaa_eth_seed_pool(struct dpa_bp *bp)
  * Add buffers/pages/skbuffs for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-static void dpaa_eth_refill_bpools(struct dpa_priv_s *priv,
-				   struct dpa_percpu_priv_s *percpu_priv)
+static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
@@ -859,12 +858,9 @@ dpa_fd_release_sg(const struct net_device *net_dev,
 void __attribute__((nonnull))
 dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 {
-	const struct dpa_priv_s		*priv;
 	struct qm_sg_entry		*sgt;
 	struct dpa_bp			*_dpa_bp, *dpa_bp;
 	struct bm_buffer		 _bmb, bmb[8];
-
-	priv = netdev_priv(net_dev);
 
 	_bmb.hi	= fd->addr_hi;
 	_bmb.lo	= fd->addr_lo;
@@ -2188,7 +2184,7 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 		return qman_cb_dqrr_stop;
 	}
 
-	dpaa_eth_refill_bpools(priv, percpu_priv);
+	dpaa_eth_refill_bpools(percpu_priv);
 	_dpa_rx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
@@ -2352,7 +2348,7 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	}
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
-	dpaa_eth_refill_bpools(priv, percpu_priv);
+	dpaa_eth_refill_bpools(percpu_priv);
 	_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
