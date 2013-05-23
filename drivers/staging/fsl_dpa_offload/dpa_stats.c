@@ -46,6 +46,7 @@
 #include "fm_pcd_ext.h"
 
 #define STATS_VAL_SIZE 4
+#define UNSUPPORTED_CNT_SEL -1
 #define CLASSIF_STATS_SHIFT 4
 #define WORKQUEUE_MAX_ACTIVE 3
 
@@ -738,7 +739,7 @@ static void create_cnt_reass_stats(struct dpa_stats *dpa_stats)
 			struct t_FmPcdManipReassemIpStats,
 			nonConsistentSp);
 #else
-	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][6] = 0;
+	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][6] = UNSUPPORTED_CNT_SEL;
 #endif /* (DPAA_VERSION >= 11) */
 	/* DPA_STATS_CNT_REASS_IPv4_FRAMES */
 	dpa_stats->stats_sel[DPA_STATS_CNT_REASS][8] = offsetof(
@@ -879,6 +880,37 @@ static void create_classif_stats(struct dpa_stats *dpa_stats)
 	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][11] = offsetof(
 			struct t_FmPcdCcKeyStatistics,
 			frameLengthRangeCount[9]);
+#else
+	/* DPA_STATS_CNT_CLASSIF_RANGE1 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][2] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE2 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][3] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE3 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][4] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE4 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][5] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE5 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][6] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE6 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][7] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE7 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][8] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE8 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][9] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE9 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][10] =
+			UNSUPPORTED_CNT_SEL;
+	/* DPA_STATS_CNT_CLASSIF_RANGE10 */
+	dpa_stats->stats_sel[DPA_STATS_CNT_CLASSIF_NODE][11] =
+			UNSUPPORTED_CNT_SEL;
 #endif
 }
 
@@ -2068,12 +2100,12 @@ static inline void get_cnt_32bit_stats(struct dpa_stats_req_cb *req_cb,
 
 	for (j = 0; j < stats_info->stats_num; j++) {
 
-		if (!stats_info->stats_off[j]) {
+		if (stats_info->stats_off[j] == UNSUPPORTED_CNT_SEL) {
 			/* Write the memory location */
 			memset(req_cb->request_area, 0, STATS_VAL_SIZE);
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE ;
+			req_cb->request_area += STATS_VAL_SIZE;
 			continue;
 		}
 
