@@ -275,7 +275,10 @@ copy_to_unmapped_area(dma_addr_t phys_start, void *src, size_t buf_size)
 }
 
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-static void dpa_bp_add_8(const struct dpa_bp *dpa_bp)
+/* Allocate 8 socket buffers.
+ * These buffers are counted for a particular CPU.
+ */
+static void dpa_bp_add_8(const struct dpa_bp *dpa_bp, unsigned int cpu)
 {
 	struct bm_buffer bmb[8];
 	struct sk_buff **skbh;
@@ -284,7 +287,7 @@ static void dpa_bp_add_8(const struct dpa_bp *dpa_bp)
 	struct sk_buff *skb;
 	int *count_ptr;
 
-	count_ptr = per_cpu_ptr(dpa_bp->percpu_count, smp_processor_id());
+	count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu);
 
 	for (i = 0; i < 8; i++) {
 		/*
@@ -349,21 +352,10 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 
 	/* Give each cpu an allotment of "count" buffers */
 	for_each_online_cpu(i) {
-		int *thiscount;
-		int *countptr;
 		int j;
-		thiscount = per_cpu_ptr(dpa_bp->percpu_count,
-				smp_processor_id());
-		countptr = per_cpu_ptr(dpa_bp->percpu_count, i);
 
 		for (j = 0; j < dpa_bp->target_count; j += 8)
-			dpa_bp_add_8(dpa_bp);
-
-		/* Adjust the counts */
-		*countptr = j;
-
-		if (countptr != thiscount)
-			*thiscount = *thiscount - j;
+			dpa_bp_add_8(dpa_bp, i);
 	}
 }
 #endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
@@ -400,13 +392,17 @@ static void dpaa_eth_refill_bpools(struct dpa_priv_s *priv,
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
-
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+	/* this function is called in softirq context;
+	 * no need to protect smp_processor_id() on RT kernel
+	 */
+	unsigned int cpu = smp_processor_id();
+
 	if (unlikely(count < CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD)) {
 		int i;
 
 		for (i = count; i < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT; i += 8)
-			dpa_bp_add_8(dpa_bp);
+			dpa_bp_add_8(dpa_bp, cpu);
 	}
 #else
 	/* Add pages to the buffer pool */
