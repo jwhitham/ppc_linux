@@ -99,7 +99,7 @@ struct ioc_compat_sa_out_params {
 
 struct ioc_compat_sa_in_params {
 	enum dpa_ipsec_arw arw;
-	int use_var_iphdr_len;
+	bool use_var_iphdr_len;
 	struct dpa_offload_ip_address src_addr;
 	struct dpa_offload_ip_address dest_addr;
 	bool use_udp_encap;
