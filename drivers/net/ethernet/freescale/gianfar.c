@@ -379,6 +379,19 @@ static void gfar_init_tx_rx_base(struct gfar_private *priv)
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
 	u32 __iomem *baddr;
 	int i;
+	dma_addr_t addr;
+
+	/* eTSEC supports 36-bit physical addressing.
+	 * Should the BD rings be located at adresses above 4GB,
+	 * initialize tbaseh/rbaseh with the upper 32 bits. This
+	 * may happen when the BD rings are allocated in SRAM.
+	 */
+	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_36BIT_ADDR) {
+		addr = priv->tx_queue[0]->tx_bd_dma_base;
+		gfar_write(&regs->tbaseh, upper_32_bits(addr) & 0xf);
+		addr = priv->rx_queue[0]->rx_bd_dma_base;
+		gfar_write(&regs->rbaseh, upper_32_bits(addr) & 0xf);
+	}
 
 	baddr = &regs->tbase0;
 	for (i = 0; i < priv->num_tx_queues; i++) {
@@ -886,7 +899,8 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 				     FSL_GIANFAR_DEV_HAS_CSUM |
 				     FSL_GIANFAR_DEV_HAS_VLAN |
 				     FSL_GIANFAR_DEV_HAS_MAGIC_PACKET |
-				     FSL_GIANFAR_DEV_HAS_EXTENDED_HASH;
+				     FSL_GIANFAR_DEV_HAS_EXTENDED_HASH |
+				     FSL_GIANFAR_DEV_HAS_36BIT_ADDR;
 
 	ctype = of_get_property(np, "phy-connection-type", NULL);
 
