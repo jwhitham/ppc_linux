@@ -189,12 +189,14 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	struct sk_buff **skbh;
 	struct sk_buff *skb = NULL;
 	const enum dma_data_direction dma_dir = DMA_TO_DEVICE;
+	int nr_frags;
 
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, dma_dir);
 
 	/* retrieve skb back pointer */
 	skbh = (struct sk_buff **)phys_to_virt(addr);
 	skb = *skbh;
+	nr_frags = skb_shinfo(skb)->nr_frags;
 
 	if (fd->format == qm_fd_sg) {
 		/*
@@ -222,7 +224,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				sgt[0].length, dma_dir);
 
 		/* remaining pages were mapped with dma_map_page() */
-		for (i = 1; i < skb_shinfo(skb)->nr_frags; i++) {
+		for (i = 1; i < nr_frags; i++) {
 			BUG_ON(sgt[i].extension);
 
 			dma_unmap_page(dpa_bp->dev, sgt[i].addr,
