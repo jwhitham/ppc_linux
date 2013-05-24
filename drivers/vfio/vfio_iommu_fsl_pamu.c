@@ -225,13 +225,14 @@ static int iova_to_win(struct vfio_iommu *iommu, dma_addr_t iova)
 }
 
 /* Unmap DMA region */
-static long __vfio_dma_do_unmap(struct vfio_iommu *iommu, dma_addr_t iova,
-			     long npage, int prot)
+static long __vfio_dma_do_unmap(struct vfio_iommu *iommu, dma_addr_t iova_start,
+				long npage, int prot)
 {
 	int win, win_start, win_end, i;
 	long unlocked = 0;
 	unsigned long size;
 	unsigned int nr_pages;
+	dma_addr_t iova = iova_start;
 
 	size = npage << PAGE_SHIFT;
 	nr_pages = iommu->page_size / PAGE_SIZE;
@@ -250,6 +251,7 @@ static long __vfio_dma_do_unmap(struct vfio_iommu *iommu, dma_addr_t iova,
 	}
 
 	/* Disable the subwindows */
+	iova = iova_start;
 	win_start = iova_to_win(iommu, iova);
 	win_end = iova_to_win(iommu, iova + (npage << PAGE_SHIFT) - 1);
 	for (win = win_start; win <= win_end ; win++)
@@ -407,7 +409,7 @@ static int __vfio_dma_map(struct vfio_iommu *iommu, dma_addr_t iova,
 			return -EINVAL;
 		}
 
-		mapsize = min(iova_map - iova_end, iommu->page_size);
+		mapsize = min(iova_end - iova_map, iommu->page_size);
 		if (mapsize < iommu->page_size) {
 			pr_err("%s iova (%llx) not alligned to window size %llx\n",
 				__func__, iova, iommu->page_size);
@@ -914,7 +916,6 @@ static long vfio_iommu_fsl_pamu_ioctl(void *iommu_data,
 
 		if (msi_map.argsz < minsz)
 			return -EINVAL;
-
 		vfio_do_msi_map(iommu, &msi_map);
 		return 0;
 	} else if (cmd == VFIO_IOMMU_PAMU_UNMAP_MSI_BANK) {
