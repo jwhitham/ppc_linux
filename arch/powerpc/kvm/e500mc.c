@@ -288,6 +288,72 @@ int kvmppc_set_one_reg(struct kvm_vcpu *vcpu, u64 id,
 	return r;
 }
 
+void kvmppc_prepare_for_emulation(struct kvm_vcpu *vcpu, unsigned int *exit_nr)
+{
+	gva_t geaddr;
+	hpa_t addr;
+	u64 mas7_mas3;
+	hva_t eaddr;
+	u32 mas1, mas3;
+	struct page *page;
+	unsigned int addr_space, psize_shift;
+	bool pr;
+
+	if ((*exit_nr != BOOKE_INTERRUPT_DATA_STORAGE) &&
+	    (*exit_nr != BOOKE_INTERRUPT_DTLB_MISS) &&
+	    (*exit_nr != BOOKE_INTERRUPT_HV_PRIV))
+		return;
+
+	/* Search guest translation to find the real addressss */
+	geaddr = vcpu->arch.pc;
+	addr_space = (vcpu->arch.shared->msr & MSR_IS) >> MSR_IR_LG;
+	mtspr(SPRN_MAS6, (vcpu->arch.pid << MAS6_SPID_SHIFT) | addr_space);
+	mtspr(SPRN_MAS5, MAS5_SGS | vcpu->arch.lpid);
+	isync();
+	asm volatile("tlbsx 0, %[geaddr]\n" : : [geaddr] "r" (geaddr));
+	mtspr(SPRN_MAS5, 0);
+	mtspr(SPRN_MAS8, 0);	
+
+	mas1 = mfspr(SPRN_MAS1);
+	if (!(mas1 & MAS1_VALID)) {
+		/*
+	 	 * There is no translation for the emulated instruction.
+		 * Simulate an instruction TLB miss. This should force the host
+		 * or ultimately the guest to add the translation and then
+		 * reexecute the instruction.
+		 */
+		*exit_nr = BOOKE_INTERRUPT_ITLB_MISS;
+		return;
+	}
+
+	/*
+	 * TODO: check permissions and return a DSI if execute permission
+	 * is missing
+	 */
+	mas3 = mfspr(SPRN_MAS3);
+	pr = vcpu->arch.shared->msr & MSR_PR;
+	if ((pr && (!(mas3 & MAS3_UX))) || ((!pr) && (!(mas3 & MAS3_SX))))
+		WARN_ON_ONCE(1);
+
+	/* Get page size */
+	if (MAS0_GET_TLBSEL(mfspr(SPRN_MAS0)) == 0)
+		psize_shift = PAGE_SHIFT;
+	else
+		psize_shift = MAS1_GET_TSIZE(mas1) + 10;
+
+	mas7_mas3 = (((u64) mfspr(SPRN_MAS7)) << 32) |
+		    mfspr(SPRN_MAS3);
+	addr = (mas7_mas3 & (~0ULL << psize_shift)) |
+	       (geaddr & ((1ULL << psize_shift) - 1ULL));
+
+	/* Map a page and get guest's instruction */
+	page = pfn_to_page(addr >> PAGE_SHIFT);
+	eaddr = (unsigned long)kmap_atomic(page);
+	eaddr |= addr & ~PAGE_MASK;
+	vcpu->arch.last_inst = *(u32 *)eaddr;
+	kunmap_atomic((u32 *)eaddr);
+}
+
 struct kvm_vcpu *kvmppc_core_vcpu_create(struct kvm *kvm, unsigned int id)
 {
 	struct kvmppc_vcpu_e500 *vcpu_e500;

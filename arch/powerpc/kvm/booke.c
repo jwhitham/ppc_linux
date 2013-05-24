@@ -997,6 +997,12 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 	/* update before a new last_exit_type is rewritten */
 	kvmppc_update_timing_stats(vcpu);
 
+	/*
+	 * The exception type can change at this point, such as if the TLB entry
+	 * for the emulated instruction has been evicted.
+	 */
+	kvmppc_prepare_for_emulation(vcpu, &exit_nr);
+
 	/* restart interrupts if they were meant for the host */
 	kvmppc_restart_interrupt(vcpu, exit_nr);
 

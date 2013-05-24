@@ -92,6 +92,8 @@ void kvmppc_vcpu_disable_spe(struct kvm_vcpu *vcpu);
 void kvmppc_booke_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
 void kvmppc_booke_vcpu_put(struct kvm_vcpu *vcpu);
 
+void kvmppc_prepare_for_emulation(struct kvm_vcpu *vcpu, unsigned int *exit_nr);
+
 enum int_class {
 	INT_CLASS_NONCRIT,
 	INT_CLASS_CRIT,

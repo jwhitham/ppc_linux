@@ -439,6 +439,10 @@ int kvmppc_set_one_reg(struct kvm_vcpu *vcpu, u64 id,
 	return r;
 }
 
+void kvmppc_prepare_for_emulation(struct kvm_vcpu *vcpu, unsigned int *exit_nr)
+{
+}
+
 struct kvm_vcpu *kvmppc_core_vcpu_create(struct kvm *kvm, unsigned int id)
 {
 	struct kvmppc_vcpu_e500 *vcpu_e500;
