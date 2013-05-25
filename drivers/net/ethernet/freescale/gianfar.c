@@ -2561,7 +2561,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	int i, rq = 0, do_tstamp = 0;
 	u32 bufaddr;
 #ifdef CONFIG_RX_TX_BUFF_XCHG
-	struct sk_buff *new_skb;
 	int skb_curtx = 0;
 #else
 	unsigned long flags;
@@ -2660,10 +2659,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 		/* BD is free to be used by s/w */
 		/* Free skb for this BD if not recycled */
-		if (tx_queue->tx_skbuff[skb_curtx]) {
-			gfar_recycle_skb(priv, tx_queue->tx_skbuff[skb_curtx]);
-			tx_queue->tx_skbuff[skb_curtx] = NULL;
-		}
 
 		txbdp->lstatus &= BD_LFLAG(TXBD_WRAP);
 		skb_curtx = (skb_curtx + 1)
@@ -2853,8 +2848,8 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 #ifdef CONFIG_RX_TX_BUFF_XCHG
 	if ((skb->owner != RT_PKT_ID) ||
 	  (!skb_is_recycleable(skb, DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT))) {
-		tx_queue->tx_skbuff[skb_curtx] = skb;
 		skb->new_skb = NULL;
+		gfar_recycle_skb(priv, skb);
 	} else {
 #ifdef CONFIG_AS_FASTPATH
 			if (skb->pkt_type == PACKET_FASTROUTE)
@@ -2885,7 +2880,6 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 	u32 lstatus;
 	int rq = 0;
 #ifdef CONFIG_RX_TX_BUFF_XCHG
-	struct sk_buff *new_skb;
 	int skb_curtx = 0;
 #else
 	unsigned long flags;
@@ -2934,11 +2928,6 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 
 		/* BD is free to be used by s/w */
 		/* Free skb for this BD if not recycled */
-		if (tx_queue->tx_skbuff[skb_curtx]) {
-			gfar_recycle_skb(priv, tx_queue->tx_skbuff[skb_curtx]);
-			tx_queue->tx_skbuff[skb_curtx] = NULL;
-		}
-
 		txbdp->lstatus &= BD_LFLAG(TXBD_WRAP);
 #endif
 	/* Update transmit stats */
@@ -3027,8 +3016,8 @@ int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
 #ifdef CONFIG_RX_TX_BUFF_XCHG
 	if ((skb->owner != RT_PKT_ID) ||
 	  (!skb_is_recycleable(skb, DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT))) {
-		tx_queue->tx_skbuff[skb_curtx] = skb;
 		skb->new_skb = NULL;
+		gfar_recycle_skb(priv, skb);
 	} else {
 			gfar_asf_reclaim_skb(skb);
 			gfar_align_skb(skb);
@@ -3245,6 +3234,11 @@ static void gfar_recycle_skb(struct gfar_private *priv, struct sk_buff *skb)
 	if (likely(skb_queue_len(&local->recycle_q) < GFAR_RECYCLE_MAX)) {
 		local->recycle_cnt++;
 
+#ifdef CONFIG_AS_FASTPATH
+		if (skb->pkt_type == PACKET_FASTROUTE)
+			gfar_asf_reclaim_skb(skb);
+		else
+#endif
 		skb_recycle(skb);
 
 		gfar_align_skb(skb);
