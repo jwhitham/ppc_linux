@@ -7559,18 +7559,27 @@ int dpa_classif_mcast_create_group(
 				next_engine_params->params.plcrParams.
 					newRelativeProfileId =
 			      member_params->policer_params->new_rel_profile_id;
+				next_engine_params->params.plcrParams.
+					overrideParams =
+			   member_params->policer_params->modify_policer_params;
+				next_engine_params->params.plcrParams.
+					newFqid =  member_params->new_fqid;
 			} else {
 				next_engine_params->nextEngine = e_FM_PCD_DONE;
 				next_engine_params->params.enqueueParams.
 					newRelativeStorageProfileId =
 						  member_params->new_rel_vsp_id;
+				next_engine_params->params.enqueueParams.
+						   action =
+							     e_FM_PCD_ENQ_FRAME;
+				next_engine_params->params.enqueueParams.
+					overrideFqid =
+						   member_params->override_fqid;
+				next_engine_params->params.enqueueParams.
+					newFqid =
+						   member_params->new_fqid;
 			}
-			next_engine_params->params.enqueueParams.action =
-						e_FM_PCD_ENQ_FRAME;
-			next_engine_params->params.enqueueParams.overrideFqid =
-						  member_params->override_fqid;
-			next_engine_params->params.enqueueParams.newFqid =
-						  member_params->new_fqid;
+
 		}
 		if (member_params->hmd != DPA_OFFLD_DESC_NONE) {
 			pgroup->entries[0].hmd = member_params->hmd;
@@ -7780,18 +7789,22 @@ int dpa_classif_mcast_add_member(int grpd,
 			next_engine_params->params.plcrParams.
 				newRelativeProfileId =
 			      member_params->policer_params->new_rel_profile_id;
+			next_engine_params->params.plcrParams.overrideParams =
+			   member_params->policer_params->modify_policer_params;
+			next_engine_params->params.plcrParams.newFqid =
+							member_params->new_fqid;
 		} else {
 			next_engine_params->nextEngine = e_FM_PCD_DONE;
 			next_engine_params->params.enqueueParams.
 				newRelativeStorageProfileId =
 						  member_params->new_rel_vsp_id;
-		}
-		next_engine_params->params.enqueueParams.action =
+			next_engine_params->params.enqueueParams.action =
 							     e_FM_PCD_ENQ_FRAME;
-		next_engine_params->params.enqueueParams.overrideFqid =
+			next_engine_params->params.enqueueParams.overrideFqid =
 						   member_params->override_fqid;
-		next_engine_params->params.enqueueParams.newFqid =
-						   member_params->new_fqid;
+			next_engine_params->params.enqueueParams.newFqid =
+							member_params->new_fqid;
+		}
 	}
 
 	if (member_params->hmd != DPA_OFFLD_DESC_NONE) {
