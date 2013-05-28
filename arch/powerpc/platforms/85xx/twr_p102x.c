@@ -139,6 +139,15 @@ static void __init twr_p1025_setup_arch(void)
 					MPC85xx_PMUXCR_QE(12));
 			iounmap(guts);
 
+#if defined(CONFIG_SERIAL_QE)
+			/* On P1025TWR board, the UCC7 acted as UART port.
+			 * However, The UCC7's CTS pin is low level in default,
+			 * it will impact the transmission in full duplex
+			 * communication. So disable the Flow control pin PA18.
+			 * The UCC7 UART just can use RXD and TXD pins.
+			 */
+			par_io_config_pin(0, 18, 0, 0, 0, 0);
+#endif
 			/* Drive PB29 to CPLD low - CPLD will then change
 			 * muxing from LBC to QE */
 			par_io_config_pin(1, 29, 1, 0, 0, 0);
