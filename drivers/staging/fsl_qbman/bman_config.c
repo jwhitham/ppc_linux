@@ -634,16 +634,6 @@ static int __devinit of_fsl_bman_probe(struct platform_device *ofdev)
 			goto del_group_3;
 	}
 
-	for (i = 0; i < (bman_pool_max + 1); i++) {
-		bman_dev_pool_count_attributes[i] =
-			kmalloc(sizeof(struct attribute), GFP_KERNEL);
-		if (!bman_dev_pool_count_attributes[i]) {
-			pr_err("cannot alloc for each"
-				" bman_dev_pool_count_attributes\n");
-			goto del_group_3;
-		}
-	}
-
 	for (i = 0; i < bman_pool_max; i++) {
 		ret = scnprintf((name_attrs_pool_count + i * 3), 3, "%d", i);
 		if (!ret)
@@ -666,8 +656,6 @@ static int __devinit of_fsl_bman_probe(struct platform_device *ofdev)
 	goto done;
 
 del_group_4:
-	for (i = 0; i < (bman_pool_max + 1); i++)
-		kfree(bman_dev_pool_count_attributes[i]);
 	kfree(bman_dev_pool_count_attributes);
 del_group_3:
 	kfree(dev_attr_buffer_pool_count);
