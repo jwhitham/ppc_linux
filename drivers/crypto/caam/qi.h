@@ -21,23 +21,22 @@
  * The job descriptor constructed by QI hardware has layout:
  *
  *	HEADER		(1 word)
- *	Shdesc ptr	(2 words)
+ *	Shdesc ptr	(1 or 2 words)
  *	SEQ_OUT_PTR	(1 word)
- *	Out ptr		(2 words)
+ *	Out ptr		(1 or 2 words)
  *	Out length	(1 word)
  *	SEQ_IN_PTR	(1 word)
- *	In ptr		(2 words)
+ *	In ptr		(1 or 2 words)
  *	In length	(1 word)
  *
  * The shdesc ptr is used to fetch shared descriptor contents
  * into deco buffer.
  *
  * Apart from shdesc contents, the total number of words that
- * get loaded in deco buffer are '11'. Hence remaining words in
- * deco buffer can be used for storing shared descriptor.
+ * get loaded in deco buffer are '8' or '11'. The remaining words
+ * in deco buffer can be used for storing shared descriptor.
  */
-
-#define MAX_SDLEN	(MAX_CAAM_DESCSIZE - 11)
+#define MAX_SDLEN	((CAAM_DESC_BYTES_MAX - DESC_JOB_IO_LEN)/CAAM_CMD_SZ)
 
 /*
  * This is the request structure the driver application should fill while
