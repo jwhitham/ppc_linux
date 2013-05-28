@@ -3081,13 +3081,7 @@ int dpa_stats_get_counters(struct dpa_stats_cnt_request_params params,
 		cnt_cb = &dpa_stats->cnts_cb[cnt_id];
 
 		/* Acquire counter lock */
-		err = mutex_trylock(&cnt_cb->lock);
-		if (err == 0) {
-			pr_err("Counter %d is being used\n", cnt_id);
-			unblock_sched_cnts(dpa_stats, params.cnts_ids,
-					   params.cnts_ids_len);
-			return -EBUSY;
-		}
+		mutex_lock(&cnt_cb->lock);
 
 		/* Check if counter control block is initialized */
 		if (cnt_cb->index == DPA_OFFLD_INVALID_OBJECT_ID) {
