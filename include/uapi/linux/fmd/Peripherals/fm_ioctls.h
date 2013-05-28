@@ -249,7 +249,7 @@ typedef struct ioc_fm_vsp_params_t {
     struct {
         ioc_fm_port_type port_type;          /**< Port type */
         uint8_t         port_id;             /**< Port Id - relative to type */
-    } portParams;
+    } port_params;
     uint8_t             relative_profile_id;  /**< VSP Id - relative to VSP's range
                                                  defined in relevant FM object */
     void                *id;                /**< return value */

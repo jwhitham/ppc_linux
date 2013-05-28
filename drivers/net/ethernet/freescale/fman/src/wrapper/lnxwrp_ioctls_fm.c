@@ -2790,7 +2790,12 @@ invalid_port_id:
 #endif
             if (copy_from_user(&param, (void *)arg, sizeof(param)))
                 RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
-	param.p_fm = p_LnxWrpFmDev->h_Dev;
+        {
+            uint8_t portId = param.port_params.port_id;
+            param.p_fm = p_LnxWrpFmDev->h_Dev;
+            param.liodn_offset =
+                p_LnxWrpFmDev->rxPorts[portId].settings.param.specificParams.rxParams.liodnOffset;
+        }
         param.id = FM_VSP_Config((t_FmVspParams *)&param);
 
 #if defined(CONFIG_COMPAT)
