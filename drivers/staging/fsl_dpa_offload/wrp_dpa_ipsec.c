@@ -754,7 +754,7 @@ static int do_add_rem_policy_compat_ioctl(void *args, bool add_pol)
 	else
 		err = dpa_ipsec_sa_remove_policy(kprm.sa_id, &kprm.pol_params);
 
-	if (err < 0)
+	if (uprm.pol_params.dir_params.type == DPA_IPSEC_POL_DIR_PARAMS_ACT)
 		kfree(in_action->enq_params.policer_params);
 
 	return err;
