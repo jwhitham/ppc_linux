@@ -28,12 +28,14 @@
 #define CAAM_MAX_IV_LENGTH		16
 
 /* length of descriptors text */
-#define DESC_JOB_IO_LEN			(CAAM_CMD_SZ * 5 + CAAM_PTR_SZ * 3)
-
 #define DESC_AEAD_BASE			(4 * CAAM_CMD_SZ)
 #define DESC_AEAD_ENC_LEN		(DESC_AEAD_BASE + 16 * CAAM_CMD_SZ)
 #define DESC_AEAD_DEC_LEN		(DESC_AEAD_BASE + 21 * CAAM_CMD_SZ)
 #define DESC_AEAD_GIVENC_LEN		(DESC_AEAD_ENC_LEN + 7 * CAAM_CMD_SZ)
+
+#define DESC_MAX_USED_BYTES		(DESC_AEAD_GIVENC_LEN + \
+					 CAAM_MAX_KEY_SIZE)
+#define DESC_MAX_USED_LEN		(DESC_MAX_USED_BYTES / CAAM_CMD_SZ)
 
 /* Set DK bit in class 1 operation if shared */
 static inline void append_dec_op1(u32 *desc, u32 type)
@@ -102,9 +104,9 @@ enum optype {
  */
 struct caam_ctx {
 	struct device *jrdev;
-	u32 sh_desc_enc[MAX_SDLEN];
-	u32 sh_desc_dec[MAX_SDLEN];
-	u32 sh_desc_givenc[MAX_SDLEN];
+	u32 sh_desc_enc[DESC_MAX_USED_LEN];
+	u32 sh_desc_dec[DESC_MAX_USED_LEN];
+	u32 sh_desc_givenc[DESC_MAX_USED_LEN];
 	u32 class1_alg_type;
 	u32 class2_alg_type;
 	u32 alg_op;
