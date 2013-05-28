@@ -19,14 +19,12 @@ config PPC_PSR2
 	bool "PowerEN System Reference Platform 2"
 	select EPAPR_BOOT
 	select PPC_WSP
-	default y
 
 config PPC_CHROMA
 	bool "PowerEN PCIe Chroma Card"
 	select EPAPR_BOOT
 	select PPC_WSP
 	select OF_DYNAMIC
-	default y
 
 endmenu
 
