@@ -368,6 +368,8 @@ void caam_drv_ctx_rel(struct caam_drv_ctx *drv_ctx)
 
 	dma_unmap_single(drv_ctx->qidev, dma_unmap_addr(drv_ctx, context_a),
 			 size, DMA_BIDIRECTIONAL);
+
+	kfree(drv_ctx);
 }
 EXPORT_SYMBOL(caam_drv_ctx_rel);
 
