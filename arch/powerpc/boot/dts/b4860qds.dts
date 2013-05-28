@@ -73,9 +73,11 @@
 			};
 			mdio0: mdio@fc000 {
 				phy_sgmii_1e: ethernet-phy@1e {
+					status = "disabled";
 					reg = <0x1e>;
 				};
 				phy_sgmii_1f: ethernet-phy@1f {
+					status = "disabled";
 					reg = <0x1f>;
 				};
 			};
@@ -83,10 +85,12 @@
 			xmdio0: mdio@fd000 {
 				/* For 10g interfaces */
 				phy_xaui_slot1: xaui-phy@slot1 {
+					status = "disabled";
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x7>; /* default switch setting on slot1 of AMC2PEX */
 				};
 				phy_xaui_slot2: xaui-phy@slot2 {
+					status = "disabled";
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x6>; /* default switch setting on slot1 of AMC2PEX */
 				};

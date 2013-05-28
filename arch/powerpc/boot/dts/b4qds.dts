@@ -192,9 +192,11 @@
 					reg = <0x11>;
 				};
 				phy_sgmii_1c: ethernet-phy@1c {
+					status = "disabled";
 					reg = <0x1c>;
 				};
 				phy_sgmii_1d: ethernet-phy@1d {
+					status = "disabled";
 					reg = <0x1d>;
 				};
 			};
