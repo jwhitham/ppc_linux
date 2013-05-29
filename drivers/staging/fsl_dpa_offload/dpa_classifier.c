@@ -2971,9 +2971,11 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 					next_engine_params->params.
 						enqueueParams.overrideFqid =
 						TRUE;
+#if (DPAA_VERSION >= 11)
 				next_engine_params->params.enqueueParams.
 					  newRelativeStorageProfileId =
 					      action->enq_params.new_rel_vsp_id;
+#endif
 			}
 
 		if (action->enable_statistics)
