@@ -3902,10 +3902,13 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	struct fm_port *rxport = NULL;
 	struct fm_port *txport = NULL;
 	struct dpa_buffer_layout_s *buf_layout = NULL;
-	bool is_shared = false;
 	struct mac_device *mac_dev;
-	int proxy_enet;
 	const struct of_device_id *match;
+	/* Interface type results as a side effect of the probing process */
+	bool is_private = false;
+	bool is_macless = false;
+	bool is_shared = false;
+	bool is_proxy = false;
 
 	dev = &_of_dev->dev;
 
@@ -3918,17 +3921,24 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	if (!of_device_is_available(dpa_node))
 		return -ENODEV;
 
-	/*
-	 * If it's not an fsl,dpa-ethernet node, we just serve as a proxy
+	/* If it's not an fsl,dpa-ethernet node, we just serve as a proxy
 	 * initializer driver, and don't do any linux device setup
+	 * proxy interfaces have fsl,dpa-ethernet-init as compatible string
 	 */
-	proxy_enet = strcmp(match->compatible, "fsl,dpa-ethernet");
+	is_proxy = strcmp(match->compatible, "fsl,dpa-ethernet") != 0;
+
+	/* Get the buffer pools assigned to this interface */
+	dpa_bp = dpa_bp_probe(_of_dev, &count);
+	if (IS_ERR(dpa_bp))
+		return PTR_ERR(dpa_bp);
+
+	is_private = (dpa_bp->kernel_pool != 0);
 
 	/*
 	 * Allocate this early, so we can store relevant information in
-	 * the private area
+	 * the private area (needed by 1588 code in dpa_mac_probe)
 	 */
-	if (!proxy_enet) {
+	if (!is_proxy) {
 		net_dev = alloc_etherdev_mq(sizeof(*priv), DPAA_ETH_TX_QUEUES);
 		if (!net_dev) {
 			dev_err(dev, "alloc_etherdev_mq() failed\n");
@@ -3945,18 +3955,17 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		priv->msg_enable = netif_msg_init(debug, -1);
 	}
 
-	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
-	if (IS_ERR(dpa_bp)) {
-		err = PTR_ERR(dpa_bp);
-		goto bp_probe_failed;
-	}
-
 	mac_dev = dpa_mac_probe(_of_dev);
 	if (IS_ERR(mac_dev)) {
 		err = PTR_ERR(mac_dev);
 		goto mac_probe_failed;
-	} else if (mac_dev) {
+	}
+
+	is_macless = mac_dev == NULL;
+	is_shared = (dpa_bp->kernel_pool == 0) && !is_macless;
+	/* Now the interface type is known */
+
+	if (!is_macless) {
 		rxport = mac_dev->port_dev[RX];
 		txport = mac_dev->port_dev[TX];
 
@@ -3973,9 +3982,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		dpa_set_buffer_layout(priv, txport, &buf_layout[TX], TX);
 	}
 
-	if (!dpa_bp->kernel_pool) {
-		is_shared = true;
-	} else {
+	if (is_private) {
 		/* For private ports, need to compute the size of the default
 		 * buffer pool, based on FMan port buffer layout;also update
 		 * the maximum buffer size for private ports if necessary
@@ -3988,28 +3995,30 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	INIT_LIST_HEAD(&rxfqlist);
 	INIT_LIST_HEAD(&txfqlist);
 
-	if (net_dev) {
-		INIT_LIST_HEAD(&priv->dpa_fq_list);
-		fq_list = &priv->dpa_fq_list;
-	} else {
+	if (is_proxy) {
 		INIT_LIST_HEAD(&proxy_fq_list);
 		fq_list = &proxy_fq_list;
+	} else {
+		INIT_LIST_HEAD(&priv->dpa_fq_list);
+		fq_list = &priv->dpa_fq_list;
 	}
 
 	memset(&port_fqs, 0, sizeof(port_fqs));
-	if (rxport)
-		err = dpa_fq_probe_mac(dev, fq_list, &port_fqs, is_shared, RX);
-	else
-		err = dpa_fq_probe_macless(dev, fq_list, RX);
-	if (err < 0)
-		goto rx_fq_probe_failed;
 
-	if (txport)
-		err = dpa_fq_probe_mac(dev, fq_list, &port_fqs, is_shared, TX);
-	else
-		err = dpa_fq_probe_macless(dev, fq_list, TX);
+	if (!is_macless) {
+		err = dpa_fq_probe_mac(dev, fq_list, &port_fqs,
+				       is_shared, RX);
+		if (!err)
+			err = dpa_fq_probe_mac(dev, fq_list, &port_fqs,
+					       is_shared, TX);
+	} else {
+		err = dpa_fq_probe_macless(dev, fq_list, RX);
+		if (!err)
+			err = dpa_fq_probe_macless(dev, fq_list, TX);
+	}
+
 	if (err < 0)
-		goto tx_fq_probe_failed;
+		goto fq_probe_failed;
 
 	/*
 	 * Now we have all of the configuration information.
@@ -4019,11 +4028,12 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	 * 2) Shared interface - A device intended for virtual connections
 	 *    or for a real interface that is shared between partitions
 	 * 3) Proxy initializer - Just configures the MAC on behalf of
-	 *    another partition
+	 *    another partition.
+	 * 4) MAC-less interface - A netdevice over configurable FQs.
 	 */
 
 	/* bp init */
-	if (net_dev) {
+	if (!is_proxy) {
 		struct task_struct *kth;
 
 		err = dpa_bp_create(net_dev, dpa_bp, count);
@@ -4059,7 +4069,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		 * assigning the egress FQs to the CGRs.
 		 * Don't create a congestion group for MAC-less interfaces.
 		 */
-		if (priv->mac_dev) {
+		if (!is_macless) {
 			err = dpaa_eth_cgr_init(priv);
 			if (err < 0) {
 				dev_err(dev, "Error initializing CGR\n");
@@ -4074,7 +4084,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 				goto fq_alloc_failed;
 		}
 
-		if (mac_dev) {
+		if (!is_macless) {
 			priv->buf_layout = buf_layout;
 			priv->tx_headroom =
 				dpa_get_headroom(&priv->buf_layout[TX]);
@@ -4084,7 +4094,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	}
 
 	/* All real interfaces need their ports initialized */
-	if (mac_dev) {
+	if (!is_macless) {
 		struct fm_port_pcd_param rx_port_pcd_param;
 
 		dpaa_eth_init_tx_port(txport, port_fqs.tx_errq,
@@ -4102,7 +4112,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	 * Proxy interfaces need to be started, and the allocated
 	 * memory freed
 	 */
-	if (!net_dev) {
+	if (is_proxy) {
 		devm_kfree(dev, dpa_bp);
 
 		/* Free FQ structures */
@@ -4111,11 +4121,11 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		devm_kfree(dev, port_fqs.tx_defq);
 		devm_kfree(dev, port_fqs.tx_errq);
 
-		if (mac_dev)
+		if (!is_macless)
 			for_each_port_device(i, mac_dev->port_dev)
 				fm_port_enable(mac_dev->port_dev[i]);
 
-		return 0;
+		return 0; /* Proxy interface initialization ended */
 	}
 
 	/* Now we need to initialize either a private or shared interface */
@@ -4131,7 +4141,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 		memset(percpu_priv, 0, sizeof(*percpu_priv));
 	}
 
-	if (priv->shared)
+	if (is_shared || is_macless)
 		err = dpa_shared_netdev_init(dpa_node, net_dev);
 	else
 		err = dpa_private_netdev_init(dpa_node, net_dev);
@@ -4168,11 +4178,9 @@ get_channel_failed:
 	if (net_dev)
 		dpa_bp_free(priv, priv->dpa_bp);
 bp_create_failed:
-tx_fq_probe_failed:
-rx_fq_probe_failed:
+fq_probe_failed:
 alloc_failed:
 mac_probe_failed:
-bp_probe_failed:
 	dev_set_drvdata(dev, NULL);
 	if (net_dev)
 		free_netdev(net_dev);
