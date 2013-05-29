@@ -1129,8 +1129,8 @@ void compat_copy_fm_vsp_params(
         param->p_fm = compat_pcd_id2ptr(compat_param->p_fm);
         memcpy(&param->ext_buf_pools, &compat_param->ext_buf_pools, sizeof(ioc_fm_ext_pools));
         param->liodn_offset = compat_param->liodn_offset;
-        param->portParams.port_id = compat_param->portParams.port_id;
-        param->portParams.port_type = compat_param->portParams.port_type;
+        param->port_params.port_id = compat_param->port_params.port_id;
+        param->port_params.port_type = compat_param->port_params.port_type;
         param->relative_profile_id = compat_param->relative_profile_id;
         param->id = compat_pcd_id2ptr(compat_param->id);
     }
@@ -1139,8 +1139,8 @@ void compat_copy_fm_vsp_params(
         compat_param->p_fm = compat_pcd_ptr2id(param->p_fm);
         memcpy(&compat_param->ext_buf_pools, &param->ext_buf_pools, sizeof(ioc_fm_ext_pools));
         compat_param->liodn_offset = param->liodn_offset;
-        compat_param->portParams.port_id = param->portParams.port_id;
-        compat_param->portParams.port_type = param->portParams.port_type;
+        compat_param->port_params.port_id = param->port_params.port_id;
+        compat_param->port_params.port_type = param->port_params.port_type;
         compat_param->relative_profile_id = param->relative_profile_id;
         compat_param->id = compat_add_ptr2id(param->id, FM_MAP_TYPE_PCD_NODE);
     }
