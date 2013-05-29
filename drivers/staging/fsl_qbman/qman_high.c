@@ -1726,7 +1726,9 @@ int qman_query_fq_np(struct qman_fq *fq, struct qm_mcr_queryfq_np *np)
 		*np = mcr->queryfq_np;
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 	put_affine_portal();
-	if (res != QM_MCR_RESULT_OK)
+	if (res == QM_MCR_RESULT_ERR_FQID)
+		return -ERANGE;
+	else if (res != QM_MCR_RESULT_OK)
 		return -EIO;
 	return 0;
 }
