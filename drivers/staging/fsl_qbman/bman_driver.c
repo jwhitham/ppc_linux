@@ -297,7 +297,7 @@ __setup("bportals=", parse_bportals);
  *    which are selected in a round-robin fashion.
  * Any portal configs left unused are available for USDPAA allocation.
  */
-static __init int bman_init(void)
+__init int bman_init(void)
 {
 	struct cpumask slave_cpus;
 	struct cpumask unshared_cpus = *cpu_none_mask;
@@ -404,6 +404,14 @@ static __init int bman_init(void)
 		for_each_cpu(cpu, &slave_cpus)
 			init_slave(cpu);
 	pr_info("Bman portals initialised\n");
+	return 0;
+}
+
+__init int bman_resource_init(void)
+{
+	struct device_node *dn;
+	int ret;
+
 	/* Initialise BPID allocation ranges */
 	for_each_compatible_node(dn, NULL, "fsl,bpid-range") {
 		ret = fsl_bpid_range_init(dn);
@@ -412,4 +420,3 @@ static __init int bman_init(void)
 	}
 	return 0;
 }
-subsys_initcall(bman_init);

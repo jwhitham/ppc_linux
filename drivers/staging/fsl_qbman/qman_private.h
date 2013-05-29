@@ -363,6 +363,15 @@ int qman_setup_fq_lookup_table(size_t num_entries);
 #define qm_isr_inhibit(qm)		__qm_isr_write(qm, qm_isr_inhibit, 1)
 #define qm_isr_uninhibit(qm)		__qm_isr_write(qm, qm_isr_inhibit, 0)
 
+#ifdef CONFIG_FSL_QMAN_CONFIG
+int qman_have_ccsr(void);
+#else
+#define qman_have_ccsr	0
+#endif
+
+__init int qman_init(void);
+__init int qman_resource_init(void);
+
 /* CEETM related */
 #define QMAN_CEETM_MAX	2
 extern u8 num_ceetms;

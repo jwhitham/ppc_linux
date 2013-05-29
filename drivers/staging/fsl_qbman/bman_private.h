@@ -151,4 +151,7 @@ int bm_pool_set(u32 bpid, const u32 *thresholds);
 /* Read the free buffer count for a given buffer */
 u32 bm_pool_free_buffers(u32 bpid);
 
+__init int bman_init(void);
+__init int bman_resource_init(void);
+
 #endif /* CONFIG_FSL_BMAN_CONFIG */

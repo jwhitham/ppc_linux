@@ -609,7 +609,7 @@ static int __init parse_qportals(char *str)
 }
 __setup("qportals=", parse_qportals);
 
-static __init int qman_init(void)
+__init int qman_init(void)
 {
 	struct cpumask slave_cpus;
 	struct cpumask unshared_cpus = *cpu_none_mask;
@@ -732,6 +732,14 @@ static __init int qman_init(void)
 		for_each_cpu(cpu, &slave_cpus)
 			init_slave(cpu);
 	pr_info("Qman portals initialised\n");
+	return 0;
+}
+
+__init int qman_resource_init(void)
+{
+	struct device_node *dn;
+	int ret;
+
 	/* Initialise FQID allocation ranges */
 	for_each_compatible_node(dn, NULL, "fsl,fqid-range") {
 		ret = fsl_fqid_range_init(dn);
@@ -762,4 +770,3 @@ static __init int qman_init(void)
 	}
 	return 0;
 }
-subsys_initcall(qman_init);
