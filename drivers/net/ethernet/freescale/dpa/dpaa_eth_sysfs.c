@@ -41,6 +41,8 @@
 #include "dpaa_1588.h"
 #endif
 
+static u8 macless_idx;
+
 static ssize_t dpaa_eth_show_addr(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -52,6 +54,19 @@ static ssize_t dpaa_eth_show_addr(struct device *dev,
 				(unsigned long long)mac_dev->res->start);
 	else
 		return sprintf(buf, "none");
+}
+
+static ssize_t dpaa_eth_show_type(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
+
+	if (!priv->mac_dev)
+		return sprintf(buf, "macless%d", priv->macless_idx);
+	else if (priv->shared)
+		return sprintf(buf, "shared");
+	else
+		return sprintf(buf, "private");
 }
 
 static ssize_t dpaa_eth_show_fqids(struct device *dev,
@@ -201,6 +216,7 @@ static ssize_t dpaa_eth_set_ptp_1588(struct device *dev,
 
 static struct device_attribute dpaa_eth_attrs[] = {
 	__ATTR(device_addr, S_IRUGO, dpaa_eth_show_addr, NULL),
+	__ATTR(device_type, S_IRUGO, dpaa_eth_show_type, NULL),
 	__ATTR(fqids, S_IRUGO, dpaa_eth_show_fqids, NULL),
 	__ATTR(dflt_bpid, S_IRUGO, dpaa_eth_show_dflt_bpid, NULL),
 	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL),
@@ -212,6 +228,7 @@ static struct device_attribute dpaa_eth_attrs[] = {
 
 void dpaa_eth_sysfs_init(struct device *dev)
 {
+	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(dpaa_eth_attrs); i++)
@@ -219,6 +236,9 @@ void dpaa_eth_sysfs_init(struct device *dev)
 			dev_err(dev, "Error creating sysfs file\n");
 			goto device_create_file_failed;
 		}
+
+	if (!priv->mac_dev)
+		priv->macless_idx = macless_idx++;
 
 	return;
 

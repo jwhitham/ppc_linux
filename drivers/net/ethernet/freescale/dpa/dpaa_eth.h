@@ -391,6 +391,7 @@ struct dpa_priv_s {
 #endif /* CONFIG_FSL_DPAA_TS */
 
 	struct dpa_buffer_layout_s *buf_layout;
+	u8 macless_idx;
 };
 
 extern const struct ethtool_ops dpa_ethtool_ops;
