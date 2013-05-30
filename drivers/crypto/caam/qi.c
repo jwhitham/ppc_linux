@@ -29,8 +29,9 @@
 struct caam_drv_ctx {
 	u32 prehdr[PRE_HDR_LEN];	/* Preheader placed before shrd desc */
 	u32 sh_desc[MAX_SDLEN];		/* Shared descriptor */
-	DEFINE_DMA_UNMAP_ADDR(context_a); /* shared descriptor dma address */
-	struct qman_fq req_fq;		/* Request frame queue to caam */
+	dma_addr_t context_a; /* shared descriptor dma address */
+	struct qman_fq *req_fq;		/* Request frame queue to caam */
+	struct qman_fq *rsp_fq;		/* Response frame queue from caam */
 	int cpu;			/* cpu on which to recv caam rsp */
 	struct device *qidev;		/* device pointer for QI backend */
 } ____cacheline_aligned;
@@ -114,7 +115,7 @@ int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 	atomic_inc(&per_cpu(pcpu_qipriv.pending, req->drv_ctx->cpu));
 
 	do {
-		ret = qman_enqueue(&req->drv_ctx->req_fq, &fd, 0);
+		ret = qman_enqueue(req->drv_ctx->req_fq, &fd, 0);
 		if (likely(!ret))
 			return 0;
 
@@ -135,16 +136,18 @@ int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 }
 EXPORT_SYMBOL(caam_qi_enqueue);
 
-static struct caam_drv_req *fd_to_drv_req(const struct qm_fd *fd)
+struct caam_drv_req *lookup_drv_req(const struct qm_fd *fd, int cpu)
 {
-	struct list_head *pos, *list;
+	struct list_head *pos, *list, *n;
 	struct caam_drv_req *req;
 
-	list = &per_cpu(pcpu_qipriv.bklog_list, smp_processor_id());
-	list_for_each(pos, list) {
+	list = &per_cpu(pcpu_qipriv.bklog_list, cpu);
+	list_for_each_safe(pos, n, list) {
 		req = container_of(pos, struct caam_drv_req, hdr__);
 
 		if (req->hwaddr == qm_fd_addr(fd)) {
+			BUG_ON(req->drv_ctx->cpu != cpu);
+
 			spin_lock(&per_cpu(pcpu_qipriv.listlock,
 					   req->drv_ctx->cpu));
 			list_del(&req->hdr__);
@@ -154,6 +157,38 @@ static struct caam_drv_req *fd_to_drv_req(const struct qm_fd *fd)
 					    req->drv_ctx->cpu));
 			return req;
 		}
+	}
+
+	return NULL;
+}
+
+
+static struct caam_drv_req *fd_to_drv_req(const struct qm_fd *fd)
+{
+	struct caam_drv_req *req;
+	const cpumask_t *cpus = qman_affine_cpus();
+	int i;
+
+	/*
+	 * First check on this_cpu since this is likely case of normal caam
+	 * response path.
+	 */
+	req = lookup_drv_req(fd, smp_processor_id());
+	if (likely(req))
+		return req;
+	/*
+	 * If drv_req is not found on this_cpu, then try searching on other
+	 * portal owning cpus. This is required to handle ERN callbacks and
+	 * volatile dequeues. These may be issued on a CPU which is different
+	 * than the one associated with the drv_req's drv_ctx.
+	 */
+	for_each_cpu(i, cpus) {
+		if (i == smp_processor_id())
+			continue;	/* Already checked */
+		req = lookup_drv_req(fd, i);
+
+		if (req)
+			return req;
 	}
 
 	return NULL;
@@ -189,6 +224,278 @@ static void caam_fq_ern_cb(struct qman_portal *qm, struct qman_fq *fq,
 	drv_req->cbk(drv_req, -EIO);
 }
 
+static enum qman_cb_dqrr_result	caam_req_fq_dqrr_cb(struct qman_portal *p,
+					struct qman_fq *req_fq,
+					const struct qm_dqrr_entry *dqrr)
+{
+	struct caam_drv_req *drv_req;
+	const struct qm_fd *fd;
+	size_t size;
+	struct device *qidev = &per_cpu(pcpu_qipriv.net_dev,
+					smp_processor_id()).dev;
+
+	fd = &dqrr->fd;
+
+	drv_req = fd_to_drv_req(fd);
+	if (!drv_req) {
+		dev_err(qidev,
+			"Can't find original request for caam response\n");
+		return qman_cb_dqrr_consume;
+	}
+
+	size = 2 * sizeof(struct qm_sg_entry);
+	dma_unmap_single(drv_req->drv_ctx->qidev, fd->addr,
+			 size, DMA_BIDIRECTIONAL);
+
+	drv_req->cbk(drv_req, -EIO);
+
+	return qman_cb_dqrr_consume;
+}
+
+static struct qman_fq *create_caam_req_fq(struct device *qidev,
+					  struct qman_fq *rsp_fq,
+					  dma_addr_t hwdesc,
+					  int fq_sched_flag)
+{
+	int ret, flags;
+	struct qman_fq *req_fq;
+	struct qm_mcc_initfq opts;
+
+	req_fq = kzalloc(sizeof(*req_fq), GFP_ATOMIC);
+	if (!req_fq) {
+		dev_err(qidev, "Mem alloc for CAAM req FQ failed\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	req_fq->cb.dqrr = caam_req_fq_dqrr_cb;
+	req_fq->cb.ern = caam_fq_ern_cb;
+	req_fq->cb.fqs = NULL;
+
+	flags = QMAN_FQ_FLAG_DYNAMIC_FQID |
+		QMAN_FQ_FLAG_TO_DCPORTAL |
+		QMAN_FQ_FLAG_LOCKED;
+
+	ret = qman_create_fq(0, flags, req_fq);
+	if (ret) {
+		dev_err(qidev, "Failed to create session REQ FQ\n");
+		goto create_req_fq_fail;
+	}
+
+	flags = fq_sched_flag;
+	opts.we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_DESTWQ |
+			QM_INITFQ_WE_CONTEXTB | QM_INITFQ_WE_CONTEXTA |
+			QM_INITFQ_WE_CGID;
+
+	opts.fqd.fq_ctrl = QM_FQCTRL_CPCSTASH | QM_FQCTRL_CGE;
+	opts.fqd.dest.channel = qm_channel_caam;
+	opts.fqd.dest.wq = 3;
+	opts.fqd.cgid = qipriv.req_cgr.cgrid;
+	opts.fqd.context_b = qman_fq_fqid(rsp_fq);
+	opts.fqd.context_a.hi = upper_32_bits(hwdesc);
+	opts.fqd.context_a.lo = lower_32_bits(hwdesc);
+
+	ret = qman_init_fq(req_fq, flags, &opts);
+	if (ret) {
+		dev_err(qidev, "Failed to init session req FQ\n");
+		goto init_req_fq_fail;
+	}
+
+	return req_fq;
+
+init_req_fq_fail:
+	qman_destroy_fq(req_fq, 0);
+
+create_req_fq_fail:
+	kfree(req_fq);
+	return ERR_PTR(ret);
+}
+
+static int empty_retired_fq(struct device *qidev, struct qman_fq *fq)
+{
+	int ret;
+	enum qman_fq_state state;
+
+	u32 flags = QMAN_VOLATILE_FLAG_WAIT_INT | QMAN_VOLATILE_FLAG_FINISH;
+	u32 vdqcr = QM_VDQCR_PRECEDENCE_VDQCR | QM_VDQCR_NUMFRAMES_TILLEMPTY;
+
+	ret = qman_volatile_dequeue(fq, flags, vdqcr);
+	if (ret) {
+		dev_err(qidev, "Volatile dequeue fail for FQ: %u\n", fq->fqid);
+		return ret;
+	}
+
+	do {
+		qman_poll_dqrr(16);
+		qman_fq_state(fq, &state, &flags);
+	} while (flags & QMAN_FQ_STATE_NE);
+
+	return 0;
+}
+
+static int kill_fq(struct device *qidev, struct qman_fq *fq)
+{
+	enum qman_fq_state state;
+	u32 flags;
+	int ret;
+
+	ret = qman_retire_fq(fq, &flags);
+	if (ret < 0) {
+		dev_err(qidev, "qman_retire_fq failed\n");
+		return ret;
+	}
+
+	if (!ret)
+		goto empty_fq;
+
+	/* Async FQ retirement condition */
+	if (1 == ret) {
+		/* Retry till FQ gets in retired state */
+		do {
+			msleep(20);
+			qman_fq_state(fq, &state, &flags);
+		} while (qman_fq_state_retired != state);
+
+		WARN_ON(flags & QMAN_FQ_STATE_BLOCKOOS);
+		WARN_ON(flags & QMAN_FQ_STATE_ORL);
+	}
+
+empty_fq:
+	if (flags & QMAN_FQ_STATE_NE) {
+		ret = empty_retired_fq(qidev, fq);
+		if (ret) {
+			dev_err(qidev, "empty_retired_fq fail for FQ: %u\n",
+				fq->fqid);
+			return ret;
+		}
+	}
+
+	ret = qman_oos_fq(fq);
+	if (ret)
+		dev_err(qidev, "OOS of FQID: %u failed\n", fq->fqid);
+
+	return ret;
+}
+
+/*
+ * TODO: This CAAM FQ empty logic can be improved. We can enqueue a NULL
+ * job descriptor to the FQ. This must be the last enqueue request to the
+ * FQ. When the response of this job comes back, the FQ is empty. Also
+ * holding tanks are guaranteed to be not holding any jobs from this FQ.
+ */
+static int empty_caam_fq(struct qman_fq *fq)
+{
+	int ret;
+	struct qm_mcr_queryfq_np np;
+
+	/* Wait till the older CAAM FQ get empty */
+	do {
+		ret = qman_query_fq_np(fq, &np);
+		if (ret)
+			return ret;
+
+		if (!np.frm_cnt)
+			break;
+
+		msleep(20);
+	} while (1);
+
+	/*
+	 * Give extra time for pending jobs from this FQ in holding tanks
+	 * to get processed
+	 */
+	msleep(20);
+	return 0;
+}
+
+int caam_drv_ctx_update(struct caam_drv_ctx *drv_ctx, u32 *sh_desc)
+{
+	size_t size;
+	u32 num_words;
+	int ret;
+	struct qman_fq *new_fq, *old_fq;
+	struct device *qidev = drv_ctx->qidev;
+
+	/* Check the size of new shared descriptor */
+	num_words = desc_len(sh_desc);
+	if (num_words > MAX_SDLEN) {
+		dev_err(qidev, "Invalid descriptor len: %d words\n",
+			num_words);
+		return -EINVAL;
+	}
+
+	/* Note down older req FQ */
+	old_fq = drv_ctx->req_fq;
+
+	/* Create a new req FQ in parked state */
+	new_fq = create_caam_req_fq(drv_ctx->qidev, drv_ctx->rsp_fq,
+				    drv_ctx->context_a, 0);
+	if (!new_fq) {
+		dev_err(qidev, "FQ allocation for shdesc update failed\n");
+		return PTR_ERR(new_fq);
+	}
+
+	/* Hook up new FQ to context so that new requests keep queueing */
+	drv_ctx->req_fq = new_fq;
+
+	/* Empty and remove the older FQ */
+	ret = empty_caam_fq(old_fq);
+	if (ret) {
+		dev_err(qidev, "Old SEC FQ empty failed\n");
+
+		/* We can revert to older FQ */
+		drv_ctx->req_fq = old_fq;
+
+		if (kill_fq(qidev, new_fq)) {
+			dev_warn(qidev, "New SEC FQ: %u kill failed\n",
+				 new_fq->fqid);
+		}
+
+		return ret;
+	}
+
+	/*
+	 * Now update the shared descriptor for driver context.
+	 * Re-initialise pre-header. Set RSLS and SDLEN
+	 */
+	drv_ctx->prehdr[0] = (1 << PREHDR_RSLS_SHIFT) | num_words;
+
+	/* Copy the new shared descriptor now */
+	memcpy(drv_ctx->sh_desc, sh_desc, desc_bytes(sh_desc));
+
+	size = sizeof(drv_ctx->sh_desc) + sizeof(drv_ctx->prehdr);
+	dma_sync_single_for_device(qidev, drv_ctx->context_a,
+				   size, DMA_BIDIRECTIONAL);
+
+	/* Put the new FQ in scheduled state */
+	ret = qman_schedule_fq(new_fq);
+	if (ret) {
+		dev_err(qidev, "Fail to sched new SEC FQ, ecode = %d\n", ret);
+
+		/*
+		 * We can kill new FQ and revert to old FQ.
+		 * Since the desc is already modified, it is success case
+		 */
+
+		drv_ctx->req_fq = old_fq;
+
+		if (kill_fq(qidev, new_fq)) {
+			dev_warn(qidev, "New SEC FQ: %u kill failed\n",
+				 new_fq->fqid);
+		}
+	} else {
+		/* Remove older FQ */
+		if (kill_fq(qidev, old_fq)) {
+			dev_warn(qidev, "Old SEC FQ: %u kill failed\n",
+				 old_fq->fqid);
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(caam_drv_ctx_update);
+
+
+
 struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 				       int *cpu,
 				       u32 *sh_desc)
@@ -196,9 +503,7 @@ struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 	size_t size;
 	u32 num_words;
 	dma_addr_t hwdesc;
-	int ret, flags;
-	struct qm_mcc_initfq opts;
-	struct qman_fq *req_fq, *rsp_fq;
+	struct qman_fq *rsp_fq;
 	struct caam_drv_ctx *drv_ctx;
 	const cpumask_t *cpus = qman_affine_cpus();
 	static DEFINE_PER_CPU(int, last_cpu);
@@ -223,7 +528,7 @@ struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 	memcpy(drv_ctx->sh_desc, sh_desc, desc_bytes(sh_desc));
 
 	/* Map address for pre-header + descriptor */
-	size = sizeof(drv_ctx->prehdr) + desc_bytes(sh_desc);
+	size = sizeof(drv_ctx->prehdr) + sizeof(drv_ctx->sh_desc);
 	hwdesc = dma_map_single(qidev, drv_ctx->prehdr,
 				size, DMA_BIDIRECTIONAL);
 	if (dma_mapping_error(qidev, hwdesc)) {
@@ -232,7 +537,7 @@ struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	dma_unmap_addr_set(drv_ctx, context_a, hwdesc);
+	drv_ctx->context_a = hwdesc;
 
 	/*
 	 * If the given CPU does not own the portal, choose another
@@ -249,52 +554,20 @@ struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 
 	/* Find response FQ hooked with this CPU*/
 	rsp_fq = &per_cpu(pcpu_qipriv.rsp_fq, drv_ctx->cpu);
+	drv_ctx->rsp_fq = rsp_fq;
 
 	/*Attach request FQ*/
-	req_fq = &drv_ctx->req_fq;
-	req_fq->cb.dqrr = NULL;
-	req_fq->cb.ern = caam_fq_ern_cb;
-	req_fq->cb.fqs = NULL;
-
-	flags = QMAN_FQ_FLAG_DYNAMIC_FQID |
-		QMAN_FQ_FLAG_TO_DCPORTAL |
-		QMAN_FQ_FLAG_LOCKED;
-
-	ret = qman_create_fq(0, flags, req_fq);
-	if (ret) {
-		dev_err(qidev, "Failed to create session REQ FQ\n");
-		goto create_req_fq_fail;
-	}
-
-	flags = QMAN_INITFQ_FLAG_SCHED;
-	opts.we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_DESTWQ |
-			QM_INITFQ_WE_CONTEXTB | QM_INITFQ_WE_CONTEXTA |
-			QM_INITFQ_WE_CGID;
-
-	opts.fqd.fq_ctrl = QM_FQCTRL_CPCSTASH | QM_FQCTRL_CGE;
-	opts.fqd.dest.channel = qm_channel_caam;
-	opts.fqd.dest.wq = 3;
-	opts.fqd.cgid = qipriv.req_cgr.cgrid;
-	opts.fqd.context_b = rsp_fq->fqid;
-	opts.fqd.context_a.hi = upper_32_bits(hwdesc);
-	opts.fqd.context_a.lo = lower_32_bits(hwdesc);
-
-	ret = qman_init_fq(req_fq, flags, &opts);
-	if (ret) {
-		dev_err(qidev, "Failed to init session req FQ\n");
-		goto init_req_fq_fail;
+	drv_ctx->req_fq = create_caam_req_fq(qidev, rsp_fq,
+					     hwdesc, QMAN_INITFQ_FLAG_SCHED);
+	if (!drv_ctx->req_fq) {
+		dev_err(qidev, "create_caam_req_fq failed\n");
+		dma_unmap_single(qidev, hwdesc, size, DMA_BIDIRECTIONAL);
+		kfree(drv_ctx);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	drv_ctx->qidev = qidev;
 	return drv_ctx;
-
-init_req_fq_fail:
-	qman_destroy_fq(req_fq, 0);
-
-create_req_fq_fail:
-	dma_unmap_single(qidev, hwdesc, size, DMA_BIDIRECTIONAL);
-	kfree(drv_ctx);
-	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL(caam_drv_ctx_init);
 
@@ -310,48 +583,6 @@ static int caam_qi_poll(struct napi_struct *napi, int budget)
 	return cleaned;
 }
 
-static int kill_fq(struct device *qidev, struct qman_fq *fq)
-{
-	enum qman_fq_state state;
-	u32 flags;
-	int ret;
-
-	ret = qman_retire_fq(fq, &flags);
-	if (ret < 0) {
-		dev_err(qidev, "qman_retire_fq failed\n");
-		return ret;
-	}
-
-	if (!ret)
-		goto oos_fq;
-
-	/* Async FQ retirement condition */
-	if (1 == ret) {
-		/* Retry till FQ gets in retired state */
-		do {
-			msleep(20);
-			qman_fq_state(fq, &state, &flags);
-		} while (qman_fq_state_retired != state);
-
-		WARN_ON(flags & QMAN_FQ_STATE_BLOCKOOS);
-		WARN_ON(flags & QMAN_FQ_STATE_ORL);
-	}
-
-	/*
-	 * Here the FQ should already be empty.
-	 * This would get ensured since the user module of QI driver
-	 * would need to be removed prior to QI module being removed.
-	 * The user module would be responsible for waiting for any
-	 * outstanding responses from QI driver before it gets removed.
-	 */
-oos_fq:
-	WARN_ON(flags & QMAN_FQ_STATE_NE);
-	ret = qman_oos_fq(fq);
-	if (ret)
-		dev_err(qidev, "OOS of FQID: %u failed\n", fq->fqid);
-
-	return ret;
-}
 
 void caam_drv_ctx_rel(struct caam_drv_ctx *drv_ctx)
 {
@@ -360,13 +591,13 @@ void caam_drv_ctx_rel(struct caam_drv_ctx *drv_ctx)
 	if (!drv_ctx)
 		return;
 
-	size = desc_bytes(drv_ctx->sh_desc) + sizeof(drv_ctx->prehdr);
+	size = sizeof(drv_ctx->sh_desc) + sizeof(drv_ctx->prehdr);
 
 	/* Remove request FQ*/
-	if (kill_fq(drv_ctx->qidev, &drv_ctx->req_fq))
+	if (kill_fq(drv_ctx->qidev, drv_ctx->req_fq))
 		dev_err(drv_ctx->qidev, "Crypto session Req FQ kill failed\n");
 
-	dma_unmap_single(drv_ctx->qidev, dma_unmap_addr(drv_ctx, context_a),
+	dma_unmap_single(drv_ctx->qidev, drv_ctx->context_a,
 			 size, DMA_BIDIRECTIONAL);
 
 	kfree(drv_ctx);
@@ -460,7 +691,7 @@ static int caam_qi_napi_schedule(struct napi_struct *napi)
 	return 0;
 }
 
-static enum qman_cb_dqrr_result	caam_rsp_fq_dqrr_cb(struct qman_portal *p,
+static enum qman_cb_dqrr_result caam_rsp_fq_dqrr_cb(struct qman_portal *p,
 					struct qman_fq *rsp_fq,
 					const struct qm_dqrr_entry *dqrr)
 {
