@@ -1628,7 +1628,7 @@ static struct dpa_bp *dpa_size2pool(struct dpa_priv_s *priv, size_t size)
 	return ERR_PTR(-ENODEV);
 }
 
-static void dpa_set_buffer_layout(struct dpa_priv_s *priv, struct fm_port *port,
+static void dpa_set_buffer_layout(struct fm_port *port,
 				  struct dpa_buffer_layout_s *layout, int type)
 {
 	struct fm_port_params params;
@@ -3593,6 +3593,46 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 			   buf_layout, frag_enabled);
 }
 
+int dpa_alloc_pcd_fqids(struct device *dev, uint32_t num,
+				uint8_t alignment, uint32_t *base_fqid)
+{
+	dev_crit(dev, "callback not implemented!\n");
+	BUG();
+
+	return 0;
+}
+
+int dpa_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
+{
+
+	dev_crit(dev, "callback not implemented!\n");
+	BUG();
+
+	return 0;
+}
+
+static void
+dpaa_eth_init_ports(struct mac_device *mac_dev,
+		struct dpa_bp *bp, size_t count,
+		struct fm_port_fqs *port_fqs,
+		struct dpa_buffer_layout_s *buf_layout,
+		struct device *dev)
+{
+	struct fm_port_pcd_param rx_port_pcd_param;
+	struct fm_port *rxport = mac_dev->port_dev[RX];
+	struct fm_port *txport = mac_dev->port_dev[TX];
+
+	dpaa_eth_init_tx_port(txport, port_fqs->tx_errq,
+			      port_fqs->tx_defq, &buf_layout[TX]);
+	dpaa_eth_init_rx_port(rxport, bp, count, port_fqs->rx_errq,
+			      port_fqs->rx_defq, &buf_layout[RX]);
+
+	rx_port_pcd_param.cba = dpa_alloc_pcd_fqids;
+	rx_port_pcd_param.cbf = dpa_free_pcd_fqids;
+	rx_port_pcd_param.dev = dev;
+	fm_port_pcd_bind(rxport, &rx_port_pcd_param);
+}
+
 static void dpa_fq_setup(struct dpa_priv_s *priv)
 {
 	struct dpa_fq *fq;
@@ -3803,24 +3843,6 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	return dpa_netdev_init(dpa_node, net_dev);
 }
 
-int dpa_alloc_pcd_fqids(struct device *dev, uint32_t num,
-				uint8_t alignment, uint32_t *base_fqid)
-{
-	dev_crit(dev, "callback not implemented!\n");
-	BUG();
-
-	return 0;
-}
-
-int dpa_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
-{
-
-	dev_crit(dev, "callback not implemented!\n");
-	BUG();
-
-	return 0;
-}
-
 static int dpaa_eth_add_channel(void *__arg)
 {
 	const cpumask_t *cpus = qman_affine_cpus();
@@ -3961,8 +3983,8 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 			dev_err(dev, "devm_kzalloc() failed\n");
 			goto alloc_failed;
 		}
-		dpa_set_buffer_layout(priv, rxport, &buf_layout[RX], RX);
-		dpa_set_buffer_layout(priv, txport, &buf_layout[TX], TX);
+		dpa_set_buffer_layout(rxport, &buf_layout[RX], RX);
+		dpa_set_buffer_layout(txport, &buf_layout[TX], TX);
 	}
 
 	if (is_private) {
@@ -4066,19 +4088,9 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	}
 
 	/* All real interfaces need their ports initialized */
-	if (!is_macless) {
-		struct fm_port_pcd_param rx_port_pcd_param;
-
-		dpaa_eth_init_tx_port(txport, port_fqs.tx_errq,
-				      port_fqs.tx_defq, &buf_layout[TX]);
-		dpaa_eth_init_rx_port(rxport, dpa_bp, count, port_fqs.rx_errq,
-				      port_fqs.rx_defq, &buf_layout[RX]);
-
-		rx_port_pcd_param.cba = dpa_alloc_pcd_fqids;
-		rx_port_pcd_param.cbf = dpa_free_pcd_fqids;
-		rx_port_pcd_param.dev = dev;
-		fm_port_pcd_bind(rxport, &rx_port_pcd_param);
-	}
+	if (!is_macless)
+		dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,
+				buf_layout, dev);
 
 	/* Now we need to initialize either a private or shared interface */
 	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
@@ -4150,7 +4162,6 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	struct dpa_bp *dpa_bp;
 	struct list_head proxy_fq_list;
 	size_t count;
-	struct dpa_priv_s *priv = NULL;
 	struct fm_port_fqs port_fqs;
 	struct fm_port *rxport = NULL;
 	struct fm_port *txport = NULL;
@@ -4185,8 +4196,8 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 		dev_err(dev, "devm_kzalloc() failed\n");
 		return -ENOMEM;
 	}
-	dpa_set_buffer_layout(priv, rxport, &buf_layout[RX], RX);
-	dpa_set_buffer_layout(priv, txport, &buf_layout[TX], TX);
+	dpa_set_buffer_layout(rxport, &buf_layout[RX], RX);
+	dpa_set_buffer_layout(txport, &buf_layout[TX], TX);
 
 	INIT_LIST_HEAD(&proxy_fq_list);
 
@@ -4196,27 +4207,15 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	if (!err)
 		err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, false,
 				       TX);
-
 	if (err < 0)
 		return err;
 
 	/* Proxy initializer - Just configures the MAC on behalf of
 	 * another partition.
 	 */
+	dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,
+			buf_layout, dev);
 
-	/* All real interfaces need their ports initialized */
-	dpaa_eth_init_tx_port(txport, port_fqs.tx_errq,
-			      port_fqs.tx_defq, &buf_layout[TX]);
-	dpaa_eth_init_rx_port(rxport, dpa_bp, count, port_fqs.rx_errq,
-			      port_fqs.rx_defq, &buf_layout[RX]);
-	{
-		struct fm_port_pcd_param rx_port_pcd_param;
-
-		rx_port_pcd_param.cba = dpa_alloc_pcd_fqids;
-		rx_port_pcd_param.cbf = dpa_free_pcd_fqids;
-		rx_port_pcd_param.dev = dev;
-		fm_port_pcd_bind(rxport, &rx_port_pcd_param);
-	}
 	/* Proxy interfaces need to be started, and the allocated
 	 * memory freed
 	 */
