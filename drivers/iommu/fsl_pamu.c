@@ -749,6 +749,32 @@ int setup_one_pamu(unsigned long pamu_reg_base, unsigned long pamu_reg_size,
 	return 0;
 }
 
+/*
+ * Primarily to Enable LIODNs which u-boot didn't update in the device tree.
+ */
+static void __init enable_remaining_liodns(void)
+{
+	int liodn;
+	struct paace *ppaace;
+
+	for (liodn = 0; liodn < PAACE_NUMBER_ENTRIES; liodn++) {
+		ppaace = pamu_get_ppaace(liodn);
+		if (!get_bf(ppaace->addr_bitfields, PAACE_AF_V)) {
+			pamu_init_ppaace(ppaace);
+			/* window size is 2^(WSE+1) bytes */
+			set_bf(ppaace->addr_bitfields, PPAACE_AF_WSE, 35);
+			ppaace->wbah = 0;
+			set_bf(ppaace->addr_bitfields, PPAACE_AF_WBAL, 0);
+			set_bf(ppaace->impl_attr, PAACE_IA_ATM,
+				PAACE_ATM_NO_XLATE);
+			set_bf(ppaace->addr_bitfields, PAACE_AF_AP,
+				PAACE_AP_PERMS_ALL);
+			mb();
+			pamu_enable_liodn(liodn);
+		}
+	}
+}
+
 /* Enable all device LIODNS */
 static void __init setup_liodns(void)
 {
@@ -792,6 +818,16 @@ static void __init setup_liodns(void)
 			pamu_enable_liodn(liodn);
 		}
 	}
+
+	/*
+	 * Currently u-boot doesn't fixup LIODNs for cases
+	 * where a frame is passed to a hardware block from
+	 * another hardware block. For example, frame can
+	 * be passed from FMAN rx port to SEC or RMAN. So,
+	 * as a work around we enable all the possible LIODN
+	 * values.
+	 */
+	enable_remaining_liodns();
 }
 
 irqreturn_t pamu_av_isr(int irq, void *arg)
