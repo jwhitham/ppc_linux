@@ -597,6 +597,7 @@ static int alloc_cgrs(struct device *qidev)
 			ret, qipriv.req_cgr.cgrid);
 		goto create_req_cgr_fail;
 	}
+	return 0;
 
 create_req_cgr_fail:
 	qman_release_cgrid(qipriv.req_cgr.cgrid);
