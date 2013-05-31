@@ -136,7 +136,7 @@
  * frames may get recycled, while forwarded skbs that get reallocated on Tx
  * aren't allowed to grow unboundedly.
  */
-#define DPA_RECYCLE_EXTRA_SIZE	256
+#define DPA_RECYCLE_EXTRA_SIZE	1024
 
 /* For MAC-based interfaces, we compute the tx needed headroom from the
  * associated Tx port's buffer layout settings.
