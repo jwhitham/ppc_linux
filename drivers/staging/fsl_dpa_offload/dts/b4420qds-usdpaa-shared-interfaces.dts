@@ -101,7 +101,7 @@
 		};
 		ethernet@2 {
 			compatible = "fsl,b4420-dpa-ethernet-init", "fsl,dpa-ethernet-init";
-			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,bman-buffer-pools = <&bp16>;
 			fsl,qman-frame-queues-rx = <0x54 1 0x55 1>;
 			fsl,qman-frame-queues-tx = <0x74 1 0x75 1>;
 		};
@@ -112,18 +112,25 @@
 			fsl,qman-frame-queues-tx = <0x7c 1 0x7d 1>;
 		};
 
-                /* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
-                 * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
-                 * queues. The ethernet driver will initialize 8 RX default Frame queues.
-                 * On receiving frame at this interface, the ethernet driver will do
-                 * kmap_atomic/kunmap_atomic for that frame. */
-               ethernet@16 {
-                        compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
-                        fsl,bman-buffer-pools = <&bp16>;
-                        fsl,qman-frame-queues-rx = <4000 8>;
-                        fsl,qman-frame-queues-tx = <4008 8>;
-                        local-mac-address = [00 11 22 33 44 55];
-                };
+		/* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
+		 * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
+		 * queues. The ethernet driver will initialize 8 RX default Frame queues.
+		 * On receiving frame at this interface, the ethernet driver will do
+		 * kmap_atomic/kunmap_atomic for that frame. */
+		ethernet@16 {
+			compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <4000 8>;
+			fsl,qman-frame-queues-tx = <4008 8>;
+			local-mac-address = [00 11 22 33 44 55];
+		};
+		ethernet@17 {
+			compatible = "fsl,b4420-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <5000 8>;
+			fsl,qman-frame-queues-tx = <5008 8>;
+			local-mac-address = [00 11 22 33 44 66];
+		};
 
 		dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";

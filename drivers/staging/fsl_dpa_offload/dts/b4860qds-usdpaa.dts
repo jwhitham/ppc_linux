@@ -111,11 +111,12 @@
 			fsl,qman-frame-queues-rx = <0x56 1 0x57 1>;
 			fsl,qman-frame-queues-tx = <0x76 1 0x77 1>;
 		};
-
-		/* ethernet@4 will be used as a normal Linux ethernet that
-		 * interfaces to the kernel network stack. All others will be
-		 * dedicated for use by usdpaa */
-
+		ethernet@4 {
+			compatible = "fsl,b4860-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,qman-frame-queues-rx = <0x58 1 0x59 1>;
+			fsl,qman-frame-queues-tx = <0x78 1 0x79 1>;
+		};
 		ethernet@5 {
 			compatible = "fsl,b4860-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
@@ -123,18 +124,25 @@
 			fsl,qman-frame-queues-tx = <0x7a 1 0x7b 1>;
 		};
 
-	       /* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
-                 * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
-                 * queues. The ethernet driver will initialize 8 RX default Frame queues.
-                 * On receiving frame at this interface, the ethernet driver will do
-                 * kmap_atomic/kunmap_atomic for that frame. */
-               ethernet@16 {
-                        compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
-                        fsl,bman-buffer-pools = <&bp16>;
-                        fsl,qman-frame-queues-rx = <4000 8>;
-                        fsl,qman-frame-queues-tx = <4008 8>;
-                        local-mac-address = [00 11 22 33 44 55];
-                };
+		/* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
+		 * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
+		 * queues. The ethernet driver will initialize 8 RX default Frame queues.
+		 * On receiving frame at this interface, the ethernet driver will do
+		 * kmap_atomic/kunmap_atomic for that frame. */
+		ethernet@16 {
+			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <4000 8>;
+			fsl,qman-frame-queues-tx = <4008 8>;
+			local-mac-address = [00 11 22 33 44 55];
+		};
+		ethernet@17 {
+			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <5000 8>;
+			fsl,qman-frame-queues-tx = <5008 8>;
+			local-mac-address = [00 11 22 33 44 66];
+		};
 
 		dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";
