@@ -1628,21 +1628,32 @@ static struct dpa_bp *dpa_size2pool(struct dpa_priv_s *priv, size_t size)
 	return ERR_PTR(-ENODEV);
 }
 
-static void dpa_set_buffer_layout(struct fm_port *port,
-				  struct dpa_buffer_layout_s *layout, int type)
+static void dpa_set_buffers_layout(struct mac_device *mac_dev,
+				  struct dpa_buffer_layout_s *layout)
 {
 	struct fm_port_params params;
 
-	layout->priv_data_size = (type == RX ?
-			DPA_RX_PRIV_DATA_SIZE : DPA_TX_PRIV_DATA_SIZE);
-	layout->parse_results = true;
-	layout->hash_results = true;
+	/* Rx */
+	layout[RX].priv_data_size = DPA_RX_PRIV_DATA_SIZE;
+	layout[RX].parse_results = true;
+	layout[RX].hash_results = true;
 #if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
-	layout->time_stamp = true;
+	layout[RX].time_stamp = true;
 #endif
-	fm_port_get_buff_layout_ext_params(port, &params);
-	layout->manip_extra_space = params.manip_extra_space;
-	layout->data_align = params.data_align;
+	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[RX], &params);
+	layout[RX].manip_extra_space = params.manip_extra_space;
+	layout[RX].data_align = params.data_align;
+
+	/* Tx */
+	layout[TX].priv_data_size = DPA_TX_PRIV_DATA_SIZE;
+	layout[TX].parse_results = true;
+	layout[TX].hash_results = true;
+#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+	layout[TX].time_stamp = true;
+#endif
+	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[TX], &params);
+	layout[TX].manip_extra_space = params.manip_extra_space;
+	layout[TX].data_align = params.data_align;
 }
 
 /**
@@ -3917,8 +3928,6 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	struct dpa_priv_s *priv = NULL;
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct fm_port_fqs port_fqs;
-	struct fm_port *rxport = NULL;
-	struct fm_port *txport = NULL;
 	struct dpa_buffer_layout_s *buf_layout = NULL;
 	struct mac_device *mac_dev;
 	struct task_struct *kth;
@@ -3971,9 +3980,6 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 	/* Now the interface type is known */
 
 	if (!is_macless) {
-		rxport = mac_dev->port_dev[RX];
-		txport = mac_dev->port_dev[TX];
-
 		/* We have physical ports, so we need to establish
 		 * the buffer layout.
 		 */
@@ -3983,8 +3989,7 @@ dpaa_eth_probe(struct platform_device *_of_dev)
 			dev_err(dev, "devm_kzalloc() failed\n");
 			goto alloc_failed;
 		}
-		dpa_set_buffer_layout(rxport, &buf_layout[RX], RX);
-		dpa_set_buffer_layout(txport, &buf_layout[TX], TX);
+		dpa_set_buffers_layout(mac_dev, buf_layout);
 	}
 
 	if (is_private) {
@@ -4163,8 +4168,6 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	struct list_head proxy_fq_list;
 	size_t count;
 	struct fm_port_fqs port_fqs;
-	struct fm_port *rxport = NULL;
-	struct fm_port *txport = NULL;
 	struct dpa_buffer_layout_s *buf_layout = NULL;
 	struct mac_device *mac_dev;
 
@@ -4184,9 +4187,6 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	if (IS_ERR(mac_dev))
 		return PTR_ERR(mac_dev);
 
-	rxport = mac_dev->port_dev[RX];
-	txport = mac_dev->port_dev[TX];
-
 	/* We have physical ports, so we need to establish
 	 * the buffer layout.
 	 */
@@ -4196,8 +4196,7 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 		dev_err(dev, "devm_kzalloc() failed\n");
 		return -ENOMEM;
 	}
-	dpa_set_buffer_layout(rxport, &buf_layout[RX], RX);
-	dpa_set_buffer_layout(txport, &buf_layout[TX], TX);
+	dpa_set_buffers_layout(mac_dev, buf_layout);
 
 	INIT_LIST_HEAD(&proxy_fq_list);
 
