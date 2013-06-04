@@ -3553,12 +3553,16 @@ static void dpa_setup_egress(struct dpa_priv_s *priv,
 	/* Allocate frame queues to all available CPUs no matter the number of
 	 * queues specified in device tree.
 	 */
-	for (i = 0; i < DPAA_ETH_TX_QUEUES; i++) {
+	for (i = 0, ptr = &fq->list; i < DPAA_ETH_TX_QUEUES; i++) {
 		iter = list_entry(ptr, struct dpa_fq, list);
 		priv->egress_fqs[i] = &iter->fq_base;
 
-		if (list_is_last(ptr, head))
+		if (list_is_last(ptr, head)) {
 			ptr = &fq->list;
+			continue;
+		}
+
+		ptr = ptr->next;
 	}
 }
 
