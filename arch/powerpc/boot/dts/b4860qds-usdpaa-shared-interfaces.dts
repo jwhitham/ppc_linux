@@ -142,7 +142,7 @@
 		ethernet@9 {
 			compatible = "fsl,b4860-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,bman-buffer-pools = <&bp17>;
-			fsl,qman-frame-queues-rx = <0x66 1 0x67 1 0x2000 3>;
+			fsl,qman-frame-queues-rx = <0x5e 1 0x5f 1 0x2000 3>;
 			fsl,qman-frame-queues-tx = <0 1 0 1 0x3000 8>;
 		};
 
