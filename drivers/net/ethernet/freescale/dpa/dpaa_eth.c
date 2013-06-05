@@ -4218,6 +4218,7 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	/* Proxy interfaces need to be started, and the allocated
 	 * memory freed
 	 */
+	devm_kfree(dev, buf_layout);
 	devm_kfree(dev, dpa_bp);
 
 	/* Free FQ structures */
@@ -4274,6 +4275,8 @@ static int __cold dpa_remove(struct platform_device *of_dev)
 	free_percpu(priv->percpu_priv);
 
 	dpa_bp_free(priv, priv->dpa_bp);
+	if (priv->buf_layout)
+		devm_kfree(dev, priv->buf_layout);
 
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	/* remove debugfs entry for this net_device */
