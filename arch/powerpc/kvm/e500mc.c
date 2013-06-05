@@ -126,7 +126,7 @@ void kvmppc_core_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	vcpu->arch.epsc = vcpu->arch.eplc;
 
 	if (vcpu->arch.oldpir != mfspr(SPRN_PIR))
-		printk(KERN_DEBUG "vcpu 0x%p loaded on PID %d, lpid %d\n",
+		pr_debug("vcpu 0x%p loaded on PID %d, lpid %d\n",
 		       vcpu, smp_processor_id(), (int)vcpu->arch.lpid);
 
 	mtspr(SPRN_LPID, vcpu->arch.lpid);
