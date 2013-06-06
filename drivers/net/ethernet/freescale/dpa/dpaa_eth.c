@@ -130,13 +130,17 @@
 #define DPA_MAX_FD_OFFSET	((1 << 9) - 1)
 
 /*
- * Extra size of a buffer (beyond the size of the buffers that are seeded into
- * the global pool) for which recycling is allowed.
- * The value is arbitrary, but tries to reach a balance such that originating
- * frames may get recycled, while forwarded skbs that get reallocated on Tx
- * aren't allowed to grow unboundedly.
+ * Maximum size of a buffer for which recycling is allowed.
+ * We need an upper limit such that forwarded skbs that get reallocated on Tx
+ * aren't allowed to grow unboundedly. On the other hand, we need to make sure
+ * that skbs allocated by us will not fail to be recycled due to their size.
+ *
+ * For a requested size, the kernel allocator provides the next power of two
+ * sized block, which the stack will use as is, regardless of the actual size
+ * it required; since we must acommodate at most 9.6K buffers (L2 maximum
+ * supported frame size), set the recycling upper limit to 16K.
  */
-#define DPA_RECYCLE_EXTRA_SIZE	1024
+#define DPA_RECYCLE_MAX_SIZE	16384
 
 /* For MAC-based interfaces, we compute the tx needed headroom from the
  * associated Tx port's buffer layout settings.
@@ -1944,8 +1948,7 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 	 * - there's enough room in the buffer pool
 	 */
 	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
-		   (skb_end_pointer(skb) - skb->head <=
-			dpa_bp->size + DPA_RECYCLE_EXTRA_SIZE) &&
+		   (skb_end_pointer(skb) - skb->head <= DPA_RECYCLE_MAX_SIZE) &&
 		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
