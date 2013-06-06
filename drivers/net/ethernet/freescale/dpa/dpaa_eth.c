@@ -1271,10 +1271,9 @@ static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 static int dpa_process_one(struct dpa_percpu_priv_s *percpu_priv,
 		struct sk_buff *skb, struct dpa_bp *bp, const struct qm_fd *fd)
 {
-	dma_addr_t addr = qm_fd_addr(fd);
-	u32 addrlo = lower_32_bits(addr);
-	u32 skblo = lower_32_bits((unsigned long)skb->head);
-	u32 pad = (addrlo - skblo) & (PAGE_SIZE - 1);
+	dma_addr_t fd_addr = qm_fd_addr(fd);
+	unsigned long skb_addr = virt_to_phys(skb->head);
+	u32 pad = fd_addr - skb_addr;
 	unsigned int data_start;
 
 	(*percpu_priv->dpa_bp_count)--;
