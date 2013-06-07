@@ -128,7 +128,9 @@ release_bufs:
 	return i;
 
 bail_out:
-	dev_err(dpa_bp->dev, "dpa_bp_add_8_pages() failed\n");
+	net_err_ratelimited("dpa_bp_add_8_pages() failed\n");
+	WARN_ONCE(1, "Memory allocation failure on Rx\n");
+
 	bm_buffer_set64(&bmb[i], 0);
 	/*
 	 * Avoid releasing a completely null buffer; bman_release() requires

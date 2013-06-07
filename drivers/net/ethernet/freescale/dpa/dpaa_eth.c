@@ -395,6 +395,7 @@ static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+	int new_pages;
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/* this function is called in softirq context;
 	 * no need to protect smp_processor_id() on RT kernel
@@ -409,8 +410,17 @@ static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 	}
 #else
 	/* Add pages to the buffer pool */
-	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
-		count += _dpa_bp_add_8_pages(dpa_bp);
+	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
+		new_pages = _dpa_bp_add_8_pages(dpa_bp);
+		if (unlikely(!new_pages)) {
+			/* Avoid looping forever if we've temporarily
+			 * run out of memory. We'll try again at the next
+			 * NAPI cycle.
+			 */
+			break;
+		}
+		count += new_pages;
+	}
 	*countptr = count;
 #endif
 }
