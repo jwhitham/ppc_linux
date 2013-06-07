@@ -129,7 +129,9 @@ release_bufs:
 	return i;
 
 bail_out:
-	dev_err(dpa_bp->dev, "dpa_bp_add_8_pages() failed\n");
+	net_err_ratelimited("dpa_bp_add_8_pages() failed\n");
+	WARN_ONCE(1, "Memory allocation failure on Rx\n");
+
 	bm_buffer_set64(&bmb[i], 0);
 	/*
 	 * Avoid releasing a completely null buffer; bman_release() requires
@@ -178,10 +180,20 @@ void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+	int new_pages;
 
 	/* Add pages to the buffer pool */
-	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
-		count += _dpa_bp_add_8_pages(dpa_bp);
+	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
+		new_pages = _dpa_bp_add_8_pages(dpa_bp);
+		if (unlikely(!new_pages)) {
+			/* Avoid looping forever if we've temporarily
+			 * run out of memory. We'll try again at the next
+			 * NAPI cycle.
+			 */
+			break;
+		}
+		count += new_pages;
+	}
 	*countptr = count;
 }
 
