@@ -94,6 +94,9 @@ void sdhci_get_of_property(struct platform_device *pdev)
 			host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
 		}
 
+		if (of_device_is_compatible(np, "fsl,p5020-esdhc"))
+			host->quirks2 |= SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ;
+
 		if (of_device_is_compatible(np, "fsl,p5040-esdhc") ||
 			of_device_is_compatible(np, "fsl,p4080-esdhc") ||
 			of_device_is_compatible(np, "fsl,p1020-esdhc"))
