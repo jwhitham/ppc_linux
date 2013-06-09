@@ -102,12 +102,22 @@ struct dpa_buffer_layout_s {
 	 FM_PORT_FRM_ERR_PRS_ILL_INSTRUCT | FM_PORT_FRM_ERR_PRS_HDR_ERR)
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-/* We may want this value configurable. Must be <= PAGE_SIZE minus a reserved
- * area where skb shared info can reside
- * A lower value may help with recycling rates, at least on forwarding.
+/* Can't be paranoid enough: we want this cacheline-aligned.
+ * netdev_alloc_frag() will use it as is, so we have to do the
+ * alignment job here.
  */
-#define DPA_SKB_TAILROOM	SKB_DATA_ALIGN(sizeof(struct skb_shared_info))
-#define dpa_bp_size(buffer_layout)	(PAGE_SIZE - DPA_SKB_TAILROOM)
+#define DPA_BP_RAW_SIZE		((PAGE_SIZE >> 1) & ~(SMP_CACHE_BYTES - 1))
+/* This is what FMan is ever allowed to use.
+ * FMan-DMA requires 16-byte alignment for Rx buffers, but SKB_DATA_ALIGN is
+ * even stronger (SMP_CACHE_BYTES-aligned), so we just get away with that,
+ * via SKB_WITH_OVERHEAD(). We can't rely on netdev_alloc_frag() giving us
+ * half-page-aligned buffers (can we?), so we reserve some more space
+ * for start-of-buffer alignment.
+ */
+#define dpa_bp_size(buffer_layout)	(SKB_WITH_OVERHEAD(DPA_BP_RAW_SIZE) - \
+						SMP_CACHE_BYTES)
+/* We must ensure that skb_shinfo is always cacheline-aligned. */
+#define DPA_SKB_SIZE(size)	((size) & ~(SMP_CACHE_BYTES - 1))
 #else
 
 /* Default buffer size is based on L2 MAX_FRM value, minus the FCS which

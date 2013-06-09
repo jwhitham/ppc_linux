@@ -46,22 +46,17 @@
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
 
-/* DMA map and add a page into the bpool */
-static void dpa_bp_add_page(struct dpa_bp *dpa_bp, unsigned long vaddr)
+/* DMA map and add a page frag back into the bpool.
+ * @vaddr fragment must have been allocated with netdev_alloc_frag(),
+ * specifically for fitting into @dpa_bp.
+ */
+static void dpa_bp_recycle_frag(struct dpa_bp *dpa_bp, unsigned long vaddr)
 {
 	struct bm_buffer bmb;
 	int *count_ptr;
 	dma_addr_t addr;
-	int offset;
 
 	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
-
-	/* Make sure we don't map beyond end of page */
-	offset = vaddr & (PAGE_SIZE - 1);
-	if (unlikely(dpa_bp->size + offset > PAGE_SIZE)) {
-		free_page(vaddr);
-		return;
-	}
 	addr = dma_map_single(dpa_bp->dev, (void *)vaddr, dpa_bp->size,
 			      DMA_BIDIRECTIONAL);
 	if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
@@ -80,21 +75,22 @@ static void dpa_bp_add_page(struct dpa_bp *dpa_bp, unsigned long vaddr)
 int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp)
 {
 	struct bm_buffer bmb[8];
-	unsigned long new_page;
+	void *new_buf;
 	dma_addr_t addr;
 	int i;
 	struct device *dev = dpa_bp->dev;
 
 	for (i = 0; i < 8; i++) {
-		new_page = __get_free_page(GFP_ATOMIC);
-		if (likely(new_page)) {
-			addr = dma_map_single(dev, (void *)new_page,
+		new_buf = netdev_alloc_frag(DPA_BP_RAW_SIZE);
+		if (likely(new_buf)) {
+			new_buf = PTR_ALIGN(new_buf, SMP_CACHE_BYTES);
+			addr = dma_map_single(dev, new_buf,
 					dpa_bp->size, DMA_BIDIRECTIONAL);
 			if (likely(!dma_mapping_error(dev, addr))) {
 				bm_buffer_set64(&bmb[i], addr);
 				continue;
 			} else
-				free_page(new_page);
+				put_page(virt_to_head_page(new_buf));
 		}
 
 		/* Something went wrong */
@@ -296,6 +292,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	struct sk_buff *skb = NULL;
 
 	vaddr = phys_to_virt(addr);
+	BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 
 	/* do we need the timestamp for bad frames? */
 #ifdef CONFIG_FSL_DPAA_1588
@@ -303,14 +300,19 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 		dpa_ptp_store_rxstamp(priv, skb, vaddr);
 #endif
 
-	/* Build the skb and adjust data and tail pointers */
-	skb = build_skb(vaddr, dpa_bp->size + DPA_SKB_TAILROOM);
+	/* Build the skb and adjust data and tail pointers, to make sure
+	 * forwarded skbs will have enough space on Tx if extra headers
+	 * are added.
+	 *
+	 * Caveat: we must make it so both skb->head and skb->end (hence,
+	 * skb_shinfo) be SMP_CACHE_BYTES-aligned. The former is aligned,
+	 * thanks to vaddr. We still need to adjust the size accordingly.
+	 */
+	skb = build_skb(vaddr, DPA_SKB_SIZE(dpa_bp->size) +
+		SKB_DATA_ALIGN(sizeof(struct skb_shared_info)));
 	if (unlikely(!skb))
 		return NULL;
 
-	/* Make sure forwarded skbs will have enough space on Tx,
-	 * if extra headers are added.
-	 */
 	BUG_ON(fd_off != priv->tx_headroom + dpa_get_rx_extra_headroom());
 	skb_reserve(skb, fd_off);
 	skb_put(skb, dpa_fd_length(fd));
@@ -332,7 +334,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
  * Build an skb with the data of the first S/G entry in the linear portion and
  * the rest of the frame as skb fragments.
  *
- * The page holding the S/G Table is recycled here.
+ * The page fragment holding the S/G Table is recycled here.
  */
 static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			       const struct qm_fd *fd, int *use_gro)
@@ -343,7 +345,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	dma_addr_t sg_addr;
 	void *vaddr, *sg_vaddr;
 	struct dpa_bp *dpa_bp;
-	struct page *page;
+	struct page *page, *head_page;
 	int frag_offset, frag_len;
 	int page_offset;
 	int i;
@@ -352,6 +354,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int *count_ptr;
 
 	vaddr = phys_to_virt(addr);
+	BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(priv, skb, vaddr);
@@ -374,6 +377,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 
 		sg_addr = qm_sg_addr(&sgt[i]);
 		sg_vaddr = phys_to_virt(sg_addr);
+		BUG_ON(!IS_ALIGNED((unsigned long)sg_vaddr, SMP_CACHE_BYTES));
 
 		if (i == 0) {
 			/* Tentatively access the first buffer, but don't unmap
@@ -385,8 +389,8 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			/* This is the first S/G entry, so build the skb
 			 * around its data buffer
 			 */
-			skb = build_skb(sg_vaddr,
-					dpa_bp->size + DPA_SKB_TAILROOM);
+			skb = build_skb(sg_vaddr, DPA_SKB_SIZE(dpa_bp->size) +
+				SKB_DATA_ALIGN(sizeof(struct skb_shared_info)));
 			if (unlikely(!skb))
 				/* dpa_fd_release() will put the current frame
 				 * back into the pool. DMA mapping status has
@@ -421,16 +425,26 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			 * be added in an skb fragment; fragment index is offset
 			 * by one since first S/G entry was incorporated in the
 			 * linear part of the skb.
+			 *
+			 * Caution: 'page' may be a tail page.
 			 */
-			page = pfn_to_page(sg_addr >> PAGE_SHIFT);
-			page_offset = (unsigned long)sg_vaddr & (PAGE_SIZE - 1);
+			page = virt_to_page(sg_vaddr);
+			head_page = virt_to_head_page(sg_vaddr);
+			/* Compute offset in (possibly tail) page */
+			page_offset = ((unsigned long)sg_vaddr &
+					(PAGE_SIZE - 1)) +
+				(page_address(page) - page_address(head_page));
+			/* page_offset only refers to the beginning of sgt[i];
+			 * but the buffer itself may have an internal offset.
+			 */
 			frag_offset = sgt[i].offset + page_offset;
 			frag_len = sgt[i].length;
-			/* TODO kernel 3.8 fixup; we might want to account for
-			 * the true-truesize.
+			/* skb_add_rx_frag() does no checking on the page; if
+			 * we pass it a tail page, we'll end up with
+			 * bad page accounting and eventually with segafults.
 			 */
-			skb_add_rx_frag(skb, i - 1, page, frag_offset, frag_len,
-					frag_len);
+			skb_add_rx_frag(skb, i - 1, head_page, frag_offset,
+				frag_len, dpa_bp->size);
 		}
 		/* Update the pool count for the current {cpu x bpool} */
 		(*count_ptr)--;
@@ -438,11 +452,12 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 		if (sgt[i].final)
 			break;
 	}
+	WARN_ONCE(i == DPA_SGT_MAX_ENTRIES, "No final bit on SGT\n");
 
-	/* recycle the SGT page */
+	/* recycle the SGT fragment */
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(IS_ERR(dpa_bp));
-	dpa_bp_add_page(dpa_bp, (unsigned long)vaddr);
+	dpa_bp_recycle_frag(dpa_bp, (unsigned long)vaddr);
 	return skb;
 }
 
@@ -653,12 +668,9 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		sgt[i].extension = 0;
 		sgt[i].final = 0;
 
-		/* This shouldn't happen */
-		BUG_ON(!frag->page.p);
-
+		BUG_ON(!skb_frag_page(frag));
 		addr = skb_frag_dma_map(dpa_bp->dev, frag, 0, dpa_bp->size,
 					dma_dir);
-
 		if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
 			dev_err(dpa_bp->dev, "DMA mapping failed");
 			err = -EINVAL;
