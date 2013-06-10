@@ -34,7 +34,7 @@ endmenu
 
 config FMAN_RESOURCE_ALLOCATION_ALGORITHM
 	bool "Enable FMan dynamic resource allocation algorithm"
-	default n
+	default y if ((FMAN_P3040_P4080_P5020 || FMAN_P1023) && FSL_DPAA_ETH_OPTIMIZE_FOR_IPFWD)
 	---help---
 		Enables algorithm for dynamic resource allocation
 
