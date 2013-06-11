@@ -3181,7 +3181,8 @@ static struct dpa_fq *dpa_fq_alloc(struct device *dev,
 
 /* Probing of FQs for MACful ports */
 static int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
-			    struct fm_port_fqs *port_fqs, bool is_shared,
+			    struct fm_port_fqs *port_fqs,
+			    bool tx_conf_fqs_per_core,
 			    enum port_type ptype)
 {
 	const struct fqid_cell *fqids;
@@ -3190,14 +3191,14 @@ static int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 	int num_ranges;
 	int i, lenp;
 
-	if (ptype == TX && !is_shared) {
+	if (ptype == TX && tx_conf_fqs_per_core) {
 		/* Use per-core tx confirmation queues on private ports */
 		if (!dpa_fq_alloc(dev, tx_confirm_fqids, list,
 				  FQ_TYPE_TX_CONF_MQ))
 			goto fq_alloc_failed;
 
 #ifdef CONFIG_FSL_DPAA_TX_RECYCLE
-		/* per-core tx queues for recycleable frames (FManv3 only) */
+		/* per-core Tx queues for recyclable frames (FManv3 only) */
 		if (!dpa_fq_alloc(dev, tx_recycle_fqids, list,
 				  FQ_TYPE_TX_RECYCLE))
 			goto fq_alloc_failed;
@@ -3766,10 +3767,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	memset(&port_fqs, 0, sizeof(port_fqs));
 
-	err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list, &port_fqs, false, RX);
+	err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list, &port_fqs, true, RX);
 	if (!err)
 		err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list,
-				       &port_fqs, false, TX);
+				       &port_fqs, true, TX);
 
 	if (err < 0)
 		goto fq_probe_failed;
@@ -3952,10 +3953,10 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	memset(&port_fqs, 0, sizeof(port_fqs));
 
 	err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list, &port_fqs,
-			       true, RX);
+			       false, RX);
 	if (!err)
 		err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list,
-				       &port_fqs, true, TX);
+				       &port_fqs, false, TX);
 	if (err < 0)
 		goto fq_probe_failed;
 
@@ -4077,6 +4078,7 @@ dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	struct dpa_percpu_priv_s *percpu_priv;
 	struct fm_port_fqs port_fqs;
 	struct task_struct *kth;
+	static u8 macless_idx;
 
 	dev = &_of_dev->dev;
 
@@ -4173,6 +4175,8 @@ dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		goto netdev_init_failed;
 
+	priv->macless_idx = macless_idx++;
+
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
 	return 0;
@@ -4245,9 +4249,9 @@ dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 
 	memset(&port_fqs, 0, sizeof(port_fqs));
 
-	err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, false, RX);
+	err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true, RX);
 	if (!err)
-		err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, false,
+		err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true,
 				       TX);
 	if (err < 0)
 		return err;

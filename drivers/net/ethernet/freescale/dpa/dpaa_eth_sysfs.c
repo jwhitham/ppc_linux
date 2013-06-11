@@ -41,8 +41,6 @@
 #include "dpaa_1588.h"
 #endif
 
-static u8 macless_idx;
-
 static ssize_t dpaa_eth_show_addr(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -231,23 +229,15 @@ static struct device_attribute dpaa_eth_attrs[] = {
 
 void dpaa_eth_sysfs_init(struct device *dev)
 {
-	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(dpaa_eth_attrs); i++)
 		if (device_create_file(dev, &dpaa_eth_attrs[i])) {
 			dev_err(dev, "Error creating sysfs file\n");
-			goto device_create_file_failed;
+			while (i > 0)
+				device_remove_file(dev, &dpaa_eth_attrs[--i]);
+			return;
 		}
-
-	if (!priv->mac_dev)
-		priv->macless_idx = macless_idx++;
-
-	return;
-
-device_create_file_failed:
-	while (i > 0)
-		device_remove_file(dev, &dpaa_eth_attrs[--i]);
 }
 
 void dpaa_eth_sysfs_remove(struct device *dev)
