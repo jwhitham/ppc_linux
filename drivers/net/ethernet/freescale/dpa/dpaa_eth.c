@@ -69,6 +69,9 @@
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 #include "dpaa_debugfs.h"
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
+#include "dpaa_eth_unit_test.h"
+#endif /* CONFIG_FSL_DPAA_ETH_UNIT_TESTS */
 
 /* CREATE_TRACE_POINTS only needs to be defined once. Other dpa files
  * using trace events only need to #include <trace/events/sched.h>
@@ -84,10 +87,6 @@
 #define DPA_NETIF_FEATURES	(NETIF_F_HW_QDISC | NETIF_F_HW_ACCEL_MQ)
 #else
 #define DPA_NETIF_FEATURES	NETIF_F_HW_ACCEL_MQ
-#endif
-
-#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
-#undef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
 #endif
 
 #define DPA_NAPI_WEIGHT		64
@@ -163,7 +162,7 @@ MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
 
 /* dpaa_eth mirror for the FMan values */
 static int dpa_rx_extra_headroom;
-static int dpa_max_frm;
+int dpa_max_frm;
 
 static const char rtx[][3] = {
 	[RX] = "RX",
@@ -2635,312 +2634,6 @@ static const struct qman_fq shared_egress_fq = {
 	.cb = { .ern = shared_ern }
 };
 
-#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
-static bool tx_unit_test_passed = true;
-
-static void tx_unit_test_ern(struct qman_portal	*portal,
-		       struct qman_fq		*fq,
-		       const struct qm_mr_entry	*msg)
-{
-	struct net_device *net_dev;
-	struct dpa_priv_s *priv;
-	struct sk_buff **skbh;
-	struct sk_buff *skb;
-	const struct qm_fd *fd;
-	dma_addr_t addr;
-
-	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	tx_unit_test_passed = false;
-
-	fd = &msg->ern.fd;
-
-	addr = qm_fd_addr(fd);
-
-	skbh = (struct sk_buff **)phys_to_virt(addr);
-	skb = *skbh;
-
-	if (!skb || !is_kernel_addr((unsigned long)skb))
-		panic("Corrupt skb in ERN!\n");
-
-	kfree_skb(skb);
-}
-
-static unsigned char *tx_unit_skb_head;
-static unsigned char *tx_unit_skb_end;
-static int tx_unit_tested;
-
-static enum qman_cb_dqrr_result tx_unit_test_dqrr(
-		struct qman_portal *portal,
-		struct qman_fq *fq,
-		const struct qm_dqrr_entry *dq)
-{
-	struct net_device *net_dev;
-	struct dpa_priv_s *priv;
-	struct sk_buff **skbh;
-	struct sk_buff *skb;
-	const struct qm_fd *fd;
-	dma_addr_t addr;
-	unsigned char *startaddr;
-	struct dpa_percpu_priv_s *percpu_priv;
-
-	tx_unit_test_passed = false;
-
-	tx_unit_tested++;
-
-	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-
-	fd = &dq->fd;
-
-	addr = qm_fd_addr(fd);
-
-	skbh = (struct sk_buff **)phys_to_virt(addr);
-	startaddr = (unsigned char *)skbh;
-	skb = *skbh;
-
-	if (!skb || !is_kernel_addr((unsigned long)skb))
-		panic("Invalid skb address in TX Unit Test FD\n");
-
-	/* Make sure we're dealing with the same skb */
-	if (skb->head != tx_unit_skb_head
-			|| skb_end_pointer(skb) != tx_unit_skb_end)
-		goto out;
-
-	/*
-	 * If we recycled, then there must be enough room between fd.addr
-	 * and skb->end for a new RX buffer
-	 */
-	if (fd->cmd & FM_FD_CMD_FCO) {
-		size_t bufsize = skb_end_pointer(skb) - startaddr;
-
-		if (bufsize < dpa_get_max_frm())
-			goto out;
-	} else {
-		/*
-		 * If we didn't recycle, but the buffer was big enough,
-		 * increment the counter to put it back
-		 */
-		if (skb_end_pointer(skb) - skb->head >=
-			dpa_get_max_frm())
-			(*percpu_priv->dpa_bp_count)++;
-
-		/* If we didn't recycle, the data pointer should be good */
-		if (skb->data != startaddr + dpa_fd_offset(fd))
-			goto out;
-	}
-
-	tx_unit_test_passed = true;
-out:
-	/* The skb is no longer needed, and belongs to us */
-	kfree_skb(skb);
-
-	return qman_cb_dqrr_consume;
-}
-
-static const struct qman_fq tx_unit_test_fq = {
-	.cb = { .dqrr = tx_unit_test_dqrr, .ern = tx_unit_test_ern }
-};
-
-static struct dpa_fq unit_fq;
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
-static struct dpa_fq unit_recycle_fq;
-#endif
-static bool tx_unit_test_ran; /* Starts as false */
-
-static int dpa_tx_unit_test(struct net_device *net_dev)
-{
-	/* Create a new FQ */
-	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	struct qman_fq *oldq;
-	int size, headroom;
-	struct dpa_percpu_priv_s *percpu_priv;
-	cpumask_var_t old_cpumask;
-	int test_count = 0;
-	int err = 0;
-	int tests_failed = 0;
-	const cpumask_t *cpus = qman_affine_cpus();
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
-	struct qman_fq *oldrecycleq;
-#endif
-
-	if (!alloc_cpumask_var(&old_cpumask, GFP_KERNEL)) {
-		pr_err("UNIT test cpumask allocation failed\n");
-		return -ENOMEM;
-	}
-
-	cpumask_copy(old_cpumask, tsk_cpus_allowed(current));
-	set_cpus_allowed_ptr(current, cpus);
-	/* disable bottom halves */
-	local_bh_disable();
-
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-
-	qman_irqsource_remove(QM_PIRQ_DQRI);
-	unit_fq.net_dev = net_dev;
-	unit_fq.fq_base = tx_unit_test_fq;
-
-	/* Save old queue */
-	oldq = priv->egress_fqs[smp_processor_id()];
-
-	err = qman_create_fq(0, QMAN_FQ_FLAG_DYNAMIC_FQID, &unit_fq.fq_base);
-
-	if (err < 0) {
-		pr_err("UNIT test FQ create failed: %d\n", err);
-		goto fq_create_fail;
-	}
-
-	err = qman_init_fq(&unit_fq.fq_base,
-			QMAN_INITFQ_FLAG_SCHED | QMAN_INITFQ_FLAG_LOCAL, NULL);
-	if (err < 0) {
-		pr_err("UNIT test FQ init failed: %d\n", err);
-		goto fq_init_fail;
-	}
-
-	/* Replace queue 0 with this queue */
-	priv->egress_fqs[smp_processor_id()] = &unit_fq.fq_base;
-
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
-	oldrecycleq = priv->recycle_fqs[smp_processor_id()];
-	unit_recycle_fq.net_dev = net_dev;
-	unit_recycle_fq.fq_base = tx_unit_test_fq;
-
-	err = qman_create_fq(0, QMAN_FQ_FLAG_DYNAMIC_FQID,
-			&unit_recycle_fq.fq_base);
-
-	if (err < 0) {
-		pr_err("UNIT test Recycle FQ create failed: %d\n", err);
-		goto recycle_fq_create_fail;
-	}
-
-	err = qman_init_fq(&unit_recycle_fq.fq_base,
-			QMAN_INITFQ_FLAG_SCHED | QMAN_INITFQ_FLAG_LOCAL, NULL);
-	if (err < 0) {
-		pr_err("UNIT test Recycle FQ init failed: %d\n", err);
-		goto recycle_fq_init_fail;
-	}
-
-	priv->recycle_fqs[smp_processor_id()] = &unit_recycle_fq.fq_base;
-
-	pr_err("TX Unit Test using FQ: %d - Recycle FQ: %d\n",
-		qman_fq_fqid(&unit_fq.fq_base),
-		qman_fq_fqid(&unit_recycle_fq.fq_base));
-#else
-	pr_err("TX Unit Test using FQ %d\n", qman_fq_fqid(&unit_fq.fq_base));
-#endif
-
-	/* Try packet sizes from 64-bytes to just above the maximum */
-	for (size = 64; size <= 9600 + 128; size += 64) {
-		for (headroom = priv->tx_headroom; headroom < 0x800;
-		     headroom += 16) {
-			int ret;
-			struct sk_buff *skb;
-
-			test_count++;
-
-			skb = dev_alloc_skb(size + headroom);
-
-			if (!skb) {
-				pr_err("Failed to allocate skb\n");
-				err = -ENOMEM;
-				goto end_test;
-			}
-
-			if (skb_end_pointer(skb) - skb->head >=
-					dpa_get_max_frm())
-				(*percpu_priv->dpa_bp_count)--;
-
-			skb_put(skb, size + headroom);
-			skb_pull(skb, headroom);
-
-			tx_unit_skb_head = skb->head;
-			tx_unit_skb_end = skb_end_pointer(skb);
-
-			skb_set_queue_mapping(skb, smp_processor_id());
-
-			/* tx */
-			ret = net_dev->netdev_ops->ndo_start_xmit(skb, net_dev);
-
-			if (ret != NETDEV_TX_OK) {
-				pr_err("Failed to TX with err %d\n", ret);
-				err = -EIO;
-				goto end_test;
-			}
-
-			/* Wait for it to arrive */
-			ret = spin_event_timeout(qman_poll_dqrr(1) != 0,
-					100000, 1);
-
-			if (!ret) {
-				pr_err("TX Packet never arrived\n");
-				/*
-				 * Count the test as failed.
-				 */
-				tests_failed++;
-			}
-
-			/* Was it good? */
-			if (tx_unit_test_passed == false) {
-				pr_err("Test failed:\n");
-				pr_err("size: %d pad: %d head: %p end: %p\n",
-					size, headroom, tx_unit_skb_head,
-					tx_unit_skb_end);
-				tests_failed++;
-			}
-		}
-	}
-
-end_test:
-	err = qman_retire_fq(&unit_fq.fq_base, NULL);
-	if (unlikely(err < 0))
-		pr_err("Could not retire TX Unit Test FQ (%d)\n", err);
-
-	err = qman_oos_fq(&unit_fq.fq_base);
-	if (unlikely(err < 0))
-		pr_err("Could not OOS TX Unit Test FQ (%d)\n", err);
-
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
-	err = qman_retire_fq(&unit_recycle_fq.fq_base, NULL);
-	if (unlikely(err < 0))
-		pr_err("Could not retire Recycle TX Unit Test FQ (%d)\n", err);
-
-	err = qman_oos_fq(&unit_recycle_fq.fq_base);
-	if (unlikely(err < 0))
-		pr_err("Could not OOS Recycle TX Unit Test FQ (%d)\n", err);
-
-recycle_fq_init_fail:
-	qman_destroy_fq(&unit_recycle_fq.fq_base, 0);
-
-recycle_fq_create_fail:
-	priv->recycle_fqs[smp_processor_id()] = oldrecycleq;
-#endif
-
-fq_init_fail:
-	qman_destroy_fq(&unit_fq.fq_base, 0);
-
-fq_create_fail:
-	priv->egress_fqs[smp_processor_id()] = oldq;
-	local_bh_enable();
-	qman_irqsource_add(QM_PIRQ_DQRI);
-	tx_unit_test_ran = true;
-	set_cpus_allowed_ptr(current, old_cpumask);
-	free_cpumask_var(old_cpumask);
-
-	pr_err("Tested %d/%d packets. %d failed\n", test_count, tx_unit_tested,
-		tests_failed);
-
-	if (tests_failed)
-		err = -EINVAL;
-
-	/* Reset counters */
-	memset(&percpu_priv->stats, 0, sizeof(percpu_priv->stats));
-
-	return err;
-}
-#endif
 
 static int __cold dpa_start(struct net_device *net_dev)
 {
@@ -4158,11 +3851,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 #ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
 	/* The unit test is designed to test private interfaces */
-	if (!tx_unit_test_ran) {
-		err = dpa_tx_unit_test(net_dev);
-
-		WARN_ON(err);
-	}
+	dpa_unit_tests(net_dev);
 #endif
 
 	return 0;
