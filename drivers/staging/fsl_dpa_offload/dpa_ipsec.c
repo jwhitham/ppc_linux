@@ -2706,6 +2706,7 @@ static int store_policy_param_to_sa_pol_list(struct dpa_ipsec_sa *sa,
 		plcr = kzalloc(sizeof(*plcr), GFP_KERNEL);
 		if (!plcr) {
 			pr_err("Could not allocate memory for policer\n");
+			kfree(pol_entry);
 			return -ENOMEM;
 		}
 		memcpy(plcr, dir->in_action.enq_params.policer_params,
