@@ -45,22 +45,6 @@
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
 
-/*
- * It does not return a page as you get the page from the fd,
- * this is only for refcounting and DMA unmapping
- */
-static inline void dpa_bp_removed_one_page(struct dpa_bp *dpa_bp,
-					   dma_addr_t dma_addr)
-{
-	int *count_ptr;
-
-	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
-	(*count_ptr)--;
-
-	dma_unmap_single(dpa_bp->dev, dma_addr, dpa_bp->size,
-		DMA_BIDIRECTIONAL);
-}
-
 /* DMA map and add a page into the bpool */
 static void dpa_bp_add_page(struct dpa_bp *dpa_bp, unsigned long vaddr)
 {
@@ -331,6 +315,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int i;
 	const t_FmPrsResult *parse_results;
 	struct sk_buff *skb = NULL;
+	int *count_ptr;
 
 	vaddr = phys_to_virt(addr);
 #ifdef CONFIG_FSL_DPAA_1588
@@ -351,20 +336,32 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 
 		dpa_bp = dpa_bpid2pool(sgt[i].bpid);
 		BUG_ON(IS_ERR(dpa_bp));
+		count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 
 		sg_addr = qm_sg_addr(&sgt[i]);
 		sg_vaddr = phys_to_virt(sg_addr);
 
-		dpa_bp_removed_one_page(dpa_bp, sg_addr);
-
 		if (i == 0) {
+			/* Tentatively access the first buffer, but don't unmap
+			 * it until we're certain the skb allocation succeeds.
+			 */
+			dma_sync_single_for_cpu(dpa_bp->dev, sg_addr,
+				dpa_bp->size, DMA_BIDIRECTIONAL);
+
 			/* This is the first S/G entry, so build the skb
 			 * around its data buffer
 			 */
 			skb = build_skb(sg_vaddr,
 					dpa_bp->size + DPA_SKB_TAILROOM);
 			if (unlikely(!skb))
+				/* dpa_fd_release() will put the current frame
+				 * back into the pool. DMA mapping status has
+				 * not changed, nor have the pool counts.
+				 */
 				return NULL;
+
+			dma_unmap_single(dpa_bp->dev, sg_addr, dpa_bp->size,
+				DMA_BIDIRECTIONAL);
 
 			/* In the case of a SG frame, FMan stores the Internal
 			 * Context in the buffer containing the sgt.
@@ -382,6 +379,8 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 				dpa_get_rx_extra_headroom());
 			skb_put(skb, sgt[i].length);
 		} else {
+			dma_unmap_single(dpa_bp->dev, sg_addr, dpa_bp->size,
+				DMA_BIDIRECTIONAL);
 			/*
 			 * Not the first S/G entry; all data from buffer will
 			 * be added in an skb fragment; fragment index is offset
@@ -398,6 +397,8 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			skb_add_rx_frag(skb, i - 1, page, frag_offset, frag_len,
 					frag_len);
 		}
+		/* Update the pool count for the current {cpu x bpool} */
+		(*count_ptr)--;
 
 		if (sgt[i].final)
 			break;
@@ -423,6 +424,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	unsigned int skb_len;
 	struct rtnl_link_stats64 *percpu_stats = &percpu_priv->stats;
 	int use_gro = net_dev->features & NETIF_F_GRO;
+	int *count_ptr;
 
 	if (unlikely(fd_status & FM_FD_STAT_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
@@ -434,7 +436,13 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	}
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	dpa_bp_removed_one_page(dpa_bp, addr);
+	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
+	/* Prepare to read from the buffer, but don't unmap it until
+	 * we know the skb allocation succeeded. At this point we already
+	 * own the buffer - i.e. FMan won't access it anymore.
+	 */
+	dma_sync_single_for_cpu(dpa_bp->dev, addr, dpa_bp->size,
+		DMA_BIDIRECTIONAL);
 
 	/* prefetch the first 64 bytes of the frame or the SGT start */
 	prefetch(phys_to_virt(addr) + dpa_fd_offset(fd));
@@ -447,7 +455,17 @@ void __hot _dpa_rx(struct net_device *net_dev,
 		/* The only FD types that we may receive are contig and S/G */
 		BUG();
 	if (unlikely(!skb))
+		/* We haven't yet touched the DMA mapping or the pool count;
+		 * dpa_fd_release() will just put the buffer back in the pool
+		 */
 		goto _release_frame;
+
+	/* Account for either the contig buffer or the SGT buffer (depending on
+	 * which case we were in) having been removed from the pool.
+	 * Also, permanently unmap the buffer.
+	 */
+	(*count_ptr)--;
+	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
 
 	skb->protocol = eth_type_trans(skb, net_dev);
 
