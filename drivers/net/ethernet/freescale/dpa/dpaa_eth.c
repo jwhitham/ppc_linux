@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -213,64 +213,6 @@ static void dpa_bp_depletion(struct bman_portal	*portal,
 {
 	if (net_ratelimit())
 		pr_err("Invalid Pool depleted notification!\n");
-}
-
-/*
- * Copy from a memory region that requires kmapping to a linear buffer,
- * taking into account page boundaries in the source
- */
-static void
-copy_from_unmapped_area(void *dest, dma_addr_t phys_start, size_t buf_size)
-{
-	struct page *page;
-	size_t size, offset;
-	void *page_vaddr;
-
-	while (buf_size > 0) {
-		offset = offset_in_page(phys_start);
-		size = (offset + buf_size > PAGE_SIZE) ?
-			PAGE_SIZE - offset : buf_size;
-
-		page = pfn_to_page(phys_start >> PAGE_SHIFT);
-		page_vaddr = kmap_atomic(page);
-
-		memcpy(dest, page_vaddr + offset, size);
-
-		kunmap_atomic(page_vaddr);
-
-		phys_start += size;
-		dest += size;
-		buf_size -= size;
-	}
-}
-
-/*
- * Copy to a memory region that requires kmapping from a linear buffer,
- * taking into account page boundaries in the destination
- */
-static void
-copy_to_unmapped_area(dma_addr_t phys_start, void *src, size_t buf_size)
-{
-	struct page *page;
-	size_t size, offset;
-	void *page_vaddr;
-
-	while (buf_size > 0) {
-		offset = offset_in_page(phys_start);
-		size = (offset + buf_size > PAGE_SIZE) ?
-				PAGE_SIZE - offset : buf_size;
-
-		page = pfn_to_page(phys_start >> PAGE_SHIFT);
-		page_vaddr = kmap_atomic(page);
-
-		memcpy(page_vaddr + offset, src, size);
-
-		kunmap_atomic(page_vaddr);
-
-		phys_start += size;
-		src += size;
-		buf_size -= size;
-	}
 }
 
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
@@ -561,7 +503,7 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 	bman_free_pool(bp->pool);
 }
 
-static void __cold __attribute__((nonnull))
+void __cold __attribute__((nonnull))
 dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp)
 {
 	int i;
@@ -584,7 +526,7 @@ static struct qman_fq *_dpa_get_tx_conf_queue(const struct dpa_priv_s *priv,
 	return NULL;
 }
 
-static int dpa_fq_init(struct dpa_fq *dpa_fq)
+int dpa_fq_init(struct dpa_fq *dpa_fq)
 {
 	int			 _errno;
 	const struct dpa_priv_s	*priv;
@@ -771,7 +713,7 @@ _dpa_fq_free(struct device *dev, struct qman_fq *fq)
 	return _errno;
 }
 
-static int __cold __attribute__((nonnull))
+int __cold __attribute__((nonnull))
 dpa_fq_free(struct device *dev, struct list_head *list)
 {
 	int		 _errno, __errno;
@@ -787,14 +729,7 @@ dpa_fq_free(struct device *dev, struct list_head *list)
 	return _errno;
 }
 
-static inline void * __must_check __attribute__((nonnull))
-dpa_phys2virt(const struct dpa_bp *dpa_bp, dma_addr_t addr)
-{
-	return dpa_bp->vaddr + (addr - dpa_bp->paddr);
-}
-
-static void
-dpa_release_sgt(struct qm_sg_entry *sgt, struct dpa_bp *dpa_bp,
+void dpa_release_sgt(struct qm_sg_entry *sgt, struct dpa_bp *dpa_bp,
 		struct bm_buffer *bmb)
 {
 	int i = 0, j;
@@ -818,47 +753,6 @@ dpa_release_sgt(struct qm_sg_entry *sgt, struct dpa_bp *dpa_bp,
 		while (bman_release(dpa_bp->pool, bmb, j, 0))
 			cpu_relax();
 	} while (!sgt[i-1].final);
-}
-
-static void
-dpa_fd_release_sg(const struct net_device *net_dev,
-			const struct qm_fd *fd)
-{
-	const struct dpa_priv_s		*priv;
-	struct qm_sg_entry		*sgt;
-	struct dpa_bp			*_dpa_bp, *dpa_bp;
-	struct bm_buffer		 _bmb, bmb[8];
-
-	priv = netdev_priv(net_dev);
-
-	_bmb.hi	= fd->addr_hi;
-	_bmb.lo	= fd->addr_lo;
-
-	_dpa_bp = dpa_bpid2pool(fd->bpid);
-
-	if (_dpa_bp->vaddr) {
-		sgt = dpa_phys2virt(_dpa_bp, bm_buf_addr(&_bmb)) +
-					dpa_fd_offset(fd);
-		dpa_release_sgt(sgt, dpa_bp, bmb);
-	} else {
-		sgt = kmalloc(DPA_SGT_MAX_ENTRIES * sizeof(*sgt), GFP_ATOMIC);
-		if (sgt == NULL) {
-			if (netif_msg_tx_err(priv) && net_ratelimit())
-				netdev_err(net_dev,
-					"Memory allocation failed\n");
-			return;
-		}
-
-		copy_from_unmapped_area(sgt, bm_buf_addr(&_bmb) +
-						dpa_fd_offset(fd),
-					min(DPA_SGT_MAX_ENTRIES * sizeof(*sgt),
-						_dpa_bp->size));
-		dpa_release_sgt(sgt, dpa_bp, bmb);
-		kfree(sgt);
-	}
-
-	while (bman_release(_dpa_bp->pool, &_bmb, 1, 0))
-		cpu_relax();
 }
 
 void __attribute__((nonnull))
@@ -979,7 +873,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
  * Calculates the statistics for the given device by adding the statistics
  * collected by each CPU.
  */
-static struct rtnl_link_stats64 * __cold
+struct rtnl_link_stats64 * __cold
 dpa_get_stats64(struct net_device *net_dev,
 		struct rtnl_link_stats64 *stats)
 {
@@ -1002,7 +896,7 @@ dpa_get_stats64(struct net_device *net_dev,
 	return stats;
 }
 
-static int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
+int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 {
 	const int max_mtu = dpa_get_max_mtu();
 	const int min_mtu = dpa_get_min_mtu();
@@ -1020,7 +914,7 @@ static int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 }
 
 /* .ndo_init callback */
-static int dpa_ndo_init(struct net_device *net_dev)
+int dpa_ndo_init(struct net_device *net_dev)
 {
 	/*
 	 * If fsl_fm_max_frm is set to a higher value than the all-common 1500,
@@ -1038,7 +932,7 @@ static int dpa_ndo_init(struct net_device *net_dev)
 	return 0;
 }
 
-static int dpa_set_mac_address(struct net_device *net_dev, void *addr)
+int dpa_set_mac_address(struct net_device *net_dev, void *addr)
 {
 	const struct dpa_priv_s	*priv;
 	int			 _errno;
@@ -1089,15 +983,12 @@ static int dpa_set_macless_address(struct net_device *net_dev, void *addr)
 	return 0;
 }
 
-static void dpa_set_rx_mode(struct net_device *net_dev)
+void dpa_set_rx_mode(struct net_device *net_dev)
 {
 	int			 _errno;
 	const struct dpa_priv_s	*priv;
 
 	priv = netdev_priv(net_dev);
-
-	if (!priv->mac_dev)
-		return;
 
 	if (!!(net_dev->flags & IFF_PROMISC) != priv->mac_dev->promisc) {
 		priv->mac_dev->promisc = !priv->mac_dev->promisc;
@@ -1252,7 +1143,7 @@ static int dpa_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 }
 #endif /* CONFIG_FSL_DPAA_TS */
 
-static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
 #ifdef CONFIG_FSL_DPAA_1588
 	struct dpa_priv_s *priv = netdev_priv(dev);
@@ -1640,17 +1531,7 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 	dev_kfree_skb(skb);
 }
 
-static struct dpa_bp *dpa_size2pool(struct dpa_priv_s *priv, size_t size)
-{
-	int i;
-
-	for (i = 0; i < priv->bp_count; i++)
-		if ((size + priv->tx_headroom) <= priv->dpa_bp[i].size)
-			return dpa_bpid2pool(priv->dpa_bp[i].bpid);
-	return ERR_PTR(-ENODEV);
-}
-
-static void dpa_set_buffers_layout(struct mac_device *mac_dev,
+void dpa_set_buffers_layout(struct mac_device *mac_dev,
 				  struct dpa_buffer_layout_s *layout)
 {
 	struct fm_port_params params;
@@ -1774,94 +1655,6 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 
 return_error:
 	return retval;
-}
-
-static int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
-{
-	struct dpa_bp *dpa_bp;
-	struct bm_buffer bmb;
-	struct dpa_percpu_priv_s *percpu_priv;
-	struct dpa_priv_s *priv;
-	struct qm_fd fd;
-	int queue_mapping;
-	int err;
-	void *dpa_bp_vaddr;
-	t_FmPrsResult parse_results;
-
-	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-
-	memset(&fd, 0, sizeof(fd));
-	fd.format = qm_fd_contig;
-
-	queue_mapping = smp_processor_id();
-
-	dpa_bp = dpa_size2pool(priv, skb_headlen(skb));
-	if (unlikely(IS_ERR(dpa_bp))) {
-		percpu_priv->stats.tx_errors++;
-		err = PTR_ERR(dpa_bp);
-		goto bpools_too_small_error;
-	}
-
-	err = bman_acquire(dpa_bp->pool, &bmb, 1, 0);
-	if (unlikely(err <= 0)) {
-		percpu_priv->stats.tx_errors++;
-		if (err == 0)
-			err = -ENOMEM;
-		goto buf_acquire_failed;
-	}
-	fd.bpid = dpa_bp->bpid;
-
-	fd.length20 = skb_headlen(skb);
-	fd.addr_hi = bmb.hi;
-	fd.addr_lo = bmb.lo;
-	fd.offset = priv->tx_headroom;
-
-	/*
-	 * The virtual address of the buffer pool is expected to be NULL
-	 * in scenarios like MAC-less or Shared-MAC between Linux and
-	 * USDPAA. In this case the buffers are dynamically mapped/unmapped.
-	 */
-	if (dpa_bp->vaddr) {
-		dpa_bp_vaddr = dpa_phys2virt(dpa_bp, bm_buf_addr(&bmb));
-
-		/* Copy the packet payload */
-		skb_copy_from_linear_data(skb,
-		                          dpa_bp_vaddr + dpa_fd_offset(&fd),
-		                          dpa_fd_length(&fd));
-
-		/* Enable L3/L4 hardware checksum computation, if applicable */
-		err = dpa_enable_tx_csum(priv, skb, &fd,
-					 dpa_bp_vaddr + DPA_TX_PRIV_DATA_SIZE);
-	} else {
-		err = dpa_enable_tx_csum(priv, skb, &fd,
-					 (char *)&parse_results);
-
-		copy_to_unmapped_area(bm_buf_addr(&bmb) + DPA_TX_PRIV_DATA_SIZE,
-				&parse_results,
-				DPA_PARSE_RESULTS_SIZE);
-
-		copy_to_unmapped_area(bm_buf_addr(&bmb) + dpa_fd_offset(&fd),
-				skb->data,
-				dpa_fd_length(&fd));
-	}
-
-	if (unlikely(err < 0)) {
-		if (netif_msg_tx_err(priv) && net_ratelimit())
-			netdev_err(net_dev, "Tx HW csum error: %d\n", err);
-		percpu_priv->stats.tx_errors++;
-		goto l3_l4_csum_failed;
-	}
-
-	err = dpa_xmit(priv, &percpu_priv->stats, queue_mapping, &fd);
-
-l3_l4_csum_failed:
-bpools_too_small_error:
-buf_acquire_failed:
-	/* We're done with the skb */
-	dev_kfree_skb(skb);
-
-	return NETDEV_TX_OK;
 }
 
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
@@ -2236,139 +2029,6 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 	return qman_cb_dqrr_consume;
 }
 
-static enum qman_cb_dqrr_result __hot
-shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
-		const struct qm_dqrr_entry *dq)
-{
-	struct net_device		*net_dev;
-	struct dpa_priv_s		*priv;
-	struct dpa_percpu_priv_s	*percpu_priv;
-	const struct qm_fd *fd = &dq->fd;
-	struct dpa_bp *dpa_bp;
-	struct sk_buff *skb;
-	struct qm_sg_entry *sgt;
-	int i;
-
-	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-
-	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(dpa_bp));
-
-	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
-		if (netif_msg_hw(priv) && net_ratelimit())
-			netdev_warn(net_dev, "FD status = 0x%08x\n",
-					fd->status & FM_FD_STAT_ERRORS);
-
-		percpu_priv->stats.rx_errors++;
-
-		goto out;
-	}
-
-	skb = __netdev_alloc_skb(net_dev,
-				 priv->tx_headroom + dpa_fd_length(fd),
-				 GFP_ATOMIC);
-	if (unlikely(skb == NULL)) {
-		if (netif_msg_rx_err(priv) && net_ratelimit())
-			netdev_err(net_dev, "Could not alloc skb\n");
-
-		percpu_priv->stats.rx_dropped++;
-
-		goto out;
-	}
-
-	skb_reserve(skb, priv->tx_headroom);
-
-	if (fd->format == qm_fd_sg) {
-		if (dpa_bp->vaddr) {
-			sgt = dpa_phys2virt(dpa_bp,
-					    qm_fd_addr(fd)) + dpa_fd_offset(fd);
-
-			for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
-				BUG_ON(sgt[i].extension);
-
-				/* copy from sgt[i] */
-				memcpy(skb_put(skb, sgt[i].length),
-					dpa_phys2virt(dpa_bp,
-							qm_sg_addr(&sgt[i]) +
-							sgt[i].offset),
-					sgt[i].length);
-				if (sgt[i].final)
-					break;
-			}
-		} else {
-			sgt = kmalloc(DPA_SGT_MAX_ENTRIES * sizeof(*sgt),
-					GFP_ATOMIC);
-			if (unlikely(sgt == NULL)) {
-				if (netif_msg_tx_err(priv) && net_ratelimit())
-					netdev_err(net_dev,
-						"Memory allocation failed\n");
-				return -ENOMEM;
-			}
-
-			copy_from_unmapped_area(sgt,
-					qm_fd_addr(fd) + dpa_fd_offset(fd),
-					min(DPA_SGT_MAX_ENTRIES * sizeof(*sgt),
-							dpa_bp->size));
-
-			for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
-				BUG_ON(sgt[i].extension);
-
-				copy_from_unmapped_area(
-					skb_put(skb, sgt[i].length),
-					qm_sg_addr(&sgt[i]) + sgt[i].offset,
-					sgt[i].length);
-
-				if (sgt[i].final)
-					break;
-			}
-
-			kfree(sgt);
-		}
-		goto skb_copied;
-	}
-
-	/* otherwise fd->format == qm_fd_contig */
-	if (dpa_bp->vaddr) {
-		/* Fill the SKB */
-		memcpy(skb_put(skb, dpa_fd_length(fd)),
-		       dpa_phys2virt(dpa_bp, qm_fd_addr(fd)) +
-		       dpa_fd_offset(fd), dpa_fd_length(fd));
-	} else {
-		copy_from_unmapped_area(skb_put(skb, dpa_fd_length(fd)),
-					qm_fd_addr(fd) + dpa_fd_offset(fd),
-					dpa_fd_length(fd));
-	}
-
-skb_copied:
-	skb->protocol = eth_type_trans(skb, net_dev);
-
-	/* IP Reassembled frames are allowed to be larger than MTU */
-	if (unlikely(dpa_check_rx_mtu(skb, net_dev->mtu) &&
-		!(fd->status & FM_FD_IPR))) {
-		percpu_priv->stats.rx_dropped++;
-		dev_kfree_skb_any(skb);
-		goto out;
-	}
-
-	if (unlikely(netif_rx(skb) != NET_RX_SUCCESS))
-		percpu_priv->stats.rx_dropped++;
-	else {
-		percpu_priv->stats.rx_packets++;
-		percpu_priv->stats.rx_bytes += dpa_fd_length(fd);
-	}
-
-out:
-	if (fd->format == qm_fd_sg)
-		dpa_fd_release_sg(net_dev, fd);
-	else
-		dpa_fd_release(net_dev, fd);
-
-	return qman_cb_dqrr_consume;
-}
-
 
 static enum qman_cb_dqrr_result __hot
 ingress_rx_default_dqrr(struct qman_portal		*portal,
@@ -2452,77 +2112,7 @@ ingress_tx_default_dqrr(struct qman_portal		*portal,
 	return qman_cb_dqrr_consume;
 }
 
-static enum qman_cb_dqrr_result
-shared_tx_error_dqrr(struct qman_portal                *portal,
-		     struct qman_fq                    *fq,
-		     const struct qm_dqrr_entry        *dq)
-{
-	struct net_device               *net_dev;
-	struct dpa_priv_s               *priv;
-	struct dpa_percpu_priv_s        *percpu_priv;
-	struct dpa_bp			*dpa_bp;
-	const struct qm_fd		*fd = &dq->fd;
-
-	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(dpa_bp));
-
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-
-	if (netif_msg_hw(priv) && net_ratelimit())
-		netdev_warn(net_dev, "FD status = 0x%08x\n",
-				fd->status & FM_FD_STAT_ERRORS);
-
-	if ((fd->format == qm_fd_sg) && (!dpa_bp->vaddr))
-		dpa_fd_release_sg(net_dev, fd);
-	else
-		dpa_fd_release(net_dev, fd);
-
-	percpu_priv->stats.tx_errors++;
-
-	return qman_cb_dqrr_consume;
-}
-
-static enum qman_cb_dqrr_result __hot
-shared_tx_default_dqrr(struct qman_portal              *portal,
-		       struct qman_fq                  *fq,
-		       const struct qm_dqrr_entry      *dq)
-{
-	struct net_device               *net_dev;
-	struct dpa_priv_s               *priv;
-	struct dpa_percpu_priv_s        *percpu_priv;
-	struct dpa_bp			*dpa_bp;
-	const struct qm_fd		*fd = &dq->fd;
-
-	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(dpa_bp));
-
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
-
-	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
-		if (netif_msg_hw(priv) && net_ratelimit())
-			netdev_warn(net_dev, "FD status = 0x%08x\n",
-					fd->status & FM_FD_STAT_ERRORS);
-
-		percpu_priv->stats.tx_errors++;
-	}
-
-	if ((fd->format == qm_fd_sg) && (!dpa_bp->vaddr))
-		dpa_fd_release_sg(net_dev, fd);
-	else
-		dpa_fd_release(net_dev, fd);
-
-	percpu_priv->tx_confirm++;
-
-	return qman_cb_dqrr_consume;
-}
-
-static void count_ern(struct dpa_percpu_priv_s *percpu_priv,
+void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 		      const struct qm_mr_entry *msg)
 {
 	switch (msg->ern.rc & QM_MR_RC_MASK) {
@@ -2551,26 +2141,6 @@ static void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 		percpu_priv->ern_cnt.orp_zero++;
 		break;
 	}
-}
-
-static void shared_ern(struct qman_portal	*portal,
-		       struct qman_fq		*fq,
-		       const struct qm_mr_entry	*msg)
-{
-	struct net_device *net_dev;
-	const struct dpa_priv_s	*priv;
-	struct dpa_percpu_priv_s *percpu_priv;
-	struct dpa_fq *dpa_fq = (struct dpa_fq *)fq;
-
-	net_dev = dpa_fq->net_dev;
-	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv,  smp_processor_id());
-
-	dpa_fd_release(net_dev, &msg->ern.fd);
-
-	percpu_priv->stats.tx_dropped++;
-	percpu_priv->stats.tx_fifo_errors++;
-	count_ern(percpu_priv, msg);
 }
 
 static void egress_ern(struct qman_portal	*portal,
@@ -2606,14 +2176,6 @@ static void egress_ern(struct qman_portal	*portal,
 	dev_kfree_skb_any(skb);
 }
 
-typedef struct dpa_fq_cbs_t {
-	struct qman_fq rx_defq;
-	struct qman_fq tx_defq;
-	struct qman_fq rx_errq;
-	struct qman_fq tx_errq;
-	struct qman_fq egress_ern;
-} dpa_fq_cbs_t;
-
 static const dpa_fq_cbs_t private_fq_cbs = {
 	.rx_defq = { .cb = { .dqrr = ingress_rx_default_dqrr } },
 	.tx_defq = { .cb = { .dqrr = ingress_tx_default_dqrr } },
@@ -2622,41 +2184,14 @@ static const dpa_fq_cbs_t private_fq_cbs = {
 	.egress_ern = { .cb = { .ern = egress_ern } }
 };
 
-static const dpa_fq_cbs_t shared_fq_cbs = {
-	.rx_defq = { .cb = { .dqrr = shared_rx_dqrr } },
-	.tx_defq = { .cb = { .dqrr = shared_tx_default_dqrr } },
-	.rx_errq = { .cb = { .dqrr = shared_rx_dqrr } },
-	.tx_errq = { .cb = { .dqrr = shared_tx_error_dqrr } },
-	.egress_ern = { .cb = { .ern = shared_ern } }
-};
-
-static int __cold dpa_start(struct net_device *net_dev)
+int __cold dpa_start(struct net_device *net_dev)
 {
 	int err, i;
 	struct dpa_priv_s *priv;
 	struct mac_device *mac_dev;
-	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
 	mac_dev = priv->mac_dev;
-
-	/* Seed the global buffer pool at the first ifconfig up
-	 * of a private port. Update the percpu buffer counters
-	 * of each private interface.
-	 */
-	if (!priv->shared && !default_pool_seeded) {
-		default_pool->size = default_buf_size;
-		dpa_make_private_pool(default_pool);
-		default_pool_seeded = true;
-	}
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		if (!priv->shared && !percpu_priv->dpa_bp) {
-			percpu_priv->dpa_bp = priv->dpa_bp;
-			percpu_priv->dpa_bp_count =
-				per_cpu_ptr(priv->dpa_bp->percpu_count, i);
-		}
-	}
 
 	dpaa_eth_napi_enable(priv);
 
@@ -2691,6 +2226,36 @@ init_phy_failed:
 	return err;
 }
 
+static int __cold dpa_eth_priv_start(struct net_device *net_dev)
+{
+	int i;
+	struct dpa_priv_s *priv;
+	struct dpa_percpu_priv_s *percpu_priv;
+
+	priv = netdev_priv(net_dev);
+
+	/* Seed the global buffer pool at the first ifconfig up
+	 * of a private port. Update the percpu buffer counters
+	 * of each private interface.
+	 */
+	if (!default_pool_seeded) {
+		default_pool->size = default_buf_size;
+		dpa_make_private_pool(default_pool);
+		default_pool_seeded = true;
+	}
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		if (!percpu_priv->dpa_bp) {
+			percpu_priv->dpa_bp = priv->dpa_bp;
+			percpu_priv->dpa_bp_count =
+				per_cpu_ptr(priv->dpa_bp->percpu_count,
+					    i);
+		}
+	}
+
+	return dpa_start(net_dev);
+}
+
 static int __cold dpa_macless_start(struct net_device *net_dev)
 {
 	netif_tx_start_all_queues(net_dev);
@@ -2698,7 +2263,7 @@ static int __cold dpa_macless_start(struct net_device *net_dev)
 	return 0;
 }
 
-static int __cold dpa_stop(struct net_device *net_dev)
+int __cold dpa_stop(struct net_device *net_dev)
 {
 	int _errno, i;
 	struct dpa_priv_s *priv;
@@ -2722,6 +2287,17 @@ static int __cold dpa_stop(struct net_device *net_dev)
 		phy_disconnect(mac_dev->phy_dev);
 	mac_dev->phy_dev = NULL;
 
+	return _errno;
+}
+
+static int __cold dpa_eth_priv_stop(struct net_device *net_dev)
+{
+	int _errno;
+	struct dpa_priv_s *priv;
+
+	_errno = dpa_stop(net_dev);
+
+	priv = netdev_priv(net_dev);
 	dpaa_eth_napi_disable(priv);
 
 	return _errno;
@@ -2734,7 +2310,7 @@ static int __cold dpa_macless_stop(struct net_device *net_dev)
 	return 0;
 }
 
-static void __cold dpa_timeout(struct net_device *net_dev)
+void __cold dpa_timeout(struct net_device *net_dev)
 {
 	const struct dpa_priv_s	*priv;
 	struct dpa_percpu_priv_s *percpu_priv;
@@ -2769,7 +2345,7 @@ static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 			((struct dpa_bp *)dpa_bp1)->size;
 }
 
-static struct dpa_bp * __cold __must_check __attribute__((nonnull))
+struct dpa_bp * __cold __must_check __attribute__((nonnull))
 dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 {
 	int			 i, lenp, na, ns;
@@ -2892,7 +2468,7 @@ _return_of_node_put:
 	return dpa_bp;
 }
 
-static int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
+int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 			size_t count)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
@@ -2930,7 +2506,7 @@ static int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	return 0;
 }
 
-static struct mac_device * __cold __must_check
+struct mac_device * __cold __must_check
 __attribute__((nonnull))
 dpa_mac_probe(struct platform_device *_of_dev)
 {
@@ -3004,13 +2580,13 @@ static const char fsl_qman_frame_queues[][25] = {
 
 
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
-static u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
+u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
 {
 	return smp_processor_id();
 }
 #endif
 
-static netdev_features_t dpa_fix_features(struct net_device *dev,
+netdev_features_t dpa_fix_features(struct net_device *dev,
 					  netdev_features_t features)
 {
 	netdev_features_t unsupported_features = 0;
@@ -3045,7 +2621,7 @@ static netdev_features_t dpa_macless_fix_features(struct net_device *dev,
 	return features;
 }
 
-static int dpa_set_features(struct net_device *dev, netdev_features_t features)
+int dpa_set_features(struct net_device *dev, netdev_features_t features)
 {
 	/* Not much to do here for now */
 	dev->features = features;
@@ -3054,9 +2630,9 @@ static int dpa_set_features(struct net_device *dev, netdev_features_t features)
 
 
 static const struct net_device_ops dpa_private_ops = {
-	.ndo_open = dpa_start,
+	.ndo_open = dpa_eth_priv_start,
 	.ndo_start_xmit = dpa_tx,
-	.ndo_stop = dpa_stop,
+	.ndo_stop = dpa_eth_priv_stop,
 	.ndo_tx_timeout = dpa_timeout,
 	.ndo_get_stats64 = dpa_get_stats64,
 	.ndo_set_mac_address = dpa_set_mac_address,
@@ -3075,24 +2651,7 @@ static const struct net_device_ops dpa_private_ops = {
 #endif
 };
 
-static const struct net_device_ops dpa_shared_ops = {
-	.ndo_open = dpa_start,
-	.ndo_start_xmit = dpa_shared_tx,
-	.ndo_stop = dpa_stop,
-	.ndo_tx_timeout = dpa_timeout,
-	.ndo_get_stats64 = dpa_get_stats64,
-	.ndo_set_mac_address = dpa_set_mac_address,
-	.ndo_validate_addr = eth_validate_addr,
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
-	.ndo_select_queue = dpa_select_queue,
-#endif
-	.ndo_change_mtu = dpa_change_mtu,
-	.ndo_set_rx_mode = dpa_set_rx_mode,
-	.ndo_init = dpa_ndo_init,
-	.ndo_set_features = dpa_set_features,
-	.ndo_fix_features = dpa_fix_features,
-	.ndo_do_ioctl = dpa_ioctl,
-};
+extern int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
 
 static const struct net_device_ops dpa_macless_ops = {
 	.ndo_open = dpa_macless_start,
@@ -3116,8 +2675,7 @@ static const struct net_device_ops dpa_macless_ops = {
 static u32 rx_pool_channel;
 static DEFINE_SPINLOCK(rx_pool_channel_init);
 
-static int dpa_get_channel(struct device *dev,
-					struct device_node *dpa_node)
+int dpa_get_channel(struct device *dev, struct device_node *dpa_node)
 {
 	spin_lock(&rx_pool_channel_init);
 	if (!rx_pool_channel) {
@@ -3175,7 +2733,7 @@ static struct dpa_fq *dpa_fq_alloc(struct device *dev,
 }
 
 /* Probing of FQs for MACful ports */
-static int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
+int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 			    struct fm_port_fqs *port_fqs,
 			    bool tx_conf_fqs_per_core,
 			    enum port_type ptype)
@@ -3375,8 +2933,7 @@ int dpa_free_pcd_fqids(struct device *dev, uint32_t base_fqid)
 	return 0;
 }
 
-static void
-dpaa_eth_init_ports(struct mac_device *mac_dev,
+void dpaa_eth_init_ports(struct mac_device *mac_dev,
 		struct dpa_bp *bp, size_t count,
 		struct fm_port_fqs *port_fqs,
 		struct dpa_buffer_layout_s *buf_layout,
@@ -3397,7 +2954,7 @@ dpaa_eth_init_ports(struct mac_device *mac_dev,
 	fm_port_pcd_bind(rxport, &rx_port_pcd_param);
 }
 
-static void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
+void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 		struct fm_port *tx_port)
 {
 	struct dpa_fq *fq;
@@ -3493,7 +3050,7 @@ static void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 	}
 }
 
-static int dpa_netdev_init(struct device_node *dpa_node,
+int dpa_netdev_init(struct device_node *dpa_node,
 		struct net_device *net_dev, const uint8_t *mac_addr)
 {
 	int err;
@@ -3553,25 +3110,6 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 	return dpa_netdev_init(dpa_node, net_dev, mac_addr);
 }
 
-static int dpa_shared_netdev_init(struct device_node *dpa_node,
-				struct net_device *net_dev)
-{
-	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	const uint8_t *mac_addr;
-
-	net_dev->netdev_ops = &dpa_shared_ops;
-
-	net_dev->mem_start = priv->mac_dev->res->start;
-	net_dev->mem_end = priv->mac_dev->res->end;
-
-	mac_addr = priv->mac_dev->addr;
-
-	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
-		NETIF_F_LLTX);
-
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr);
-}
-
 static int dpa_private_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev)
 {
@@ -3617,7 +3155,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	return dpa_netdev_init(dpa_node, net_dev, mac_addr);
 }
 
-static int dpaa_eth_add_channel(void *__arg)
+int dpaa_eth_add_channel(void *__arg)
 {
 	const cpumask_t *cpus = qman_affine_cpus();
 	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u32)(unsigned long)__arg);
@@ -3630,7 +3168,7 @@ static int dpaa_eth_add_channel(void *__arg)
 	return 0;
 }
 
-static int dpaa_eth_cgr_init(struct dpa_priv_s *priv)
+int dpaa_eth_cgr_init(struct dpa_priv_s *priv)
 {
 	struct qm_mcc_initcgr initcgr;
 	u32 cs_th;
@@ -3871,185 +3409,7 @@ mac_probe_failed:
 	return err;
 }
 
-static const struct of_device_id dpa_shared_match[];
-static int
-dpaa_eth_shared_probe(struct platform_device *_of_dev)
-{
-	int err = 0, i;
-	struct device *dev;
-	struct device_node *dpa_node;
-	struct dpa_bp *dpa_bp;
-	struct dpa_fq *dpa_fq, *tmp;
-	size_t count;
-	struct net_device *net_dev = NULL;
-	struct dpa_priv_s *priv = NULL;
-	struct dpa_percpu_priv_s *percpu_priv;
-	struct fm_port_fqs port_fqs;
-	struct dpa_buffer_layout_s *buf_layout = NULL;
-	struct mac_device *mac_dev;
-	struct task_struct *kth;
-
-	dev = &_of_dev->dev;
-
-	dpa_node = dev->of_node;
-
-	if (!of_device_is_available(dpa_node))
-		return -ENODEV;
-
-	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
-	if (IS_ERR(dpa_bp))
-		return PTR_ERR(dpa_bp);
-
-	/* Allocate this early, so we can store relevant information in
-	 * the private area (needed by 1588 code in dpa_mac_probe)
-	 */
-	net_dev = alloc_etherdev_mq(sizeof(*priv), DPAA_ETH_TX_QUEUES);
-	if (!net_dev) {
-		dev_err(dev, "alloc_etherdev_mq() failed\n");
-		return -ENOMEM;
-	}
-
-	/* Do this here, so we can be verbose early */
-	SET_NETDEV_DEV(net_dev, dev);
-	dev_set_drvdata(dev, net_dev);
-
-	priv = netdev_priv(net_dev);
-	priv->net_dev = net_dev;
-
-	priv->msg_enable = netif_msg_init(debug, -1);
-
-	mac_dev = dpa_mac_probe(_of_dev);
-	if (IS_ERR(mac_dev)) {
-		err = PTR_ERR(mac_dev);
-		goto mac_probe_failed;
-	}
-
-	/* We have physical ports, so we need to establish
-	 * the buffer layout.
-	 */
-	buf_layout = devm_kzalloc(dev, 2 * sizeof(*buf_layout),
-				  GFP_KERNEL);
-	if (!buf_layout) {
-		dev_err(dev, "devm_kzalloc() failed\n");
-		goto alloc_failed;
-	}
-	dpa_set_buffers_layout(mac_dev, buf_layout);
-
-	INIT_LIST_HEAD(&priv->dpa_fq_list);
-
-	memset(&port_fqs, 0, sizeof(port_fqs));
-
-	err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list, &port_fqs,
-			       false, RX);
-	if (!err)
-		err = dpa_fq_probe_mac(dev, &priv->dpa_fq_list,
-				       &port_fqs, false, TX);
-	if (err < 0)
-		goto fq_probe_failed;
-
-	/* bp init */
-
-	err = dpa_bp_create(net_dev, dpa_bp, count);
-
-	if (err < 0)
-		goto bp_create_failed;
-
-	priv->mac_dev = mac_dev;
-
-	priv->channel = dpa_get_channel(dev, dpa_node);
-
-	if (priv->channel < 0) {
-		err = priv->channel;
-		goto get_channel_failed;
-	}
-
-	/* Start a thread that will walk the cpus with affine portals
-	 * and add this pool channel to each's dequeue mask.
-	 */
-	kth = kthread_run(dpaa_eth_add_channel,
-			  (void *)(unsigned long)priv->channel,
-			  "dpaa_%p:%d", net_dev, priv->channel);
-	if (!kth) {
-		err = -ENOMEM;
-		goto add_channel_failed;
-	}
-
-	dpa_fq_setup(priv, &shared_fq_cbs, priv->mac_dev->port_dev[TX]);
-
-	/* Create a congestion group for this netdev, with
-	 * dynamically-allocated CGR ID.
-	 * Must be executed after probing the MAC, but before
-	 * assigning the egress FQs to the CGRs.
-	 */
-	err = dpaa_eth_cgr_init(priv);
-	if (err < 0) {
-		dev_err(dev, "Error initializing CGR\n");
-		goto cgr_init_failed;
-	}
-
-	/* Add the FQs to the interface, and make them active */
-	list_for_each_entry_safe(dpa_fq, tmp, &priv->dpa_fq_list, list) {
-		err = dpa_fq_init(dpa_fq);
-		if (err < 0)
-			goto fq_alloc_failed;
-	}
-
-	priv->buf_layout = buf_layout;
-	priv->tx_headroom =
-		dpa_get_headroom(&priv->buf_layout[TX]);
-
-	/* All real interfaces need their ports initialized */
-	dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,
-			buf_layout, dev);
-
-	/* Now we need to initialize either a private or shared interface */
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
-
-	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
-		err = -ENOMEM;
-		goto alloc_percpu_failed;
-	}
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		memset(percpu_priv, 0, sizeof(*percpu_priv));
-	}
-
-	err = dpa_shared_netdev_init(dpa_node, net_dev);
-
-	if (err < 0)
-		goto netdev_init_failed;
-
-	dpaa_eth_sysfs_init(&net_dev->dev);
-
-	return 0;
-
-netdev_init_failed:
-	if (net_dev)
-		free_percpu(priv->percpu_priv);
-alloc_percpu_failed:
-fq_alloc_failed:
-	if (net_dev) {
-		dpa_fq_free(dev, &priv->dpa_fq_list);
-		qman_release_cgrid(priv->cgr_data.cgr.cgrid);
-		qman_delete_cgr(&priv->cgr_data.cgr);
-	}
-cgr_init_failed:
-add_channel_failed:
-get_channel_failed:
-	if (net_dev)
-		dpa_bp_free(priv, priv->dpa_bp);
-bp_create_failed:
-fq_probe_failed:
-alloc_failed:
-mac_probe_failed:
-	dev_set_drvdata(dev, NULL);
-	if (net_dev)
-		free_netdev(net_dev);
-
-	return err;
-}
+extern const dpa_fq_cbs_t shared_fq_cbs;
 
 static const struct of_device_id dpa_macless_match[];
 static int
@@ -4276,14 +3636,6 @@ static const struct of_device_id dpa_match[] = {
 };
 MODULE_DEVICE_TABLE(of, dpa_match);
 
-static const struct of_device_id dpa_shared_match[] = {
-	{
-		.compatible	= "fsl,dpa-ethernet-shared"
-	},
-	{}
-};
-MODULE_DEVICE_TABLE(of, dpa_shared_match);
-
 static const struct of_device_id dpa_macless_match[] = {
 	{
 		.compatible	= "fsl,dpa-ethernet-macless"
@@ -4300,7 +3652,7 @@ static const struct of_device_id dpa_proxy_match[] = {
 };
 MODULE_DEVICE_TABLE(of, dpa_proxy_match);
 
-static int __cold dpa_remove(struct platform_device *of_dev)
+int __cold dpa_remove(struct platform_device *of_dev)
 {
 	int			err;
 	struct device		*dev;
@@ -4354,16 +3706,6 @@ static struct platform_driver dpa_driver = {
 	.remove		= dpa_remove
 };
 
-static struct platform_driver dpa_shared_driver = {
-	.driver = {
-		.name		= KBUILD_MODNAME,
-		.of_match_table	= dpa_shared_match,
-		.owner		= THIS_MODULE,
-	},
-	.probe		= dpaa_eth_shared_probe,
-	.remove		= dpa_remove
-};
-
 static struct platform_driver dpa_macless_driver = {
 	.driver = {
 		.name		= KBUILD_MODNAME,
@@ -4404,16 +3746,6 @@ static int __init __cold dpa_load(void)
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 
-	_errno = platform_driver_register(&dpa_shared_driver);
-	if (unlikely(_errno < 0)) {
-		pr_err(KBUILD_MODNAME"-shared"
-			": %s:%hu:%s(): platform_driver_register() = %d\n",
-			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
-	}
-
-	pr_debug(KBUILD_MODNAME"-shared" ": %s:%s() ->\n",
-		KBUILD_BASENAME".c", __func__);
-
 	_errno = platform_driver_register(&dpa_macless_driver);
 	if (unlikely(_errno < 0)) {
 		pr_err(KBUILD_MODNAME"-macless"
@@ -4446,11 +3778,6 @@ static void __exit __cold dpa_unload(void)
 	platform_driver_unregister(&dpa_driver);
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
-		KBUILD_BASENAME".c", __func__);
-
-	platform_driver_unregister(&dpa_shared_driver);
-
-	pr_debug(KBUILD_MODNAME"-shared" ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_macless_driver);

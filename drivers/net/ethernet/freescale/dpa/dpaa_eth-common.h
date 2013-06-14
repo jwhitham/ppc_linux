@@ -70,7 +70,21 @@ struct dpa_buffer_layout_s {
 #define DPA_PARSE_RESULTS_SIZE sizeof(t_FmPrsResult)
 #define DPA_TIME_STAMP_SIZE 8
 #define DPA_HASH_RESULTS_SIZE 8
+#define DPA_RX_PRIV_DATA_SIZE   (DPA_TX_PRIV_DATA_SIZE + \
+					dpa_get_rx_extra_headroom())
+/* number of Tx queues to FMan */
+#define DPAA_ETH_TX_QUEUES	NR_CPUS
+#define DPAA_ETH_RX_QUEUES	128
 
+#define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
+
+
+#define FM_FD_STAT_ERRORS						\
+	(FM_PORT_FRM_ERR_DMA | FM_PORT_FRM_ERR_PHYSICAL	| \
+	 FM_PORT_FRM_ERR_SIZE | FM_PORT_FRM_ERR_CLS_DISCARD | \
+	 FM_PORT_FRM_ERR_EXTRACTION | FM_PORT_FRM_ERR_NO_SCHEME	| \
+	 FM_PORT_FRM_ERR_ILL_PLCR | FM_PORT_FRM_ERR_PRS_TIMEOUT	| \
+	 FM_PORT_FRM_ERR_PRS_ILL_INSTRUCT | FM_PORT_FRM_ERR_PRS_HDR_ERR)
 
 #define dpaa_eth_init_port(type, port, param, errq_id, defq_id, buf_layout,\
 			   frag_enabled) \

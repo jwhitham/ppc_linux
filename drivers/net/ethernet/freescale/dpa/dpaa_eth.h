@@ -90,12 +90,6 @@
 #endif
 
 
-#define DPA_RX_PRIV_DATA_SIZE   (DPA_TX_PRIV_DATA_SIZE + \
-					dpa_get_rx_extra_headroom())
-/* number of Tx queues to FMan */
-#define DPAA_ETH_TX_QUEUES	NR_CPUS
-#define DPAA_ETH_RX_QUEUES	128
-
 #if defined(CONFIG_FSL_DPAA_FMAN_UNIT_TESTS)
 /*TODO: temporary for fman pcd testing */
 #define FMAN_PCD_TESTS_MAX_NUM_RANGES	20
@@ -168,8 +162,6 @@ struct dpaa_eth_hooks_s {
 
 void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
-#define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
-
 /*
  * Largest value that the FQD's OAL field can hold.
  * This is DPAA-1.x specific.
@@ -210,12 +202,6 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
  */
 #define FM_FD_STAT_L4CV		0x00000004
 
-#define FM_FD_STAT_ERRORS						\
-	(FM_PORT_FRM_ERR_DMA | FM_PORT_FRM_ERR_PHYSICAL	| \
-	 FM_PORT_FRM_ERR_SIZE | FM_PORT_FRM_ERR_CLS_DISCARD | \
-	 FM_PORT_FRM_ERR_EXTRACTION | FM_PORT_FRM_ERR_NO_SCHEME	| \
-	 FM_PORT_FRM_ERR_ILL_PLCR | FM_PORT_FRM_ERR_PRS_TIMEOUT	| \
-	 FM_PORT_FRM_ERR_PRS_ILL_INSTRUCT | FM_PORT_FRM_ERR_PRS_HDR_ERR)
 
 #define FM_FD_STAT_ERR_PHYSICAL	FM_PORT_FRM_ERR_PHYSICAL
 
@@ -257,6 +243,14 @@ struct dpa_fq {
 	uint8_t wq;
 	enum dpa_fq_type fq_type;
 };
+
+typedef struct dpa_fq_cbs_t {
+	struct qman_fq rx_defq;
+	struct qman_fq tx_defq;
+	struct qman_fq rx_errq;
+	struct qman_fq tx_errq;
+	struct qman_fq egress_ern;
+} dpa_fq_cbs_t;
 
 struct dpa_bp {
 	struct bman_pool		*pool;
