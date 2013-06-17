@@ -388,6 +388,8 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
+	printk(KERN_INFO "fsl_dpa_macless: Probed macless interface %s\n", net_dev->name);
+
 	return 0;
 
 netdev_init_failed:

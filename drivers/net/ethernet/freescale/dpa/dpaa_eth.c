@@ -3231,6 +3231,8 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
+	printk(KERN_INFO "fsl_dpa: Probed interface %s\n", net_dev->name);
+
 #ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
 	/* The unit test is designed to test private interfaces */
 	dpa_unit_tests(net_dev);
