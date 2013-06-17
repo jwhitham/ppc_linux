@@ -966,28 +966,33 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 			return ret;
 		break;
 	case DPA_STATS_CNT_CLASSIF_TBL:
-		ret = dpa_stats_tbl_cls_compatcpy(&kprm_cls->classif_tbl_params,
+	{
+		struct dpa_stats_cls_cnt_classif_tbl *tbl =
+						&kprm_cls->classif_tbl_params;
+
+		ret = dpa_stats_tbl_cls_compatcpy(tbl,
 			&uprm_cls->classif_tbl_params, kprm_cls->class_members);
 		if (!ret)
 			break;
 
-		for (i = 0; i < kprm_cls->class_members; i++) {
-			struct dpa_stats_cls_cnt_classif_tbl *tbl =
-						&kprm_cls->classif_tbl_params;
-
-			if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
+		if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
+			for (i = 0; i < kprm_cls->class_members; i++) {
 				kfree(tbl->keys[i].byte);
 				kfree(tbl->keys[i].mask);
 			}
+			kfree(tbl->keys);
 
-			if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
+		} else if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
+			for (i = 0; i < kprm_cls->class_members; i++) {
 				kfree(tbl->pairs[i].first_key.byte);
 				kfree(tbl->pairs[i].first_key.mask);
 				kfree(tbl->pairs[i].second_key.byte);
 				kfree(tbl->pairs[i].second_key.mask);
 			}
+			kfree(tbl->pairs);
 		}
 		return ret;
+	}
 	case DPA_STATS_CNT_CLASSIF_NODE:
 		ret = dpa_stats_ccnode_cls_compatcpy(
 					&kprm_cls->classif_node_params,
@@ -999,6 +1004,7 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 			kfree(kprm_cls->classif_node_params.keys[i].byte);
 			kfree(kprm_cls->classif_node_params.keys[i].mask);
 		}
+		kfree(kprm_cls->classif_node_params.keys);
 		return ret;
 	case DPA_STATS_CNT_IPSEC:
 		ret = dpa_stats_ipsec_cls_compatcpy(&kprm_cls->ipsec_params,
@@ -1040,18 +1046,21 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 		struct dpa_stats_cls_cnt_classif_tbl *tbl =
 				&kprm_cls->classif_tbl_params;
 
-		for (i = 0; i < kprm_cls->class_members; i++) {
-			if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
+		if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
+			for (i = 0; i < kprm_cls->class_members; i++) {
 				kfree(tbl->keys[i].byte);
 				kfree(tbl->keys[i].mask);
 			}
+			kfree(tbl->keys);
 
-			if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
+		} else if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
+			for (i = 0; i < kprm_cls->class_members; i++) {
 				kfree(tbl->pairs[i].first_key.byte);
 				kfree(tbl->pairs[i].first_key.mask);
 				kfree(tbl->pairs[i].second_key.byte);
 				kfree(tbl->pairs[i].second_key.mask);
 			}
+			kfree(tbl->pairs);
 		}
 		break;
 	}
@@ -1060,6 +1069,7 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 			kfree(kprm_cls->classif_node_params.keys[i].byte);
 			kfree(kprm_cls->classif_node_params.keys[i].mask);
 		}
+		kfree(kprm_cls->classif_node_params.keys);
 		break;
 	case DPA_STATS_CNT_IPSEC:
 		kfree(kprm_cls->ipsec_params.sa_id);
