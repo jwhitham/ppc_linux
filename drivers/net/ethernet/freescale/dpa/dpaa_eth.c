@@ -3325,7 +3325,7 @@ static int __init __cold dpa_load(void)
 {
 	int	 _errno;
 
-	pr_info(KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();

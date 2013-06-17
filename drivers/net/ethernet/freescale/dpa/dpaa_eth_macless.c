@@ -417,7 +417,7 @@ static int __init __cold dpa_macless_load(void)
 {
 	int	 _errno;
 
-	pr_info(KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
 
 /* Todo: is it safe to remove these?
 	/ * Initialize dpaa_eth mirror values * /
