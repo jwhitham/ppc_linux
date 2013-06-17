@@ -3552,82 +3552,6 @@ fq_probe_failed:
 	return err;
 }
 
-static const struct of_device_id dpa_proxy_match[];
-static int
-dpaa_eth_proxy_probe(struct platform_device *_of_dev)
-{
-	int err = 0, i;
-	struct device *dev;
-	struct device_node *dpa_node;
-	struct dpa_bp *dpa_bp;
-	struct list_head proxy_fq_list;
-	size_t count;
-	struct fm_port_fqs port_fqs;
-	struct dpa_buffer_layout_s *buf_layout = NULL;
-	struct mac_device *mac_dev;
-
-	dev = &_of_dev->dev;
-
-	dpa_node = dev->of_node;
-
-	if (!of_device_is_available(dpa_node))
-		return -ENODEV;
-
-	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
-	if (IS_ERR(dpa_bp))
-		return PTR_ERR(dpa_bp);
-
-	mac_dev = dpa_mac_probe(_of_dev);
-	if (IS_ERR(mac_dev))
-		return PTR_ERR(mac_dev);
-
-	/* We have physical ports, so we need to establish
-	 * the buffer layout.
-	 */
-	buf_layout = devm_kzalloc(dev, 2 * sizeof(*buf_layout),
-				  GFP_KERNEL);
-	if (!buf_layout) {
-		dev_err(dev, "devm_kzalloc() failed\n");
-		return -ENOMEM;
-	}
-	dpa_set_buffers_layout(mac_dev, buf_layout);
-
-	INIT_LIST_HEAD(&proxy_fq_list);
-
-	memset(&port_fqs, 0, sizeof(port_fqs));
-
-	err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true, RX);
-	if (!err)
-		err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true,
-				       TX);
-	if (err < 0)
-		return err;
-
-	/* Proxy initializer - Just configures the MAC on behalf of
-	 * another partition.
-	 */
-	dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,
-			buf_layout, dev);
-
-	/* Proxy interfaces need to be started, and the allocated
-	 * memory freed
-	 */
-	devm_kfree(dev, buf_layout);
-	devm_kfree(dev, dpa_bp);
-
-	/* Free FQ structures */
-	devm_kfree(dev, port_fqs.rx_defq);
-	devm_kfree(dev, port_fqs.rx_errq);
-	devm_kfree(dev, port_fqs.tx_defq);
-	devm_kfree(dev, port_fqs.tx_errq);
-
-	for_each_port_device(i, mac_dev->port_dev)
-		fm_port_enable(mac_dev->port_dev[i]);
-
-	return 0; /* Proxy interface initialization ended */
-}
-
 static const struct of_device_id dpa_match[] = {
 	{
 		.compatible	= "fsl,dpa-ethernet"
@@ -3644,14 +3568,6 @@ static const struct of_device_id dpa_macless_match[] = {
 };
 MODULE_DEVICE_TABLE(of, dpa_macless_match);
 
-static const struct of_device_id dpa_proxy_match[] = {
-	{
-		.compatible	= "fsl,dpa-ethernet-init"
-	},
-	{}
-};
-MODULE_DEVICE_TABLE(of, dpa_proxy_match);
-
 int __cold dpa_remove(struct platform_device *of_dev)
 {
 	int			err;
@@ -3661,10 +3577,6 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	dev = &of_dev->dev;
 	net_dev = dev_get_drvdata(dev);
-
-	/* Nothing to do here for proxy ports */
-	if (!net_dev)
-		return 0;
 
 	priv = netdev_priv(net_dev);
 
@@ -3716,16 +3628,6 @@ static struct platform_driver dpa_macless_driver = {
 	.remove		= dpa_remove
 };
 
-static struct platform_driver dpa_proxy_driver = {
-	.driver = {
-		.name		= KBUILD_MODNAME"-proxy",
-		.of_match_table	= dpa_proxy_match,
-		.owner		= THIS_MODULE,
-	},
-	.probe		= dpaa_eth_proxy_probe,
-	.remove		= dpa_remove
-};
-
 static int __init __cold dpa_load(void)
 {
 	int	 _errno;
@@ -3756,16 +3658,6 @@ static int __init __cold dpa_load(void)
 	pr_debug(KBUILD_MODNAME"-macless" ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 
-	_errno = platform_driver_register(&dpa_proxy_driver);
-	if (unlikely(_errno < 0)) {
-		pr_err(KBUILD_MODNAME"-proxy"
-			": %s:%hu:%s(): platform_driver_register() = %d\n",
-			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
-	}
-
-	pr_debug(KBUILD_MODNAME"-proxy" ": %s:%s() ->\n",
-		KBUILD_BASENAME".c", __func__);
-
 	return _errno;
 }
 module_init(dpa_load);
@@ -3783,11 +3675,6 @@ static void __exit __cold dpa_unload(void)
 	platform_driver_unregister(&dpa_macless_driver);
 
 	pr_debug(KBUILD_MODNAME"-macless" ": %s:%s() ->\n",
-		KBUILD_BASENAME".c", __func__);
-
-	platform_driver_unregister(&dpa_proxy_driver);
-
-	pr_debug(KBUILD_MODNAME"-proxy" ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 }
 module_exit(dpa_unload);

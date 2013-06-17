@@ -1,0 +1,200 @@
+/*
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *	 notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *	 notice, this list of conditions and the following disclaimer in the
+ *	 documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Freescale Semiconductor nor the
+ *	 names of its contributors may be used to endorse or promote products
+ *	 derived from this software without specific prior written permission.
+ *
+ *
+ * ALTERNATIVELY, this software may be distributed under the terms of the
+ * GNU General Public License ("GPL") as published by the Free Software
+ * Foundation, either version 2 of that License or (at your option) any
+ * later version.
+ *
+ * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": %s:%hu:%s() " fmt, \
+	KBUILD_BASENAME".c", __LINE__, __func__
+
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/of_platform.h>
+#include "dpaa_eth.h"
+#include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
+
+static uint8_t debug = -1;
+module_param(debug, byte, S_IRUGO);
+MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
+
+#define DPA_DESCRIPTION "FSL DPAA Proxy initialization driver"
+
+/* candidates for dpa_eth_common.c */
+struct dpa_bp * __cold __must_check __attribute__((nonnull))
+dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
+struct mac_device * __cold __must_check
+__attribute__((nonnull)) dpa_mac_probe(struct platform_device *_of_dev);
+void dpa_set_buffers_layout(struct mac_device *mac_dev,
+		  struct dpa_buffer_layout_s *layout);
+int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
+		struct fm_port_fqs *port_fqs,
+		bool tx_conf_fqs_per_core,
+		enum port_type ptype);
+void dpaa_eth_init_ports(struct mac_device *mac_dev,
+		struct dpa_bp *bp, size_t count,
+		struct fm_port_fqs *port_fqs,
+		struct dpa_buffer_layout_s *buf_layout,
+		struct device *dev);
+
+/* forward declarations */
+static int dpaa_eth_proxy_probe(struct platform_device *_of_dev);
+static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev);
+
+static const struct of_device_id dpa_proxy_match[] = {
+	{
+		.compatible	= "fsl,dpa-ethernet-init"
+	},
+	{}
+};
+MODULE_DEVICE_TABLE(of, dpa_proxy_match);
+
+static struct platform_driver dpa_proxy_driver = {
+	.driver = {
+		.name		= KBUILD_MODNAME"-proxy",
+		.of_match_table	= dpa_proxy_match,
+		.owner		= THIS_MODULE,
+	},
+	.probe		= dpaa_eth_proxy_probe,
+	.remove		= dpa_eth_proxy_remove
+};
+
+static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
+{
+	int err = 0, i;
+	struct device *dev;
+	struct device_node *dpa_node;
+	struct dpa_bp *dpa_bp;
+	struct list_head proxy_fq_list;
+	size_t count;
+	struct fm_port_fqs port_fqs;
+	struct dpa_buffer_layout_s *buf_layout = NULL;
+	struct mac_device *mac_dev;
+
+	dev = &_of_dev->dev;
+
+	dpa_node = dev->of_node;
+
+	if (!of_device_is_available(dpa_node))
+		return -ENODEV;
+
+	/* Get the buffer pools assigned to this interface */
+	dpa_bp = dpa_bp_probe(_of_dev, &count);
+	if (IS_ERR(dpa_bp))
+		return PTR_ERR(dpa_bp);
+
+	mac_dev = dpa_mac_probe(_of_dev);
+	if (IS_ERR(mac_dev))
+		return PTR_ERR(mac_dev);
+
+	/* We have physical ports, so we need to establish
+	 * the buffer layout.
+	 */
+	buf_layout = devm_kzalloc(dev, 2 * sizeof(*buf_layout),
+				  GFP_KERNEL);
+	if (!buf_layout) {
+		dev_err(dev, "devm_kzalloc() failed\n");
+		return -ENOMEM;
+	}
+	dpa_set_buffers_layout(mac_dev, buf_layout);
+
+	INIT_LIST_HEAD(&proxy_fq_list);
+
+	memset(&port_fqs, 0, sizeof(port_fqs));
+
+	err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true, RX);
+	if (!err)
+		err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true,
+				       TX);
+	if (err < 0)
+		return err;
+
+	/* Proxy initializer - Just configures the MAC on behalf of
+	 * another partition.
+	 */
+	dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,
+			buf_layout, dev);
+
+	/* Proxy interfaces need to be started, and the allocated
+	 * memory freed
+	 */
+	devm_kfree(dev, buf_layout);
+	devm_kfree(dev, dpa_bp);
+
+	/* Free FQ structures */
+	devm_kfree(dev, port_fqs.rx_defq);
+	devm_kfree(dev, port_fqs.rx_errq);
+	devm_kfree(dev, port_fqs.tx_defq);
+	devm_kfree(dev, port_fqs.tx_errq);
+
+	for_each_port_device(i, mac_dev->port_dev)
+		fm_port_enable(mac_dev->port_dev[i]);
+
+	return 0; /* Proxy interface initialization ended */
+}
+
+static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev)
+{
+	return 0;
+}
+
+static int __init __cold dpa_proxy_load(void)
+{
+	int	 _errno;
+
+	pr_info(KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
+
+/* Todo: is it safe to remove these?
+	/ * Initialize dpaa_eth mirror values * /
+	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
+	dpa_max_frm = fm_get_max_frm();
+*/
+
+	_errno = platform_driver_register(&dpa_proxy_driver);
+	if (unlikely(_errno < 0)) {
+		pr_err(KBUILD_MODNAME
+			": %s:%hu:%s(): platform_driver_register() = %d\n",
+			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
+	}
+
+	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
+		KBUILD_BASENAME".c", __func__);
+
+	return _errno;
+}
+module_init(dpa_proxy_load);
+
+static void __exit __cold dpa_proxy_unload(void)
+{
+	platform_driver_unregister(&dpa_proxy_driver);
+
+	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
+		KBUILD_BASENAME".c", __func__);
+}
+module_exit(dpa_proxy_unload);
