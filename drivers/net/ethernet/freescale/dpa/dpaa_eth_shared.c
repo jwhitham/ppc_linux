@@ -87,7 +87,7 @@ int dpa_get_channel(struct device *dev, struct device_node *dpa_node);
 void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 		struct fm_port *tx_port);
 int dpaa_eth_cgr_init(struct dpa_priv_s *priv);
-int dpa_fq_init(struct dpa_fq *dpa_fq);
+int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable);
 void dpaa_eth_init_ports(struct mac_device *mac_dev,
 		struct dpa_bp *bp, size_t count,
 		struct fm_port_fqs *port_fqs,
@@ -717,7 +717,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 
 	/* Add the FQs to the interface, and make them active */
 	list_for_each_entry_safe(dpa_fq, tmp, &priv->dpa_fq_list, list) {
-		err = dpa_fq_init(dpa_fq);
+		err = dpa_fq_init(dpa_fq, false);
 		if (err < 0)
 			goto fq_alloc_failed;
 	}

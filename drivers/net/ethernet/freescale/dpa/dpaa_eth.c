@@ -137,12 +137,6 @@
  */
 #define DPA_RECYCLE_EXTRA_SIZE	1024
 
-/* For MAC-based interfaces, we compute the tx needed headroom from the
- * associated Tx port's buffer layout settings.
- * For MACless interfaces just use a default value.
- */
-#define DPA_DEFAULT_TX_HEADROOM	64
-
 #define DPA_DESCRIPTION "FSL DPAA Ethernet driver"
 
 MODULE_LICENSE("Dual BSD/GPL");
@@ -526,7 +520,7 @@ static struct qman_fq *_dpa_get_tx_conf_queue(const struct dpa_priv_s *priv,
 	return NULL;
 }
 
-int dpa_fq_init(struct dpa_fq *dpa_fq)
+int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 {
 	int			 _errno;
 	const struct dpa_priv_s	*priv;
@@ -598,16 +592,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq)
 				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL);
 		}
 
-		/*
-		 * For MAC-less devices we only get here for RX frame queues
-		 * initialization, which are the TX queues of the other
-		 * partition.
-		 * It is safe to rely on one partition to set the FQ taildrop
-		 * threshold for the TX queues of the other partition
-		 * because the ERN notifications will be received by the
-		 * partition doing qman_enqueue.
-		 */
-		if (!priv->mac_dev) {
+		if (td_enable) {
 			initfq.we_mask |= QM_INITFQ_WE_TDTHRESH;
 			qm_fqd_taildrop_set(&initfq.fqd.td,
 					DPA_FQ_TD, 1);
@@ -964,25 +949,6 @@ int dpa_set_mac_address(struct net_device *net_dev, void *addr)
 	return 0;
 }
 
-static int dpa_set_macless_address(struct net_device *net_dev, void *addr)
-{
-	const struct dpa_priv_s	*priv;
-	int			 _errno;
-
-	priv = netdev_priv(net_dev);
-
-	_errno = eth_mac_addr(net_dev, addr);
-	if (_errno < 0) {
-		if (netif_msg_drv(priv))
-			netdev_err(net_dev,
-				       "eth_mac_addr() = %d\n",
-				       _errno);
-		return _errno;
-	}
-
-	return 0;
-}
-
 void dpa_set_rx_mode(struct net_device *net_dev)
 {
 	int			 _errno;
@@ -1006,9 +972,6 @@ void dpa_set_rx_mode(struct net_device *net_dev)
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }
 
-static void dpa_set_macless_rx_mode(struct net_device *net_dev)
-{
-}
 #if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
 			const void *data)
@@ -1173,10 +1136,6 @@ int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	return ret;
 }
 
-static int dpa_macless_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
-{
-	return -EINVAL;
-}
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 /*
  * When we put the buffer into the pool, we purposefully added
@@ -2256,13 +2215,6 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 	return dpa_start(net_dev);
 }
 
-static int __cold dpa_macless_start(struct net_device *net_dev)
-{
-	netif_tx_start_all_queues(net_dev);
-
-	return 0;
-}
-
 int __cold dpa_stop(struct net_device *net_dev)
 {
 	int _errno, i;
@@ -2301,13 +2253,6 @@ static int __cold dpa_eth_priv_stop(struct net_device *net_dev)
 	dpaa_eth_napi_disable(priv);
 
 	return _errno;
-}
-
-static int __cold dpa_macless_stop(struct net_device *net_dev)
-{
-	netif_tx_stop_all_queues(net_dev);
-
-	return 0;
 }
 
 void __cold dpa_timeout(struct net_device *net_dev)
@@ -2603,24 +2548,6 @@ netdev_features_t dpa_fix_features(struct net_device *dev,
 	return features;
 }
 
-static netdev_features_t dpa_macless_fix_features(struct net_device *dev,
-					  netdev_features_t features)
-{
-	netdev_features_t unsupported_features = 0;
-
-	/* In theory we should never be requested to enable features that
-	 * we didn't set in netdev->features and netdev->hw_features at probe
-	 * time, but double check just to be on the safe side.
-	 */
-	unsupported_features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM;
-	/* We don't support enabling Rx csum through ethtool yet */
-	unsupported_features |= NETIF_F_RXCSUM;
-
-	features &= ~unsupported_features;
-
-	return features;
-}
-
 int dpa_set_features(struct net_device *dev, netdev_features_t features)
 {
 	/* Not much to do here for now */
@@ -2651,27 +2578,6 @@ static const struct net_device_ops dpa_private_ops = {
 #endif
 };
 
-extern int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
-
-static const struct net_device_ops dpa_macless_ops = {
-	.ndo_open = dpa_macless_start,
-	.ndo_start_xmit = dpa_shared_tx,
-	.ndo_stop = dpa_macless_stop,
-	.ndo_tx_timeout = dpa_timeout,
-	.ndo_get_stats64 = dpa_get_stats64,
-	.ndo_set_mac_address = dpa_set_macless_address,
-	.ndo_validate_addr = eth_validate_addr,
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
-	.ndo_select_queue = dpa_select_queue,
-#endif
-	.ndo_change_mtu = dpa_change_mtu,
-	.ndo_set_rx_mode = dpa_set_macless_rx_mode,
-	.ndo_init = dpa_ndo_init,
-	.ndo_set_features = dpa_set_features,
-	.ndo_fix_features = dpa_macless_fix_features,
-	.ndo_do_ioctl = dpa_macless_ioctl,
-};
-
 static u32 rx_pool_channel;
 static DEFINE_SPINLOCK(rx_pool_channel_init);
 
@@ -2690,11 +2596,6 @@ int dpa_get_channel(struct device *dev, struct device_node *dpa_node)
 	return rx_pool_channel;
 }
 
-struct fqid_cell {
-	uint32_t start;
-	uint32_t count;
-};
-
 static const struct fqid_cell default_fqids[][3] = {
 	[RX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_RX_QUEUES} },
 	[TX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_TX_QUEUES} }
@@ -2710,7 +2611,7 @@ static const struct fqid_cell tx_recycle_fqids[] = {
 };
 #endif
 
-static struct dpa_fq *dpa_fq_alloc(struct device *dev,
+struct dpa_fq *dpa_fq_alloc(struct device *dev,
 				   const struct fqid_cell *fqids,
 				   struct list_head *list,
 				   enum dpa_fq_type fq_type)
@@ -2822,35 +2723,6 @@ invalid_default_queue:
 invalid_error_queue:
 	dev_err(dev, "Too many default or error queues\n");
 	return -EINVAL;
-}
-
-/* Probing of FQs for MACless ports */
-static int dpa_fq_probe_macless(struct device *dev, struct list_head *list,
-				enum port_type ptype)
-{
-	struct device_node *np = dev->of_node;
-	const struct fqid_cell *fqids;
-	int num_ranges;
-	int i, lenp;
-
-	fqids = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
-	if (fqids == NULL) {
-		dev_err(dev, "Need FQ definition in dts for MACless devices\n");
-		return -EINVAL;
-	}
-
-	num_ranges = lenp / sizeof(*fqids);
-
-	/* All ranges defined in the device tree are used as Rx/Tx queues */
-	for (i = 0; i < num_ranges; i++) {
-		if (!dpa_fq_alloc(dev, &fqids[i], list, ptype == RX ?
-				  FQ_TYPE_RX_PCD : FQ_TYPE_TX)) {
-			dev_err(dev, "_dpa_fq_alloc() failed\n");
-			return -ENOMEM;
-		}
-	}
-
-	return 0;
 }
 
 static inline void dpa_setup_ingress(const struct dpa_priv_s *priv,
@@ -3090,26 +2962,6 @@ int dpa_netdev_init(struct device_node *dpa_node,
 	return 0;
 }
 
-static int dpa_macless_netdev_init(struct device_node *dpa_node,
-				struct net_device *net_dev)
-{
-	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	struct device *dev = net_dev->dev.parent;
-	const uint8_t *mac_addr;
-
-	net_dev->netdev_ops = &dpa_macless_ops;
-
-	/* Get the MAC address */
-	mac_addr = of_get_mac_address(dpa_node);
-	if (mac_addr == NULL) {
-		if (netif_msg_probe(priv))
-			dev_err(dev, "No MAC address found!\n");
-		return -EINVAL;
-	}
-
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr);
-}
-
 static int dpa_private_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev)
 {
@@ -3344,7 +3196,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	/* Add the FQs to the interface, and make them active */
 	list_for_each_entry_safe(dpa_fq, tmp, &priv->dpa_fq_list, list) {
-		err = dpa_fq_init(dpa_fq);
+		err = dpa_fq_init(dpa_fq, false);
 		if (err < 0)
 			goto fq_alloc_failed;
 	}
@@ -3409,149 +3261,6 @@ mac_probe_failed:
 	return err;
 }
 
-extern const dpa_fq_cbs_t shared_fq_cbs;
-
-static const struct of_device_id dpa_macless_match[];
-static int
-dpaa_eth_macless_probe(struct platform_device *_of_dev)
-{
-	int err = 0, i;
-	struct device *dev;
-	struct device_node *dpa_node;
-	struct dpa_bp *dpa_bp;
-	struct dpa_fq *dpa_fq, *tmp;
-	size_t count;
-	struct net_device *net_dev = NULL;
-	struct dpa_priv_s *priv = NULL;
-	struct dpa_percpu_priv_s *percpu_priv;
-	struct fm_port_fqs port_fqs;
-	struct task_struct *kth;
-	static u8 macless_idx;
-
-	dev = &_of_dev->dev;
-
-	dpa_node = dev->of_node;
-
-	if (!of_device_is_available(dpa_node))
-		return -ENODEV;
-
-	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
-	if (IS_ERR(dpa_bp))
-		return PTR_ERR(dpa_bp);
-
-	/* Allocate this early, so we can store relevant information in
-	 * the private area (needed by 1588 code in dpa_mac_probe)
-	 */
-	net_dev = alloc_etherdev_mq(sizeof(*priv), DPAA_ETH_TX_QUEUES);
-	if (!net_dev) {
-		dev_err(dev, "alloc_etherdev_mq() failed\n");
-		return -ENOMEM;
-	}
-
-	/* Do this here, so we can be verbose early */
-	SET_NETDEV_DEV(net_dev, dev);
-	dev_set_drvdata(dev, net_dev);
-
-	priv = netdev_priv(net_dev);
-	priv->net_dev = net_dev;
-
-	priv->msg_enable = netif_msg_init(debug, -1);
-
-	INIT_LIST_HEAD(&priv->dpa_fq_list);
-
-	memset(&port_fqs, 0, sizeof(port_fqs));
-
-	err = dpa_fq_probe_macless(dev, &priv->dpa_fq_list, RX);
-	if (!err)
-		err = dpa_fq_probe_macless(dev, &priv->dpa_fq_list,
-					   TX);
-	if (err < 0)
-		goto fq_probe_failed;
-
-	/* bp init */
-
-	err = dpa_bp_create(net_dev, dpa_bp, count);
-
-	if (err < 0)
-		goto bp_create_failed;
-
-	priv->mac_dev = NULL;
-
-	priv->channel = dpa_get_channel(dev, dpa_node);
-
-	if (priv->channel < 0) {
-		err = priv->channel;
-		goto get_channel_failed;
-	}
-
-	/* Start a thread that will walk the cpus with affine portals
-	 * and add this pool channel to each's dequeue mask.
-	 */
-	kth = kthread_run(dpaa_eth_add_channel,
-			  (void *)(unsigned long)priv->channel,
-			  "dpaa_%p:%d", net_dev, priv->channel);
-	if (!kth) {
-		err = -ENOMEM;
-		goto add_channel_failed;
-	}
-
-	dpa_fq_setup(priv, &shared_fq_cbs, NULL);
-
-	/* Add the FQs to the interface, and make them active */
-	list_for_each_entry_safe(dpa_fq, tmp, &priv->dpa_fq_list, list) {
-		err = dpa_fq_init(dpa_fq);
-		if (err < 0)
-			goto fq_alloc_failed;
-	}
-
-	priv->tx_headroom = DPA_DEFAULT_TX_HEADROOM;
-
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
-
-	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
-		err = -ENOMEM;
-		goto alloc_percpu_failed;
-	}
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		memset(percpu_priv, 0, sizeof(*percpu_priv));
-	}
-
-	err = dpa_macless_netdev_init(dpa_node, net_dev);
-	if (err < 0)
-		goto netdev_init_failed;
-
-	priv->macless_idx = macless_idx++;
-
-	dpaa_eth_sysfs_init(&net_dev->dev);
-
-	return 0;
-
-netdev_init_failed:
-	if (net_dev)
-		free_percpu(priv->percpu_priv);
-alloc_percpu_failed:
-fq_alloc_failed:
-	if (net_dev) {
-		dpa_fq_free(dev, &priv->dpa_fq_list);
-		qman_release_cgrid(priv->cgr_data.cgr.cgrid);
-		qman_delete_cgr(&priv->cgr_data.cgr);
-	}
-add_channel_failed:
-get_channel_failed:
-	if (net_dev)
-		dpa_bp_free(priv, priv->dpa_bp);
-bp_create_failed:
-fq_probe_failed:
-	dev_set_drvdata(dev, NULL);
-	if (net_dev)
-		free_netdev(net_dev);
-
-	return err;
-}
-
 static const struct of_device_id dpa_match[] = {
 	{
 		.compatible	= "fsl,dpa-ethernet"
@@ -3559,14 +3268,6 @@ static const struct of_device_id dpa_match[] = {
 	{}
 };
 MODULE_DEVICE_TABLE(of, dpa_match);
-
-static const struct of_device_id dpa_macless_match[] = {
-	{
-		.compatible	= "fsl,dpa-ethernet-macless"
-	},
-	{}
-};
-MODULE_DEVICE_TABLE(of, dpa_macless_match);
 
 int __cold dpa_remove(struct platform_device *of_dev)
 {
@@ -3618,16 +3319,6 @@ static struct platform_driver dpa_driver = {
 	.remove		= dpa_remove
 };
 
-static struct platform_driver dpa_macless_driver = {
-	.driver = {
-		.name		= KBUILD_MODNAME,
-		.of_match_table	= dpa_macless_match,
-		.owner		= THIS_MODULE,
-	},
-	.probe		= dpaa_eth_macless_probe,
-	.remove		= dpa_remove
-};
-
 static int __init __cold dpa_load(void)
 {
 	int	 _errno;
@@ -3648,16 +3339,6 @@ static int __init __cold dpa_load(void)
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 
-	_errno = platform_driver_register(&dpa_macless_driver);
-	if (unlikely(_errno < 0)) {
-		pr_err(KBUILD_MODNAME"-macless"
-			": %s:%hu:%s(): platform_driver_register() = %d\n",
-			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
-	}
-
-	pr_debug(KBUILD_MODNAME"-macless" ": %s:%s() ->\n",
-		KBUILD_BASENAME".c", __func__);
-
 	return _errno;
 }
 module_init(dpa_load);
@@ -3670,11 +3351,6 @@ static void __exit __cold dpa_unload(void)
 	platform_driver_unregister(&dpa_driver);
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
-		KBUILD_BASENAME".c", __func__);
-
-	platform_driver_unregister(&dpa_macless_driver);
-
-	pr_debug(KBUILD_MODNAME"-macless" ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 }
 module_exit(dpa_unload);

@@ -252,6 +252,11 @@ typedef struct dpa_fq_cbs_t {
 	struct qman_fq egress_ern;
 } dpa_fq_cbs_t;
 
+struct fqid_cell {
+	uint32_t start;
+	uint32_t count;
+};
+
 struct dpa_bp {
 	struct bman_pool		*pool;
 	uint8_t				bpid;
