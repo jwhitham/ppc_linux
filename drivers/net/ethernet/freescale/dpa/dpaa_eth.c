@@ -2915,6 +2915,8 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 	 */
 	while (egress_cnt < DPAA_ETH_TX_QUEUES) {
 		list_for_each_entry(fq, &priv->dpa_fq_list, list) {
+			if (fq->fq_type != FQ_TYPE_TX)
+				continue;
 			priv->egress_fqs[egress_cnt++] = &fq->fq_base;
 			if (egress_cnt == DPAA_ETH_TX_QUEUES)
 				break;
