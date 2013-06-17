@@ -647,7 +647,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	priv->msg_enable = netif_msg_init(debug, -1);
 
 	mac_dev = dpa_mac_probe(_of_dev);
-	if (IS_ERR(mac_dev)) {
+	if (IS_ERR(mac_dev) || !mac_dev) {
 		err = PTR_ERR(mac_dev);
 		goto mac_probe_failed;
 	}
