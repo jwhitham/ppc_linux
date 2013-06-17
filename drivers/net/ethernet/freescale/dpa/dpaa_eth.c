@@ -714,9 +714,9 @@ dpa_fq_free(struct device *dev, struct list_head *list)
 	return _errno;
 }
 
-void dpa_release_sgt(struct qm_sg_entry *sgt, struct dpa_bp *dpa_bp,
-		struct bm_buffer *bmb)
+void dpa_release_sgt(struct qm_sg_entry *sgt, struct bm_buffer *bmb)
 {
+	struct dpa_bp *dpa_bp;
 	int i = 0, j;
 
 	do {
@@ -744,7 +744,7 @@ void __attribute__((nonnull))
 dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 {
 	struct qm_sg_entry		*sgt;
-	struct dpa_bp			*_dpa_bp, *dpa_bp;
+	struct dpa_bp			*_dpa_bp;
 	struct bm_buffer		 _bmb, bmb[8];
 
 	_bmb.hi	= fd->addr_hi;
@@ -755,7 +755,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 
 	if (fd->format == qm_fd_sg) {
 		sgt = (phys_to_virt(bm_buf_addr(&_bmb)) + dpa_fd_offset(fd));
-		dpa_release_sgt(sgt, dpa_bp, bmb);
+		dpa_release_sgt(sgt, bmb);
 	}
 
 	while (bman_release(_dpa_bp->pool, &_bmb, 1, 0))

@@ -99,7 +99,7 @@ dpa_fq_free(struct device *dev, struct list_head *list);
 void __cold __attribute__((nonnull))
 dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp);
 struct dpa_bp *dpa_bpid2pool(int bpid);
-void dpa_release_sgt(struct qm_sg_entry *sgt, struct dpa_bp *dpa_bp,
+void dpa_release_sgt(struct qm_sg_entry *sgt,
 		struct bm_buffer *bmb);
 void __attribute__((nonnull))
 dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd);
@@ -235,7 +235,7 @@ dpa_fd_release_sg(const struct net_device *net_dev,
 {
 	const struct dpa_priv_s		*priv;
 	struct qm_sg_entry		*sgt;
-	struct dpa_bp			*_dpa_bp, *dpa_bp;
+	struct dpa_bp			*_dpa_bp;
 	struct bm_buffer		 _bmb, bmb[8];
 
 	priv = netdev_priv(net_dev);
@@ -248,7 +248,7 @@ dpa_fd_release_sg(const struct net_device *net_dev,
 	if (_dpa_bp->vaddr) {
 		sgt = dpa_phys2virt(_dpa_bp, bm_buf_addr(&_bmb)) +
 					dpa_fd_offset(fd);
-		dpa_release_sgt(sgt, dpa_bp, bmb);
+		dpa_release_sgt(sgt, bmb);
 	} else {
 		sgt = kmalloc(DPA_SGT_MAX_ENTRIES * sizeof(*sgt), GFP_ATOMIC);
 		if (sgt == NULL) {
@@ -262,7 +262,7 @@ dpa_fd_release_sg(const struct net_device *net_dev,
 						dpa_fd_offset(fd),
 					min(DPA_SGT_MAX_ENTRIES * sizeof(*sgt),
 						_dpa_bp->size));
-		dpa_release_sgt(sgt, dpa_bp, bmb);
+		dpa_release_sgt(sgt, bmb);
 		kfree(sgt);
 	}
 
