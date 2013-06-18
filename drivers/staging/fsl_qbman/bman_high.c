@@ -844,16 +844,16 @@ int bman_release(struct bman_pool *pool, const struct bm_buffer *bufs, u8 num,
 		return -EINVAL;
 	if (pool->params.flags & BMAN_POOL_FLAG_NO_RELEASE)
 		return -EINVAL;
+#endif
+	/* Without stockpile, this API is a pass-through to the h/w operation */
+	if (!(pool->params.flags & BMAN_POOL_FLAG_STOCKPILE))
+		return __bman_release(pool, bufs, num, flags);
+#ifdef CONFIG_FSL_DPA_CHECKING
 	if (!atomic_dec_and_test(&pool->in_use)) {
 		pr_crit("Parallel attempts to enter bman_released() detected.");
 		panic("only one instance of bman_released/acquired allowed");
 	}
 #endif
-	/* Without stockpile, this API is a pass-through to the h/w operation */
-	if (!(pool->params.flags & BMAN_POOL_FLAG_STOCKPILE)) {
-		ret = __bman_release(pool, bufs, num, flags);
-		goto release_done;
-	}
 	/* This needs some explanation. Adding the given buffers may take the
 	 * stockpile over the threshold, but in fact the stockpile may already
 	 * *be* over the threshold if a previous release-to-hw attempt had
@@ -930,16 +930,16 @@ int bman_acquire(struct bman_pool *pool, struct bm_buffer *bufs, u8 num,
 		return -EINVAL;
 	if (pool->params.flags & BMAN_POOL_FLAG_ONLY_RELEASE)
 		return -EINVAL;
+#endif
+	/* Without stockpile, this API is a pass-through to the h/w operation */
+	if (!(pool->params.flags & BMAN_POOL_FLAG_STOCKPILE))
+		return __bman_acquire(pool, bufs, num);
+#ifdef CONFIG_FSL_DPA_CHECKING
 	if (!atomic_dec_and_test(&pool->in_use)) {
 		pr_crit("Parallel attempts to enter bman_acquire() detected.");
 		panic("only one instance of bman_released/acquired allowed");
 	}
 #endif
-	/* Without stockpile, this API is a pass-through to the h/w operation */
-	if (!(pool->params.flags & BMAN_POOL_FLAG_STOCKPILE)) {
-		ret = __bman_acquire(pool, bufs, num);
-		goto acquire_done;
-	}
 	/* Only need a h/w op if we'll hit the low-water thresh */
 	if (!(flags & BMAN_ACQUIRE_FLAG_STOCKPILE) &&
 			(pool->sp_fill <= (BMAN_STOCKPILE_LOW + num))) {
