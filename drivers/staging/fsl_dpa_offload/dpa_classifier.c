@@ -72,8 +72,7 @@
 		(object) = desc_to_object(&(desc_table), (desc)); \
 		if (!(object)) { \
 			release_desc_table(&(desc_table)); \
-			pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n", \
-				__FILE__, __func__, __LINE__, (desc)); \
+			log_err("Invalid descriptor (%d).\n", (desc)); \
 			return (einval); \
 		} \
 		mutex_lock(&(object)->access); \
@@ -162,13 +161,11 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 
 	/* Parameters sanity checks: */
 	if (!params) {
-		pr_err("ERROR: %s, %s (%d): \"params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!td) {
-		pr_err("ERROR: %s, %s (%d): \"td\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"td\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -180,9 +177,8 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 
 	ptable = kzalloc(sizeof(*ptable), GFP_KERNEL);
 	if (!ptable) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA classifier "
-			"table. Requested table type=%d.\n", __FILE__, __func__,
-			__LINE__, params->type);
+		log_err("No more memory for DPA classifier table. Requested "
+			"table type=%d.\n", params->type);
 		err = -ENOMEM;
 		goto dpa_classif_table_create_error;
 	}
@@ -200,10 +196,9 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 				kzalloc(sizeof(*ptable->shadow_table),
 					GFP_KERNEL);
 			if (!ptable->shadow_table) {
-				pr_err("ERROR: %s, %s (%d): No more memory for "
-					"classifier shadow table while creating"
-					"INDEXED table.\n", __FILE__, __func__,
-					__LINE__);
+				log_err("No more memory for classifier shadow "
+					"table while creating INDEXED "
+					"table.\n");
 				err = -ENOMEM;
 				goto dpa_classif_table_create_error;
 			}
@@ -225,10 +220,9 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 				kzalloc(sizeof(*ptable->shadow_table),
 					GFP_KERNEL);
 			if (!ptable->shadow_table) {
-				pr_err("ERROR: %s, %s (%d): No more memory for "
-					"classifier shadow table while creating"
-					"EXACT MATCH table.\n", __FILE__,
-					__func__, __LINE__);
+				log_err("No more memory for classifier shadow "
+					"table while creating EXACT MATCH "
+					"table.\n");
 				err = -ENOMEM;
 				goto dpa_classif_table_create_error;
 			}
@@ -250,11 +244,9 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 					kzalloc(sizeof(*ptable->shadow_table),
 						GFP_KERNEL);
 				if (!ptable->shadow_table) {
-					pr_err("ERROR: %s, %s (%d): No more "
-						"memory for classifier shadow "
-						"table while creating HASH "
-						"table.\n", __FILE__, __func__,
-						__LINE__);
+					log_err("No more memory for classifier "
+						"shadow table while creating "
+						"HASH table.\n");
 					err = -ENOMEM;
 					goto dpa_classif_table_create_error;
 				}
@@ -269,8 +261,7 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 		}
 		break;
 	default:
-		pr_err("ERROR: %s, %s (%d): Unsupported DPA Classifier table "
-			"type (%d).\n", __FILE__, __func__, __LINE__,
+		log_err("Unsupported DPA Classifier table type (%d).\n",
 			ptable->params.type);
 		goto dpa_classif_table_create_error;
 	}
@@ -282,10 +273,9 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 			kmalloc(ptable->shadow_table->size *
 				sizeof(struct list_head), GFP_KERNEL);
 		if (!ptable->shadow_table->shadow_entry) {
-			pr_err("ERROR: %s, %s (%d): No more memory for DPA "
-				"Classifier shadow table buckets (%d buckets). "
-				"Requested table type=%d.\n", __FILE__,
-				__func__, __LINE__, ptable->shadow_table->size,
+			log_err("No more memory for DPA Classifier shadow "
+				"table buckets (%d buckets). Requested table "
+				"type=%d.\n", ptable->shadow_table->size,
 				ptable->params.type);
 			err = -ENOMEM;
 			goto dpa_classif_table_create_error;
@@ -300,20 +290,17 @@ int dpa_classif_table_create(const struct dpa_cls_tbl_params	*params,
 	case DPA_CLS_TBL_INDEXED:
 		err = table_init_indexed(ptable);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to create INDEXED "
-				"table.\n", __FILE__, __func__, __LINE__);
+			log_err("Failed to create INDEXED table.\n");
 		break;
 	case DPA_CLS_TBL_EXACT_MATCH:
 		err = table_init_exact_match(ptable);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to create EXACT "
-				"MATCH table.\n", __FILE__, __func__, __LINE__);
+			log_err("Failed to create EXACT MATCH table.\n");
 		break;
 	case DPA_CLS_TBL_HASH:
 		err = table_init_hash(ptable);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to create HASH "
-				"table.\n", __FILE__, __func__, __LINE__);
+			log_err("Failed to create HASH table.\n");
 		break;
 	}
 	if (err < 0)
@@ -369,8 +356,7 @@ int dpa_classif_table_free(int td)
 	ptable = desc_to_object(&table_array, td);
 	if (!ptable) {
 		release_desc_table(&table_array);
-		pr_err("ERROR: %s, %s (%d): No such table (td=%d).\n", __FILE__,
-			__func__, __LINE__, td);
+		log_err("No such table (td=%d).\n", td);
 		return -EINVAL;
 	}
 
@@ -428,8 +414,7 @@ int dpa_classif_table_modify_miss_action(int			td,
 
 	/* Parameters sanity checks: */
 	if (!miss_action) {
-		pr_err("ERROR: %s, %s (%d): \"miss_action\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"miss_action\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -437,9 +422,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 
 	if (ptable->params.type == DPA_CLS_TBL_INDEXED) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Miss Action for DPA Classifier "
-			"Indexed Tables (td=%d) is not supported.\n", __FILE__,
-			__func__, __LINE__, td);
+		log_err("Miss Action for DPA Classifier Indexed Tables (td=%d) "
+			"is not supported.\n", td);
 		return -ENOSYS;
 	}
 
@@ -448,9 +432,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 		NULL, NULL, NULL);
 	if (errno < 0) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Failed verification of miss action "
-			"params for table td=%d.\n", __FILE__, __func__,
-			__LINE__, td);
+		log_err("Failed verification of miss action params for table "
+			"td=%d.\n", td);
 		return errno;
 	}
 
@@ -459,10 +442,9 @@ int dpa_classif_table_modify_miss_action(int			td,
 			cc_node, &miss_engine_params);
 		if (err != E_OK) {
 			RELEASE_OBJECT(ptable);
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_HashTableModifyMissNextEngine "
-				"(td=%d, Cc node handle=0x%p).\n", __FILE__,
-				__func__, __LINE__, td,
+				"(td=%d, Cc node handle=0x%p).\n", td,
 				ptable->params.cc_node);
 			return -EBUSY;
 		}
@@ -471,10 +453,9 @@ int dpa_classif_table_modify_miss_action(int			td,
 			int_cc_node[0].cc_node, &miss_engine_params);
 		if (err != E_OK) {
 			RELEASE_OBJECT(ptable);
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_MatchTableModifyMissNextEngine (td=%d, "
-				"Cc node handle=0x%p).\n", __FILE__, __func__,
-				__LINE__, td,
+				"Cc node handle=0x%p).\n", td,
 				ptable->int_cc_node[0].cc_node);
 			return -EBUSY;
 		}
@@ -502,24 +483,20 @@ int dpa_classif_table_insert_entry(int				td,
 
 	/* Parameters sanity checks: */
 	if (!key) {
-		pr_err("ERROR: %s, %s (%d): \"key\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!key->byte) {
-		pr_err("ERROR: %s, %s (%d): \"key->byte\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key->byte\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if ((key->size <= 0) || (key->size > DPA_OFFLD_MAXENTRYKEYSIZE)) {
-		pr_err("ERROR: %s, %s (%d): Key size should be between %d and "
-			"%d.\n", __FILE__, __func__, __LINE__, 1,
+		log_err("Key size should be between %d and %d.\n", 1,
 			DPA_OFFLD_MAXENTRYKEYSIZE);
 		return -EINVAL;
 	}
 	if (!action) {
-		pr_err("ERROR: %s, %s (%d): \"action\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"action\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -527,9 +504,8 @@ int dpa_classif_table_insert_entry(int				td,
 
 	if (ptable->params.type == DPA_CLS_TBL_INDEXED) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Insert entry in an indexed table "
-			"(td=%d) makes no sense. Please use modify_entry "
-			"instead.\n", __FILE__, __func__, __LINE__, td);
+		log_err("Insert entry in an indexed table (td=%d) makes no "
+			"sense. Please use modify_entry instead.\n", td);
 		return -EINVAL;
 	}
 
@@ -541,10 +517,9 @@ int dpa_classif_table_insert_entry(int				td,
 	if ((ptable->shadow_table) &&
 			(find_shadow_entry(ptable, key) != NULL)) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): DPA Classifier table entry already "
-			"exists in table td=%d. Attempted to add twice the "
-			"following key (hex) (%d byte(s)):", __FILE__, __func__,
-			__LINE__, td, key->size);
+		log_err("DPA Classifier table entry already exists in table "
+			"td=%d. Attempted to add twice the following key (hex) "
+			"(%d byte(s)):", td, key->size);
 		dump_lookup_key(key);
 		pr_err("\n");
 		return -EEXIST;
@@ -570,9 +545,8 @@ int dpa_classif_table_insert_entry(int				td,
 
 	RELEASE_OBJECT(ptable);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to insert entry in table "
-			"td=%d. Table type=%d. Lookup key was (hex) (%d "
-			"byte(s)):", __FILE__, __func__, __LINE__, td,
+		log_err("Failed to insert entry in table td=%d. Table type=%d. "
+			"Lookup key was (hex) (%d byte(s)):", td,
 			ptable->params.type, key->size);
 		dump_lookup_key(key);
 		pr_err("\n");
@@ -606,24 +580,20 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 
 	/* Parameters sanity checks: */
 	if (!key) {
-		pr_err("ERROR: %s, %s (%d): \"key\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!key->byte) {
-		pr_err("ERROR: %s, %s (%d): \"key->byte\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key->byte\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if ((key->size <= 0) || (key->size > DPA_OFFLD_MAXENTRYKEYSIZE)) {
-		pr_err("ERROR: %s, %s (%d): Key size should be between %d and "
-			"%d.\n", __FILE__, __func__, __LINE__, 1,
+		log_err("Key size should be between %d and %d.\n", 1,
 			DPA_OFFLD_MAXENTRYKEYSIZE);
 		return -EINVAL;
 	}
 	if (!mod_params) {
-		pr_err("ERROR: %s, %s (%d): \"mod_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"mod_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -633,11 +603,9 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 	if ((mod_params->type != DPA_CLS_TBL_MODIFY_ACTION) &&
 		(ptable->params.type != DPA_CLS_TBL_EXACT_MATCH)) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Modify entry key is supported only "
-			"on exact match tables. ", __FILE__, __func__,
-			__LINE__);
-		pr_err("You attempted to use it on table td=%d which is of "
-			"type=%d.\n", td, ptable->params.type);
+		log_err("Modify entry key is supported only on exact match "
+			"tables. You attempted to use it on table td=%d which "
+			"is of type=%d.\n", td, ptable->params.type);
 		return -ENOSYS;
 	}
 
@@ -656,10 +624,8 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 				/* Parameter sanity check: */
 				if (!mod_params->action) {
 					RELEASE_OBJECT(ptable);
-					pr_err("ERROR: %s, %s (%d): "
-						"\"mod_params->action\" cannot "
-						"be NULL.\n", __FILE__,
-						__func__, __LINE__);
+					log_err("\"mod_params->action\" cannot "
+						"be NULL.\n");
 					return -EINVAL;
 				}
 
@@ -673,12 +639,10 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 							classification);
 				if (ret < 0) {
 					RELEASE_OBJECT(ptable);
-					pr_err("ERROR: %s, %s (%d): Failed "
-						"verification of new action "
-						"params while modifying entry "
-						"by KEY in table td=%d. Lookup "
-						"key (hex) (%d byte(s)):",
-						__FILE__, __func__, __LINE__,
+					log_err("Failed verification of new "
+						"action params while modifying "
+						"entry by KEY in table td=%d. "
+						"Lookup key (hex) (%d byte(s)):",
 						td, key->size);
 					dump_lookup_key(key);
 					pr_err("\n");
@@ -701,12 +665,10 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 				&key_params.ccNextEngineParams);
 			if (err != E_OK) {
 				RELEASE_OBJECT(ptable);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_MatchTableFindNModifyNextEngine"
 					". td=%d, Cc node handle=0x%p, entry "
-					"key (hex) (%d byte(s)):", __FILE__,
-					__func__, __LINE__, td,
+					"key (hex) (%d byte(s)):", td,
 					ptable->int_cc_node[0].cc_node,
 					key->size);
 				dump_lookup_key(key);
@@ -721,12 +683,10 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 				&key_params.ccNextEngineParams);
 			if (err != E_OK) {
 				RELEASE_OBJECT(ptable);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_HashTableModifyNextEngine. "
 					"td=%d, Cc node handle=0x%p, entry key "
-					"(hex) (%d byte(s)):", __FILE__,
-					__func__, __LINE__, td,
+					"(hex) (%d byte(s)):", td,
 					ptable->params.cc_node, key->size);
 				dump_lookup_key(key);
 				pr_err("\n");
@@ -744,10 +704,8 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 						DPA_CLS_TBL_EXACT_MATCH);
 				/* Parameter sanity check: */
 				if (!mod_params->action) {
-					pr_err("ERROR: %s, %s (%d): "
-						"\"mod_params->action\" cannot "
-						"be NULL.\n", __FILE__,
-						__func__, __LINE__);
+					log_err("\"mod_params->action\" cannot "
+						"be NULL.\n");
 					return -EINVAL;
 				}
 
@@ -761,12 +719,10 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 						classification);
 				if (ret < 0) {
 					RELEASE_OBJECT(ptable);
-					pr_err("ERROR: %s, %s (%d): Failed "
-						"verification of new action "
-						"params while modifying entry "
-						"by KEY in table td=%d. Lookup "
-						"key (hex) (%d byte(s)):",
-						__FILE__, __func__, __LINE__,
+					log_err("Failed verification of new "
+						"action params while modifying "
+						"entry by KEY in table td=%d. "
+						"Lookup key (hex) (%d byte(s)):",
 						td, key->size);
 					dump_lookup_key(key);
 					pr_err("\n");
@@ -783,10 +739,8 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 						DPA_CLS_TBL_EXACT_MATCH);
 				/* Parameter sanity check: */
 				if (!mod_params->key) {
-					pr_err("ERROR: %s, %s (%d): "
-						"\"mod_params->key\" cannot "
-						"be NULL.\n", __FILE__,
-						__func__, __LINE__);
+					log_err("\"mod_params->key\" cannot "
+						"be NULL.\n");
 					return -EINVAL;
 				}
 
@@ -817,13 +771,11 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 				new_mask);
 			if (err != E_OK) {
 				RELEASE_OBJECT(ptable);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_MatchTableFindNModifyKey. "
 					"td=%d, Cc node handle=0x%p, trying to "
 					"modify entry w/ key (hex) (%d "
-					"byte(s)):", __FILE__, __func__,
-					__LINE__, td,
+					"byte(s)):", td,
 					ptable->int_cc_node[0].cc_node,
 					key->size);
 				dump_lookup_key(key);
@@ -841,11 +793,10 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 				&key_params);
 			if (err != E_OK) {
 				RELEASE_OBJECT(ptable);
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
-		"FM_PCD_MatchTableFindNModifyKeyAndNextEngine. td=%d, Cc node "
-				"handle=0x%p, trying to modify entry w/ key "
-				"(hex) (%d byte(s)):", __FILE__, __func__,
-				__LINE__, td,
+			log_err("FMan driver call failed - "
+				"FM_PCD_MatchTableFindNModifyKeyAndNextEngine. "
+				"td=%d, Cc node handle=0x%p, trying to modify "
+				"entry w/ key (hex) (%d byte(s)):", td,
 				ptable->int_cc_node[0].cc_node, key->size);
 				dump_lookup_key(key);
 				pr_err("\n");
@@ -860,11 +811,9 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 			return ret;
 		} else {
 			RELEASE_OBJECT(ptable);
-			pr_err("ERROR: %s, %s (%d): Unable to determine "
-				"entry_id associated with this lookup key for "
-				"table td=%d. ", __FILE__, __func__, __LINE__,
-				td);
-			pr_err("Lookup key was (hex) (%d byte(s)):", key->size);
+			log_err("Unable to determine entry_id associated with "
+				"this lookup key for table td=%d. Lookup key "
+				"was (hex) (%d byte(s)):", td, key->size);
 			dump_lookup_key(key);
 			pr_err("\n");
 			return entry_id;
@@ -874,10 +823,9 @@ int dpa_classif_table_modify_entry_by_key(int			td,
 	ret = table_modify_entry_by_ref(ptable, entry_id, mod_params);
 	RELEASE_OBJECT(ptable);
 	if (ret < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to MODIFY entry by KEY in "
-			"table td=%d. Translated entry ref=%d. Lookup key was "
-			"(hex) (%d byte(s)):", __FILE__, __func__, __LINE__,
-			td, entry_id, key->size);
+		log_err("Failed to MODIFY entry by KEY in table td=%d. "
+			"Translated entry ref=%d. Lookup key was (hex) (%d "
+			"byte(s)):", td, entry_id, key->size);
 		dump_lookup_key(key);
 		pr_err("\n");
 	}
@@ -928,20 +876,17 @@ int dpa_classif_table_modify_entry_by_ref(int			td,
 	/* Check for unsupported modifications */
 	if ((mod_params->type != DPA_CLS_TBL_MODIFY_ACTION) &&
 			(ptable->params.type != DPA_CLS_TBL_EXACT_MATCH)) {
-		pr_err("ERROR: %s, %s (%d): Modify entry key is supported only "
-			"on exact match tables. ", __FILE__, __func__,
-			__LINE__);
-		pr_err("You attempted to use it on table td=%d which is of "
-			"type=%d.\n", td, ptable->params.type);
+		log_err("Modify entry key is supported only on exact match "
+			"tables. You attempted to use it on table td=%d which "
+			"is of type=%d.\n", td, ptable->params.type);
 		return -ENOSYS;
 	}
 
 	err = table_modify_entry_by_ref(ptable, entry_id, mod_params);
 	RELEASE_OBJECT(ptable);
 	if (err < 0)
-		pr_err("ERROR: %s, %s (%d): Failed to MODIFY entry by REF in "
-			"table td=%d. Entry ref=%d.\n", __FILE__, __func__,
-			__LINE__, td, entry_id);
+		log_err("Failed to MODIFY entry by REF in table td=%d. Entry "
+			"ref=%d.\n", td, entry_id);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -977,19 +922,17 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 
 	/* Parameters sanity checks: */
 	if ((entry_id < 0) || (entry_id >= ptable->entries_cnt)) {
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d). Should "
-			"be between %d and %d for this table.\n", __FILE__,
-			__func__, __LINE__, entry_id, 0, ptable->entries_cnt-1);
+		log_err("Invalid \"entry_id\" (%d). Should be between %d and "
+			"%d for this table.\n", entry_id, 0,
+			ptable->entries_cnt-1);
 		return -EINVAL;
 	}
 	if (!(ptable->entry[entry_id].flags & DPA_CLS_TBL_ENTRY_VALID)) {
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d).\n",
-			__FILE__, __func__, __LINE__, entry_id);
+		log_err("Invalid \"entry_id\" (%d).\n", entry_id);
 		return -EINVAL;
 	}
 	if (!mod_params) {
-		pr_err("ERROR: %s, %s (%d): \"mod_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"mod_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -1006,9 +949,7 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 	case DPA_CLS_TBL_MODIFY_ACTION:
 		/* Parameter sanity check: */
 		if (!mod_params->action) {
-			pr_err("ERROR: %s, %s (%d): \"mod_params->action\" "
-				"cannot be NULL.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("\"mod_params->action\" cannot be NULL.\n");
 			return -EINVAL;
 		}
 
@@ -1028,11 +969,10 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 						entry_index,
 						&next_engine_params);
 		if (err != E_OK) {
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_MatchTableModifyNextEngine. Entry "
 				"ref=%d, Cc node handle=0x%p, entry index=%d.\n",
-				__FILE__, __func__, __LINE__, entry_id,
-				cc_node, entry_index);
+				entry_id, cc_node, entry_index);
 			return -EBUSY;
 		}
 
@@ -1043,16 +983,13 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 
 		/* Parameters sanity checks: */
 		if (!mod_params->key) {
-			pr_err("ERROR: %s, %s (%d): \"mod_params->key\" "
-				"cannot be NULL.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("\"mod_params->key\" cannot be NULL.\n");
 			return -EINVAL;
 		}
 		if (mod_params->key->size !=
 			ptable->params.exact_match_params.key_size) {
-			pr_err("ERROR: %s, %s (%d): New key size (%d bytes) "
-				"doesn't match the table key size (%d bytes)"
-				".\n", __FILE__, __func__, __LINE__,
+			log_err("New key size (%d bytes) doesn't match the "
+				"table key size (%d bytes).\n",
 				mod_params->key->size,
 				ptable->params.exact_match_params.key_size);
 			return -EINVAL;
@@ -1081,10 +1018,9 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 				key_params.p_Key,
 				key_params.p_Mask);
 		if (err != E_OK) {
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_MatchTableModifyKey. Entry ref=%d, Cc "
-				"node handle=0x%p, entry index=%d.\n",
-				__FILE__, __func__, __LINE__, entry_id,
+				"node handle=0x%p, entry index=%d.\n", entry_id,
 				cc_node, entry_index);
 			return -EBUSY;
 		}
@@ -1096,22 +1032,17 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 
 		/* Parameters sanity checks: */
 		if (!mod_params->key) {
-			pr_err("ERROR: %s, %s (%d): \"mod_params->key\" "
-				"cannot be NULL.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("\"mod_params->key\" cannot be NULL.\n");
 			return -EINVAL;
 		}
 		if (!mod_params->action) {
-			pr_err("ERROR: %s, %s (%d): \"mod_params->action\" "
-				"cannot be NULL.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("\"mod_params->action\" cannot be NULL.\n");
 			return -EINVAL;
 		}
 		if (mod_params->key->size !=
 			ptable->params.exact_match_params.key_size) {
-			pr_err("ERROR: %s, %s (%d): New key size (%d bytes) "
-				"doesn't match the table key size (%d bytes)."
-				"\n", __FILE__, __func__, __LINE__,
+			log_err("New key size (%d bytes) doesn't match the "
+				"table key size (%d bytes).\n",
 				mod_params->key->size,
 				ptable->params.exact_match_params.key_size);
 			return -EINVAL;
@@ -1152,11 +1083,10 @@ static int table_modify_entry_by_ref(struct dpa_cls_table	*ptable,
 				ptable->params.exact_match_params.key_size,
 				&key_params);
 		if (err != E_OK) {
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_MatchTableModifyKeyAndNextEngine. "
 				"Entry ref=%d, Cc node handle=0x%p, entry "
-				"index=%d.\n", __FILE__, __func__, __LINE__,
-				entry_id, cc_node, entry_index);
+				"index=%d.\n", entry_id, cc_node, entry_index);
 			return -EBUSY;
 		}
 
@@ -1250,18 +1180,15 @@ int dpa_classif_table_delete_entry_by_key(int				td,
 
 	/* Parameters sanity checks: */
 	if (!key) {
-		pr_err("ERROR: %s, %s (%d): \"key\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!key->byte) {
-		pr_err("ERROR: %s, %s (%d): \"key->byte\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key->byte\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if ((key->size <= 0) || (key->size > DPA_OFFLD_MAXENTRYKEYSIZE)) {
-		pr_err("ERROR: %s, %s (%d): Key size should be between %d and "
-			"%d.\n", __FILE__, __func__, __LINE__, 1,
+		log_err("Key size should be between %d and %d.\n", 1,
 			DPA_OFFLD_MAXENTRYKEYSIZE);
 		return -EINVAL;
 	}
@@ -1296,13 +1223,11 @@ int dpa_classif_table_delete_entry_by_key(int				td,
 				mask);
 			if (error != E_OK) {
 				RELEASE_OBJECT(ptable);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_MatchTableFindNRemoveKey. "
 					"td=%d, Cc node handle=0x%p, trying to "
 					"remove entry w/ key (hex) (%d byte(s)):",
-					__FILE__, __func__, __LINE__, td,
-					ptable->int_cc_node[0].cc_node,
+					td, ptable->int_cc_node[0].cc_node,
 					key->size);
 				dump_lookup_key(key);
 				pr_err("\n");
@@ -1328,14 +1253,11 @@ int dpa_classif_table_delete_entry_by_key(int				td,
 					key_data);
 				if (error != E_OK) {
 					RELEASE_OBJECT(ptable);
-					pr_err("ERROR: %s, %s (%d): FMan "
-						"driver call failed - "
+					log_err("FMan driver call failed - "
 						"FM_PCD_HashTableRemoveKey. "
 						"td=%d, Cc node handle=0x%p, "
 						"trying to remove entry w/ key "
-						"(hex) (%d byte(s)):",
-						__FILE__, __func__, __LINE__,
-						td,
+						"(hex) (%d byte(s)):", td,
 						ptable->params.cc_node,
 						key->size);
 					dump_lookup_key(key);
@@ -1355,10 +1277,8 @@ int dpa_classif_table_delete_entry_by_key(int				td,
 			return err;
 		} else {
 			RELEASE_OBJECT(ptable);
-			pr_err("ERROR: %s, %s (%d): Unable to determine "
-				"entry_id associated with this lookup key (hex) "
-				"(%d bytes):", __FILE__, __func__, __LINE__,
-				key->size);
+			log_err("Unable to determine entry_id associated with "
+				"this lookup key (hex) (%d bytes):", key->size);
 			dump_lookup_key(key);
 			pr_err("\n");
 			return entry_id;
@@ -1368,10 +1288,9 @@ int dpa_classif_table_delete_entry_by_key(int				td,
 	err = table_delete_entry_by_ref(ptable, entry_id);
 	RELEASE_OBJECT(ptable);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to DELETE entry by KEY in "
-			"table td=%d. Translated entry ref=%d. Lookup key was "
-			"(hex) (%d byte(s)):", __FILE__, __func__, __LINE__,
-			td, entry_id, key->size);
+		log_err("Failed to DELETE entry by KEY in table td=%d. "
+			"Translated entry ref=%d. Lookup key was (hex) (%d "
+			"byte(s)):", td, entry_id, key->size);
 		dump_lookup_key(key);
 		pr_err("\n");
 	}
@@ -1396,9 +1315,8 @@ int dpa_classif_table_delete_entry_by_ref(int td, int entry_id)
 	err = table_delete_entry_by_ref(ptable, entry_id);
 	RELEASE_OBJECT(ptable);
 	if (err < 0)
-		pr_err("ERROR: %s, %s (%d): Failed to DELETE entry by REF in "
-			"table td=%d. Entry ref=%d.\n", __FILE__, __func__,
-			__LINE__, td, entry_id);
+		log_err("Failed to DELETE entry by REF in table td=%d. Entry "
+			"ref=%d.\n", td, entry_id);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -1426,14 +1344,13 @@ static int table_delete_entry_by_ref(struct dpa_cls_table *ptable, int entry_id)
 
 	/* Parameters sanity checks: */
 	if ((entry_id < 0) || (entry_id >= ptable->entries_cnt)) {
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d). Should "
-			"be between %d and %d for this table.\n", __FILE__,
-			__func__, __LINE__, entry_id, 0, ptable->entries_cnt-1);
+		log_err("Invalid \"entry_id\" (%d). Should be between %d and "
+			"%d for this table.\n", entry_id, 0,
+			ptable->entries_cnt-1);
 		return -EINVAL;
 	}
 	if (!(ptable->entry[entry_id].flags & DPA_CLS_TBL_ENTRY_VALID)) {
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d).\n",
-			__FILE__, __func__, __LINE__, entry_id);
+		log_err("Invalid \"entry_id\" (%d).\n", entry_id);
 		return -EINVAL;
 	}
 
@@ -1443,19 +1360,17 @@ static int table_delete_entry_by_ref(struct dpa_cls_table *ptable, int entry_id)
 	cc_node	= (t_Handle)ptable->int_cc_node[cc_node_index].cc_node;
 	int_cc_node = &ptable->int_cc_node[cc_node_index];
 	if (ptable->params.type == DPA_CLS_TBL_INDEXED) {
-		pr_err("ERROR: %s, %s (%d): Delete entry is not allowed on an "
-			" indexed table.\n", __FILE__, __func__, __LINE__);
+		log_err("Delete entry is not allowed on an indexed table.\n");
 		return -EINVAL;
 	} else {
 		/* For all the other tables types we can remove the key */
 		err = FM_PCD_MatchTableRemoveKey(cc_node,
 					entry_index);
 		if (err != E_OK) {
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_MatchTableRemoveKey. Entry ref=%d, Cc "
-				"node handle=0x%p, entry index=%d.\n", __FILE__,
-				__func__, __LINE__, entry_id, cc_node,
-				entry_index);
+				"node handle=0x%p, entry index=%d.\n",
+				entry_id, cc_node, entry_index);
 			return -EBUSY;
 		}
 
@@ -1530,24 +1445,20 @@ int dpa_classif_table_lookup_by_key(int				td,
 
 	/* Parameters sanity checks: */
 	if (!key) {
-		pr_err("ERROR: %s, %s (%d): \"key\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!key->byte) {
-		pr_err("ERROR: %s, %s (%d): \"key->byte\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key->byte\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if ((key->size <= 0) || (key->size > DPA_OFFLD_MAXENTRYKEYSIZE)) {
-		pr_err("ERROR: %s, %s (%d): Key size should be between %d and "
-			"%d.\n", __FILE__, __func__, __LINE__, 1,
+		log_err("Key size should be between %d and %d.\n", 1,
 			DPA_OFFLD_MAXENTRYKEYSIZE);
 		return -EINVAL;
 	}
 	if (!action) {
-		pr_err("ERROR: %s, %s (%d): \"action\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"action\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -1555,9 +1466,8 @@ int dpa_classif_table_lookup_by_key(int				td,
 
 	if (!ptable->shadow_table) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Cannot lookup by key in a "
-			"DPA_CLS_TBL_MANAGE_BY_REF table (td=%d).\n", __FILE__,
-			__func__, __LINE__, td);
+		log_err("Cannot lookup by key in a DPA_CLS_TBL_MANAGE_BY_REF "
+			"table (td=%d).\n", td);
 		return -ENOSYS;
 	}
 
@@ -1604,8 +1514,7 @@ int dpa_classif_table_lookup_by_ref(int				td,
 
 	/* Parameters sanity checks: */
 	if (!action) {
-		pr_err("ERROR: %s, %s (%d): \"action\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"action\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -1614,23 +1523,21 @@ int dpa_classif_table_lookup_by_ref(int				td,
 	/* Parameters sanity checks: */
 	if ((entry_id < 0) || (entry_id >= ptable->entries_cnt)) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d). Should "
-			"be between %d and %d for this table.\n", __FILE__,
-			__func__, __LINE__, entry_id, 0, ptable->entries_cnt-1);
+		log_err("Invalid \"entry_id\" (%d). Should be between %d and "
+			"%d for this table.\n", entry_id, 0,
+			ptable->entries_cnt-1);
 		return -EINVAL;
 	}
 	if (!(ptable->entry[entry_id].flags & DPA_CLS_TBL_ENTRY_VALID)) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d).\n",
-			__FILE__, __func__, __LINE__, entry_id);
+		log_err("Invalid \"entry_id\" (%d).\n", entry_id);
 		return -EINVAL;
 	}
 
 	if (!ptable->shadow_table) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Cannot lookup in a "
-			"DPA_CLS_TBL_MANAGE_BY_REF table (td=%d).\n", __FILE__,
-			__func__, __LINE__, td);
+		log_err("Cannot lookup in a DPA_CLS_TBL_MANAGE_BY_REF table "
+			"(td=%d).\n", td);
 		return -ENOSYS;
 	}
 
@@ -1675,8 +1582,7 @@ int dpa_classif_table_flush(int td)
 	err = flush_table(ptable);
 	RELEASE_OBJECT(ptable);
 	if (err < 0)
-		pr_err("ERROR: %s, %s (%d): Failed to flush table td=%d. Table "
-			"type=%d.\n", __FILE__, __func__, __LINE__, td,
+		log_err("Failed to flush table td=%d. Table type=%d.\n", td,
 			ptable->params.type);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
@@ -1724,11 +1630,9 @@ static int flush_table(struct dpa_cls_table *ptable)
 							(uint16_t)i,
 							&next_engine_params);
 			if (err != E_OK) {
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_MatchTableModifyNextEngine. "
 					"Cc node handle=0x%p, entry index=%d.\n",
-					__FILE__, __func__, __LINE__,
 					cc_node, i);
 				return -EBUSY;
 			}
@@ -1767,10 +1671,9 @@ static int flush_table(struct dpa_cls_table *ptable)
 			err = FM_PCD_MatchTableRemoveKey(cc_node,
 						index_entry->entry_index);
 			if (err != E_OK) {
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_MatchTableRemoveKey. "
-					"Cc node handle=0x%p, entry index=%d.\n",
-					__FILE__, __func__, __LINE__,
+				log_err("FMan driver call failed - "
+					"FM_PCD_MatchTableRemoveKey. Cc node "
+					"handle=0x%p, entry index=%d.\n",
 					cc_node, index_entry->entry_index);
 				return -EBUSY;
 			}
@@ -1802,24 +1705,20 @@ int dpa_classif_table_get_entry_stats_by_key(int			td,
 
 	/* Parameters sanity checks: */
 	if (!key) {
-		pr_err("ERROR: %s, %s (%d): \"key\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!key->byte) {
-		pr_err("ERROR: %s, %s (%d): \"key->byte\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"key->byte\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if ((key->size <= 0) || (key->size > DPA_OFFLD_MAXENTRYKEYSIZE)) {
-		pr_err("ERROR: %s, %s (%d): Key size should be between %d and "
-			"%d.\n", __FILE__, __func__, __LINE__, 1,
+		log_err("Key size should be between %d and %d.\n", 1,
 			DPA_OFFLD_MAXENTRYKEYSIZE);
 		return -EINVAL;
 	}
 	if (!stats) {
-		pr_err("ERROR: %s, %s (%d): \"stats\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"stats\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -1829,17 +1728,15 @@ int dpa_classif_table_get_entry_stats_by_key(int			td,
 			(ptable->params.prefilled_entries)) {
 		RELEASE_OBJECT(ptable);
 		/* get_entry_stats not supported on prefilled HASH tables */
-		pr_err("ERROR: %s, %s (%d): get_entry_stats_by_key is not "
-			"supported on prefilled HASH tables (td=%d).\n",
-			__FILE__, __func__, __LINE__, td);
+		log_err("get_entry_stats_by_key is not supported on prefilled "
+			"HASH tables (td=%d).\n", td);
 		return -ENOSYS;
 	}
 	entry_id = key_to_entry_id(ptable, key);
 	if (entry_id < 0) {
 		RELEASE_OBJECT(ptable);
-		pr_err("ERROR: %s, %s (%d): Unable to determine entry_id "
-			"associated with this lookup key (hex) (%d byte(s)):",
-			__FILE__, __func__, __LINE__, key->size);
+		log_err("Unable to determine entry_id associated with this "
+			"lookup key (hex) (%d byte(s)):", key->size);
 		dump_lookup_key(key);
 		pr_err("\n");
 		return entry_id;
@@ -1848,10 +1745,9 @@ int dpa_classif_table_get_entry_stats_by_key(int			td,
 	err = table_get_entry_stats_by_ref(ptable, entry_id, stats);
 	RELEASE_OBJECT(ptable);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to get entry STATS by KEY "
-			"in table td=%d. Translated entry ref=%d. Lookup key "
-			"was (hex) (%d byte(s)):", __FILE__, __func__, __LINE__,
-			td, entry_id, key->size);
+		log_err("Failed to get entry STATS by KEY in table td=%d. "
+			"Translated entry ref=%d. Lookup key was (hex) (%d "
+			"byte(s)):", td, entry_id, key->size);
 		dump_lookup_key(key);
 		pr_err("\n");
 	}
@@ -1878,9 +1774,8 @@ int dpa_classif_table_get_entry_stats_by_ref(int		td,
 	err = table_get_entry_stats_by_ref(ptable, entry_id, stats);
 	RELEASE_OBJECT(ptable);
 	if (err < 0)
-		pr_err("ERROR: %s, %s (%d): Failed to get entry STATS by REF in "
-			"table td=%d. Entry ref=%d.\n", __FILE__, __func__,
-			__LINE__, td, entry_id);
+		log_err("Failed to get entry STATS by REF in table td=%d. "
+			"Entry ref=%d.\n", td, entry_id);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -1905,19 +1800,17 @@ static int table_get_entry_stats_by_ref(struct dpa_cls_table	*ptable,
 
 	/* Parameters sanity checks: */
 	if ((entry_id < 0) || (entry_id >= ptable->entries_cnt)) {
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d). Should "
-			"be between %d and %d for this table.\n", __FILE__,
-			__func__, __LINE__, entry_id, 0, ptable->entries_cnt-1);
+		log_err("Invalid \"entry_id\" (%d). Should be between %d and "
+			"%d for this table.\n", entry_id, 0,
+			ptable->entries_cnt-1);
 		return -EINVAL;
 	}
 	if (!(ptable->entry[entry_id].flags & DPA_CLS_TBL_ENTRY_VALID)) {
-		pr_err("ERROR: %s, %s (%d): Invalid \"entry_id\" (%d).\n",
-			__FILE__, __func__, __LINE__, entry_id);
+		log_err("Invalid \"entry_id\" (%d).\n", entry_id);
 		return -EINVAL;
 	}
 	if (!stats) {
-		pr_err("ERROR: %s, %s (%d): \"stats\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"stats\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -1944,8 +1837,7 @@ int dpa_classif_table_get_params(int td, struct dpa_cls_tbl_params *params)
 
 	/* Parameters sanity checks: */
 	if (!params) {
-		pr_err("ERROR: %s, %s (%d): \"params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -1976,8 +1868,8 @@ static int alloc_table_management(struct dpa_cls_table *cls_table)
 		kzalloc(cls_table->int_cc_nodes_count *
 			sizeof(*cls_table->int_cc_node), GFP_KERNEL);
 	if (!cls_table->int_cc_node) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA Classifier "
-			"table management.\n", __FILE__, __func__, __LINE__);
+		log_err("No more memory for DPA Classifier table "
+			"management.\n");
 		err = -ENOMEM;
 		goto alloc_table_mgmt_error;
 	}
@@ -2034,9 +1926,8 @@ static int table_init_indexed(struct dpa_cls_table *cls_table)
 		kzalloc(cls_table->entries_cnt * sizeof(*cls_table->entry),
 			GFP_KERNEL);
 	if (!cls_table->entry) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA Classifier "
-			"table index management.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("No more memory for DPA Classifier table index "
+			"management.\n");
 		cls_table->entries_cnt = 0;
 		return -ENOMEM;
 	}
@@ -2066,11 +1957,9 @@ static int table_init_indexed(struct dpa_cls_table *cls_table)
 							i,
 							&next_engine_params);
 			if (err != E_OK) {
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_MatchTableGetNextEngine. Cc "
 					"node handle=0x%p, entry index=%d.\n",
-					__FILE__, __func__, __LINE__,
 					cc_node, i);
 				return -EBUSY;
 			}
@@ -2078,9 +1967,8 @@ static int table_init_indexed(struct dpa_cls_table *cls_table)
 			shadow_entry = kzalloc(sizeof(*shadow_entry),
 								GFP_KERNEL);
 			if (!shadow_entry) {
-				pr_err("ERROR: %s, %s (%d): Out of memory "
-					"while populating shadow table.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Out of memory while populating shadow "
+					"table.\n");
 				return -ENOMEM;
 			}
 
@@ -2129,11 +2017,9 @@ static int table_init_hash(struct dpa_cls_table *cls_table)
 			if (FM_PCD_MatchTableGetNextEngine(cc_node,
 						i,
 						&next_engine_params) != E_OK) {
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - "
+				log_err("FMan driver call failed - "
 					"FM_PCD_MatchTableGetNextEngine. Cc "
 					"node handle=0x%p, entry index=%d.\n",
-					__FILE__, __func__, __LINE__,
 					cc_node, i);
 				err = -EBUSY;
 				goto table_init_hash_error;
@@ -2156,9 +2042,8 @@ static int table_init_hash(struct dpa_cls_table *cls_table)
 		cls_table->entry = kzalloc(cls_table->entries_cnt *
 					sizeof(*cls_table->entry), GFP_KERNEL);
 		if (!cls_table->entry) {
-			pr_err("ERROR: %s, %s (%d): No more memory for DPA "
-				"Classifier table index management.\n",
-				__FILE__, __func__, __LINE__);
+			log_err("No more memory for DPA Classifier table index "
+				"management.\n");
 			cls_table->entries_cnt	= 0;
 			err			= -ENOMEM;
 			goto table_init_hash_error;
@@ -2209,9 +2094,8 @@ static int table_init_exact_match(struct dpa_cls_table *cls_table)
 		kzalloc(cls_table->entries_cnt * sizeof(*cls_table->entry),
 			GFP_KERNEL);
 	if (!cls_table->entry) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA Classifier "
-			"table index management.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("No more memory for DPA Classifier table index "
+			"management.\n");
 		cls_table->entries_cnt	= 0;
 		err			= -ENOMEM;
 		goto table_init_exact_match_error;
@@ -2270,10 +2154,9 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 	case DPA_CLS_TBL_EXACT_MATCH:
 		if (params->exact_match_params.entries_cnt >
 				FM_PCD_MAX_NUM_OF_KEYS) {
-			pr_err("ERROR: %s, %s (%d): Specified number of entries"
-				"(%d) for exact match table exceeds the maximum"
-				"capacity of this type of table (%d).\n",
-				__FILE__, __func__, __LINE__,
+			log_err("Specified number of entries (%d) for exact "
+				"match table exceeds the maximum capacity of "
+				"this type of table (%d).\n",
 				params->exact_match_params.entries_cnt,
 				FM_PCD_MAX_NUM_OF_KEYS);
 			err = -EINVAL;
@@ -2282,9 +2165,8 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 
 		if (params->exact_match_params.key_size >
 				FM_PCD_MAX_SIZE_OF_KEY) {
-			pr_err("ERROR: %s, %s (%d): DPA Classifier exact match "
-				"table key size (%d bytes) exceeds maximum (%d "
-				"bytes).\n", __FILE__, __func__, __LINE__,
+			log_err("DPA Classifier exact match table key size (%d "
+				"bytes) exceeds maximum (%d bytes).\n",
 				params->exact_match_params.key_size,
 				FM_PCD_MAX_SIZE_OF_KEY);
 			err = -EINVAL;
@@ -2293,9 +2175,8 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 		break;
 	case DPA_CLS_TBL_HASH:
 		if (params->hash_params.num_sets > FM_PCD_MAX_NUM_OF_KEYS) {
-			pr_err("ERROR: %s, %s (%d): DPA Classifier hash table "
-				"number of sets (%d) exceeds maximum (%d).\n",
-				__FILE__, __func__, __LINE__,
+			log_err("DPA Classifier hash table number of sets (%d) "
+				"exceeds maximum (%d).\n",
 				params->hash_params.num_sets,
 				FM_PCD_MAX_NUM_OF_KEYS);
 			err = -EINVAL;
@@ -2308,18 +2189,16 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 		while (num_sets < params->hash_params.num_sets)
 			num_sets <<= 1;
 		if (num_sets != params->hash_params.num_sets) {
-			pr_err("ERROR: %s, %s (%d): DPA Classifier hash table "
-				"number of sets (%d) must be a power of 2.\n",
-				__FILE__, __func__, __LINE__,
+			log_err("DPA Classifier hash table number of sets (%d) "
+				"must be a power of 2.\n",
 				params->hash_params.num_sets);
 			err = -EINVAL;
 			break;
 		}
 
 		if (params->hash_params.max_ways > FM_PCD_MAX_NUM_OF_KEYS) {
-			pr_err("ERROR: %s, %s (%d): DPA Classifier hash table "
-				"number of ways (%d) exceeds maximum (%d).\n",
-				__FILE__, __func__, __LINE__,
+			log_err("DPA Classifier hash table number of ways (%d) "
+				"exceeds maximum (%d).\n",
 				params->hash_params.max_ways,
 				FM_PCD_MAX_NUM_OF_KEYS);
 			err = -EINVAL;
@@ -2327,9 +2206,8 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 		}
 
 		if (params->hash_params.key_size > FM_PCD_MAX_SIZE_OF_KEY) {
-			pr_err("ERROR: %s, %s (%d): DPA Classifier hash table "
-				"key size (%d bytes) exceeds maximum (%d "
-				"bytes).\n", __FILE__, __func__, __LINE__,
+			log_err("DPA Classifier hash table key size (%d bytes) "
+				"exceeds maximum (%d bytes).\n",
 				params->hash_params.key_size,
 				FM_PCD_MAX_SIZE_OF_KEY);
 			err = -EINVAL;
@@ -2339,9 +2217,8 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 	case DPA_CLS_TBL_INDEXED:
 		if (params->indexed_params.entries_cnt >
 				FM_PCD_MAX_NUM_OF_KEYS) {
-			pr_err("ERROR: %s, %s (%d): DPA Classifier indexed "
-				"table size (%d entries) exceeds maximum (%d "
-				"entries).\n", __FILE__, __func__, __LINE__,
+			log_err("DPA Classifier indexed table size (%d "
+				"entries) exceeds maximum (%d entries).\n",
 				params->indexed_params.entries_cnt,
 				FM_PCD_MAX_NUM_OF_KEYS);
 			err = -EINVAL;
@@ -2349,15 +2226,13 @@ static int verify_table_params(const struct dpa_cls_tbl_params *params)
 		}
 
 		if (params->indexed_params.entries_cnt == 0) {
-			pr_err("ERROR: %s, %s (%d): Indexed table size zero is "
-				"invalid.\n", __FILE__, __func__, __LINE__);
+			log_err("Indexed table size zero is invalid.\n");
 			err = -EINVAL;
 			break;
 		}
 		break;
 	default:
-		pr_err("ERROR: %s, %s (%d): Unsupported DPA Classifier table "
-			"type (%d).\n", __FILE__, __func__, __LINE__,
+		log_err("Unsupported DPA Classifier table type (%d).\n",
 			params->type);
 		err = -EINVAL;
 	}
@@ -2470,8 +2345,7 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 	BUG_ON(cls_table->params.type != DPA_CLS_TBL_EXACT_MATCH);
 
 	if (key->size != cls_table->params.exact_match_params.key_size) {
-		pr_err("ERROR: %s, %s (%d): Key size (%d) doesn't match table "
-			"key size (%d).\n", __FILE__, __func__, __LINE__,
+		log_err("Key size (%d) doesn't match table key size (%d).\n",
 			key->size,
 			cls_table->params.exact_match_params.key_size);
 		return -EINVAL;
@@ -2480,9 +2354,8 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 	if (cls_table->int_cc_node[0].used >=
 		cls_table->int_cc_node[0].table_size) {
 		/* No more space to add a new entry */
-		pr_err("ERROR: %s, %s (%d): DPA Classifier exact match table "
-			"is full. Unable to add a new entry.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("DPA Classifier exact match table is full. Unable to "
+			"add a new entry.\n");
 		return -ENOSPC;
 	}
 
@@ -2572,10 +2445,9 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 		cls_table->params.exact_match_params.key_size,
 		&key_params);
 	if (err != E_OK) {
-		pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
-			"FM_PCD_MatchTableAddKey. Entry ref=%d, Cc node "
-			"handle=0x%p, entry index=%d.\n", __FILE__, __func__,
-			__LINE__, k, cls_table->int_cc_node[0].cc_node,
+		log_err("FMan driver call failed - FM_PCD_MatchTableAddKey. "
+			"Entry ref=%d, Cc node handle=0x%p, entry index=%d.\n",
+			k, cls_table->int_cc_node[0].cc_node,
 			cls_table->entry[k].entry_index);
 		return -EBUSY;
 	}
@@ -2605,9 +2477,8 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 	if (cls_table->shadow_table) {
 		shadow_entry = kzalloc(sizeof(*shadow_entry), GFP_KERNEL);
 		if (!shadow_entry) {
-			pr_err("ERROR: %s, %s (%d): Out of memory while "
-				"populating shadow table.\n", __FILE__,
-				__func__, __LINE__);
+			log_err("Out of memory while populating shadow "
+				"table.\n");
 			return -ENOMEM;
 		}
 
@@ -2615,9 +2486,8 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 			sizeof(struct dpa_cls_tbl_action));
 		shadow_entry->key.byte = kzalloc(key->size, GFP_KERNEL);
 		if (!shadow_entry->key.byte) {
-			pr_err("ERROR: %s, %s (%d): Out of memory while "
-				"populating shadow table.\n", __FILE__,
-				__func__, __LINE__);
+			log_err("Out of memory while populating shadow "
+				"table.\n");
 			kfree(shadow_entry);
 			return -ENOMEM;
 		}
@@ -2625,9 +2495,8 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 		if (key->mask) {
 			shadow_entry->key.mask = kzalloc(key->size, GFP_KERNEL);
 			if (!shadow_entry->key.mask) {
-				pr_err("ERROR: %s, %s (%d): Out of memory "
-					"while populating shadow table.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Out of memory while populating shadow "
+					"table.\n");
 				kfree(shadow_entry->key.byte);
 				kfree(shadow_entry);
 				return -ENOMEM;
@@ -2686,16 +2555,14 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	BUG_ON(cls_table->params.type != DPA_CLS_TBL_HASH);
 
 	if (key->size != cls_table->params.hash_params.key_size) {
-		pr_err("ERROR: %s, %s (%d): Key size (%d bytes) doesn't match "
-			"table key size (%d bytes).\n", __FILE__, __func__,
-			__LINE__, key->size,
+		log_err("Key size (%d bytes) doesn't match table key size (%d "
+			"bytes).\n", key->size,
 			cls_table->params.hash_params.key_size);
 		return -EINVAL;
 	}
 
 	if (key->mask) {
-		pr_err("ERROR: %s, %s (%d): Key masks are not supported by "
-			"HASH tables.\n", __FILE__, __func__, __LINE__);
+		log_err("Key masks are not supported by HASH tables.\n");
 		return -EINVAL;
 	}
 
@@ -2729,10 +2596,9 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 				cls_table->params.hash_params.key_size,
 				&key_params);
 		if (err != E_OK) {
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_HashTableAddKey. HASH table "
-				"handle=0x%p.\n", __FILE__, __func__, __LINE__,
-				cls_table->params.cc_node);
+				"handle=0x%p.\n", cls_table->params.cc_node);
 			return -EBUSY;
 		}
 
@@ -2759,9 +2625,8 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	/* Check if there are entries still available in the selected set */
 	if (cls_table->int_cc_node[hash_set_index].used >=
 			cls_table->int_cc_node[hash_set_index].table_size) {
-		pr_err("ERROR: %s, %s (%d): Hash set #%llu is full (%d "
-			"entries). Unable to add this entry.\n", __FILE__,
-			__func__, __LINE__, hash_set_index,
+		log_err("Hash set #%llu is full (%d entries). Unable to add "
+			"this entry.\n", hash_set_index,
 			cls_table->int_cc_node[hash_set_index].table_size);
 		return -ENOSPC;
 	}
@@ -2808,10 +2673,9 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 		cls_table->params.hash_params.key_size,
 		&key_params);
 	if (err != E_OK) {
-		pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
-			"FM_PCD_MatchTableAddKey. Entry ref=%d, HASH set=%llu,"
-			" Cc node handle=0x%p, entry index=%d.\n", __FILE__,
-			__func__, __LINE__, j, hash_set_index,
+		log_err("FMan driver call failed - FM_PCD_MatchTableAddKey. "
+			"Entry ref=%d, HASH set=%llu, Cc node handle=0x%p, "
+			"entry index=%d.\n", j, hash_set_index,
 			cls_table->int_cc_node[hash_set_index].cc_node,
 			cls_table->entry[j].entry_index);
 		return -EBUSY;
@@ -2826,9 +2690,8 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	if (cls_table->shadow_table) {
 		shadow_entry = kzalloc(sizeof(*shadow_entry), GFP_KERNEL);
 		if (!shadow_entry) {
-			pr_err("ERROR: %s, %s (%d): Out of memory while "
-				"populating shadow table.\n", __FILE__,
-				__func__, __LINE__);
+			log_err("Out of memory while populating shadow "
+				"table.\n");
 			return -ENOMEM;
 		}
 
@@ -2836,9 +2699,8 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 			sizeof(struct dpa_cls_tbl_action));
 		shadow_entry->key.byte = kzalloc(key->size, GFP_KERNEL);
 		if (!shadow_entry->key.byte) {
-			pr_err("ERROR: %s, %s (%d): Out of memory while "
-				"populating shadow table entry.\n", __FILE__,
-				__func__, __LINE__);
+			log_err("Out of memory while populating shadow table "
+				"entry.\n");
 			kfree(shadow_entry);
 			return -ENOMEM;
 		}
@@ -2906,9 +2768,8 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 				kzalloc(sizeof(t_FmPcdKgSchemeParams),
 					GFP_KERNEL);
 			if (!scheme_params) {
-				pr_err("ERROR: %s, %s (%d): Failed "
-					 "to alocate direct scheme params.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Failed to alocate direct scheme "
+					"params.\n");
 				return -ENOMEM;
 			}
 			memset(scheme_params, 0, sizeof(*scheme_params));
@@ -2932,9 +2793,7 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 				scheme_params);
 			kfree(scheme_params);
 			if (!distribution) {
-				pr_err("ERROR: %s, %s (%d): Failed "
-					"to set direct scheme.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Failed to set direct scheme.\n");
 				return -EINVAL;
 			}
 
@@ -2985,27 +2844,23 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 
 		if (action->enq_params.hmd != DPA_OFFLD_DESC_NONE) {
 			if (!hmd) {
-				pr_err("ERROR: %s, %s (%d): Header "
-					"manipulations are not allowed on this "
-					"action.\n", __FILE__, __func__,
-					__LINE__);
+				log_err("Header manipulations are not allowed "
+					"on this action.\n");
 				return -EINVAL;
 			}
 			if (!dpa_classif_hm_is_chain_head(
 						action->enq_params.hmd)) {
-				pr_err("ERROR: %s, %s (%d): hmd=%d is not a "
-					"header manipulation chain head. Only "
-					"chain heads can be attached to table "
-					"entries.\n", __FILE__, __func__,
-					__LINE__, action->enq_params.hmd);
+				log_err("hmd=%d is not a header manipulation "
+					"chain head. Only chain heads can be "
+					"attached to table entries.\n",
+					action->enq_params.hmd);
 				return -EINVAL;
 			}
 			next_engine_params->h_Manip = (t_Handle)
 		dpa_classif_hm_lock_chain(action->enq_params.hmd);
 			if (!next_engine_params->h_Manip) {
-				pr_err("ERROR: %s, %s (%d): Failed to attach "
-					"HM op hmd=%d to classification entry.",
-					__FILE__, __func__, __LINE__,
+				log_err("Failed to attach HM op hmd=%d to "
+					"classification entry.\n",
 					action->enq_params.hmd);
 				return -EINVAL;
 			}
@@ -3020,9 +2875,8 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 				table_array.num_descriptors) ||
 			(!table_array.object[action->next_table_params.
 								next_td])) {
-			pr_err("ERROR: %s, %s (%d): Invalid next table "
-				"descriptor (next_td=%d).\n", __FILE__,
-				__func__, __LINE__,
+			log_err("Invalid next table descriptor "
+				"(next_td=%d).\n",
 				(unsigned)action->next_table_params.next_td);
 			return -EINVAL;
 		}
@@ -3065,18 +2919,15 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 	case DPA_CLS_TBL_ACTION_MCAST:
 		if (action->mcast_params.hmd != DPA_OFFLD_DESC_NONE) {
 			if (!hmd) {
-				pr_err("ERROR: %s, %s (%d): Header "
-					"manipulations are not allowed on this "
-					"action.\n", __FILE__, __func__,
-					__LINE__);
+				log_err("Header manipulations are not allowed "
+					"on this action.\n");
 				return -EINVAL;
 			}
 			next_engine_params->h_Manip = (t_Handle)
 			dpa_classif_hm_lock_chain(action->enq_params.hmd);
 			if (!next_engine_params->h_Manip) {
-				pr_err("ERROR: %s, %s (%d): Failed to attach "
-					"HM op hmd=%d to classification entry.",
-					__FILE__, __func__, __LINE__,
+				log_err("Failed to attach HM op hmd=%d to "
+					"classification entry.\n",
 					action->enq_params.hmd);
 				return -EINVAL;
 			}
@@ -3088,8 +2939,7 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 		pgroup = desc_to_object(&mcast_grp_array,
 					action->mcast_params.grpd);
 		if (!pgroup) {
-			pr_err("ERROR: %s, %s (%d): No such group (grpd=%d).\n",
-				__FILE__, __func__, __LINE__,
+			log_err("No such group (grpd=%d).\n",
 				action->mcast_params.grpd);
 			return -EINVAL;
 		}
@@ -3098,8 +2948,7 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 		break;
 #endif
 	default:
-		pr_err("ERROR: %s, %s (%d): Unsupported DPA Classifier action "
-			"type (%d).\n", __FILE__, __func__, __LINE__,
+		log_err("Unsupported DPA Classifier action type (%d).\n",
 			action->type);
 		return -EINVAL;
 	}
@@ -3139,9 +2988,9 @@ static int next_engine_params_to_action(const t_FmPcdCcNextEngineParams
 			action->type = DPA_CLS_TBL_ACTION_DROP;
 			break;
 		default:
-			pr_warn("WARNING: DPA Classifier does not directly "
-				"support this type of e_FM_PCD_DONE action "
-				"(%d).\n", next_engine_params->params.
+			log_warn("DPA Classifier does not directly support "
+				"this type of e_FM_PCD_DONE action (%d).\n",
+				next_engine_params->params.
 				enqueueParams.action);
 			action->type = DPA_CLS_TBL_ACTION_NONE;
 			break;
@@ -3174,7 +3023,7 @@ static int next_engine_params_to_action(const t_FmPcdCcNextEngineParams
 				h_CcNode);
 		break;
 	default:
-		pr_warn("WARNING: DPA Classifier does not directly support "
+		log_warn("DPA Classifier does not directly support "
 			"this type of NextEngine parameters (%d).\n",
 			next_engine_params->nextEngine);
 		action->type = DPA_CLS_TBL_ACTION_NONE;
@@ -3194,9 +3043,8 @@ static int key_to_entry_id(const struct dpa_cls_table *cls_table,
 
 	if (cls_table->params.type == DPA_CLS_TBL_INDEXED) {
 		if (key->size != 1) {
-			pr_err("ERROR: %s, %s (%d): Bad key format for index "
-				"table. Key size must be 1.\n", __FILE__,
-				__func__, __LINE__);
+			log_err("Bad key format for index table. Key size must "
+				"be 1.\n");
 			return -EINVAL;
 		}
 		return (int)key->byte[0];
@@ -3208,8 +3056,7 @@ static int key_to_entry_id(const struct dpa_cls_table *cls_table,
 		return -ENODEV;
 
 	if (!cls_table->shadow_table) {
-		pr_err("ERROR: %s, %s (%d): No shadow table.\n", __FILE__,
-			__func__, __LINE__);
+		log_err("No shadow table.\n");
 		return -ENOSYS;
 	}
 
@@ -3259,8 +3106,8 @@ static int extend_descriptor_table(struct dpa_cls_descriptor_table *desc_table)
 	new_objects_array = kzalloc(new_table_size * sizeof(void *),
 				   GFP_KERNEL);
 	if (!new_objects_array) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA Classifier "
-			"descriptor table.\n", __FILE__, __func__, __LINE__);
+		log_err("No more memory for DPA Classifier descriptor "
+			"table.\n");
 		return -ENOMEM;
 	}
 
@@ -3395,18 +3242,16 @@ static int nat_hm_check_params(const struct dpa_cls_hm_nat_params *nat_params)
 		if (nat_params->flags & DPA_CLS_HM_NAT_UPDATE_DIP) {
 			if ((ip_ver) &&
 				(ip_ver != nat_params->nat.dip.version)) {
-				pr_err("ERROR: %s, %s (%d): Inconsistent SIP "
-					"DIP address versions.\n", __FILE__,
-					__func__, __LINE__);
+				log_err("Inconsistent SIP DIP address "
+					"versions.\n");
 				return -EINVAL;
 			}
 			ip_ver = nat_params->nat.dip.version;
 		}
 
 		if ((ip_ver) && (ip_ver != 4) && (ip_ver != 6)) {
-			pr_err("ERROR: %s, %s (%d): Unsupported IP version "
-				"(%d). Only IPv4 and IPv6 are supported\n",
-				__FILE__, __func__, __LINE__, ip_ver);
+			log_err("Unsupported IP version (%d). Only IPv4 and "
+				"IPv6 are supported\n", ip_ver);
 			return -EINVAL;
 		}
 	}
@@ -3419,16 +3264,14 @@ static int fwd_hm_check_params(const struct dpa_cls_hm_fwd_params *fwd_params)
 	BUG_ON(!fwd_params);
 
 	if (fwd_params->out_if_type == DPA_CLS_HM_IF_TYPE_PPPoE) {
-		pr_err("ERROR: %s, %s (%d): Forwarding HM: PPPoE output "
-			"interface not supported yet.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Forwarding HM: PPPoE output interface not supported "
+			"yet.\n");
 		return -ENOSYS;
 	}
 
 	if (fwd_params->ip_frag_params.mtu != 0) {
-		pr_err("ERROR: %s, %s (%d): Forwarding HM: IP fragmentation "
-			"is not supported yet.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Forwarding HM: IP fragmentation is not supported "
+			"yet.\n");
 		return -ENOSYS;
 	}
 
@@ -3442,8 +3285,7 @@ static int remove_hm_check_params(const struct dpa_cls_hm_remove_params
 
 	switch (remove_params->type) {
 	case DPA_CLS_HM_REMOVE_PPPoE:
-		pr_err("ERROR: %s, %s (%d): Unsupported HM: remove PPPoE.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Unsupported HM: remove PPPoE.\n");
 		return -ENOSYS;
 		break;
 	default:
@@ -3460,16 +3302,14 @@ static int insert_hm_check_params(const struct dpa_cls_hm_insert_params
 
 	switch (insert_params->type) {
 	case DPA_CLS_HM_INSERT_PPPoE:
-		pr_err("ERROR: %s, %s (%d): Unsupported HM: insert PPPoE.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Unsupported HM: insert PPPoE.\n");
 		return -ENOSYS;
 		break;
 	case DPA_CLS_HM_INSERT_ETHERNET:
 		if (insert_params->eth.num_tags >
 			DPA_CLS_HM_MAX_VLANs) {
-			pr_err("ERROR: %s, %s (%d): Insert HM: Can only insert "
-				"a maximum of %d VLAN tags.\n", __FILE__,
-				__func__, __LINE__, DPA_CLS_HM_MAX_VLANs);
+			log_err("Insert HM: Can only insert a maximum of %d "
+				"VLAN tags.\n", DPA_CLS_HM_MAX_VLANs);
 			return -EINVAL;
 		}
 		break;
@@ -3494,8 +3334,7 @@ static int update_hm_check_params(const struct dpa_cls_hm_update_params
 
 	if ((update_params->op_flags == DPA_CLS_HM_UPDATE_NONE) &&
 		(update_params->ip_frag_params.mtu == 0)) {
-		pr_err("ERROR: %s, %s (%d): Cannot create an empty update "
-			"HM.\n", __FILE__, __func__, __LINE__);
+		log_err("Cannot create an empty update HM.\n");
 		return -EINVAL;
 	}
 
@@ -3504,8 +3343,7 @@ static int update_hm_check_params(const struct dpa_cls_hm_update_params
 		while ((ops & 0x1) == 0)
 			ops >>= 1;
 		if (ops > 1) {
-			pr_err("ERROR: %s, %s (%d): Only one UPDATE operation "
-				"is allowed.\n", __FILE__, __func__, __LINE__);
+			log_err("Only one UPDATE operation is allowed.\n");
 			return -EINVAL;
 		}
 
@@ -3513,18 +3351,16 @@ static int update_hm_check_params(const struct dpa_cls_hm_update_params
 			if ((update_params->update.l3.field_flags &
 				DPA_CLS_HM_IP_UPDATE_IPSA) &&
 				(update_params->update.l3.ipsa.version != 4)) {
-				pr_err("ERROR: %s, %s (%d): Only IPv4 addresses "
-					"are accepted for IPv4 IPSA update.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Only IPv4 addresses are accepted for "
+					"IPv4 IPSA update.\n");
 				return -EINVAL;
 			}
 
 			if ((update_params->update.l3.field_flags &
 				DPA_CLS_HM_IP_UPDATE_IPDA) &&
 				(update_params->update.l3.ipda.version != 4)) {
-				pr_err("ERROR: %s, %s (%d): Only IPv4 addresses "
-					"are accepted for IPv4 IPDA update.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Only IPv4 addresses are accepted for "
+					"IPv4 IPDA update.\n");
 				return -EINVAL;
 			}
 		}
@@ -3533,18 +3369,16 @@ static int update_hm_check_params(const struct dpa_cls_hm_update_params
 			if ((update_params->update.l3.field_flags &
 				DPA_CLS_HM_IP_UPDATE_IPSA) &&
 				(update_params->update.l3.ipsa.version != 6)) {
-				pr_err("ERROR: %s, %s (%d): Only IPv6 addresses "
-					"are accepted for IPv6 IPSA update.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Only IPv6 addresses are accepted for "
+					"IPv6 IPSA update.\n");
 				return -EINVAL;
 			}
 
 			if ((update_params->update.l3.field_flags &
 				DPA_CLS_HM_IP_UPDATE_IPDA) &&
 				(update_params->update.l3.ipda.version != 6)) {
-				pr_err("ERROR: %s, %s (%d): Only IPv6 addresses "
-					"are accepted for IPv6 IPDA update.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Only IPv6 addresses are accepted for "
+					"IPv6 IPDA update.\n");
 				return -EINVAL;
 			}
 		}
@@ -3555,8 +3389,7 @@ static int update_hm_check_params(const struct dpa_cls_hm_update_params
 		while ((ops & 0x1) == 0)
 			ops >>= 1;
 		if (ops > 1) {
-			pr_err("ERROR: %s, %s (%d): Only one REPLACE operation "
-				"is allowed.\n", __FILE__, __func__, __LINE__);
+			log_err("Only one REPLACE operation is allowed.\n");
 			return -EINVAL;
 		}
 	}
@@ -3573,24 +3406,21 @@ static int
 	case DPA_CLS_HM_VLAN_INGRESS:
 		if (vlan_params->ingress.num_tags !=
 			DPA_CLS_HM_VLAN_CNT_ALL_QTAGS) {
-			pr_err("ERROR: %s, %s (%d): Ingress VLAN QTags remove "
-				"HM: Only \"remove all QTags\" is currenly "
-				"supported.\n", __FILE__, __func__, __LINE__);
+			log_err("Ingress VLAN QTags remove HM: Only \"remove "
+				"all QTags\" is currenly supported.\n");
 			return -EINVAL;
 		}
 		break;
 	case DPA_CLS_HM_VLAN_EGRESS:
 		if (vlan_params->egress.num_tags >
 						DPA_CLS_HM_MAX_VLANs) {
-			pr_err("ERROR: %s, %s (%d): Egress VLAN HM: Can only "
-				"insert a maximum of %d VLANs.\n", __FILE__,
-				__func__, __LINE__, DPA_CLS_HM_MAX_VLANs);
+			log_err("Egress VLAN HM: Can only insert a maximum of "
+				"%d VLANs.\n", DPA_CLS_HM_MAX_VLANs);
 			return -EINVAL;
 		}
 		break;
 	default:
-		pr_err("ERROR: %s, %s (%d): Invalid VLAN specific HM type "
-			"(%d).\n", __FILE__, __func__, __LINE__,
+		log_err("Invalid VLAN specific HM type (%d).\n",
 			vlan_params->type);
 		return -EINVAL;
 		break;
@@ -3606,9 +3436,8 @@ static int
 
 	if ((mpls_params->type == DPA_CLS_HM_MPLS_INSERT_LABELS) &&
 		(mpls_params->num_labels > DPA_CLS_HM_MAX_MPLS_LABELS)) {
-		pr_err("ERROR: %s, %s (%d): MPLS HM: Can only insert a maximum "
-			"of %d MPLS labels.\n", __FILE__, __func__, __LINE__,
-			DPA_CLS_HM_MAX_MPLS_LABELS);
+		log_err("MPLS HM: Can only insert a maximum of %d MPLS "
+			"labels.\n", DPA_CLS_HM_MAX_MPLS_LABELS);
 		return -EINVAL;
 	}
 
@@ -3666,9 +3495,8 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 			hm->hm_node[i] = kzalloc(sizeof(struct dpa_cls_hm_node),
 						 GFP_KERNEL);
 			if (!hm->hm_node[i]) {
-				pr_err("ERROR: %s, %s (%d): Not enough memory "
-					"for HM node management.\n", __FILE__,
-					__func__, __LINE__);
+				log_err("Not enough memory for HM node "
+					"management.\n");
 				return -ENOMEM;
 			}
 
@@ -3866,10 +3694,9 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 			"node (h_node=0x%p).\n", __func__, __LINE__,
 			pcurrent->node));
 		if (!pcurrent->node) {
-			pr_err("ERROR: %s, %s (%d): FMan driver call failed - "
+			log_err("FMan driver call failed - "
 				"FM_PCD_ManipNodeSet. Failed to initialize low "
-				"level HM #%d from this chain.\n", __FILE__,
-				__func__, __LINE__, index);
+				"level HM #%d from this chain.\n", index);
 			err = -EBUSY;
 		}
 
@@ -3885,10 +3712,9 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 			 * level header manipulation nodes that are already
 			 * initialized is not possible.
 			 */
-			pr_err("ERROR: %s, %s (%d): Unsupported hybrid header "
-				"manipulation chain. The imported/static HM ops "
-				"must be LAST in chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Unsupported hybrid header manipulation chain. "
+				"The imported/static HM ops must be LAST in "
+				"chain.\n");
 			return -EINVAL;
 		}
 		/* For STATIC HM ops we don't need to do anything here */
@@ -3907,11 +3733,10 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 			error = FM_PCD_ManipNodeReplace(pcurrent->node,
 							&params);
 			if (error != E_OK) {
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_ManipNodeReplace. "
-					"Failed to initialize low level HM #%d "
-					"from this chain.\n", __FILE__,
-					__func__, __LINE__, index);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace. Failed to "
+					"initialize low level HM #%d "
+					"from this chain.\n", index);
 				err = -EBUSY;
 			}
 		}
@@ -3938,10 +3763,10 @@ int remove_hm_chain(struct list_head *chain_head, struct list_head *item)
 	if ((pcurrent->flags & DPA_CLS_HM_NODE_INTERNAL) && (pcurrent->node)) {
 		error = FM_PCD_ManipNodeDelete((t_Handle) pcurrent->node);
 		if (error != E_OK) {
-			pr_warn("WARNING: Memory leak: failed to remove low "
+			log_warn("Memory leak: failed to remove low "
 				"level HM #%d from this chain. Manip node "
 				"handle=0x%p.\n", index, pcurrent->node);
-			pr_warn("WARNING: FMan driver call failed - "
+			log_warn("FMan driver call failed - "
 				"FM_PCD_ManipNodeDelete.\n");
 		}
 	}
@@ -3999,9 +3824,8 @@ static struct dpa_cls_hm_node
 		val = e_FM_PCD_MANIP_HDR_FIELD_UPDATE_TCP_UDP;
 		break;
 	default:
-		pr_err("ERROR: %s, %s (%d): Don't know how to search for nodes"
-			" compatible with type=%d.\n", __FILE__, __func__,
-			__LINE__, type);
+		log_err("Don't know how to search for nodes compatible with "
+			"type=%d.\n", type);
 		return NULL;
 	}
 
@@ -4028,8 +3852,7 @@ static int create_new_hm_op(int *hmd, int next_hmd)
 	/* Allocate header manipulation object */
 	hm = kzalloc(sizeof(struct dpa_cls_hm), GFP_KERNEL);
 	if (!hm) {
-		pr_err("ERROR: %s, %s (%d): No more memory for header manip "
-			"ops.\n", __FILE__, __func__, __LINE__);
+		log_err("No more memory for header manip ops.\n");
 		return -ENOMEM;
 	}
 
@@ -4049,18 +3872,16 @@ static int create_new_hm_op(int *hmd, int next_hmd)
 		/* Check whether [next_hmd] is a valid descriptor */
 		if ((next_hmd < 0) || (next_hmd >= hm_array.num_descriptors)) {
 			release_desc_table(&hm_array);
-			pr_err("ERROR: %s, %s (%d): Invalid next HM descriptor "
-				"(next_hmd=%d). Should be between %d and %d.\n",
-				__FILE__, __func__, __LINE__, next_hmd, 0,
-				hm_array.num_descriptors-1);
+			log_err("Invalid next HM descriptor (next_hmd=%d). "
+				"Should be between %d and %d.\n",
+				next_hmd, 0, hm_array.num_descriptors-1);
 			return -EINVAL;
 		}
 		next_hm = (struct dpa_cls_hm *)hm_array.object[next_hmd];
 		if (!next_hm) {
 			release_desc_table(&hm_array);
-			pr_err("ERROR: %s, %s (%d): Link to an invalid HM "
-				"(next_hmd=%d).\n", __FILE__, __func__,
-				__LINE__, next_hmd);
+			log_err("Link to an invalid HM (next_hmd=%d).\n",
+				next_hmd);
 			return -EINVAL;
 		}
 
@@ -4081,8 +3902,7 @@ static int create_new_hm_op(int *hmd, int next_hmd)
 		if (!hm->hm_chain) {
 			remove_hm_op(*hmd);
 			release_desc_table(&hm_array);
-			pr_err("ERROR: %s, %s (%d): No more memory for header "
-				"manip ops.\n", __FILE__, __func__, __LINE__);
+			log_err("No more memory for header manip ops.\n");
 			*hmd = DPA_OFFLD_DESC_NONE;
 			return -ENOMEM;
 		}
@@ -4140,13 +3960,11 @@ int dpa_classif_set_nat_hm(const struct dpa_cls_hm_nat_params	*nat_params,
 
 	/* Parameters sanity checks: */
 	if (!nat_params) {
-		pr_err("ERROR: %s, %s (%d): \"nat_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"nat_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -4154,15 +3972,13 @@ int dpa_classif_set_nat_hm(const struct dpa_cls_hm_nat_params	*nat_params,
 
 	err = nat_hm_check_params(nat_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid NAT HM parameters.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid NAT HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create NAT HM op.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Failed to create NAT HM op.\n");
 		return err;
 	}
 
@@ -4176,16 +3992,14 @@ int dpa_classif_set_nat_hm(const struct dpa_cls_hm_nat_params	*nat_params,
 
 	err = nat_hm_prepare_nodes(pnat_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto nat_hm_error;
 	}
 
 	err = nat_hm_update_params(pnat_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto nat_hm_error;
 	}
 
@@ -4194,9 +4008,7 @@ int dpa_classif_set_nat_hm(const struct dpa_cls_hm_nat_params	*nat_params,
 				pnat_hm->hm_chain,
 				pnat_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -4294,9 +4106,8 @@ static int nat_hm_prepare_nodes(struct dpa_cls_hm *pnat_hm,
 		if (!hm_node) {
 			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 			if (!hm_node) {
-				pr_err("ERROR: %s, %s (%d): No more memory for "
-					"header manip nodes.\n", __FILE__,
-					__func__, __LINE__);
+				log_err("No more memory for header manip "
+					"nodes.\n");
 				return -ENOMEM;
 			}
 			INIT_LIST_HEAD(&hm_node->list_node);
@@ -4314,9 +4125,8 @@ static int nat_hm_prepare_nodes(struct dpa_cls_hm *pnat_hm,
 		if (!hm_node) {
 			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 			if (!hm_node) {
-				pr_err("ERROR: %s, %s (%d): No more memory for "
-					"header manip nodes.\n", __FILE__,
-					__func__, __LINE__);
+				log_err("No more memory for header manip "
+					"nodes.\n");
 				return -ENOMEM;
 			}
 			INIT_LIST_HEAD(&hm_node->list_node);
@@ -4507,8 +4317,7 @@ int dpa_classif_modify_nat_hm(int hmd,
 
 	/* Parameters sanity checks: */
 	if (!new_nat_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_nat_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_nat_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -4516,8 +4325,7 @@ int dpa_classif_modify_nat_hm(int hmd,
 	pnat_hm = desc_to_object(&hm_array, hmd);
 	if (!pnat_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&pnat_hm->access);
@@ -4531,8 +4339,7 @@ int dpa_classif_modify_nat_hm(int hmd,
 	if (pnat_hm->type != DPA_CLS_HM_TYPE_NAT) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pnat_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an NAT type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an NAT type header manip.\n", hmd);
 		return -EINVAL;
 	}
 
@@ -4542,11 +4349,9 @@ int dpa_classif_modify_nat_hm(int hmd,
 					pnat_hm->nat_params.nat.sip.version) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pnat_hm->access);
-				pr_err("ERROR: %s, %s (%d): New SIP adress "
-					"version (%d) in NAT header "
-					"manipulation hmd=%d cannot be "
+				log_err("New SIP adress version (%d) in NAT "
+					"header manipulation hmd=%d cannot be "
 					"different from the old one (%d).\n",
-					__FILE__, __func__, __LINE__,
 					new_nat_params->nat.sip.version, hmd,
 					pnat_hm->nat_params.nat.sip.version);
 				return -EINVAL;
@@ -4562,11 +4367,9 @@ int dpa_classif_modify_nat_hm(int hmd,
 					pnat_hm->nat_params.nat.dip.version) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pnat_hm->access);
-				pr_err("ERROR: %s, %s (%d): New DIP adress "
-					"version (%d) in NAT header "
-					"manipulation hmd=%d cannot be "
+				log_err("New DIP adress version (%d) in NAT "
+					"header manipulation hmd=%d cannot be "
 					"different from the old one (%d).\n",
-					__FILE__, __func__, __LINE__,
 					new_nat_params->nat.dip.version, hmd,
 					pnat_hm->nat_params.nat.dip.version);
 				return -EINVAL;
@@ -4601,13 +4404,11 @@ int dpa_classif_modify_nat_hm(int hmd,
 							options_size = 0;
 						release_desc_table(&hm_array);
 						mutex_unlock(&pnat_hm->access);
-						pr_err("ERROR: %s, %s (%d): "
-							"Out of memory while "
+						log_err("Out of memory while "
 							"modifying IPv6 header "
 							"replace header "
-							"manipulation hmd=%d.\n",
-							__FILE__, __func__,
-							__LINE__, hmd);
+							"manipulation "
+							"hmd=%d.\n", hmd);
 						return -EINVAL;
 					}
 				} else
@@ -4669,13 +4470,11 @@ int dpa_classif_modify_nat_hm(int hmd,
 				if (error != E_OK) {
 					release_desc_table(&hm_array);
 					mutex_unlock(&pnat_hm->access);
-					pr_err("ERROR: %s, %s (%d): FMan "
-						"driver call failed - "
+					log_err("FMan driver call failed - "
 						"FM_PCD_ManipNodeReplace, "
 						"while trying to modify "
 						"hmd=%d, manip node "
 						"handle=0x%p (node #%d).\n",
-						__FILE__, __func__, __LINE__,
 						hmd, hm_node->node, i);
 					return -EBUSY;
 				}
@@ -4707,13 +4506,11 @@ int dpa_classif_set_fwd_hm(const struct dpa_cls_hm_fwd_params	*fwd_params,
 
 	/* Parameters sanity checks: */
 	if (!fwd_params) {
-		pr_err("ERROR: %s, %s (%d): \"fwd_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"fwd_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -4721,15 +4518,13 @@ int dpa_classif_set_fwd_hm(const struct dpa_cls_hm_fwd_params	*fwd_params,
 
 	err = fwd_hm_check_params(fwd_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid forwarding HM parameters.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid forwarding HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create forwarding HM op.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Failed to create forwarding HM op.\n");
 		return err;
 	}
 
@@ -4743,16 +4538,14 @@ int dpa_classif_set_fwd_hm(const struct dpa_cls_hm_fwd_params	*fwd_params,
 
 	err = fwd_hm_prepare_nodes(pfwd_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto fwd_hm_error;
 	}
 
 	err = fwd_hm_update_params(pfwd_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto fwd_hm_error;
 	}
 
@@ -4761,9 +4554,7 @@ int dpa_classif_set_fwd_hm(const struct dpa_cls_hm_fwd_params	*fwd_params,
 				pfwd_hm->hm_chain,
 				pfwd_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -4812,8 +4603,7 @@ static int fwd_hm_prepare_nodes(struct dpa_cls_hm *pfwd_hm,
 
 	hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 	if (!hm_node) {
-		pr_err("ERROR: %s, %s (%d): Not enough memory for header manip "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Not enough memory for header manip nodes.\n");
 		return -ENOMEM;
 	}
 
@@ -4825,8 +4615,7 @@ static int fwd_hm_prepare_nodes(struct dpa_cls_hm *pfwd_hm,
 		/* Create a header manip node: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 		if (!hm_node) {
-			pr_err("ERROR: %s, %s (%d): No more memory for header "
-				"manip nodes.\n", __FILE__, __func__, __LINE__);
+			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
@@ -4871,9 +4660,7 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 		size = (uint8_t)(sizeof(struct ethhdr) - ETHERTYPE_SIZE);
 		pdata = kzalloc(size, GFP_KERNEL);
 		if (!pdata) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"forwarding HM.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Not enough memory for forwarding HM.\n");
 			return -ENOMEM;
 		}
 
@@ -4907,9 +4694,7 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 		size	= PPP_HEADER_SIZE;
 		pdata	= kzalloc(size, GFP_KERNEL);
 		if (!pdata) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"forwarding HM.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Not enough memory for forwarding HM.\n");
 			return -ENOMEM;
 		}
 
@@ -4923,8 +4708,7 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 		hm_node->params.u.hdr.insrtParams.u.generic.p_Data	= pdata;
 		break;
 	default:
-		pr_err("ERROR: %s, %s (%d): Forwarding HM: Unknown output port "
-			"type (%d).\n", __FILE__, __func__, __LINE__,
+		log_err("Forwarding HM: Unknown output port type (%d).\n",
 			pfwd_hm->fwd_params.out_if_type);
 		return -EINVAL;
 	}
@@ -4985,8 +4769,7 @@ int dpa_classif_modify_fwd_hm(int hmd,
 
 	/* Parameters sanity checks: */
 	if (!new_fwd_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_fwd_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_fwd_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -4994,8 +4777,7 @@ int dpa_classif_modify_fwd_hm(int hmd,
 	pfwd_hm = desc_to_object(&hm_array, hmd);
 	if (!pfwd_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&pfwd_hm->access);
@@ -5009,8 +4791,8 @@ int dpa_classif_modify_fwd_hm(int hmd,
 	if (pfwd_hm->type != DPA_CLS_HM_TYPE_FORWARDING) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pfwd_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an FORWARDING type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an FORWARDING type header manip.\n",
+			hmd);
 		return -EINVAL;
 	}
 
@@ -5115,13 +4897,11 @@ int dpa_classif_modify_fwd_hm(int hmd,
 				if (error != E_OK) {
 					release_desc_table(&hm_array);
 					mutex_unlock(&pfwd_hm->access);
-					pr_err("ERROR: %s, %s (%d): FMan "
-						"driver call failed - "
+					log_err("FMan driver call failed - "
 						"FM_PCD_ManipNodeReplace, "
 						"while trying to modify "
 						"hmd=%d, manip node "
 						"handle=0x%p (node #%d).\n",
-						__FILE__, __func__, __LINE__,
 						hmd, hm_node->node, i);
 					return -EBUSY;
 				}
@@ -5151,13 +4931,11 @@ int dpa_classif_set_remove_hm(const struct dpa_cls_hm_remove_params
 
 	/* Parameters sanity checks: */
 	if (!remove_params) {
-		pr_err("ERROR: %s, %s (%d): \"remove_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"remove_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -5165,15 +4943,13 @@ int dpa_classif_set_remove_hm(const struct dpa_cls_hm_remove_params
 
 	err = remove_hm_check_params(remove_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid remove HM parameters.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid remove HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create remove HM op.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Failed to create remove HM op.\n");
 		return err;
 	}
 
@@ -5188,16 +4964,14 @@ int dpa_classif_set_remove_hm(const struct dpa_cls_hm_remove_params
 
 	err = remove_hm_prepare_nodes(premove_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto remove_hm_error;
 	}
 
 	err = remove_hm_update_params(premove_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto remove_hm_error;
 	}
 
@@ -5206,9 +4980,7 @@ int dpa_classif_set_remove_hm(const struct dpa_cls_hm_remove_params
 				premove_hm->hm_chain,
 				premove_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -5257,9 +5029,7 @@ static int remove_hm_prepare_nodes(struct dpa_cls_hm *premove_hm,
 	} else { /* Create HM nodes */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 		if (!hm_node) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"header manip nodes.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Not enough memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
@@ -5348,8 +5118,7 @@ int dpa_classif_modify_remove_hm(int hmd,
 
 	/* Parameters sanity checks: */
 	if (!new_remove_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_remove_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_remove_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -5357,8 +5126,7 @@ int dpa_classif_modify_remove_hm(int hmd,
 	premove_hm = desc_to_object(&hm_array, hmd);
 	if (!premove_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&premove_hm->access);
@@ -5372,8 +5140,7 @@ int dpa_classif_modify_remove_hm(int hmd,
 	if (premove_hm->type != DPA_CLS_HM_TYPE_REMOVE) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&premove_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an REMOVE type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an REMOVE type header manip.\n", hmd);
 		return -EINVAL;
 	}
 
@@ -5418,11 +5185,10 @@ int dpa_classif_modify_remove_hm(int hmd,
 			if (error != E_OK) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&premove_hm->access);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_ManipNodeReplace, "
-					"while trying to modify hmd=%d, manip "
-					"node handle=0x%p.\n", __FILE__,
-					__func__, __LINE__, hmd, hm_node->node);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
 				return -EBUSY;
 			}
 		}
@@ -5450,13 +5216,11 @@ int dpa_classif_set_insert_hm(const struct dpa_cls_hm_insert_params
 
 	/* Parameters sanity checks: */
 	if (!insert_params) {
-		pr_err("ERROR: %s, %s (%d): \"insert_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"insert_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -5464,15 +5228,13 @@ int dpa_classif_set_insert_hm(const struct dpa_cls_hm_insert_params
 
 	err = insert_hm_check_params(insert_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid insert HM parameters.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid insert HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create insert HM op.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Failed to create insert HM op.\n");
 		return err;
 	}
 
@@ -5487,16 +5249,14 @@ int dpa_classif_set_insert_hm(const struct dpa_cls_hm_insert_params
 
 	err = insert_hm_prepare_nodes(pinsert_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto insert_hm_error;
 	}
 
 	err = insert_hm_update_params(pinsert_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto insert_hm_error;
 	}
 
@@ -5505,9 +5265,7 @@ int dpa_classif_set_insert_hm(const struct dpa_cls_hm_insert_params
 				pinsert_hm->hm_chain,
 				pinsert_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -5556,9 +5314,7 @@ static int insert_hm_prepare_nodes(struct dpa_cls_hm *pinsert_hm,
 	} else { /* Create HM nodes */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 		if (!hm_node) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"header manip nodes.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Not enough memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
@@ -5602,8 +5358,7 @@ static int insert_hm_update_params(struct dpa_cls_hm *pinsert_hm)
 			sizeof(struct vlan_header)));
 		pdata = kzalloc(size, GFP_KERNEL);
 		if (!pdata) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"insert HM.\n", __FILE__, __func__, __LINE__);
+			log_err("Not enough memory for insert HM.\n");
 			return -ENOMEM;
 		}
 
@@ -5636,8 +5391,7 @@ static int insert_hm_update_params(struct dpa_cls_hm *pinsert_hm)
 		size	= PPP_HEADER_SIZE;
 		pdata	= kzalloc(size, GFP_KERNEL);
 		if (!pdata) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"insert HM.\n", __FILE__, __func__, __LINE__);
+			log_err("Not enough memory for insert HM.\n");
 			return -ENOMEM;
 		}
 
@@ -5649,8 +5403,7 @@ static int insert_hm_update_params(struct dpa_cls_hm *pinsert_hm)
 		size	= pinsert_hm->insert_params.custom.size;
 		pdata	= kzalloc(size, GFP_KERNEL);
 		if (!pdata) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"insert HM.\n", __FILE__, __func__, __LINE__);
+			log_err("Not enough memory for insert HM.\n");
 			return -ENOMEM;
 		}
 		memcpy(pdata, pinsert_hm->insert_params.custom.data, size);
@@ -5696,8 +5449,7 @@ int dpa_classif_modify_insert_hm(int hmd,
 
 	/* Parameters sanity checks: */
 	if (!new_insert_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_insert_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_insert_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -5705,8 +5457,7 @@ int dpa_classif_modify_insert_hm(int hmd,
 	pinsert_hm = desc_to_object(&hm_array, hmd);
 	if (!pinsert_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&pinsert_hm->access);
@@ -5720,8 +5471,7 @@ int dpa_classif_modify_insert_hm(int hmd,
 	if (pinsert_hm->type != DPA_CLS_HM_TYPE_INSERT) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pinsert_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an INSERT type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an INSERT type header manip.\n", hmd);
 		return -EINVAL;
 	}
 
@@ -5732,9 +5482,8 @@ int dpa_classif_modify_insert_hm(int hmd,
 			DPA_CLS_HM_INSERT_ETHERNET)) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pinsert_hm->access);
-		pr_err("ERROR: %s, %s (%d): modify_flags=0x%x doesn't work on "
-			"hmd=%d. It only works on INSERT ETHERNET header "
-			"manipulations.\n", __FILE__, __func__, __LINE__,
+		log_err("modify_flags=0x%x doesn't work on hmd=%d. It only "
+			"works on INSERT ETHERNET header manipulations.\n",
 			modify_flags, hmd);
 		return -EINVAL;
 	}
@@ -5745,9 +5494,8 @@ int dpa_classif_modify_insert_hm(int hmd,
 			DPA_CLS_HM_INSERT_CUSTOM)) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pinsert_hm->access);
-		pr_err("ERROR: %s, %s (%d): modify_flags=0x%x doesn't work on "
-			"hmd=%d. It only works on CUSTOM INSERT header "
-			"manipulations.\n", __FILE__, __func__, __LINE__,
+		log_err("modify_flags=0x%x doesn't work on hmd=%d. It only "
+			"works on CUSTOM INSERT header manipulations.\n",
 			modify_flags, hmd);
 		return -EINVAL;
 	}
@@ -5759,10 +5507,9 @@ int dpa_classif_modify_insert_hm(int hmd,
 						DPA_CLS_HM_INSERT_PPP) {
 			release_desc_table(&hm_array);
 			mutex_unlock(&pinsert_hm->access);
-			pr_err("ERROR: %s, %s (%d): modify_flags=0x%x doesn't "
-				"work on hmd=%d. It only works on INSERT PPP "
-				"header manipulations.\n", __FILE__, __func__,
-				__LINE__, modify_flags, hmd);
+			log_err("modify_flags=0x%x doesn't work on hmd=%d. It "
+				"only works on INSERT PPP header "
+				"manipulations.\n", modify_flags, hmd);
 			return -EINVAL;
 		}
 
@@ -5792,9 +5539,8 @@ int dpa_classif_modify_insert_hm(int hmd,
 		if (!pdata) {
 			release_desc_table(&hm_array);
 			mutex_unlock(&pinsert_hm->access);
-			pr_err("ERROR: %s, %s (%d): Not enough memory to "
-				"adjust custom insert header manipulation.\n",
-				__FILE__, __func__, __LINE__);
+			log_err("Not enough memory to adjust custom insert "
+				"header manipulation.\n");
 			return -ENOMEM;
 		}
 		/* Replace old data buffer with the new data buffer */
@@ -5843,11 +5589,10 @@ int dpa_classif_modify_insert_hm(int hmd,
 			if (error != E_OK) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pinsert_hm->access);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_ManipNodeReplace, "
-					"while trying to modify hmd=%d, manip "
-					"node handle=0x%p.\n", __FILE__,
-					__func__, __LINE__, hmd, hm_node->node);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
 				return -EBUSY;
 			}
 		}
@@ -5875,13 +5620,11 @@ int dpa_classif_set_update_hm(const struct dpa_cls_hm_update_params
 
 	/* Parameters sanity checks: */
 	if (!update_params) {
-		pr_err("ERROR: %s, %s (%d): \"update_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"update_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -5889,15 +5632,13 @@ int dpa_classif_set_update_hm(const struct dpa_cls_hm_update_params
 
 	err = update_hm_check_params(update_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid update HM parameters.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid update HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create update HM op.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Failed to create update HM op.\n");
 		return err;
 	}
 
@@ -5912,16 +5653,14 @@ int dpa_classif_set_update_hm(const struct dpa_cls_hm_update_params
 
 	err = update_hm_prepare_nodes(pupdate_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto update_hm_error;
 	}
 
 	err = update_hm_update_params(pupdate_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto update_hm_error;
 	}
 
@@ -5930,9 +5669,7 @@ int dpa_classif_set_update_hm(const struct dpa_cls_hm_update_params
 				pupdate_hm->hm_chain,
 				pupdate_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -6038,9 +5775,8 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 
 			if (!hm_node) {
-				pr_err("ERROR: %s, %s (%d): No more memory for "
-					"header manip nodes.\n", __FILE__,
-					__func__, __LINE__);
+				log_err("No more memory for header manip "
+					"nodes.\n");
 				return -ENOMEM;
 			}
 
@@ -6055,8 +5791,7 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 		/* Create a header manip node: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 		if (!hm_node) {
-			pr_err("ERROR: %s, %s (%d): No more memory for header "
-				"manip nodes.\n", __FILE__, __func__, __LINE__);
+			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
@@ -6335,8 +6070,7 @@ int dpa_classif_modify_update_hm(int hmd,
 
 	/* Parameters sanity checks: */
 	if (!new_update_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_update_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_update_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -6344,8 +6078,7 @@ int dpa_classif_modify_update_hm(int hmd,
 	pupdate_hm = desc_to_object(&hm_array, hmd);
 	if (!pupdate_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&pupdate_hm->access);
@@ -6359,8 +6092,7 @@ int dpa_classif_modify_update_hm(int hmd,
 	if (pupdate_hm->type != DPA_CLS_HM_TYPE_UPDATE) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pupdate_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an UPDATE type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an UPDATE type header manip.\n", hmd);
 		return -EINVAL;
 	}
 
@@ -6390,12 +6122,9 @@ int dpa_classif_modify_update_hm(int hmd,
 						new_ipv4_hdr.options_size = 0;
 					release_desc_table(&hm_array);
 					mutex_unlock(&pupdate_hm->access);
-					pr_err("ERROR: %s, %s (%d): Out of "
-						"memory while modifying IPv6 "
-						"header replace header "
-						"manipulation hmd=%d.\n",
-						__FILE__, __func__, __LINE__,
-						hmd);
+					log_err("Out of memory while modifying "
+						"IPv6 header replace header "
+						"manipulation hmd=%d.\n", hmd);
 					return -EINVAL;
 				}
 			} else
@@ -6407,10 +6136,9 @@ int dpa_classif_modify_update_hm(int hmd,
 		} else {
 			release_desc_table(&hm_array);
 			mutex_unlock(&pupdate_hm->access);
-			pr_err("ERROR: %s, %s (%d): modify_flags=0x%x doesn't "
-				"work on hmd=%d. It only works on REPLACE "
-				"header manipulations.\n", __FILE__, __func__,
-				__LINE__, modify_flags, hmd);
+			log_err("modify_flags=0x%x doesn't work on hmd=%d. It "
+				"only works on REPLACE header manipulations.\n",
+				modify_flags, hmd);
 			return -EINVAL;
 		}
 		update[0] = true;
@@ -6425,11 +6153,9 @@ int dpa_classif_modify_update_hm(int hmd,
 				version) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pupdate_hm->access);
-				pr_err("ERROR: %s, %s (%d): New SIP adress "
-					"version (%d) in UPDATE header "
-					"manipulation hmd=%d cannot be "
+				log_err("New SIP adress version (%d) in UPDATE "
+					"header manipulation hmd=%d cannot be "
 					"different from the old one (%d).\n",
-					__FILE__, __func__, __LINE__,
 					new_update_params->update.l3.ipsa.
 					version, hmd, pupdate_hm->
 					update_params.update.l3.ipsa.version);
@@ -6447,11 +6173,9 @@ int dpa_classif_modify_update_hm(int hmd,
 				version) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pupdate_hm->access);
-				pr_err("ERROR: %s, %s (%d): New DIP adress "
-					"version (%d) in UPDATE header "
-					"manipulation hmd=%d cannot be "
+				log_err("New DIP adress version (%d) in UPDATE "
+					"header manipulation hmd=%d cannot be "
 					"different from the old one (%d).\n",
-					__FILE__, __func__, __LINE__,
 					new_update_params->update.l3.ipda.
 					version, hmd, pupdate_hm->
 					update_params.update.l3.ipda.version);
@@ -6534,11 +6258,10 @@ int dpa_classif_modify_update_hm(int hmd,
 			if (error != E_OK) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pupdate_hm->access);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_ManipNodeReplace, "
-					"while trying to modify hmd=%d, manip "
-					"node handle=0x%p.\n", __FILE__,
-					__func__, __LINE__, hmd, hm_node->node);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
 				return -EBUSY;
 			}
 		}
@@ -6570,13 +6293,11 @@ int dpa_classif_set_vlan_hm(const struct dpa_cls_hm_vlan_params	*vlan_params,
 
 	/* Parameters sanity checks: */
 	if (!vlan_params) {
-		pr_err("ERROR: %s, %s (%d): \"vlan_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"vlan_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -6584,15 +6305,13 @@ int dpa_classif_set_vlan_hm(const struct dpa_cls_hm_vlan_params	*vlan_params,
 
 	err = vlan_hm_check_params(vlan_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid VLAN specific HM "
-			"parameters.\n", __FILE__, __func__, __LINE__);
+		log_err("Invalid VLAN specific HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create VLAN specific HM "
-			"op.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to create VLAN specific HM op.\n");
 		return err;
 	}
 
@@ -6606,16 +6325,14 @@ int dpa_classif_set_vlan_hm(const struct dpa_cls_hm_vlan_params	*vlan_params,
 
 	err = vlan_hm_prepare_nodes(pvlan_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto vlan_hm_error;
 	}
 
 	err = vlan_hm_update_params(pvlan_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto vlan_hm_error;
 	}
 
@@ -6624,9 +6341,7 @@ int dpa_classif_set_vlan_hm(const struct dpa_cls_hm_vlan_params	*vlan_params,
 				pvlan_hm->hm_chain,
 				pvlan_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -6675,9 +6390,7 @@ static int vlan_hm_prepare_nodes(struct dpa_cls_hm *pvlan_hm,
 	} else { /* Create HM nodes */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 		if (!hm_node) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"header manip nodes.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Not enough memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
@@ -6735,9 +6448,8 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 				num_tags * sizeof(struct vlan_header));
 			pdata = kzalloc(size, GFP_KERNEL);
 			if (!pdata) {
-				pr_err("ERROR: %s, %s (%d): Not enough memory "
-					"for VLAN specific egress HM.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Not enough memory for VLAN specific "
+					"egress HM.\n");
 				kfree(hm_node);
 				return -ENOMEM;
 			}
@@ -6784,9 +6496,7 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 					FM_PCD_MANIP_DSCP_TO_VLAN_TRANS);
 				break;
 			default:
-				pr_err("ERROR: %s, %s (%d): Unknown VLAN "
-					"update type.\n", __FILE__, __func__,
-					__LINE__);
+				log_err("Unknown VLAN update type.\n");
 				kfree(hm_node);
 				return -EINVAL;
 				break;
@@ -6824,16 +6534,14 @@ int dpa_classif_modify_vlan_hm(int hmd,
 
 	if ((modify_flags & DPA_CLS_HM_VLAN_MOD_INGRESS_NUM_QTAGS) &&
 		(modify_flags != DPA_CLS_HM_VLAN_MOD_INGRESS_NUM_QTAGS)) {
-		pr_err("ERROR: %s, %s (%d): MOD_INGRESS_NUM_QTAGS flag "
-			"cannot be combined with other flags.\n", __FILE__,
-			__func__, __LINE__);
+		log_err("MOD_INGRESS_NUM_QTAGS flag cannot be combined with "
+			"other flags.\n");
 		return -EINVAL;
 	}
 
 	/* Parameters sanity checks: */
 	if (!new_vlan_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_vlan_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_vlan_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -6841,8 +6549,7 @@ int dpa_classif_modify_vlan_hm(int hmd,
 	pvlan_hm = desc_to_object(&hm_array, hmd);
 	if (!pvlan_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&pvlan_hm->access);
@@ -6856,8 +6563,7 @@ int dpa_classif_modify_vlan_hm(int hmd,
 	if (pvlan_hm->type != DPA_CLS_HM_TYPE_VLAN) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pvlan_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an VLAN type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an VLAN type header manip.\n", hmd);
 		return -EINVAL;
 	}
 
@@ -6865,9 +6571,8 @@ int dpa_classif_modify_vlan_hm(int hmd,
 		if (pvlan_hm->vlan_params.type != DPA_CLS_HM_VLAN_INGRESS) {
 			release_desc_table(&hm_array);
 			mutex_unlock(&pvlan_hm->access);
-			pr_err("ERROR: %s, %s (%d): hmd=%d is not an INGRESS "
-				"VLAN type header manipulation.\n", __FILE__,
-				__func__, __LINE__, hmd);
+			log_err("hmd=%d is not an INGRESS VLAN type header "
+				"manipulation.\n", hmd);
 			return -EINVAL;
 		}
 
@@ -6881,9 +6586,8 @@ int dpa_classif_modify_vlan_hm(int hmd,
 		if (pvlan_hm->vlan_params.type != DPA_CLS_HM_VLAN_EGRESS) {
 			release_desc_table(&hm_array);
 			mutex_unlock(&pvlan_hm->access);
-			pr_err("ERROR: %s, %s (%d): hmd=%d is not an EGRESS "
-				"VLAN type header manipulation.\n", __FILE__,
-				__func__, __LINE__, hmd);
+			log_err("hmd=%d is not an EGRESS VLAN type header "
+				"manipulation.\n", hmd);
 			return -EINVAL;
 		}
 
@@ -6943,11 +6647,10 @@ int dpa_classif_modify_vlan_hm(int hmd,
 			if (error != E_OK) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pvlan_hm->access);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_ManipNodeReplace, "
-					"while trying to modify hmd=%d, manip "
-					"node handle=0x%p.\n", __FILE__,
-					__func__, __LINE__, hmd, hm_node->node);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
 				return -EBUSY;
 			}
 		}
@@ -6977,13 +6680,11 @@ int dpa_classif_set_mpls_hm(const struct dpa_cls_hm_mpls_params	*mpls_params,
 
 	/* Parameters sanity checks: */
 	if (!mpls_params) {
-		pr_err("ERROR: %s, %s (%d): \"mpls_params\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"mpls_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -6991,15 +6692,13 @@ int dpa_classif_set_mpls_hm(const struct dpa_cls_hm_mpls_params	*mpls_params,
 
 	err = mpls_hm_check_params(mpls_params);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Invalid MPLS specific HM "
-			"parameters.\n", __FILE__, __func__, __LINE__);
+		log_err("Invalid MPLS specific HM parameters.\n");
 		return err;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create MPLS specific HM "
-			"op.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to create MPLS specific HM op.\n");
 		return err;
 	}
 
@@ -7013,16 +6712,14 @@ int dpa_classif_set_mpls_hm(const struct dpa_cls_hm_mpls_params	*mpls_params,
 
 	err = mpls_hm_prepare_nodes(pmpls_hm, res);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to acquire necessary HM "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("Failed to acquire necessary HM nodes.\n");
 		goto mpls_hm_error;
 	}
 
 	err = mpls_hm_update_params(pmpls_hm);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to update low level header "
-			"manipulation parameters.\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Failed to update low level header manipulation "
+			"parameters.\n");
 		goto mpls_hm_error;
 	}
 
@@ -7031,9 +6728,7 @@ int dpa_classif_set_mpls_hm(const struct dpa_cls_hm_mpls_params	*mpls_params,
 				pmpls_hm->hm_chain,
 				pmpls_hm->hm_chain->next);
 		if (err < 0)
-			pr_err("ERROR: %s, %s (%d): Failed to initialize low "
-				"level HM chain.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Failed to initialize low level HM chain.\n");
 	}
 
 	/* Release the high level HM op chain */
@@ -7082,9 +6777,7 @@ static int mpls_hm_prepare_nodes(struct dpa_cls_hm *pmpls_hm,
 	} else { /* Create HM nodes */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 		if (!hm_node) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for "
-				"header manip nodes.\n", __FILE__, __func__,
-				__LINE__);
+			log_err("Not enough memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
@@ -7142,8 +6835,7 @@ static int mpls_hm_update_params(struct dpa_cls_hm *pmpls_hm)
 						sizeof(struct mpls_header));
 		pdata = kzalloc(size, GFP_KERNEL);
 		if (!pdata) {
-			pr_err("ERROR: %s, %s (%d): Not enough memory for MPLS "
-				"specific HM.\n", __FILE__, __func__, __LINE__);
+			log_err("Not enough memory for MPLS specific HM.\n");
 			kfree(hm_node);
 			return -ENOMEM;
 		}
@@ -7189,8 +6881,7 @@ int dpa_classif_modify_mpls_hm(int hmd,
 
 	/* Parameters sanity checks: */
 	if (!new_mpls_params) {
-		pr_err("ERROR: %s, %s (%d): \"new_mpls_params\" cannot be "
-			"NULL.\n", __FILE__, __func__, __LINE__);
+		log_err("\"new_mpls_params\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
@@ -7198,8 +6889,7 @@ int dpa_classif_modify_mpls_hm(int hmd,
 	pmpls_hm = desc_to_object(&hm_array, hmd);
 	if (!pmpls_hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return -EINVAL;
 	}
 	mutex_lock(&pmpls_hm->access);
@@ -7213,8 +6903,7 @@ int dpa_classif_modify_mpls_hm(int hmd,
 	if (pmpls_hm->type != DPA_CLS_HM_TYPE_MPLS) {
 		release_desc_table(&hm_array);
 		mutex_unlock(&pmpls_hm->access);
-		pr_err("ERROR: %s, %s (%d): hmd=%d is not an MPLS type "
-			"header manip.\n", __FILE__, __func__, __LINE__, hmd);
+		log_err("hmd=%d is not an MPLS type header manip.\n", hmd);
 		return -EINVAL;
 	}
 
@@ -7253,11 +6942,10 @@ int dpa_classif_modify_mpls_hm(int hmd,
 			if (error != E_OK) {
 				release_desc_table(&hm_array);
 				mutex_unlock(&pmpls_hm->access);
-				pr_err("ERROR: %s, %s (%d): FMan driver call "
-					"failed - FM_PCD_ManipNodeReplace, "
-					"while trying to modify hmd=%d, manip "
-					"node handle=0x%p.\n", __FILE__,
-					__func__, __LINE__, hmd, hm_node->node);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
 				return -EBUSY;
 			}
 		}
@@ -7284,20 +6972,17 @@ int dpa_classif_import_static_hm(void *hm, int next_hmd, int *hmd)
 
 	/* Parameters sanity checks: */
 	if (!hm) {
-		pr_err("ERROR: %s, %s (%d): \"hm\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hm\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 	if (!hmd) {
-		pr_err("ERROR: %s, %s (%d): \"hmd\" cannot be NULL.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("\"hmd\" cannot be NULL.\n");
 		return -EINVAL;
 	}
 
 	err = create_new_hm_op(hmd, next_hmd);
 	if (err < 0) {
-		pr_err("ERROR: %s, %s (%d): Failed to create static HM op.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Failed to create static HM op.\n");
 		return err;
 	}
 
@@ -7309,8 +6994,7 @@ int dpa_classif_import_static_hm(void *hm, int next_hmd, int *hmd)
 	hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 	if (!hm_node) {
 		RELEASE_HM_OP_CHAIN(pstatic_hm);
-		pr_err("ERROR: %s, %s (%d): No more memory for header manip "
-			"nodes.\n", __FILE__, __func__, __LINE__);
+		log_err("No more memory for header manip nodes.\n");
 		return -ENOMEM;
 	}
 
@@ -7380,8 +7064,7 @@ void *dpa_classif_hm_lock_chain(int hmd)
 	hm = desc_to_object(&hm_array, hmd);
 	if (!hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return NULL;
 	}
 	LOCK_HM_OP_CHAIN(hm);
@@ -7418,8 +7101,7 @@ void dpa_classif_hm_release_chain(int hmd)
 	hm = desc_to_object(&hm_array, hmd);
 	if (!hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return;
 	}
 	LOCK_HM_OP_CHAIN(hm);
@@ -7430,7 +7112,7 @@ void dpa_classif_hm_release_chain(int hmd)
 		if (hm_node->ref)
 			hm_node->ref--;
 		else
-			pr_warn("WARNING: Unbalanced HM node release on manip "
+			log_warn("Unbalanced HM node release on manip "
 				"node=0x%p.\n", hm_node->node);
 
 	RELEASE_HM_OP_CHAIN(hm);
@@ -7468,8 +7150,7 @@ void *dpa_classif_get_frag_hm_handle(int hmd)
 	hm = desc_to_object(&hm_array, hmd);
 	if (!hm) {
 		release_desc_table(&hm_array);
-		pr_err("ERROR: %s, %s (%d): Invalid descriptor (%d).\n",
-			__FILE__, __func__, __LINE__, hmd);
+		log_err("Invalid descriptor (%d).\n", hmd);
 		return NULL;
 	}
 	LOCK_HM_OP_CHAIN(hm);
@@ -7510,10 +7191,10 @@ int dpa_classif_free_hm(int hmd)
 		if (hm_node->ref) {
 			release_desc_table(&hm_array);
 			RELEASE_HM_OP_CHAIN(phm);
-			pr_err("ERROR: %s, %s (%d): Unable to remove HM chain "
-				"hmd=%d. Manip node #%d (0x%p) is still in use "
-				"by %d entity(ies).\n", __FILE__, __func__,
-				__LINE__, hmd, i, hm_node->node, hm_node->ref);
+			log_err("Unable to remove HM chain hmd=%d. Manip node "
+				"#%d (0x%p) is still in use by %d "
+				"entity(ies).\n", hmd, i, hm_node->node,
+				hm_node->ref);
 			return -EBUSY;
 		}
 		i++;
@@ -7525,7 +7206,7 @@ int dpa_classif_free_hm(int hmd)
 		 * chain of low level ops
 		 */
 		if (remove_hm_chain(phm->hm_chain, phm->hm_chain->next) < 0)
-			pr_warn("WARNING: Not all low level HM nodes could be "
+			log_warn("Not all low level HM nodes could be "
 				"removed for chain hmd=%d.\n", hmd);
 	}
 
@@ -7556,39 +7237,34 @@ int dpa_classif_mcast_create_group(
 	t_FmPcdCcNextEngineParams		*next_engine_params;
 
 	if (!group_params) {
-		pr_err("\nERROR: %s, %s (%d): Invalid value for group "
-			"params.\n", __FILE__, __func__, __LINE__);
+		log_err("Invalid value for group params.\n");
 		err = -EINVAL;
 		return err;
 	}
 
 	if (!grpd) {
-		pr_err("\nERROR: %s, %s (%d): Invalid group desc\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid group desc\n");
 		err = -EINVAL;
 		return err;
 	}
 
 	if (!group_params->max_members) {
-		pr_err("\nERROR: %s, %s (%d): Invalid value for maximum number"
-			"of members in a group\n", __FILE__, __func__,
-			__LINE__);
+		log_err("Invalid value for maximum number of members in a "
+			"group\n");
 		err = -EINVAL;
 		return err;
 	}
 
 	if ((group_params->max_members > DPA_CLS_MCAST_MAX_NUM_OF_ENTRIES)) {
-		pr_err("\n\nERROR: %s, %s (%d): Maximum number of members "
-			"in group is greater than %d\n", __FILE__, __func__,
-			__LINE__, DPA_CLS_MCAST_MAX_NUM_OF_ENTRIES);
+		log_err("Maximum number of members in group is greater than "
+			"%d\n", DPA_CLS_MCAST_MAX_NUM_OF_ENTRIES);
 		err = -EINVAL;
 		return err;
 	}
 
 	pgroup = kzalloc(sizeof(struct dpa_cls_mcast_group), GFP_KERNEL);
 	if (!pgroup) {
-		pr_err("\nERROR: %s, %s (%d): No more memory for DPA multicast "
-			"groups.", __FILE__, __func__, __LINE__);
+		log_err("No more memory for DPA multicast groups.\n");
 		err = -ENOMEM;
 		goto dpa_classif_mcast_create_group_error;
 	}
@@ -7596,9 +7272,8 @@ int dpa_classif_mcast_create_group(
 	mutex_init(&pgroup->access);
 
 	if (group_params->prefilled_members > group_params->max_members) {
-		pr_err("\nERROR: %s, %s (%d): Number of prefilled members is "
-			"greater than the maximum number of members in group."
-			"%d > %d", __FILE__, __func__, __LINE__,
+		log_err("Number of prefilled members is greater than the "
+			"maximum number of members in group. %d > %d\n",
 			group_params->prefilled_members,
 			group_params->max_members);
 		err = -EINVAL;
@@ -7622,8 +7297,7 @@ int dpa_classif_mcast_create_group(
 	pgroup->entries = kzalloc(sizeof(struct members) * max_members,
 				  GFP_KERNEL);
 	if (!pgroup->entries) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA multicast "
-			"member entries.", __FILE__, __func__, __LINE__);
+		log_err("No more memory for DPA multicast member entries.\n");
 		err = -ENOMEM;
 		goto dpa_classif_mcast_create_group_error;
 	}
@@ -7633,8 +7307,8 @@ int dpa_classif_mcast_create_group(
 	 */
 	pgroup->member_ids = kzalloc(sizeof(int) * max_members, GFP_KERNEL);
 	if (!pgroup->member_ids) {
-		pr_err("ERROR: %s, %s (%d): No more memory for DPA multicast "
-			"index members array.", __FILE__, __func__, __LINE__);
+		log_err("No more memory for DPA multicast index members "
+			"array.\n");
 		err = -ENOMEM;
 		goto dpa_classif_mcast_create_group_error;
 	}
@@ -7654,9 +7328,8 @@ int dpa_classif_mcast_create_group(
 		replic_grp_params = kzalloc(sizeof(t_FmPcdFrmReplicGroupParams),
 					    GFP_KERNEL);
 		if (!replic_grp_params) {
-			pr_err("\nERROR: %s, %s (%d): No more memory for DPA "
-				"multicast group params.", __FILE__, __func__,
-				__LINE__);
+			log_err("No more memory for DPA multicast group "
+				"params.\n");
 			err = -ENOMEM;
 			goto dpa_classif_mcast_create_group_error;
 		}
@@ -7672,9 +7345,8 @@ int dpa_classif_mcast_create_group(
 					  kzalloc(sizeof(t_FmPcdKgSchemeParams),
 							GFP_KERNEL);
 			if (!scheme_params) {
-				pr_err("ERROR: %s, %s (%d): Failed "
-					 "to alocate direct scheme params.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Failed to alocate direct scheme "
+					"params.\n");
 				err = -ENOMEM;
 				goto dpa_classif_mcast_create_group_error;
 			}
@@ -7699,9 +7371,7 @@ int dpa_classif_mcast_create_group(
 				scheme_params);
 			kfree(scheme_params);
 			if (!distribution) {
-				pr_err("ERROR: %s, %s (%d): Failed "
-					"to set direct scheme.\n",
-					__FILE__, __func__, __LINE__);
+				log_err("Failed to set direct scheme.\n");
 				err = -EINVAL;
 				goto dpa_classif_mcast_create_group_error;
 			}
@@ -7750,9 +7420,8 @@ int dpa_classif_mcast_create_group(
 			next_engine_params->h_Manip = (t_Handle)
 				dpa_classif_hm_lock_chain(member_params->hmd);
 			if (!next_engine_params->h_Manip) {
-				pr_err("ERROR: %s, %s (%d): Failed to attach "
-					"HM op hmd=%d to multicast entry.",
-					__FILE__, __func__, __LINE__,
+				log_err("Failed to attach HM op hmd=%d to "
+					"multicast entry.\n",
 					member_params->hmd);
 				err = -EINVAL;
 				goto dpa_classif_mcast_create_group_error;
@@ -7781,8 +7450,7 @@ int dpa_classif_mcast_create_group(
 	}
 
 	if (!pgroup->group) {
-		pr_err("\nERROR: %s, %s (%d): Could not create %s group %d",
-			__FILE__, __func__, __LINE__,
+		log_err("Could not create %s group %d\n",
 			(group_params->prefilled_members > 0) ? "imported" :
 			"", *grpd);
 		err = -EINVAL;
@@ -7828,8 +7496,7 @@ int dpa_classif_mcast_add_member(int grpd,
 	pgroup = desc_to_object(&mcast_grp_array, grpd);
 	if (!pgroup) {
 		release_desc_table(&mcast_grp_array);
-		pr_err("ERROR: %s, %s (%d): Invalid group descriptor "
-			"(grpd=%d).\n", __FILE__, __func__, __LINE__, grpd);
+		log_err("Invalid group descriptor (grpd=%d).\n", grpd);
 		return -EINVAL;
 	}
 
@@ -7838,24 +7505,21 @@ int dpa_classif_mcast_add_member(int grpd,
 
 	if (!member_params) {
 		mutex_unlock(&pgroup->access);
-		pr_err("\nERROR: %s, %s (%d): Invalid value for member "
-			"params.\n", __FILE__, __func__, __LINE__);
+		log_err("Invalid value for member params.\n");
 		return -EINVAL;
 	}
 
 	if (!md) {
 		mutex_unlock(&pgroup->access);
-		pr_err("\nERROR: %s, %s (%d): Invalid member desc.\n",
-			__FILE__, __func__, __LINE__);
+		log_err("Invalid member desc.\n");
 		return -EINVAL;
 	}
 
 	*md = DPA_OFFLD_DESC_NONE;
 	if (pgroup->num_members == pgroup->group_params.max_members) {
 		mutex_unlock(&pgroup->access);
-		pr_err("\nERROR: %s, %s (%d): Current number of members "
-			"reached maximum value %d.\n", __FILE__, __func__,
-			__LINE__, pgroup->group_params.max_members);
+		log_err("Current number of members reached maximum value %d.\n",
+			pgroup->group_params.max_members);
 		return -ENOSPC;
 	}
 
@@ -7871,9 +7535,7 @@ int dpa_classif_mcast_add_member(int grpd,
 	pgroup->num_members++;
 
 	if (unlikely(pgroup->member_ids[*md] != DPA_OFFLD_DESC_NONE)) {
-		pr_err("\nERROR: %s, %s (%d): Current member index  %d"
-			"is already in use .\n", __FILE__, __func__,
-			__LINE__, *md);
+		log_err("Current member index %d is already in use.\n", *md);
 		mutex_unlock(&pgroup->access);
 		return -ENOSPC;
 	}
@@ -7885,8 +7547,7 @@ int dpa_classif_mcast_add_member(int grpd,
 	replic_grp_params = kzalloc(sizeof(t_FmPcdFrmReplicGroupParams),
 				    GFP_KERNEL);
 	if (!replic_grp_params) {
-		pr_err("\nERROR: %s, %s (%d): No more memory for DPA multicast "
-			"group params.", __FILE__, __func__, __LINE__);
+		log_err("No more memory for DPA multicast group params.\n");
 		err = -ENOMEM;
 		goto dpa_classif_mcast_add_member_error;
 	}
@@ -7901,9 +7562,7 @@ int dpa_classif_mcast_add_member(int grpd,
 					  kzalloc(sizeof(t_FmPcdKgSchemeParams),
 							GFP_KERNEL);
 		if (!scheme_params) {
-			pr_err("ERROR: %s, %s (%d): Failed "
-				 "to alocate direct scheme params.\n",
-				__FILE__, __func__, __LINE__);
+			log_err("Failed to alocate direct scheme params.\n");
 			err = -ENOMEM;
 			goto dpa_classif_mcast_add_member_error;
 
@@ -7928,9 +7587,7 @@ int dpa_classif_mcast_add_member(int grpd,
 			scheme_params);
 		kfree(scheme_params);
 		if (!distribution) {
-			pr_err("ERROR: %s, %s (%d): Failed "
-				"to set direct scheme.\n",
-				__FILE__, __func__, __LINE__);
+			log_err("Failed to set direct scheme.\n");
 			err = -EINVAL;
 			goto dpa_classif_mcast_add_member_error;
 		}
@@ -7976,10 +7633,8 @@ int dpa_classif_mcast_add_member(int grpd,
 		next_engine_params->h_Manip = (t_Handle)
 				dpa_classif_hm_lock_chain(member_params->hmd);
 		if (!next_engine_params->h_Manip) {
-			pr_err("ERROR: %s, %s (%d): Failed to attach "
-				"HM op hmd=%d to multicast entry.",
-				__FILE__, __func__, __LINE__,
-				member_params->hmd);
+			log_err("Failed to attach HM op hmd=%d to multicast "
+				"entry.\n", member_params->hmd);
 			err = -EINVAL;
 			goto dpa_classif_mcast_add_member_error;
 		}
@@ -7990,8 +7645,8 @@ int dpa_classif_mcast_add_member(int grpd,
 					pgroup->member_ids[*md],
 					next_engine_params);
 	if (err != E_OK) {
-		pr_err("\nERROR: %s: Could not add member (%d) to "
-			"the group (%d)", __func__, *md, grpd);
+		log_err("Could not add member (%d) to the group (%d)\n", *md,
+			grpd);
 		err = -EINVAL;
 		goto dpa_classif_mcast_add_member_error;
 	}
@@ -8027,8 +7682,7 @@ int dpa_classif_mcast_remove_member(int grpd, int md)
 	pgroup = desc_to_object(&mcast_grp_array, grpd);
 	if (!pgroup) {
 		release_desc_table(&mcast_grp_array);
-		pr_err("ERROR: %s, %s (%d): Invalid group descriptor "
-			"(grpd=%d).\n", __FILE__, __func__, __LINE__, grpd);
+		log_err("Invalid group descriptor (grpd=%d).\n", grpd);
 		return -EINVAL;
 	}
 
@@ -8037,15 +7691,13 @@ int dpa_classif_mcast_remove_member(int grpd, int md)
 
 	if ((md <= 0) || (md > pgroup->group_params.max_members)) {
 		mutex_unlock(&pgroup->access);
-		pr_err("ERROR: %s, %s (%d): Invalid member descriptor "
-			"(grpd=%d).\n", __FILE__, __func__, __LINE__, md);
+		log_err("Invalid member descriptor (grpd=%d).\n", md);
 		return -EINVAL;
 	}
 
 	if (pgroup->member_ids[md] == DPA_OFFLD_DESC_NONE) {
 		mutex_unlock(&pgroup->access);
-		pr_err("ERROR: %s, %s (%d): Member was already removed "
-			"(md=%d).\n", __FILE__, __func__, __LINE__, md);
+		log_err("Member was already removed (md=%d).\n", md);
 		return -EINVAL;
 	}
 
@@ -8053,9 +7705,7 @@ int dpa_classif_mcast_remove_member(int grpd, int md)
 					   pgroup->member_ids[md]);
 	if (err != E_OK) {
 		mutex_unlock(&pgroup->access);
-		pr_err("\nERROR: %s, %s (%d): Could not remove member %d from  "
-			"group %d\n", __FILE__, __func__, __LINE__,
-			md, grpd);
+		log_err("Could not remove member %d from group %d\n", md, grpd);
 		return -EINVAL;
 	}
 
@@ -8091,8 +7741,7 @@ int dpa_classif_mcast_free_group(int grpd)
 	pgroup = desc_to_object(&mcast_grp_array, grpd);
 	if (!pgroup) {
 		release_desc_table(&mcast_grp_array);
-		pr_err("ERROR: %s, %s (%d): Invalid group descriptor "
-			"(grpd=%d).\n", __FILE__, __func__, __LINE__, grpd);
+		log_err("Invalid group descriptor (grpd=%d).\n", grpd);
 		return -EINVAL;
 	}
 
@@ -8103,8 +7752,7 @@ int dpa_classif_mcast_free_group(int grpd)
 		if (err != E_OK) {
 			release_desc_table(&mcast_grp_array);
 			mutex_unlock(&pgroup->access);
-			pr_err("\nERROR: %s, %s (%d): Could not delete group "
-				"(%d)\n", __FILE__, __func__, __LINE__, grpd);
+			log_err("Could not delete group (%d)\n", grpd);
 			return -EINVAL;
 		}
 	}
