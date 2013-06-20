@@ -82,13 +82,13 @@ config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI
 	  Selecting this will use SEC Queue Interface for sending
 	  & receiving crypto jobs to/from SEC. This gives better
 	  performance than job ring interface when the number of
-	  number of cores are more than the number of job rings
-	  assigned to kernel. Also the number of portals assigned
-	  to kernel should be more than the number of job rings.
+	  cores are more than the number of job rings assigned to
+	  the kernel. The number of portals assigned to the kernel
+	  should also be more than the number of job rings.
 
-	  Currently only AEAD algorithms have been implemented to
-	  use SEC-QI backend interface. Rest of the algorithms
-	  would use job ring interface.
+	  Currently, only AEAD algorithms have been implemented on
+	  top of SEC-QI backend interface. The rest of the algorithms
+	  use job ring interface.
 
 	  To compile this as a module, choose M here: the module
 	  will be called caamalg_qi.
