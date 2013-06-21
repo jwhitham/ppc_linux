@@ -302,8 +302,8 @@ static irqreturn_t portal_isr(__always_unused int irq, void *ptr)
 	 * as part of the handling of this interrupt source. We mustn't
 	 * clear it a second time in this top-level function.
 	 */
-	u32 clear = QM_DQAVAIL_MASK | (p->irq_sources & ~QM_PIRQ_CSCI) |
-					(p->irq_sources & ~QM_PIRQ_CCSCI);
+	u32 clear = QM_DQAVAIL_MASK | (p->irq_sources &
+		~(QM_PIRQ_CSCI | QM_PIRQ_CCSCI));
 	u32 is = qm_isr_status_read(&p->p) & p->irq_sources;
 	/* DQRR-handling if it's interrupt-driven */
 	if (is & QM_PIRQ_DQRI)
