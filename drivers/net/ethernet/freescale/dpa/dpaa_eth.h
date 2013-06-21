@@ -451,7 +451,7 @@ struct fm_port_fqs {
 
 /* functions with different implementation for SG and non-SG: */
 void dpa_make_private_pool(struct dpa_bp *dpa_bp);
-void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv);
+int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv);
 void __hot _dpa_rx(struct net_device *net_dev,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,

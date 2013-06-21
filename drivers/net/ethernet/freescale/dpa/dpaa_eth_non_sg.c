@@ -153,7 +153,7 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 /* Add buffers/(skbuffs) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
@@ -169,6 +169,8 @@ void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 		for (i = count; i < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT; i += 8)
 			dpa_bp_add_8(dpa_bp, cpu);
 	}
+
+	return 0;
 }
 
 /* Cleanup function for outgoing frame descriptors that were built on Tx path,

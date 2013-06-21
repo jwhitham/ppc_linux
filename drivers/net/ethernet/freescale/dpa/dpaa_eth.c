@@ -345,8 +345,14 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 		return qman_cb_dqrr_stop;
 	}
 
-	dpaa_eth_refill_bpools(percpu_priv);
-	_dpa_rx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
+	if (unlikely(dpaa_eth_refill_bpools(percpu_priv)))
+		/* Unable to refill the buffer pool due to insufficient
+		 * system memory. Just release the frame back into the pool,
+		 * otherwise we'll soon end up with an empty buffer pool.
+		 */
+		dpa_fd_release(net_dev, &dq->fd);
+	else
+		_dpa_rx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
 }
@@ -376,8 +382,15 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 	}
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
-	dpaa_eth_refill_bpools(percpu_priv);
-	_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
+
+	if (unlikely(dpaa_eth_refill_bpools(percpu_priv)))
+		/* Unable to refill the buffer pool due to insufficient
+		 * system memory. Just release the frame back into the pool,
+		 * otherwise we'll soon end up with an empty buffer pool.
+		 */
+		dpa_fd_release(net_dev, &dq->fd);
+	else
+		_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
 }
