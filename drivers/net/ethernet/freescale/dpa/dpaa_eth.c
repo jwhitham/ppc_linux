@@ -390,13 +390,14 @@ static void dpaa_eth_seed_pool(struct dpa_bp *bp)
  * Add buffers/pages/skbuffs for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+static int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
-	int new_pages;
+	int new_pages __maybe_unused;
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+
 	/* this function is called in softirq context;
 	 * no need to protect smp_processor_id() on RT kernel
 	 */
@@ -422,7 +423,12 @@ static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 		count += new_pages;
 	}
 	*countptr = count;
+
+	if (*countptr < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
+		return -ENOMEM;
 #endif
+
+	return 0;
 }
 
 static int dpa_make_shared_port_pool(struct dpa_bp *bp)
@@ -2193,6 +2199,7 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 	struct net_device		*net_dev;
 	struct dpa_priv_s		*priv;
 	struct dpa_percpu_priv_s	*percpu_priv;
+	int err;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
@@ -2204,7 +2211,16 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 		return qman_cb_dqrr_stop;
 	}
 
-	dpaa_eth_refill_bpools(percpu_priv);
+	err = dpaa_eth_refill_bpools(percpu_priv);
+	if (err) {
+		/* Unable to refill the buffer pool due to insufficient
+		 * system memory. Just release the frame back into the pool,
+		 * otherwise we'll soon end up with an empty buffer pool.
+		 */
+		dpa_fd_release(net_dev, &dq->fd);
+		return qman_cb_dqrr_consume;
+	}
+
 	_dpa_rx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
@@ -2352,6 +2368,7 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	struct net_device		*net_dev;
 	struct dpa_priv_s		*priv;
 	struct dpa_percpu_priv_s	*percpu_priv;
+	int err;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
@@ -2368,7 +2385,16 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	}
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
-	dpaa_eth_refill_bpools(percpu_priv);
+	err = dpaa_eth_refill_bpools(percpu_priv);
+	if (err) {
+		/* Unable to refill the buffer pool due to insufficient
+		 * system memory. Just release the frame back into the pool,
+		 * otherwise we'll soon end up with an empty buffer pool.
+		 */
+		dpa_fd_release(net_dev, &dq->fd);
+		return qman_cb_dqrr_consume;
+	}
+
 	_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
