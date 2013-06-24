@@ -78,7 +78,7 @@
 
 #define IOC_FM_PCD_PRS_NUM_OF_HDRS                      16                  /**< Number of headers supported by HW parser */
 #define IOC_FM_PCD_MAX_NUM_OF_DISTINCTION_UNITS         (32 - IOC_FM_PCD_MAX_NUM_OF_PRIVATE_HDRS)
-                                                                        /**< Number of distinction units is limited by
+                                                                            /**< Number of distinction units is limited by
                                                                              register size (32 bits) minus reserved bits
                                                                              for private headers. */
 #define IOC_FM_PCD_MAX_NUM_OF_INTERCHANGEABLE_HDRS      4                   /**< Maximum number of interchangeable headers
@@ -96,16 +96,6 @@
 #define IOC_FM_PCD_SW_PRS_SIZE                          0x00000800          /**< Total size of SW parser area */
 #define IOC_FM_PCD_PRS_SW_OFFSET                        0x00000040          /**< Size of illegal addresses at the beginning
                                                                              of the SW parser area */
-#if DPAA_VERSION >= 11
-#define IOC_FM_PCD_PRS_SW_PATCHES_SIZE                  0x00000240          /**< Number of bytes saved for patches */
-#else
-#define IOC_FM_PCD_PRS_SW_PATCHES_SIZE                  0x00000200          /**< Number of bytes saved for patches */
-#endif
-
-#define IOC_FM_PCD_PRS_SW_TAIL_SIZE                     4                   /**< Number of bytes that must be cleared at
-                                                                             the end of the SW parser area */
-#define IOC_FM_SW_PRS_MAX_IMAGE_SIZE                    (IOC_FM_PCD_SW_PRS_SIZE-IOC_FM_PCD_PRS_SW_OFFSET-IOC_FM_PCD_PRS_SW_TAIL_SIZE-IOC_FM_PCD_PRS_SW_PATCHES_SIZE)
-                                                                        /**< Maximum size of SW parser code */
 
 #define IOC_FM_PCD_MAX_MANIP_INSRT_TEMPLATE_SIZE        128                 /**< Maximum size of insertion template for
                                                                              insert manipulation */
