@@ -72,7 +72,7 @@ static void dpa_bp_recycle_frag(struct dpa_bp *dpa_bp, unsigned long vaddr)
 	(*count_ptr)++;
 }
 
-int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp)
+int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 {
 	struct bm_buffer bmb[8];
 	void *new_buf;
@@ -109,7 +109,7 @@ release_bufs:
 	return i;
 
 bail_out:
-	net_err_ratelimited("dpa_bp_add_8_pages() failed\n");
+	net_err_ratelimited("dpa_bp_add_8_bufs() failed\n");
 	WARN_ONCE(1, "Memory allocation failure on Rx\n");
 
 	bm_buffer_set64(&bmb[i], 0);
@@ -124,12 +124,12 @@ bail_out:
 }
 
 /*
- * Cold path wrapper over _dpa_bp_add_8_pages().
+ * Cold path wrapper over _dpa_bp_add_8_bufs().
  */
-void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu)
+void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
 {
 	int *count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu);
-	*count_ptr += _dpa_bp_add_8_pages(dpa_bp);
+	*count_ptr += _dpa_bp_add_8_bufs(dpa_bp);
 }
 
 void dpa_make_private_pool(struct dpa_bp *dpa_bp)
@@ -147,7 +147,7 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 		 * we do it at boot time so it is safe
 		 */
 		for (j = 0; j < dpa_bp->config_count; j += 8)
-			dpa_bp_add_8_pages(dpa_bp, i);
+			dpa_bp_add_8_bufs(dpa_bp, i);
 	}
 }
 
@@ -160,19 +160,19 @@ int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
-	int new_pages;
+	int new_bufs;
 
 	/* Add pages to the buffer pool */
 	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
-		new_pages = _dpa_bp_add_8_pages(dpa_bp);
-		if (unlikely(!new_pages)) {
+		new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
+		if (unlikely(!new_bufs)) {
 			/* Avoid looping forever if we've temporarily
 			 * run out of memory. We'll try again at the next
 			 * NAPI cycle.
 			 */
 			break;
 		}
-		count += new_pages;
+		count += new_bufs;
 	}
 	*countptr = count;
 
@@ -245,7 +245,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		}
 
 		/*
-		 * TODO: dpa_bp_add_page() ?
+		 * TODO: dpa_bp_recycle_frag() ?
 		 * We could put these in the pool, since we allocated them
 		 * and we know they're not used by anyone else
 		 */

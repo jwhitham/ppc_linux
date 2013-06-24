@@ -476,8 +476,8 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 				      int *use_gro);
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-void dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp, int cpu_id);
-int _dpa_bp_add_8_pages(const struct dpa_bp *dpa_bp);
+void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu_id);
+int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp);
 #endif
 
 /*
