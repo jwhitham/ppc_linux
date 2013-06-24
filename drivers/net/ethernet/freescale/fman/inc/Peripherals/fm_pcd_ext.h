@@ -99,16 +99,6 @@
 #define FM_PCD_SW_PRS_SIZE                          0x00000800          /**< Total size of SW parser area */
 #define FM_PCD_PRS_SW_OFFSET                        0x00000040          /**< Size of illegal addresses at the beginning
                                                                              of the SW parser area */
-#if (DPAA_VERSION >= 11)
-#define FM_PCD_PRS_SW_PATCHES_SIZE                  0x00000240          /**< Number of bytes saved for patches */
-#else
-#define FM_PCD_PRS_SW_PATCHES_SIZE                  0x00000200          /**< Number of bytes saved for patches */
-#endif /* (DPAA_VERSION >= 11) */
-
-#define FM_PCD_PRS_SW_TAIL_SIZE                     4                   /**< Number of bytes that must be cleared at
-                                                                             the end of the SW parser area */
-#define FM_SW_PRS_MAX_IMAGE_SIZE                    (FM_PCD_SW_PRS_SIZE-FM_PCD_PRS_SW_OFFSET-FM_PCD_PRS_SW_TAIL_SIZE-FM_PCD_PRS_SW_PATCHES_SIZE)
-                                                                        /**< Maximum size of SW parser code */
 
 #define FM_PCD_MAX_MANIP_INSRT_TEMPLATE_SIZE        128                 /**< Maximum size of insertion template for
                                                                              insert manipulation */
