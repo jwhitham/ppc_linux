@@ -3257,6 +3257,7 @@ get_channel_failed:
 		dpa_bp_free(priv, priv->dpa_bp);
 bp_create_failed:
 fq_probe_failed:
+	devm_kfree(dev, buf_layout);
 alloc_failed:
 mac_probe_failed:
 	dev_set_drvdata(dev, NULL);

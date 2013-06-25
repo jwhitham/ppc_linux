@@ -132,8 +132,10 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	if (!err)
 		err = dpa_fq_probe_mac(dev, &proxy_fq_list, &port_fqs, true,
 				       TX);
-	if (err < 0)
+	if (err < 0) {
+		devm_kfree(dev, buf_layout);
 		return err;
+	}
 
 	/* Proxy initializer - Just configures the MAC on behalf of
 	 * another partition.
