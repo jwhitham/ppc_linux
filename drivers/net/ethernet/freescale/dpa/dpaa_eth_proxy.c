@@ -172,11 +172,9 @@ static int __init __cold dpa_proxy_load(void)
 
 	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
 
-/* Todo: is it safe to remove these?
-	/ * Initialize dpaa_eth mirror values * /
+	/* Initialize dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
-*/
 
 	_errno = platform_driver_register(&dpa_proxy_driver);
 	if (unlikely(_errno < 0)) {

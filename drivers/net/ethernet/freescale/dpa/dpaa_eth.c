@@ -155,7 +155,7 @@ module_param(tx_timeout, ushort, S_IRUGO);
 MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
 
 /* dpaa_eth mirror for the FMan values */
-static int dpa_rx_extra_headroom;
+int dpa_rx_extra_headroom;
 int dpa_max_frm;
 
 static const char rtx[][3] = {

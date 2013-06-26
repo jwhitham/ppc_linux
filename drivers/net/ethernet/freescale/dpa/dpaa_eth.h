@@ -57,11 +57,10 @@
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 #include "dpaa_eth_trace.h"
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-#define dpa_get_rx_extra_headroom() fm_get_rx_extra_headroom()
-#else
+extern int dpa_rx_extra_headroom;
+extern int dpa_max_frm;
+
 #define dpa_get_rx_extra_headroom() dpa_rx_extra_headroom
-#endif
 #define dpa_get_max_frm() dpa_max_frm
 
 /*
