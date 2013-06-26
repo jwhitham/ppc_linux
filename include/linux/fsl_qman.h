@@ -46,14 +46,18 @@ extern "C" {
 #define QMAN_CHANNEL_POOL1_REV3 0x401
 #define QMAN_CHANNEL_CAAM_REV3 0x840
 #define QMAN_CHANNEL_PME_REV3 0x860
+#define QMAN_CHANNEL_DCE 0x8a0
 extern u16 qm_channel_pool1;
 extern u16 qm_channel_caam;
 extern u16 qm_channel_pme;
+extern u16 qm_channel_dce;
 enum qm_dc_portal {
 	qm_dc_portal_fman0 = 0,
 	qm_dc_portal_fman1 = 1,
 	qm_dc_portal_caam = 2,
-	qm_dc_portal_pme = 3
+	qm_dc_portal_pme = 3,
+	qm_dc_portal_rman = 4,
+	qm_dc_portal_dce = 5
 };
 
 /* Portal processing (interrupt) sources */
@@ -327,8 +331,8 @@ struct qm_mr_entry {
 		} __packed ern;
 		struct {
 			u8 colour:2;	/* See QM_MR_DCERN_COLOUR_* */
-			u8 __reserved1:4;
-			enum qm_dc_portal portal:2;
+			u8 __reserved1:3;
+			enum qm_dc_portal portal:3;
 			u16 __reserved2;
 			u8 rc;		/* Rejection Code */
 			u32 __reserved3:24;

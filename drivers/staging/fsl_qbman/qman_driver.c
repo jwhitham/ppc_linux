@@ -44,6 +44,8 @@ u16 qm_channel_caam = QMAN_CHANNEL_CAAM;
 EXPORT_SYMBOL(qm_channel_caam);
 u16 qm_channel_pme = QMAN_CHANNEL_PME;
 EXPORT_SYMBOL(qm_channel_pme);
+u16 qm_channel_dce = QMAN_CHANNEL_DCE;
+EXPORT_SYMBOL(qm_channel_dce);
 u16 qman_portal_max;
 EXPORT_SYMBOL(qman_portal_max);
 
