@@ -107,11 +107,8 @@ static int __cold dpa_macless_start(struct net_device *net_dev);
 static int __cold dpa_macless_stop(struct net_device *net_dev);
 static int dpa_set_macless_address(struct net_device *net_dev, void *addr);
 static int dpaa_eth_macless_probe(struct platform_device *_of_dev);
-static void dpa_set_macless_rx_mode(struct net_device *net_dev);
 static netdev_features_t
 dpa_macless_fix_features(struct net_device *dev, netdev_features_t features);
-static int dpa_macless_ioctl(struct net_device *dev,
-			     struct ifreq *rq, int cmd);
 static int dpa_macless_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev);
 
@@ -127,11 +124,9 @@ static const struct net_device_ops dpa_macless_ops = {
 	.ndo_select_queue = dpa_select_queue,
 #endif
 	.ndo_change_mtu = dpa_change_mtu,
-	.ndo_set_rx_mode = dpa_set_macless_rx_mode,
 	.ndo_init = dpa_ndo_init,
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_macless_fix_features,
-	.ndo_do_ioctl = dpa_macless_ioctl,
 };
 
 static const struct of_device_id dpa_macless_match[] = {
@@ -171,10 +166,6 @@ static int __cold dpa_macless_stop(struct net_device *net_dev)
 	return 0;
 }
 
-static void dpa_set_macless_rx_mode(struct net_device *net_dev)
-{
-}
-
 static int dpa_set_macless_address(struct net_device *net_dev, void *addr)
 {
 	const struct dpa_priv_s	*priv;
@@ -210,11 +201,6 @@ dpa_macless_fix_features(struct net_device *dev, netdev_features_t features)
 	features &= ~unsupported_features;
 
 	return features;
-}
-
-static int dpa_macless_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
-{
-	return -EINVAL;
 }
 
 static int dpa_macless_netdev_init(struct device_node *dpa_node,
