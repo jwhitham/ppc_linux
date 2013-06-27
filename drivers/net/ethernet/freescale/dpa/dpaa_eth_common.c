@@ -977,22 +977,6 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	return 0;
 }
 
-#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-static inline void _dpa_bp_free_buf(void *addr)
-{
-	struct sk_buff **skbh = addr;
-	struct sk_buff *skb;
-
-	skb = *skbh;
-	dev_kfree_skb_any(skb);
-}
-#else
-static inline void _dpa_bp_free_buf(void *addr)
-{
-	free_page((unsigned long)addr);
-}
-#endif
-
 static void __cold __attribute__((nonnull))
 _dpa_bp_free(struct dpa_bp *dpa_bp)
 {

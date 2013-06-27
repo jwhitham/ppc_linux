@@ -29,6 +29,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include <linux/module.h>
+#include <linux/fsl_bman.h>
 
 #include "dpaa_eth.h"
 #include "dpaa_eth_unit_test.h"
@@ -335,12 +337,77 @@ fq_create_fail:
 	return err;
 }
 
+void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
+{
+	int i;
+	int num;
+	struct dpa_priv_s *priv;
+	struct dpa_percpu_priv_s *percpu_priv;
+
+	priv = netdev_priv(net_dev);
+
+	do {
+		struct bm_buffer bmb[8];
+
+		num = bman_acquire(default_pool->pool, bmb, 8, 0);
+
+		for (i = 0; i < num; i++) {
+			dma_addr_t addr = bm_buf_addr(&bmb[i]);
+
+			dma_unmap_single(default_pool->dev, addr,
+					default_pool->size,
+					DMA_BIDIRECTIONAL);
+
+			_dpa_bp_free_buf(phys_to_virt(addr));
+		}
+	} while (num == 8);
+
+	/* restore counters to their previous state */
+	free_percpu(default_pool->percpu_count);
+
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		percpu_priv->dpa_bp = NULL;
+		percpu_priv->dpa_bp_count = NULL;
+	}
+}
+
+void dpa_unit_test_seed_default_pool(struct net_device *net_dev)
+{
+	int i;
+	struct dpa_priv_s *priv;
+	struct dpa_percpu_priv_s *percpu_priv;
+
+	priv = netdev_priv(net_dev);
+
+	default_pool->size = default_buf_size;
+	dpa_make_private_pool(default_pool);
+
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		if (!percpu_priv->dpa_bp) {
+			percpu_priv->dpa_bp = priv->dpa_bp;
+			percpu_priv->dpa_bp_count =
+				per_cpu_ptr(priv->dpa_bp->percpu_count,
+						i);
+		}
+	}
+}
+
 void dpa_unit_tests(struct net_device *net_dev)
 {
 	int err;
 
+	/* the unit tests use the default pool */
+	if (!default_pool)
+		return;
+
 	if (!tx_unit_test_ran) {
+		dpa_unit_test_seed_default_pool(net_dev);
+
 		err = dpa_tx_unit_test(net_dev);
 		WARN_ON(err);
+
+		dpa_unit_test_drain_default_pool(net_dev);
 	}
 }

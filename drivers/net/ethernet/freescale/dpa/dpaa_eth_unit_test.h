@@ -34,6 +34,9 @@
 #define DPAA_ETH_UNIT_TEST_H_
 
 extern int dpa_max_frm;
+extern struct dpa_bp *default_pool;
+extern bool default_pool_seeded;
+extern uint32_t default_buf_size;
 
 void dpa_unit_tests(struct net_device *net_dev);
 

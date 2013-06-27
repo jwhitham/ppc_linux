@@ -118,9 +118,9 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 
 #define DPAA_ETH_MAX_PAD (L1_CACHE_BYTES * 8)
 
-static struct dpa_bp *default_pool;
-static bool default_pool_seeded;
-static uint32_t default_buf_size;
+struct dpa_bp *default_pool;
+bool default_pool_seeded;
+uint32_t default_buf_size;
 
 /* A set of callbacks for hooking into the fastpath at different points. */
 struct dpaa_eth_hooks_s dpaa_eth_hooks;

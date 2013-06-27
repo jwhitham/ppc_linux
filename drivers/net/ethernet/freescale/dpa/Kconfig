@@ -121,9 +121,11 @@ config FSL_DPAA_ETH_REFILL_THRESHOLD
 	  modify this value unless one has very specific performance reasons.
 
 config FSL_DPAA_ETH_UNIT_TESTS
-	bool
+	bool "DPAA Ethernet unit tests"
 	depends on FSL_DPAA_ETH
 	default n
+	---help---
+	  A series of tests that will verify basic functionality of DPAA Ethernet driver at bootup.
 
 config FSL_DPAA_ETH_DEBUGFS
 	tristate "DPAA Ethernet debugfs interface"

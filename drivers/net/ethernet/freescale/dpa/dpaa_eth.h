@@ -672,4 +672,20 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 	skb_get_queue_mapping(skb)
 #endif
 
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+static inline void _dpa_bp_free_buf(void *addr)
+{
+	struct sk_buff **skbh = addr;
+	struct sk_buff *skb;
+
+	skb = *skbh;
+	dev_kfree_skb_any(skb);
+}
+#else
+static inline void _dpa_bp_free_buf(void *addr)
+{
+	free_page((unsigned long)addr);
+}
+#endif
+
 #endif	/* __DPA_H */
