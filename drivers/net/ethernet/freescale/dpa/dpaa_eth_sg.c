@@ -40,6 +40,7 @@
 #include <linux/fsl_bman.h>
 
 #include "dpaa_eth.h"
+#include "dpaa_eth_common.h"
 #include "dpaa_1588.h"
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
@@ -169,7 +170,22 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 }
 
 /*
- * Cleanup function for outgoing frame descriptors that were built on Tx path,
+ * Add buffers/(pages) for Rx processing whenever bpool count falls below
+ * REFILL_THRESHOLD.
+ */
+void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+{
+	int *countptr = percpu_priv->dpa_bp_count;
+	int count = *countptr;
+	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+
+	/* Add pages to the buffer pool */
+	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
+		count += _dpa_bp_add_8_pages(dpa_bp);
+	*countptr = count;
+}
+
+/* Cleanup function for outgoing frame descriptors that were built on Tx path,
  * either contiguous frames or scatter/gather ones.
  * Skb freeing is not handled here.
  *

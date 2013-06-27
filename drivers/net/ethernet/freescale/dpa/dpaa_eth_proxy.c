@@ -38,30 +38,18 @@
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include "dpaa_eth.h"
+#include "dpaa_eth_common.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
+
+#define DPA_DESCRIPTION "FSL DPAA Proxy initialization driver"
+
+MODULE_LICENSE("Dual BSD/GPL");
+
+MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
 static uint8_t debug = -1;
 module_param(debug, byte, S_IRUGO);
 MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
-#define DPA_DESCRIPTION "FSL DPAA Proxy initialization driver"
-
-/* candidates for dpa_eth_common.c */
-struct dpa_bp * __cold __must_check __attribute__((nonnull))
-dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
-struct mac_device * __cold __must_check
-__attribute__((nonnull)) dpa_mac_probe(struct platform_device *_of_dev);
-void dpa_set_buffers_layout(struct mac_device *mac_dev,
-		  struct dpa_buffer_layout_s *layout);
-int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
-		struct fm_port_fqs *port_fqs,
-		bool tx_conf_fqs_per_core,
-		enum port_type ptype);
-void dpaa_eth_init_ports(struct mac_device *mac_dev,
-		struct dpa_bp *bp, size_t count,
-		struct fm_port_fqs *port_fqs,
-		struct dpa_buffer_layout_s *buf_layout,
-		struct device *dev);
 
 /* forward declarations */
 static int dpaa_eth_proxy_probe(struct platform_device *_of_dev);
@@ -105,7 +93,7 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 		return -ENODEV;
 
 	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
+	dpa_bp = dpa_bp_probe(_of_dev, &count, NULL);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 

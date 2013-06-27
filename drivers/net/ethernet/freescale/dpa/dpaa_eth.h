@@ -45,8 +45,6 @@
 
 #include <linux/fsl_qman.h>	/* struct qman_fq */
 
-#include "dpaa_eth-common.h"
-
 #include "lnxwrp_fsl_fman.h"
 #include "fm_ext.h"
 #include "fm_port_ext.h" /* FM_PORT_FRM_ERR_* */
@@ -71,6 +69,37 @@ extern int dpa_max_frm;
 #define dpa_get_max_mtu()	\
 	(dpa_get_max_frm() - (VLAN_ETH_HLEN + ETH_FCS_LEN))
 
+#define __hot
+
+/* Simple enum of FQ types - used for array indexing */
+enum port_type {RX, TX};
+
+/* TODO: This structure should be renamed & moved to the FMD wrapper */
+struct dpa_buffer_layout_s {
+	uint16_t	priv_data_size;
+	bool		parse_results;
+	bool		time_stamp;
+	bool		hash_results;
+	uint8_t		manip_extra_space;
+	uint16_t	data_align;
+};
+
+#define DPA_TX_PRIV_DATA_SIZE	16
+#define DPA_PARSE_RESULTS_SIZE sizeof(t_FmPrsResult)
+#define DPA_TIME_STAMP_SIZE 8
+#define DPA_HASH_RESULTS_SIZE 8
+#define DPA_RX_PRIV_DATA_SIZE   (DPA_TX_PRIV_DATA_SIZE + \
+					dpa_get_rx_extra_headroom())
+
+#define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
+
+
+#define FM_FD_STAT_ERRORS						\
+	(FM_PORT_FRM_ERR_DMA | FM_PORT_FRM_ERR_PHYSICAL	| \
+	 FM_PORT_FRM_ERR_SIZE | FM_PORT_FRM_ERR_CLS_DISCARD | \
+	 FM_PORT_FRM_ERR_EXTRACTION | FM_PORT_FRM_ERR_NO_SCHEME	| \
+	 FM_PORT_FRM_ERR_ILL_PLCR | FM_PORT_FRM_ERR_PRS_TIMEOUT	| \
+	 FM_PORT_FRM_ERR_PRS_ILL_INSTRUCT | FM_PORT_FRM_ERR_PRS_HDR_ERR)
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 /* We may want this value configurable. Must be <= PAGE_SIZE minus a reserved
@@ -226,9 +255,27 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 #define fm_l4_frame_is_tcp(parse_result_ptr) \
 	((parse_result_ptr)->l4r & FM_L4_PARSE_RESULT_TCP)
 
+/* number of Tx queues to FMan */
+#define DPAA_ETH_TX_QUEUES	NR_CPUS
+#define DPAA_ETH_RX_QUEUES	128
+
 struct pcd_range {
 	uint32_t			 base;
 	uint32_t			 count;
+};
+
+/* More detailed FQ types - used for fine-grained WQ assignments */
+enum dpa_fq_type {
+	FQ_TYPE_RX_DEFAULT = 1, /* Rx Default FQs */
+	FQ_TYPE_RX_ERROR,       /* Rx Error FQs */
+	FQ_TYPE_RX_PCD,         /* User-defined PCDs */
+	FQ_TYPE_TX,             /* "Real" Tx FQs */
+	FQ_TYPE_TX_CONFIRM,     /* Tx default Conf FQ (actually an Rx FQ) */
+	FQ_TYPE_TX_CONF_MQ,     /* Tx conf FQs (one for each Tx FQ) */
+	FQ_TYPE_TX_ERROR,       /* Tx Error FQs (these are actually Rx FQs) */
+#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+	FQ_TYPE_TX_RECYCLE,	/* Tx FQs for recycleable frames only */
+#endif
 };
 
 struct dpa_fq {
@@ -402,26 +449,17 @@ struct fm_port_fqs {
 	struct dpa_fq *rx_errq;
 };
 
-extern const struct ethtool_ops dpa_ethtool_ops;
-
-void __attribute__((nonnull))
-dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd);
-
+/* functions with different implementation for SG and non-SG: */
 void dpa_make_private_pool(struct dpa_bp *dpa_bp);
-
-struct dpa_bp *dpa_bpid2pool(int bpid);
-
+void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv);
 void __hot _dpa_rx(struct net_device *net_dev,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,
 		const struct qm_fd *fd,
 		u32 fqid);
-
 int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev);
-
 struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				   const struct qm_fd *fd);
-
 void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 				      const struct qm_fd *fd,
 				      struct sk_buff *skb,
@@ -633,14 +671,5 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 #define dpa_get_queue_mapping(skb) \
 	skb_get_queue_mapping(skb)
 #endif
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
-u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv,
-			enum port_type rx_tx, const void *data);
-#endif
-#ifdef CONFIG_FSL_DPAA_TS
-/* Updates the skb shared hw timestamp from the hardware timestamp */
-int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
-	struct skb_shared_hwtstamps *shhwtstamps, const void *data);
-#endif /* CONFIG_FSL_DPAA_TS */
 
 #endif	/* __DPA_H */

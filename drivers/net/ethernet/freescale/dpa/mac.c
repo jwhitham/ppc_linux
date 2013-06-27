@@ -40,8 +40,6 @@
 #include <linux/device.h>
 #include <linux/phy.h>
 
-#include "dpaa_eth-common.h"
-
 #include "lnxwrp_fm_ext.h"
 
 #include "mac.h"

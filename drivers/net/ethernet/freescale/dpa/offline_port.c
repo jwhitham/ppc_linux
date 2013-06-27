@@ -44,7 +44,8 @@
 #include <linux/of_platform.h>
 
 #include "offline_port.h"
-#include "dpaa_eth-common.h"
+#include "dpaa_eth.h"
+#include "dpaa_eth_common.h"
 
 #define OH_MOD_DESCRIPTION	"FSL FMan Offline Parsing port driver"
 /*
@@ -128,7 +129,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	struct platform_device	*oh_of_dev;
 	struct device_node	*oh_node, *bpool_node = NULL, *root_node;
 	struct device		*oh_dev;
-	struct dpa_oh_config_s	*oh_config;
+	struct dpa_oh_config_s	*oh_config = NULL;
 	uint32_t		*oh_all_queues;
 	uint32_t		 queues_count;
 	uint32_t		 crt_fqid_base;

@@ -252,5 +252,3 @@ void dpaa_eth_sysfs_remove(struct device *dev)
 
 
 
-
-

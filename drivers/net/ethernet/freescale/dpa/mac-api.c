@@ -40,7 +40,6 @@
 #include <linux/phy.h>
 #include <linux/netdevice.h>
 
-#include "dpaa_eth-common.h"
 #include "dpaa_eth.h"
 #include "mac.h"
 #include "lnxwrp_fsl_fman.h"

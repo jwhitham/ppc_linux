@@ -41,73 +41,10 @@
 #include <linux/kthread.h>
 #include <linux/percpu.h>
 #include <linux/highmem.h>
-#include <linux/fsl_bman.h>
 #include <linux/fsl_qman.h>
 #include "dpaa_eth.h"
+#include "dpaa_eth_common.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
-
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
-/* candidates for dpa_eth_common.c */
-int dpa_netdev_init(struct device_node *dpa_node,
-		struct net_device *net_dev, const uint8_t *mac_addr);
-int __cold dpa_start(struct net_device *net_dev);
-int __cold dpa_stop(struct net_device *net_dev);
-void __cold dpa_timeout(struct net_device *net_dev);
-struct rtnl_link_stats64 * __cold
-dpa_get_stats64(struct net_device *net_dev,
-		struct rtnl_link_stats64 *stats);
-int dpa_set_mac_address(struct net_device *net_dev, void *addr);
-void dpa_set_rx_mode(struct net_device *net_dev);
-int dpa_ndo_init(struct net_device *net_dev);
-int dpa_set_features(struct net_device *dev, netdev_features_t features);
-netdev_features_t dpa_fix_features(struct net_device *dev,
-					  netdev_features_t features);
-int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
-u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb);
-#endif
-int dpa_change_mtu(struct net_device *net_dev, int new_mtu);
-int __cold dpa_remove(struct platform_device *of_dev);
-struct dpa_bp * __cold __must_check __attribute__((nonnull))
-dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
-struct mac_device * __cold __must_check
-__attribute__((nonnull)) dpa_mac_probe(struct platform_device *_of_dev);
-void dpa_set_buffers_layout(struct mac_device *mac_dev,
-		  struct dpa_buffer_layout_s *layout);
-int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
-		struct fm_port_fqs *port_fqs,
-		bool tx_conf_fqs_per_core,
-		enum port_type ptype);
-int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
-			 size_t count);
-int dpa_get_channel(struct device *dev, struct device_node *dpa_node);
-void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
-		struct fm_port *tx_port);
-int dpaa_eth_cgr_init(struct dpa_priv_s *priv);
-int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable);
-void dpaa_eth_init_ports(struct mac_device *mac_dev,
-		struct dpa_bp *bp, size_t count,
-		struct fm_port_fqs *port_fqs,
-		struct dpa_buffer_layout_s *buf_layout,
-		struct device *dev);
-void dpaa_eth_sysfs_init(struct device *dev);
-int __cold __attribute__((nonnull))
-dpa_fq_free(struct device *dev, struct list_head *list);
-void __cold __attribute__((nonnull))
-dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp);
-struct dpa_bp *dpa_bpid2pool(int bpid);
-void dpa_release_sgt(struct qm_sg_entry *sgt,
-		struct bm_buffer *bmb);
-void __attribute__((nonnull))
-dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd);
-void count_ern(struct dpa_percpu_priv_s *percpu_priv,
-		      const struct qm_mr_entry *msg);
-int dpa_enable_tx_csum(struct dpa_priv_s *priv,
-	struct sk_buff *skb, struct qm_fd *fd, char *parse_results);
-int dpaa_eth_add_channel(void *__arg);
 
 /* forward declarations */
 static enum qman_cb_dqrr_result __hot
@@ -127,6 +64,19 @@ static void shared_ern(struct qman_portal	*portal,
 int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
 
 #define DPA_DESCRIPTION "FSL DPAA Shared Ethernet driver"
+
+MODULE_LICENSE("Dual BSD/GPL");
+
+MODULE_DESCRIPTION(DPA_DESCRIPTION);
+
+static uint8_t debug = -1;
+module_param(debug, byte, S_IRUGO);
+MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
+
+/* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
+static uint16_t tx_timeout = 1000;
+module_param(tx_timeout, ushort, S_IRUGO);
+MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
 
 static const struct of_device_id dpa_shared_match[];
 
@@ -596,7 +546,7 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 		NETIF_F_LLTX);
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr);
+	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
 }
 
 static int
@@ -624,7 +574,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 		return -ENODEV;
 
 	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
+	dpa_bp = dpa_bp_probe(_of_dev, &count, NULL);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
@@ -677,7 +627,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 
 	/* bp init */
 
-	err = dpa_bp_create(net_dev, dpa_bp, count);
+	err = dpa_bp_create(net_dev, dpa_bp, count, NULL);
 
 	if (err < 0)
 		goto bp_create_failed;

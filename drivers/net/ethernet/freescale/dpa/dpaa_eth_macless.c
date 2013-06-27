@@ -42,9 +42,9 @@
 #include <linux/kthread.h>
 #include <linux/percpu.h>
 #include <linux/highmem.h>
-#include <linux/fsl_bman.h>
 #include <linux/fsl_qman.h>
 #include "dpaa_eth.h"
+#include "dpaa_eth_common.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
 
 /* For MAC-based interfaces, we compute the tx needed headroom from the
@@ -55,48 +55,18 @@
 
 #define DPA_DESCRIPTION "FSL DPAA MACless Ethernet driver"
 
+MODULE_LICENSE("Dual BSD/GPL");
+
+MODULE_DESCRIPTION(DPA_DESCRIPTION);
+
 static uint8_t debug = -1;
 module_param(debug, byte, S_IRUGO);
 MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
 
-/* candidates for dpa_eth_common.c */
-int dpa_netdev_init(struct device_node *dpa_node,
-		struct net_device *net_dev, const uint8_t *mac_addr);
-void __cold dpa_timeout(struct net_device *net_dev);
-struct rtnl_link_stats64 * __cold
-dpa_get_stats64(struct net_device *net_dev,
-		struct rtnl_link_stats64 *stats);
-int __cold dpa_remove(struct platform_device *of_dev);
-struct dpa_bp * __cold __must_check __attribute__((nonnull))
-dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
-struct mac_device * __cold __must_check
-__attribute__((nonnull)) dpa_mac_probe(struct platform_device *_of_dev);
-void dpa_set_buffers_layout(struct mac_device *mac_dev,
-		  struct dpa_buffer_layout_s *layout);
-int dpa_change_mtu(struct net_device *net_dev, int new_mtu);
-int dpa_ndo_init(struct net_device *net_dev);
-int dpa_set_features(struct net_device *dev, netdev_features_t features);
-#ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
-u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb);
-#endif
-int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
-			 size_t count);
-int dpa_get_channel(struct device *dev, struct device_node *dpa_node);
-void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
-		struct fm_port *tx_port);
-int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable);
-void dpaa_eth_sysfs_init(struct device *dev);
-int __cold __attribute__((nonnull))
-dpa_fq_free(struct device *dev, struct list_head *list);
-void __cold __attribute__((nonnull))
-dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp);
-int dpaa_eth_add_channel(void *__arg);
-
-/* reused from the priv driver */
-struct dpa_fq *dpa_fq_alloc(struct device *dev,
-				   const struct fqid_cell *fqids,
-				   struct list_head *list,
-				   enum dpa_fq_type fq_type);
+/* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
+static uint16_t tx_timeout = 1000;
+module_param(tx_timeout, ushort, S_IRUGO);
+MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
 
 /* reused from the shared driver */
 extern const dpa_fq_cbs_t shared_fq_cbs;
@@ -220,7 +190,7 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 		return -EINVAL;
 	}
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr);
+	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
 }
 
 /* Probing of FQs for MACless ports */
@@ -275,7 +245,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 		return -ENODEV;
 
 	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count);
+	dpa_bp = dpa_bp_probe(_of_dev, &count, NULL);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
@@ -310,7 +280,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	/* bp init */
 
-	err = dpa_bp_create(net_dev, dpa_bp, count);
+	err = dpa_bp_create(net_dev, dpa_bp, count, NULL);
 
 	if (err < 0)
 		goto bp_create_failed;
