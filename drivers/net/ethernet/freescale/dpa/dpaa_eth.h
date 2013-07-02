@@ -127,6 +127,18 @@ struct dpa_buffer_layout_s {
 	dpa_get_buffer_size(buffer_layout, (dpa_get_max_frm() - ETH_FCS_LEN))
 #endif
 
+/*
+ * Maximum size of a buffer for which recycling is allowed.
+ * We need an upper limit such that forwarded skbs that get reallocated on Tx
+ * aren't allowed to grow unboundedly. On the other hand, we need to make sure
+ * that skbs allocated by us will not fail to be recycled due to their size.
+ *
+ * For a requested size, the kernel allocator provides the next power of two
+ * sized block, which the stack will use as is, regardless of the actual size
+ * it required; since we must acommodate at most 9.6K buffers (L2 maximum
+ * supported frame size), set the recycling upper limit to 16K.
+ */
+#define DPA_RECYCLE_MAX_SIZE	16384
 
 #if defined(CONFIG_FSL_DPAA_FMAN_UNIT_TESTS)
 /*TODO: temporary for fman pcd testing */
@@ -206,6 +218,9 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
  * TODO: This rather belongs in fsl_qman.h
  */
 #define FSL_QMAN_MAX_OAL	127
+
+/* Maximum offset value for a contig or sg FD (represented on 9 bits) */
+#define DPA_MAX_FD_OFFSET	((1 << 9) - 1)
 
 /*
  * Values for the L3R field of the FM Parse Results

@@ -276,6 +276,57 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	return skb;
 }
 
+#ifndef CONFIG_FSL_DPAA_TS
+static bool dpa_skb_is_recyclable(struct sk_buff *skb)
+{
+	/* No recycling possible if skb has an userspace buffer */
+	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY)
+		return false;
+
+	/* or if it's cloned or shared */
+	if (skb_shared(skb) || skb_cloned(skb) ||
+	    skb->fclone != SKB_FCLONE_UNAVAILABLE)
+		return false;
+
+	/* or if it's kmalloc'ed  */
+	if (skb->head_frag == 0)
+		return false;
+
+	return true;
+}
+
+static bool dpa_buf_is_recyclable(struct sk_buff *skb,
+				  uint32_t min_size,
+				  uint16_t min_offset,
+				  unsigned char **new_buf_start)
+{
+	unsigned char *new;
+
+	/* In order to recycle a buffer, the following conditions must be met:
+	 * - buffer size no less than the buffer pool size
+	 * - buffer size no higher than an upper limit (to avoid moving too much
+	 *   system memory to the buffer pools)
+	 * - buffer address aligned to cacheline bytes
+	 * - offset of data from start of buffer no lower than a minimum value
+	 * - offset of data from start of buffer no higher than a maximum value
+	 */
+	new = min(skb_end_pointer(skb) - min_size, skb->data - min_offset);
+
+	/* left align to the nearest cacheline */
+	new = (unsigned char *)((unsigned long)new & ~(SMP_CACHE_BYTES - 1));
+
+	if (likely(new >= skb->head &&
+		   new >= (skb->data - DPA_MAX_FD_OFFSET) &&
+		   skb_end_pointer(skb) - new <= DPA_RECYCLE_MAX_SIZE)) {
+		*new_buf_start = new;
+		return true;
+	}
+
+	return false;
+}
+#endif /* CONFIG_FSL_DPAA_TS */
+
+
 /*
  * Build a linear skb around the received buffer.
  * We are guaranteed there is enough room at the end of the data buffer to
@@ -560,16 +611,48 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 {
 	struct sk_buff **skbh;
 	dma_addr_t addr;
-	struct dpa_bp *dpa_bp;
+	struct dpa_bp *dpa_bp = priv->dpa_bp;
 	struct net_device *net_dev = priv->net_dev;
 	int err;
+	enum dma_data_direction dma_dir = DMA_TO_DEVICE;
+	int *count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
+	unsigned char *rec_buf_start;
 
-	/* We are guaranteed that we have at least tx_headroom bytes */
+	/* We are guaranteed to have at least tx_headroom bytes */
 	skbh = (struct sk_buff **)(skb->data - priv->tx_headroom);
+	fd->offset = priv->tx_headroom;
 
+#ifndef CONFIG_FSL_DPAA_TS
+	/* Check recycling conditions; only if timestamp support is not
+	 * enabled, otherwise we need the fd back on tx confirmation
+	 */
+
+	/* We cannot recycle the buffer if the pool is already full */
+	if (unlikely(*count_ptr >= dpa_bp->target_count))
+		goto no_recycle;
+
+	/* ... or if the skb doesn't meet the recycling criteria */
+	if (unlikely(!dpa_skb_is_recyclable(skb)))
+		goto no_recycle;
+
+	/* ... or if buffer recycling conditions are not met */
+	if (unlikely(!dpa_buf_is_recyclable(skb, dpa_bp->size,
+			priv->tx_headroom, &rec_buf_start)))
+		goto no_recycle;
+
+	/* Buffer is recyclable; use the new start address */
+	skbh = (struct sk_buff **)rec_buf_start;
+
+	/* and set fd parameters and DMA mapping direction */
+	fd->cmd |= FM_FD_CMD_FCO;
+	fd->bpid = dpa_bp->bpid;
+	BUG_ON(skb->data - rec_buf_start > DPA_MAX_FD_OFFSET);
+	fd->offset = (uint16_t)(skb->data - rec_buf_start);
+	dma_dir = DMA_BIDIRECTIONAL;
+#endif
+
+no_recycle:
 	*skbh = skb;
-
-	dpa_bp = priv->dpa_bp;
 
 	/*
 	 * Enable L3/L4 hardware checksum computation.
@@ -588,9 +671,8 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	/* Fill in the FD */
 	fd->format = qm_fd_contig;
 	fd->length20 = skb->len;
-	fd->offset = priv->tx_headroom; /* This is now guaranteed */
 
-	addr = dma_map_single(dpa_bp->dev, skbh, dpa_bp->size, DMA_TO_DEVICE);
+	addr = dma_map_single(dpa_bp->dev, skbh, dpa_bp->size, dma_dir);
 	if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
 		if (netif_msg_tx_err(priv) && net_ratelimit())
 			netdev_err(net_dev, "dma_map_single() failed\n");
@@ -801,14 +883,34 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	if (unlikely(err < 0))
 		goto skb_to_fd_failed;
 
+	if (fd.cmd & FM_FD_CMD_FCO) {
+		/* The buffer contained in this skb will be recycled. Update
+		 * the buffer pool percpu count. Also bump up the usage count
+		 * of the page containing the recycled buffer to make sure it
+		 * doesn't get freed.
+		 */
+		(*percpu_priv->dpa_bp_count)++;
+		get_page(virt_to_head_page(skb->head));
+		percpu_priv->tx_returned++;
+	}
+
 	if (unlikely(dpa_xmit(priv, percpu_stats, queue_mapping, &fd) < 0))
 		goto xmit_failed;
+
+	/* If we recycled the buffer, no need to hold on to the skb anymore */
+	if (fd.cmd & FM_FD_CMD_FCO)
+		dev_kfree_skb(skb);
 
 	net_dev->trans_start = jiffies;
 
 	return NETDEV_TX_OK;
 
 xmit_failed:
+	if (fd.cmd & FM_FD_CMD_FCO) {
+		(*percpu_priv->dpa_bp_count)--;
+		put_page(virt_to_head_page(skb->head));
+		percpu_priv->tx_returned--;
+	}
 	_dpa_cleanup_tx_fd(priv, &fd);
 skb_to_fd_failed:
 enomem:

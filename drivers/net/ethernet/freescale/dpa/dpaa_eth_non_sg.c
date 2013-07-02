@@ -42,21 +42,6 @@
 
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 
-/* Maximum size of a buffer for which recycling is allowed.
- * We need an upper limit such that forwarded skbs that get reallocated on Tx
- * aren't allowed to grow unboundedly. On the other hand, we need to make sure
- * that skbs allocated by us will not fail to be recycled due to their size.
- *
- * For a requested size, the kernel allocator provides the next power of two
- * sized block, which the stack will use as is, regardless of the actual size
- * it required; since we must acommodate at most 9.6K buffers (L2 maximum
- * supported frame size), set the recycling upper limit to 16K.
- */
-#define DPA_RECYCLE_MAX_SIZE	16384
-
-/* Maximum offset value for a contig or sg FD (represented on 9bits) */
-#define DPA_MAX_FD_OFFSET	((1 << 9) - 1)
-
 /* Maximum frame size on Tx for which skb copying is preferrable to
  * creating a S/G frame
  */
