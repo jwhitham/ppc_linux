@@ -3027,6 +3027,33 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 			return -EINVAL;
 		}
 
+		if (action->next_table_params.hmd != DPA_OFFLD_DESC_NONE) {
+			if (!hmd) {
+				log_err("Header manipulations are not allowed on "
+					"this action.\n");
+				return -EINVAL;
+			}
+			if (!dpa_classif_hm_is_chain_head(
+						action->next_table_params.hmd)) {
+				log_err("hmd=%d is not a header manipulation "
+					"chain head. Only chain heads can be "
+					"used by the classifier table.\n",
+					action->next_table_params.hmd);
+				return -EINVAL;
+			}
+			next_engine_params->h_Manip = (t_Handle)
+		dpa_classif_hm_lock_chain(action->next_table_params.hmd);
+			if (!next_engine_params->h_Manip) {
+				log_err("Failed to attach HM op hmd=%d to "
+					"classification entry.",
+					action->next_table_params.hmd);
+				return -EINVAL;
+			}
+
+			*hmd = action->next_table_params.hmd;
+		} else
+			next_engine_params->h_Manip = NULL;
+
 		next_engine_params->nextEngine = e_FM_PCD_CC;
 		next_table = (struct dpa_cls_table *)
 			table_array.object[action->next_table_params.next_td];

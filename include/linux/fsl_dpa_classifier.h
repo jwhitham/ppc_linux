@@ -246,8 +246,7 @@ struct dpa_cls_tbl_enq_action_desc {
 
 	/*
 	 * Descriptor of the header manipulation chain to use with this
-	 * entry. Use a negative value if no header manipulation should be
-	 * performed for this entry.
+	 * entry.
 	 */
 	int					hmd;
 
@@ -267,6 +266,12 @@ struct dpa_cls_tbl_next_table_desc {
 	 * classification with
 	 */
 	int		next_td;
+
+	/*
+	 * Descriptor of the header manipulation chain to use before sending
+	 * the frames to the next table.
+	 */
+	int		hmd;
 };
 
 struct dpa_cls_tbl_mcast_group_desc {

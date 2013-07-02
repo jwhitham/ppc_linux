@@ -2507,6 +2507,7 @@ int dpa_cls_tbl_action_params_compatcpy(
 	case DPA_CLS_TBL_ACTION_NEXT_TABLE:
 		kparam->next_table_params.next_td =
 				uparam->next_table_params.next_td;
+		kparam->next_table_params.hmd = uparam->next_table_params.hmd;
 		break;
 	case DPA_CLS_TBL_ACTION_MCAST:
 		kparam->mcast_params.grpd = uparam->mcast_params.grpd;
@@ -2551,6 +2552,7 @@ int dpa_cls_tbl_action_params_rcompatcpy(
 	case DPA_CLS_TBL_ACTION_NEXT_TABLE:
 		uparam->next_table_params.next_td =
 				kparam->next_table_params.next_td;
+		uparam->next_table_params.hmd = kparam->next_table_params.hmd;
 		break;
 	default:
 		break;
