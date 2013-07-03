@@ -192,6 +192,7 @@ struct qm_portal_config {
 #define QMAN_REV31 0x0301
 extern u16 qman_ip_rev; /* 0 if uninitialised, otherwise QMAN_REVx */
 extern u32 qman_clk;
+extern u16 qman_portal_max;
 
 #ifdef CONFIG_FSL_QMAN_CONFIG
 /* Hooks from qman_driver.c to qman_config.c */

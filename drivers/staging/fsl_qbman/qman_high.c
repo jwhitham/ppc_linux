@@ -4511,9 +4511,11 @@ int qman_shutdown_fq(u32 fqid)
 	struct qman_portal *p;
 	unsigned long irqflags __maybe_unused;
 	int ret;
+	struct qm_portal *low_p;
 	p = get_affine_portal();
 	PORTAL_IRQ_LOCK(p, irqflags);
-	ret = qm_shutdown_fq(&p->p, fqid);
+	low_p = &p->p;
+	ret = qm_shutdown_fq(&low_p, 1, fqid);
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 	put_affine_portal();
 	return ret;

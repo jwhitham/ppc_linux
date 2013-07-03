@@ -45,6 +45,7 @@ EXPORT_SYMBOL(qm_channel_caam);
 u16 qm_channel_pme = QMAN_CHANNEL_PME;
 EXPORT_SYMBOL(qm_channel_pme);
 u16 qman_portal_max;
+EXPORT_SYMBOL(qman_portal_max);
 
 u32 qman_clk;
 struct qm_ceetm qman_ceetms[QMAN_CEETM_MAX];
