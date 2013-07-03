@@ -1175,21 +1175,22 @@ static inline void __qm_isr_write(struct qm_portal *portal, enum qm_isr_reg n,
 }
 
 /* Cleanup FQs */
-static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
+static inline int qm_shutdown_fq(struct qm_portal **portal, int portal_count,
+				 u32 fqid)
 {
 
 	struct qm_mc_command *mcc;
 	struct qm_mc_result *mcr;
 	u8 state;
-	int orl_empty, fq_empty, count, drain = 0;
+	int orl_empty, fq_empty, i, drain = 0;
 	u32 result;
 	u32 channel, wq;
 
 	/* Determine the state of the FQID */
-	mcc = qm_mc_start(portal);
+	mcc = qm_mc_start(portal[0]);
 	mcc->queryfq_np.fqid = fqid;
-	qm_mc_commit(portal, QM_MCC_VERB_QUERYFQ_NP);
-	while (!(mcr = qm_mc_result(portal)))
+	qm_mc_commit(portal[0], QM_MCC_VERB_QUERYFQ_NP);
+	while (!(mcr = qm_mc_result(portal[0])))
 		cpu_relax();
 	DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) == QM_MCR_VERB_QUERYFQ_NP);
 	state = mcr->queryfq_np.state & QM_MCR_NP_STATE_MASK;
@@ -1197,10 +1198,10 @@ static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
 		return 0; /* Already OOS, no need to do anymore checks */
 
 	/* Query which channel the FQ is using */
-	mcc = qm_mc_start(portal);
+	mcc = qm_mc_start(portal[0]);
 	mcc->queryfq.fqid = fqid;
-	qm_mc_commit(portal, QM_MCC_VERB_QUERYFQ);
-	while (!(mcr = qm_mc_result(portal)))
+	qm_mc_commit(portal[0], QM_MCC_VERB_QUERYFQ);
+	while (!(mcr = qm_mc_result(portal[0])))
 		cpu_relax();
 	DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) == QM_MCR_VERB_QUERYFQ);
 
@@ -1214,10 +1215,10 @@ static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
 	case QM_MCR_NP_STATE_ACTIVE:
 	case QM_MCR_NP_STATE_PARKED:
 		orl_empty = 0;
-		mcc = qm_mc_start(portal);
+		mcc = qm_mc_start(portal[0]);
 		mcc->alterfq.fqid = fqid;
-		qm_mc_commit(portal, QM_MCC_VERB_ALTER_RETIRE);
-		while (!(mcr = qm_mc_result(portal)))
+		qm_mc_commit(portal[0], QM_MCC_VERB_ALTER_RETIRE);
+		while (!(mcr = qm_mc_result(portal[0])))
 			cpu_relax();
 		DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) ==
 			   QM_MCR_VERB_ALTER_RETIRE);
@@ -1250,34 +1251,47 @@ static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
 					fqid, channel);
 				return -EBUSY;
 			}
-
+			/* Set the sdqcr to drain this channel */
+			if (channel < qm_channel_pool1)
+				for (i = 0; i < portal_count; i++)
+					qm_dqrr_sdqcr_set(portal[i],
+						  QM_SDQCR_TYPE_ACTIVE |
+						  QM_SDQCR_CHANNELS_DEDICATED);
+			else
+				for (i = 0; i < portal_count; i++)
+					qm_dqrr_sdqcr_set(portal[i],
+							  QM_SDQCR_TYPE_ACTIVE |
+							  QM_SDQCR_CHANNELS_POOL_CONV
+							  (channel));
 			while (!found_fqrn) {
 				/* Keep draining DQRR while checking the MR*/
-				qm_dqrr_sdqcr_set(portal,
-						  0x41000000 | dequeue_wq);
-				qm_dqrr_pvb_update(portal);
-				dqrr = qm_dqrr_current(portal);
-				while (dqrr) {
-					qm_dqrr_cdc_consume_1ptr(portal,
-								 dqrr, 0);
-					qm_dqrr_pvb_update(portal);
-					qm_dqrr_next(portal);
-					dqrr = qm_dqrr_current(portal);
+				for (i = 0; i < portal_count; i++) {
+					qm_dqrr_pvb_update(portal[i]);
+					dqrr = qm_dqrr_current(portal[i]);
+					while (dqrr) {
+						qm_dqrr_cdc_consume_1ptr(
+							portal[i], dqrr, 0);
+						qm_dqrr_pvb_update(portal[i]);
+						qm_dqrr_next(portal[i]);
+						dqrr = qm_dqrr_current(
+							portal[i]);
+					}
+					/* Process message ring too */
+					qm_mr_pvb_update(portal[i]);
+					msg = qm_mr_current(portal[i]);
+					while (msg) {
+						if ((msg->verb &
+						     QM_MR_VERB_TYPE_MASK)
+						    == QM_MR_VERB_FQRN)
+							found_fqrn = 1;
+						qm_mr_next(portal[i]);
+						qm_mr_cci_consume_to_current(
+							portal[i]);
+						qm_mr_pvb_update(portal[i]);
+						msg = qm_mr_current(portal[i]);
+					}
+					cpu_relax();
 				}
-
-				/* Process message ring too */
-				qm_mr_pvb_update(portal);
-				msg = qm_mr_current(portal);
-				while (msg) {
-					if ((msg->verb & QM_MR_VERB_TYPE_MASK)
-					    == QM_MR_VERB_FQRN)
-						found_fqrn = 1;
-					qm_mr_next(portal);
-					qm_mr_cci_consume_to_current(portal);
-					qm_mr_pvb_update(portal);
-					msg = qm_mr_current(portal);
-				}
-				cpu_relax();
 			}
 		}
 		if (result != QM_MCR_RESULT_OK &&
@@ -1300,55 +1314,57 @@ static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
 			do {
 				const struct qm_dqrr_entry *dqrr = NULL;
 				u32 vdqcr = fqid | QM_VDQCR_NUMFRAMES_SET(3);
-				qm_dqrr_vdqcr_set(portal, vdqcr);
+				qm_dqrr_vdqcr_set(portal[0], vdqcr);
 
 				/* Wait for a dequeue to occur */
 				while (dqrr == NULL) {
-					qm_dqrr_pvb_update(portal);
-					dqrr = qm_dqrr_current(portal);
+					qm_dqrr_pvb_update(portal[0]);
+					dqrr = qm_dqrr_current(portal[0]);
 					if (!dqrr)
 						cpu_relax();
 				}
 				/* Process the dequeues, making sure to
 				   empty the ring completely */
 				while (dqrr) {
-					if (dqrr->stat & QM_DQRR_STAT_FQ_EMPTY)
+					if (dqrr->fqid == fqid &&
+					    dqrr->stat & QM_DQRR_STAT_FQ_EMPTY)
 						fq_empty = 1;
-					qm_dqrr_cdc_consume_1ptr(portal,
+					qm_dqrr_cdc_consume_1ptr(portal[0],
 								 dqrr, 0);
-					qm_dqrr_pvb_update(portal);
-					qm_dqrr_next(portal);
-					dqrr = qm_dqrr_current(portal);
+					qm_dqrr_pvb_update(portal[0]);
+					qm_dqrr_next(portal[0]);
+					dqrr = qm_dqrr_current(portal[0]);
 				}
 			} while (fq_empty == 0);
 		}
+		for (i = 0; i < portal_count; i++)
+			qm_dqrr_sdqcr_set(portal[i], 0);
+
 		/* Wait for the ORL to have been completely drained */
-		count = 0;
 		while (orl_empty == 0) {
 			const struct qm_mr_entry *msg;
-			qm_mr_pvb_update(portal);
-			msg = qm_mr_current(portal);
+			qm_mr_pvb_update(portal[0]);
+			msg = qm_mr_current(portal[0]);
 			while (msg) {
-				++count;
 				if ((msg->verb & QM_MR_VERB_TYPE_MASK) ==
 				    QM_MR_VERB_FQRL)
 					orl_empty = 1;
-				qm_mr_next(portal);
-				qm_mr_cci_consume_to_current(portal);
-				qm_mr_pvb_update(portal);
-				msg = qm_mr_current(portal);
+				qm_mr_next(portal[0]);
+				qm_mr_cci_consume_to_current(portal[0]);
+				qm_mr_pvb_update(portal[0]);
+				msg = qm_mr_current(portal[0]);
 			}
 			cpu_relax();
 		}
-		mcc = qm_mc_start(portal);
+		mcc = qm_mc_start(portal[0]);
 		mcc->alterfq.fqid = fqid;
-		qm_mc_commit(portal, QM_MCC_VERB_ALTER_OOS);
-		while (!(mcr = qm_mc_result(portal)))
+		qm_mc_commit(portal[0], QM_MCC_VERB_ALTER_OOS);
+		while (!(mcr = qm_mc_result(portal[0])))
 			cpu_relax();
 		DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) ==
 			   QM_MCR_VERB_ALTER_OOS);
 		if (mcr->result != QM_MCR_RESULT_OK) {
-			pr_err("OOS Failed on FQID 0x%x, result 0x%x\n",
+			pr_err("OOS after drain Failed on FQID 0x%x, result 0x%x\n",
 			       fqid, mcr->result);
 			return -1;
 		}
@@ -1356,10 +1372,10 @@ static inline int qm_shutdown_fq(struct qm_portal *portal, u32 fqid)
 		break;
 	case QM_MCR_NP_STATE_RETIRED:
 		/* Send OOS Command */
-		mcc = qm_mc_start(portal);
+		mcc = qm_mc_start(portal[0]);
 		mcc->alterfq.fqid = fqid;
-		qm_mc_commit(portal, QM_MCC_VERB_ALTER_OOS);
-		while (!(mcr = qm_mc_result(portal)))
+		qm_mc_commit(portal[0], QM_MCC_VERB_ALTER_OOS);
+		while (!(mcr = qm_mc_result(portal[0])))
 			cpu_relax();
 		DPA_ASSERT((mcr->verb & QM_MCR_VERB_MASK) ==
 			   QM_MCR_VERB_ALTER_OOS);

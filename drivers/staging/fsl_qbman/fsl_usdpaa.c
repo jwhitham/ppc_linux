@@ -123,12 +123,14 @@ static const struct alloc_backend {
 		.id_type = usdpaa_id_bpid,
 		.alloc = bman_alloc_bpid_range,
 		.release = bman_release_bpid_range,
+		.reserve = bman_reserve_bpid_range,
 		.acronym = "BPID"
 	},
 	{
 		.id_type = usdpaa_id_qpool,
 		.alloc = qman_alloc_pool_range,
 		.release = qman_release_pool_range,
+		.reserve = qman_reserve_pool_range,
 		.acronym = "QPOOL"
 	},
 	{
@@ -314,6 +316,9 @@ static int init_qm_portal(struct qm_portal_config *config,
 	portal->addr.addr_ce = config->addr_virt[DPA_PORTAL_CE];
 	portal->addr.addr_ci = config->addr_virt[DPA_PORTAL_CI];
 
+	/* Make sure interrupts are inhibited */
+	qm_out(IIR, 1);
+
 	/* Initialize the DQRR.  This will stop any dequeue
 	   commands that are in progress */
 	if (qm_dqrr_init(portal, config, qm_dqrr_dpush, qm_dqrr_pvb,
@@ -323,7 +328,10 @@ static int init_qm_portal(struct qm_portal_config *config,
 		return 1;
 	}
 	/* Consume any items in the dequeue ring */
-	qm_dqrr_cdc_consume_n(portal, 0xffff);
+	while (qm_dqrr_cdc_cci(portal) != qm_dqrr_cursor(portal)) {
+		qm_dqrr_cdc_consume_n(portal, 0xffff);
+		qm_dqrr_cdc_cce_prefetch(portal);
+	}
 
 	/* Initialize the EQCR */
 	if (qm_eqcr_init(portal, qm_eqcr_pvb, qm_eqcr_cce)) {
@@ -371,8 +379,7 @@ static int init_bm_portal(struct bm_portal_config *config,
    be torn down.  If the check_channel helper returns true the FQ will be
    transitioned to the OOS state */
 static int qm_check_and_destroy_fqs(struct qm_portal *portal, void *ctx,
-				    bool (*check_channel)
-				    (void *ctx, u32 channel))
+				    bool (*check_channel)(void*, u32))
 {
 	u32 fq_id = 0;
 	while (1) {
@@ -407,7 +414,7 @@ static int qm_check_and_destroy_fqs(struct qm_portal *portal, void *ctx,
 			goto next;
 
 		if (check_channel(ctx, channel))
-			qm_shutdown_fq(portal, fq_id);
+			qm_shutdown_fq(&portal, 1, fq_id);
  next:
 		++fq_id;
 	}
@@ -441,7 +448,16 @@ static bool check_channel_device(void *_ctx, u32 channel)
 	return false;
 }
 
-
+static bool check_portal_channel(void *ctx, u32 channel)
+{
+	u32 portal_channel = *(u32 *)ctx;
+	if (portal_channel == channel) {
+		/* This FQs destination is a portal
+		   we're cleaning, send a retire */
+		return true;
+	}
+	return false;
+}
 
 static int usdpaa_release(struct inode *inode, struct file *filp)
 {
@@ -455,6 +471,9 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 	struct qm_portal_config *qm_alloced_portal = NULL;
 	struct bm_portal_config *bm_alloced_portal = NULL;
 
+	struct qm_portal *portal_array[qman_portal_max];
+	int portal_count = 0;
+
 	/* The following logic is used to recover resources that were not
 	   correctly released by the process that is closing the FD.
 	   Step 1: syncronize the HW with the qm_portal/bm_portal structures
@@ -464,10 +483,19 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 	list_for_each_entry_safe(portal, tmpportal, &ctx->portals, list) {
 		/* Try to recover any portals that weren't shut down */
 		if (portal->user.type == usdpaa_portal_qman) {
+			portal_array[portal_count] = &portal->qman_portal_low;
+			++portal_count;
 			init_qm_portal(portal->qportal,
 				       &portal->qman_portal_low);
-			if (!qm_cleanup_portal)
+			if (!qm_cleanup_portal) {
 				qm_cleanup_portal = &portal->qman_portal_low;
+			} else {
+				/* Clean FQs on the dedicated channel */
+				u32 chan = portal->qportal->public_cfg.channel;
+				qm_check_and_destroy_fqs(
+					&portal->qman_portal_low, &chan,
+					check_portal_channel);
+			}
 		} else {
 			/* BMAN */
 			init_bm_portal(portal->bportal,
@@ -510,6 +538,15 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 		int leaks = 0;
 		list_for_each_entry(res, &ctx->resources[backend->id_type],
 				    list) {
+			if (backend->id_type == usdpaa_id_fqid) {
+				int i = 0;
+				for (; i < res->num; i++) {
+					/* Clean FQs with the cleanup portal */
+					qm_shutdown_fq(portal_array,
+						       portal_count,
+						       res->id + i);
+				}
+			}
 			leaks += res->num;
 			backend->release(res->id, res->num);
 		}
@@ -619,7 +656,7 @@ static int check_mmap_portal(struct ctx *ctx, struct vm_area_struct *vma,
 static int usdpaa_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct ctx *ctx = filp->private_data;
-	unsigned long pfn;
+	unsigned long pfn = 0;
 	int match, ret;
 
 	spin_lock(&mem_lock);
@@ -737,6 +774,8 @@ static long ioctl_id_release(struct ctx *ctx, void __user *arg)
 	}
 	/* Failed to find the resource */
 	spin_unlock(&ctx->lock);
+	pr_err("Couldn't find resource type %d base 0x%x num %d\n",
+	       i.id_type, i.base, i.num);
 	return -EINVAL;
 found:
 	/* Release the resource to the backend */
@@ -1097,17 +1136,6 @@ err_copy_from_user:
 	return ret;
 }
 
-static bool check_portal_channel(void *ctx, u32 channel)
-{
-	u32 portal_channel = *(u32 *)ctx;
-	if (portal_channel == channel) {
-		/* This FQs destination is a portal
-		   we're cleaning, send a retire */
-		return true;
-	}
-	return false;
-}
-
 static long ioctl_portal_unmap(struct ctx *ctx, struct usdpaa_portal_map *i)
 {
 	struct portal_mapping *mapping;
@@ -1146,7 +1174,8 @@ found:
 
 		/* Tear down any FQs this portal is referencing */
 		channel = mapping->qportal->public_cfg.channel;
-		qm_check_and_destroy_fqs(&mapping->qman_portal_low, &channel,
+		qm_check_and_destroy_fqs(&mapping->qman_portal_low,
+					 &channel,
 					 check_portal_channel);
 		qm_put_unused_portal(mapping->qportal);
 	} else if (mapping->user.type == usdpaa_portal_bman) {
