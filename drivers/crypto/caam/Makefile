@@ -1,7 +1,7 @@
 #
 # Makefile for the CAAM backend and dependent components
 #
-
+ccflags-$(CONFIG_CRYPTO_DEV_FSL_CAAM_DEBUG) := -DDEBUG
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM) += caam.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API) += caamalg.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_AHASH_API) += caamhash.o
