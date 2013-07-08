@@ -619,9 +619,10 @@ static int free_reqs_resources(struct dpa_stats *dpa_stats)
 }
 
 /* cleanup DPA Stats */
-static void free_resources(void)
+static int free_resources(void)
 {
 	struct dpa_stats *dpa_stats;
+	int err = 0;
 
 	/* Sanity check */
 	if (!gbl_dpa_stats) {
@@ -631,13 +632,18 @@ static void free_resources(void)
 	dpa_stats = gbl_dpa_stats;
 
 	/* free resources occupied by counters control blocks */
-	free_cnts_resources(dpa_stats);
+	err = free_cnts_resources(dpa_stats);
+	if (err < 0)
+		return err;
 
 	/* free resources occupied by requests control blocks */
-	free_reqs_resources(dpa_stats);
+	err = free_reqs_resources(dpa_stats);
+	if (err < 0)
+		return err;
 
 	kfree(dpa_stats);
 	gbl_dpa_stats = NULL;
+	return 0;
 }
 
 static int treat_cnts_request(struct dpa_stats *dpa_stats,
@@ -3694,8 +3700,6 @@ int dpa_stats_free(int dpa_stats_id)
 	/* multiple DPA Stats instances are not currently supported */
 	unused(dpa_stats_id);
 
-	free_resources();
-
-	return 0;
+	return free_resources();
 }
 EXPORT_SYMBOL(dpa_stats_free);
