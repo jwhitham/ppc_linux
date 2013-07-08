@@ -74,7 +74,7 @@
 #endif
 
 #ifndef CONFIG_FSL_FM_RX_EXTRA_HEADROOM
-#define CONFIG_FSL_FM_RX_EXTRA_HEADROOM       0
+#define CONFIG_FSL_FM_RX_EXTRA_HEADROOM       16
 #endif
 
 typedef enum {
