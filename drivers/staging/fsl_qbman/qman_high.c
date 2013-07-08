@@ -361,9 +361,6 @@ loop:
 	goto loop;
 }
 
-
-
-
 struct qman_portal *qman_create_portal(
 			struct qman_portal *portal,
 			const struct qm_portal_config *config,
@@ -382,12 +379,20 @@ struct qman_portal *qman_create_portal(
 
 	__p = &portal->p;
 
+	portal->p.eqcr.use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ?
+								1 : 0);
+
 	/* prep the low-level portal struct with the mapped addresses from the
 	 * config, everything that follows depends on it and "config" is more
 	 * for (de)reference... */
 	__p->addr.addr_ce = config->addr_virt[DPA_PORTAL_CE];
 	__p->addr.addr_ci = config->addr_virt[DPA_PORTAL_CI];
-	if (qm_eqcr_init(__p, qm_eqcr_pvb)) {
+	/*
+	 * If CI-stashing is used, the current defaults use a threshold of 3,
+	 * and stash with high-than-DQRR priority.
+	 */
+	if (qm_eqcr_init(__p, qm_eqcr_pvb,
+			portal->p.eqcr.use_eqcr_ci_stashing ? 3 : 0, 1)) {
 		pr_err("Qman EQCR initialisation failed\n");
 		goto fail_eqcr;
 	}
@@ -1986,10 +1991,23 @@ static inline struct qm_eqcr_entry *try_eq_start(struct qman_portal **p,
 		(*p)->eqci_owned = fq;
 	}
 #endif
-	avail = qm_eqcr_get_avail(&(*p)->p);
-	if (avail < 2)
-		update_eqcr_ci(*p, avail);
-	eq = qm_eqcr_start(&(*p)->p);
+	if ((*p)->p.eqcr.use_eqcr_ci_stashing) {
+		/*
+		 * The stashing case is easy, only update if we need to in
+		 * order to try and liberate ring entries.
+		 */
+		eq = qm_eqcr_start_stash(&(*p)->p);
+	} else {
+		/*
+		 * The non-stashing case is harder, need to prefetch ahead of
+		 * time.
+		 */
+		avail = qm_eqcr_get_avail(&(*p)->p);
+		if (avail < 2)
+			update_eqcr_ci(*p, avail);
+		eq = qm_eqcr_start_no_stash(&(*p)->p);
+	}
+
 	if (unlikely(!eq)) {
 #ifdef CONFIG_FSL_DPA_CAN_WAIT_SYNC
 		if (unlikely((flags & QMAN_ENQUEUE_FLAG_WAIT) &&

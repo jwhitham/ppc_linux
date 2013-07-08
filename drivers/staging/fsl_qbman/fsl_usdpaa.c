@@ -326,7 +326,8 @@ static int init_qm_portal(struct qm_portal_config *config,
 	qm_dqrr_cdc_consume_n(portal, 0xffff);
 
 	/* Initialize the EQCR */
-	if (qm_eqcr_init(portal, qm_eqcr_pvb, qm_eqcr_cce)) {
+	if (qm_eqcr_init(portal, qm_eqcr_pvb, 
+			portal->eqcr.use_eqcr_ci_stashing ? 3 : 0, 1)) {
 		pr_err("Qman EQCR initialisation failed\n");
 		return 1;
 	}
