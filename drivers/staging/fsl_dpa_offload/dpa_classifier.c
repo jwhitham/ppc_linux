@@ -39,6 +39,7 @@
 
 
 #include <linux/crc8.h>
+#include <linux/crc64_ecma.h>
 #include <linux/module.h>
 
 /* DPA offloading layer includes */
@@ -2539,7 +2540,7 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	struct dpa_cls_tbl_shadow_entry *shadow_entry = NULL;
 	t_FmPcdCcKeyParams key_params;
 	uint8_t shadow_table_index;
-	uint64_t hash_set_index;
+	u64 hash_set_index;
 	uint8_t key_data[DPA_OFFLD_MAXENTRYKEYSIZE];
 	int j, hmd;
 	struct dpa_cls_tbl_shadow_table *shadow_table;
@@ -2613,11 +2614,11 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	if (errno < 0)
 		return errno;
 
-	hash_set_index = crc64_init();
-	hash_set_index = crc64_compute(key_data,
+	hash_set_index = crc64_ecma_seed();
+	hash_set_index = crc64_ecma(key_data,
 				cls_table->params.hash_params.key_size,
 				hash_set_index);
-	hash_set_index = (uint64_t)(hash_set_index & cls_table->hash_mask) >>
+	hash_set_index = (u64)(hash_set_index & cls_table->hash_mask) >>
 		(8 * (6 - cls_table->params.hash_params.hash_offs) + 4);
 
 	BUG_ON(hash_set_index >= cls_table->int_cc_nodes_count);
