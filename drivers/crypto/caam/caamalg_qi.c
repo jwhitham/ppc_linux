@@ -446,6 +446,35 @@ static int aead_setkey(struct crypto_aead *aead,
 	if (ret) {
 		dma_unmap_single(jrdev, ctx->key_dma, ctx->split_key_pad_len +
 				 enckeylen, DMA_TO_DEVICE);
+		goto badkey;
+	}
+
+	/* Now update the driver contexts with the new shared descriptor */
+	if (ctx->drv_ctx[ENCRYPT]) {
+		ret = caam_drv_ctx_update(ctx->drv_ctx[ENCRYPT],
+					  ctx->sh_desc_enc);
+		if (ret) {
+			dev_err(jrdev, "driver enc context update failed\n");
+			goto badkey;
+		}
+	}
+
+	if (ctx->drv_ctx[DECRYPT]) {
+		ret = caam_drv_ctx_update(ctx->drv_ctx[DECRYPT],
+					  ctx->sh_desc_dec);
+		if (ret) {
+			dev_err(jrdev, "driver dec context update failed\n");
+			goto badkey;
+		}
+	}
+
+	if (ctx->drv_ctx[GIVENCRYPT]) {
+		ret = caam_drv_ctx_update(ctx->drv_ctx[GIVENCRYPT],
+					  ctx->sh_desc_givenc);
+		if (ret) {
+			dev_err(jrdev, "driver givenc context update failed\n");
+			goto badkey;
+		}
 	}
 
 	return ret;

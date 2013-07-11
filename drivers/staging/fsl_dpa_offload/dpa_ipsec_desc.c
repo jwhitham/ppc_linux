@@ -870,7 +870,7 @@ void built_decap_extra_material(struct dpa_ipsec_sa *sa,
 int build_extended_encap_shared_descriptor(struct dpa_ipsec_sa *sa,
 				     dma_addr_t auth_key_dma,
 				     dma_addr_t crypto_key_dma,
-				     uint8_t bytes_to_copy,
+				     uint32_t bytes_to_copy,
 				     int sec_era)
 {
 	uint32_t *desc, *no_sg_jump, *extra_cmds;

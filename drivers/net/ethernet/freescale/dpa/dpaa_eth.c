@@ -130,13 +130,17 @@
 #define DPA_MAX_FD_OFFSET	((1 << 9) - 1)
 
 /*
- * Extra size of a buffer (beyond the size of the buffers that are seeded into
- * the global pool) for which recycling is allowed.
- * The value is arbitrary, but tries to reach a balance such that originating
- * frames may get recycled, while forwarded skbs that get reallocated on Tx
- * aren't allowed to grow unboundedly.
+ * Maximum size of a buffer for which recycling is allowed.
+ * We need an upper limit such that forwarded skbs that get reallocated on Tx
+ * aren't allowed to grow unboundedly. On the other hand, we need to make sure
+ * that skbs allocated by us will not fail to be recycled due to their size.
+ *
+ * For a requested size, the kernel allocator provides the next power of two
+ * sized block, which the stack will use as is, regardless of the actual size
+ * it required; since we must acommodate at most 9.6K buffers (L2 maximum
+ * supported frame size), set the recycling upper limit to 16K.
  */
-#define DPA_RECYCLE_EXTRA_SIZE	1024
+#define DPA_RECYCLE_MAX_SIZE	16384
 
 /* For MAC-based interfaces, we compute the tx needed headroom from the
  * associated Tx port's buffer layout settings.
@@ -386,12 +390,14 @@ static void dpaa_eth_seed_pool(struct dpa_bp *bp)
  * Add buffers/pages/skbuffs for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+static int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
 	int *countptr = percpu_priv->dpa_bp_count;
 	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+	int new_pages __maybe_unused;
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+
 	/* this function is called in softirq context;
 	 * no need to protect smp_processor_id() on RT kernel
 	 */
@@ -405,10 +411,24 @@ static void dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 	}
 #else
 	/* Add pages to the buffer pool */
-	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
-		count += _dpa_bp_add_8_pages(dpa_bp);
+	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
+		new_pages = _dpa_bp_add_8_pages(dpa_bp);
+		if (unlikely(!new_pages)) {
+			/* Avoid looping forever if we've temporarily
+			 * run out of memory. We'll try again at the next
+			 * NAPI cycle.
+			 */
+			break;
+		}
+		count += new_pages;
+	}
 	*countptr = count;
+
+	if (*countptr < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT)
+		return -ENOMEM;
 #endif
+
+	return 0;
 }
 
 static int dpa_make_shared_port_pool(struct dpa_bp *bp)
@@ -1271,10 +1291,9 @@ static int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 static int dpa_process_one(struct dpa_percpu_priv_s *percpu_priv,
 		struct sk_buff *skb, struct dpa_bp *bp, const struct qm_fd *fd)
 {
-	dma_addr_t addr = qm_fd_addr(fd);
-	u32 addrlo = lower_32_bits(addr);
-	u32 skblo = lower_32_bits((unsigned long)skb->head);
-	u32 pad = (addrlo - skblo) & (PAGE_SIZE - 1);
+	dma_addr_t fd_addr = qm_fd_addr(fd);
+	unsigned long skb_addr = virt_to_phys(skb->head);
+	u32 pad = fd_addr - skb_addr;
 	unsigned int data_start;
 
 	(*percpu_priv->dpa_bp_count)--;
@@ -1945,8 +1964,7 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 	 * - there's enough room in the buffer pool
 	 */
 	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
-		   (skb_end_pointer(skb) - skb->head <=
-			dpa_bp->size + DPA_RECYCLE_EXTRA_SIZE) &&
+		   (skb_end_pointer(skb) - skb->head <= DPA_RECYCLE_MAX_SIZE) &&
 		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
@@ -2181,6 +2199,7 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 	struct net_device		*net_dev;
 	struct dpa_priv_s		*priv;
 	struct dpa_percpu_priv_s	*percpu_priv;
+	int err;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
@@ -2192,7 +2211,16 @@ ingress_rx_error_dqrr(struct qman_portal		*portal,
 		return qman_cb_dqrr_stop;
 	}
 
-	dpaa_eth_refill_bpools(percpu_priv);
+	err = dpaa_eth_refill_bpools(percpu_priv);
+	if (err) {
+		/* Unable to refill the buffer pool due to insufficient
+		 * system memory. Just release the frame back into the pool,
+		 * otherwise we'll soon end up with an empty buffer pool.
+		 */
+		dpa_fd_release(net_dev, &dq->fd);
+		return qman_cb_dqrr_consume;
+	}
+
 	_dpa_rx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
@@ -2340,6 +2368,7 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	struct net_device		*net_dev;
 	struct dpa_priv_s		*priv;
 	struct dpa_percpu_priv_s	*percpu_priv;
+	int err;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
@@ -2356,7 +2385,16 @@ ingress_rx_default_dqrr(struct qman_portal		*portal,
 	}
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
-	dpaa_eth_refill_bpools(percpu_priv);
+	err = dpaa_eth_refill_bpools(percpu_priv);
+	if (err) {
+		/* Unable to refill the buffer pool due to insufficient
+		 * system memory. Just release the frame back into the pool,
+		 * otherwise we'll soon end up with an empty buffer pool.
+		 */
+		dpa_fd_release(net_dev, &dq->fd);
+		return qman_cb_dqrr_consume;
+	}
+
 	_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
@@ -3553,12 +3591,16 @@ static void dpa_setup_egress(struct dpa_priv_s *priv,
 	/* Allocate frame queues to all available CPUs no matter the number of
 	 * queues specified in device tree.
 	 */
-	for (i = 0; i < DPAA_ETH_TX_QUEUES; i++) {
+	for (i = 0, ptr = &fq->list; i < DPAA_ETH_TX_QUEUES; i++) {
 		iter = list_entry(ptr, struct dpa_fq, list);
 		priv->egress_fqs[i] = &iter->fq_base;
 
-		if (list_is_last(ptr, head))
+		if (list_is_last(ptr, head)) {
 			ptr = &fq->list;
+			continue;
+		}
+
+		ptr = ptr->next;
 	}
 }
 

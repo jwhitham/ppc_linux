@@ -62,6 +62,13 @@
 		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 
+	bp16: buffer-pool@16 {
+		compatible = "fsl,p4080-bpool", "fsl,bpool";
+		fsl,bpid = <16>;
+		fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
+		fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
+	};
+
 	fsl,dpaa {
 		ethernet@0 {
 			compatible = "fsl,p4080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
@@ -122,6 +129,27 @@
 			fsl,qman-frame-queues-rx = <0x66 1 0x67 1>;
 			fsl,qman-frame-queues-tx = <0x86 1 0x87 1>;
 		};
+
+		/* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
+		 * USDPAA will seed buffers to this buffer pool and initialize 8 TX Frame
+		 * queues. The ethernet driver will initialize 8 RX default Frame queues.
+		 * On receiving frame at this interface, the ethernet driver will do
+		 * kmap_atomic/kunmap_atomic for that frame. */
+		ethernet@16 {
+			compatible = "fsl,p4080-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <4000 8>;
+			fsl,qman-frame-queues-tx = <4008 8>;
+			local-mac-address = [00 11 22 33 44 55];
+		};
+		ethernet@17 {
+			compatible = "fsl,p4080-dpa-ethernet", "fsl,dpa-ethernet";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <5000 8>;
+			fsl,qman-frame-queues-tx = <5008 8>;
+			local-mac-address = [00 11 22 33 44 66];
+		};
+
 		dpa_fman1_oh1: dpa-fman1-oh@1 {
 			compatible = "fsl,dpa-oh";
 			fsl,qman-frame-queues-oh = <0x64 1 0x65 1>;

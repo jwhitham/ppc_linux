@@ -60,6 +60,9 @@ static const struct file_operations dpa_ipsec_fops = {
 };
 
 static int dpa_ipsec_cdev_major = -1;
+static struct class  *ipsec_class;
+static struct device *ipsec_dev;
+
 static long wrp_dpa_ipsec_do_ioctl(struct file *filp, unsigned int cmd,
 				   unsigned long args);
 
@@ -1111,6 +1114,26 @@ int wrp_dpa_ipsec_init(void)
 		pr_err("Could not register Dpa IPSec character device\n");
 		return dpa_ipsec_cdev_major;
 	}
+
+	ipsec_class = class_create(THIS_MODULE, DPA_IPSEC_CDEV);
+	if (IS_ERR(ipsec_class)) {
+		pr_err("Cannot create DPA IPsec class device\n");
+		unregister_chrdev(dpa_ipsec_cdev_major, DPA_IPSEC_CDEV);
+		dpa_ipsec_cdev_major = -1;
+		return PTR_ERR(ipsec_class);
+	}
+
+	ipsec_dev = device_create(ipsec_class, NULL,
+				  MKDEV(dpa_ipsec_cdev_major, 0), NULL,
+				  DPA_IPSEC_CDEV);
+	if (IS_ERR(ipsec_dev)) {
+		pr_err("Cannot create DPA IPsec device\n");
+		class_destroy(ipsec_class);
+		unregister_chrdev(dpa_ipsec_cdev_major, DPA_IPSEC_CDEV);
+		dpa_ipsec_cdev_major = -1;
+		return PTR_ERR(ipsec_dev);
+	}
+
 	return 0;
 }
 
@@ -1119,8 +1142,12 @@ int wrp_dpa_ipsec_exit(void)
 {
 	if (dpa_ipsec_cdev_major < 0)
 		return 0;
+
+	device_destroy(ipsec_class, MKDEV(dpa_ipsec_cdev_major, 0));
+	class_destroy(ipsec_class);
 	unregister_chrdev(dpa_ipsec_cdev_major, DPA_IPSEC_CDEV);
 	dpa_ipsec_cdev_major = -1;
+
 	return 0;
 }
 

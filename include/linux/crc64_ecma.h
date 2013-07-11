@@ -1,5 +1,5 @@
-
-/* Copyright 2008-2012 Freescale Semiconductor, Inc.
+/*
+ * Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,58 +30,27 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef __CRC64_ECMA_H_
+#define __CRC64_ECMA_H_
+
+#include <linux/types.h>
+
+
+#define CRC64_DEFAULT_INITVAL           0xFFFFFFFFFFFFFFFFULL
+
+
 /*
- * Internal DPA Classifier Wrapper Application Programming Interface
+ * crc64_ecma_seed - Initializes the CRC64 ECMA seed.
  */
+u64 crc64_ecma_seed(void);
 
-#ifndef __WRP_DPA_CLASSIFIER_H
-#define __WRP_DPA_CLASSIFIER_H
+/*
+ * crc64_ecma - Computes the 64 bit ECMA CRC.
+ *
+ * @pdata:	pointer to the data to compute checksum for.
+ * @nbytes:	number of bytes in data buffer.
+ * @seed:	CRC seed.
+ */
+u64 crc64_ecma(u8 const *pdata, u32 nbytes, u64 seed);
 
-
-/* Other includes */
-#include "linux/fs.h"
-
-
-#define WRP_DPA_CLS_CDEVNAME				"dpa_classifier"
-#define WRP_DPA_CLS_CLASS_NAME				"dpa_classifier"
-
-
-int	wrp_dpa_classif_init(void);
-
-int	wrp_dpa_classif_exit(void);
-
-int	wrp_dpa_classif_open(struct inode *inode, struct file *filp);
-
-int	wrp_dpa_classif_release(struct inode *inode, struct file *filp);
-
-ssize_t	wrp_dpa_classif_read(
-			struct file	*filp,
-			char __user	*buf,
-			size_t		len,
-			loff_t		*offp);
-
-ssize_t	wrp_dpa_classif_write(
-			struct file		*filp,
-			const char __user	*buf,
-			size_t			len,
-			loff_t			*offp);
-
-long	wrp_dpa_classif_ioctl(
-			struct file	*filp,
-			unsigned int	cmd,
-			unsigned long	args);
-
-long	wrp_dpa_classif_do_ioctl(
-			struct file	*filp,
-			unsigned int	cmd,
-			unsigned long	args,
-			bool		compat_mode);
-
-#ifdef CONFIG_COMPAT
-long	wrp_dpa_classif_compat_ioctl(
-			struct file	*filp,
-			unsigned int	cmd,
-			unsigned long	args);
-#endif
-
-#endif /* __WRP_DPA_CLASSIFIER_H */
+#endif /* __CRC64_ECMA_H_ */

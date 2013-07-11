@@ -129,6 +129,19 @@ extern int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req);
  */
 extern bool caam_drv_ctx_busy(struct caam_drv_ctx *drv_ctx);
 
+/*
+ * caam_drv_ctx_update - Upate QI drv context.
+ *
+ * Invoked when shared descriptor is required to be change in driver context.
+ *
+ * drv_ctx -	Driver context to be updated
+ *
+ * sh_desc -	New shared descriptor pointer to be updated in QI driver
+ *		context.
+ *
+ * Returns 0 on success or negative error code on failure.
+ */
+extern int caam_drv_ctx_update(struct caam_drv_ctx *drv_ctx, u32 *sh_desc);
 
 /*
  * caam_drv_ctx_rel - Release a QI driver context.

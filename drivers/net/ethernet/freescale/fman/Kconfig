@@ -34,7 +34,7 @@ endmenu
 
 config FMAN_RESOURCE_ALLOCATION_ALGORITHM
 	bool "Enable FMan dynamic resource allocation algorithm"
-	default n
+	default y if ((FMAN_P3040_P4080_P5020 || FMAN_P1023) && FSL_DPAA_ETH_OPTIMIZE_FOR_IPFWD)
 	---help---
 		Enables algorithm for dynamic resource allocation
 
@@ -59,7 +59,6 @@ config FSL_FM_MAX_FRAME_SIZE
 	int "Maximum L2 frame size"
 	depends on FSL_FMAN
 	range 64 9600
-	default "9600" if FSL_DPAA_ETH_SG_SUPPORT
 	default "1522"
 	help
 		Configure this in relation to the maximum possible MTU of your

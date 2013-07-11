@@ -191,15 +191,17 @@ static void re_jr_dequeue(unsigned long data)
 	dev = (struct device *)data;
 	jr = dev_get_drvdata(dev);
 
-	count = RE_JR_OUB_SLOT_FULL(in_be32(&jr->jrregs->oubring_slot_full));
-	out_be32(&jr->jrregs->oubring_job_rmvd, RE_JR_OUB_JOB_REMOVE(count));
-
 	spin_lock_bh(&jr->desc_lock);
-	while (count--) {
-		jr->oub_count &= RING_SIZE_MASK;
-		desc = &jr->descs[jr->oub_count++];
-		list_add_tail(&desc->node, &jr->ack_q);
-		re_jr_desc_done(desc);
+	count =	RE_JR_OUB_SLOT_FULL(in_be32(&jr->jrregs->oubring_slot_full));
+	if (count) {
+		out_be32(&jr->jrregs->oubring_job_rmvd,
+			 RE_JR_OUB_JOB_REMOVE(count));
+		while (count--) {
+			jr->oub_count &= RING_SIZE_MASK;
+			desc = &jr->descs[jr->oub_count++];
+			list_add_tail(&desc->node, &jr->ack_q);
+			re_jr_desc_done(desc);
+		}
 	}
 	spin_unlock_bh(&jr->desc_lock);
 
@@ -331,10 +333,9 @@ static struct fsl_re_dma_async_tx_desc *re_jr_alloc_desc(struct re_jr *jr,
 		re_jr_issue_pending(&jr->chan);
 		return NULL;
 	}
-	spin_unlock_bh(&jr->desc_lock);
-
 	desc->state = RE_DESC_ALLOC;
 	desc->async_tx.flags = flags;
+	spin_unlock_bh(&jr->desc_lock);
 
 	return desc;
 }
