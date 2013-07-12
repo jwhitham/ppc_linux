@@ -1541,6 +1541,7 @@ static long do_ioctl_mcast_create_group(unsigned long args, bool compat_mode)
 	long ret = 0;
 	struct ioc_dpa_cls_mcast_group_params kparam;
 	struct dpa_cls_tbl_policer_params policer_params;
+	struct dpa_cls_mcast_group_resources *p_res = NULL;
 #ifdef CONFIG_COMPAT
 	struct compat_ioc_dpa_cls_mcast_group_params uparam;
 	if (compat_mode) {
@@ -1580,10 +1581,13 @@ static long do_ioctl_mcast_create_group(unsigned long args, bool compat_mode)
 								&policer_params;
 		}
 	}
+
+	if (kparam.res.group_node)
+		p_res = &kparam.res;
 	/*
 	 * Translate FM_PCD file descriptor
 	 */
-	if (!kparam.mcast_grp_params.group) {
+	if (!p_res) {
 		kparam.mcast_grp_params.fm_pcd =
 				translate_fm_pcd_handle(kparam.
 						       mcast_grp_params.fm_pcd);
@@ -1593,7 +1597,7 @@ static long do_ioctl_mcast_create_group(unsigned long args, bool compat_mode)
 
 #if (DPAA_VERSION >= 11)
 	ret = dpa_classif_mcast_create_group(&kparam.mcast_grp_params,
-					     &kparam.grpd);
+					     &kparam.grpd, p_res);
 #else
 	log_err("Multicast not supported on this platform.\n");
 	return -EINVAL;
@@ -2972,12 +2976,12 @@ int dpa_cls_mcast_group_params_compatcpy(
 	kparam->mcast_grp_params.prefilled_members =
 			uparam->mcast_grp_params.prefilled_members;
 
-	if (uparam->mcast_grp_params.group)
-		kparam->mcast_grp_params.group = compat_get_id2ptr(
-						uparam->mcast_grp_params.group,
-						FM_MAP_TYPE_PCD_NODE);
+	if (uparam->res.group_node)
+		kparam->res.group_node = compat_get_id2ptr(
+					uparam->res.group_node,
+					FM_MAP_TYPE_PCD_NODE);
 	else
-		kparam->mcast_grp_params.group = NULL;
+		kparam->res.group_node = NULL;
 
 	if (compat_ptr(uparam->mcast_grp_params.distribution))
 		kparam->mcast_grp_params.distribution = compat_get_id2ptr(
