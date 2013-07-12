@@ -2411,7 +2411,8 @@ int dpa_cls_tbl_action_params_rcompatcpy(
 		uparam->enq_params.new_fqid =
 				kparam->enq_params.new_fqid;
 		uparam->enq_params.hmd = kparam->enq_params.hmd;
-
+		uparam->enq_params.new_rel_vsp_id =
+				kparam->enq_params.new_rel_vsp_id;
 		if (kparam->enq_params.policer_params) {
 			BUG_ON(!compat_ptr(uparam->enq_params.policer_params));
 			if (copy_to_user(
