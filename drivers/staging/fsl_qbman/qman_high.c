@@ -114,14 +114,12 @@ struct qman_portal {
 	struct list_head cgr_cbs;
 	/* list lock */
 	spinlock_t cgr_lock;
-
 	/* 2-element array. ccgrs[0] is mask, ccgrs[1] is snapshot. */
 	struct qman_ccgrs *ccgrs[QMAN_CEETM_MAX];
 	/* 256-element array, each is a linked-list of CCSCN handlers. */
 	struct list_head ccgr_cbs[QMAN_CEETM_MAX];
 	/* list lock */
 	spinlock_t ccgr_lock;
-
 	/* track if memory was allocated by the driver */
 	u8 alloced;
 };
@@ -599,7 +597,6 @@ void qman_destroy_portal(struct qman_portal *qm)
 	/* Stop dequeues on the portal */
 	qm_dqrr_sdqcr_set(&qm->p, 0);
 
-
 	/* NB we do this to "quiesce" EQCR. If we add enqueue-completions or
 	 * something related to QM_PIRQ_EQCI, this may need fixing.
 	 * Also, due to the prefetching model used for CI updates in the enqueue
@@ -716,7 +713,6 @@ static u32 __poll_portal_slow(struct qman_portal *p, u32 is)
 		 * state change.
 		 */
 		qm_isr_status_clear(&p->p, QM_PIRQ_CSCI);
-
 		qm_mc_start(&p->p);
 		qm_mc_commit(&p->p, QM_MCC_VERB_QUERYCONGESTION);
 		while (!(mcr = qm_mc_result(&p->p)))
@@ -871,7 +867,6 @@ mr_loop:
 mr_done:
 		qm_mr_cci_consume(&p->p, num);
 	}
-
 	/*
 	 * QM_PIRQ_CSCI/CCSCI has already been cleared, as part of its specific
 	 * processing. If that interrupt source has meanwhile been re-asserted,
@@ -2339,8 +2334,7 @@ int qman_delete_cgr(struct qman_cgr *cgr)
 	/* Overwrite TARG */
 	local_opts.we_mask = QM_CGR_WE_CSCN_TARG;
 	if ((qman_ip_rev & 0xFF00) >= QMAN_REV30)
-		local_opts.cgr.cscn_targ_upd_ctrl =
-			~QM_CGR_TARG_UDP_CTRL_WRITE_BIT | PORTAL_IDX(p);
+		local_opts.cgr.cscn_targ_upd_ctrl = PORTAL_IDX(p);
 	else
 		local_opts.cgr.cscn_targ = cgr_state.cgr.cscn_targ &
 							 ~(TARG_MASK(p));
@@ -4233,9 +4227,11 @@ int qman_ceetm_ccg_release(struct qm_ceetm_ccg *ccg)
 	list_for_each_entry(i, &p->ccgr_cbs[ccg->parent->dcp_idx], cb_node)
 		if ((i->idx == ccg->idx) && i->cb)
 			goto release_lock;
+	config_opts.ccgrid = CEETM_CCGR_CM_CONFIGURE |
+				(ccg->parent->idx << 4) | ccg->idx;
+	config_opts.dcpid = ccg->parent->dcp_idx;
 	config_opts.we_mask = QM_CCGR_WE_CSCN_TUPD;
-	config_opts.cm_config.cscn_tupd =
-			~QM_CGR_TARG_UDP_CTRL_WRITE_BIT | PORTAL_IDX(p);
+	config_opts.cm_config.cscn_tupd = PORTAL_IDX(p);
 
 	ret = qman_ceetm_configure_ccgr(&config_opts);
 release_lock:
