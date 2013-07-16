@@ -1294,11 +1294,14 @@ int usdpaa_get_portal_config(struct file *filp, void *cinh,
 	list_for_each_entry(portal, &context->portals, list) {
 		if (portal->user.type == ptype &&
 		    portal->user.addr.cinh == cinh) {
+			if (ptype == usdpaa_portal_qman) {
+				*irq = portal->qportal->public_cfg.irq;
+				*iir_reg = portal->qportal->addr_virt[1] + QM_REG_IIR;
+			} else {
+				*irq = portal->bportal->public_cfg.irq;
+				*iir_reg = portal->bportal->addr_virt[1] + BM_REG_IIR;
+			}
 			spin_unlock(&context->lock);
-			*irq = portal->qportal->public_cfg.irq;
-			*iir_reg = portal->qportal->addr_virt[1] +
-				((ptype == usdpaa_portal_qman) ? QM_REG_IIR :
-								 BM_REG_IIR);
 			return 0;
 		}
 	}
