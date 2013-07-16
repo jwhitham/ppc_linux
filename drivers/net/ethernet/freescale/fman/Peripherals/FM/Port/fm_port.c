@@ -2444,6 +2444,17 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
         }
     }
 
+#ifdef FM_HEAVY_TRAFFIC_SEQUENCER_HANG_ERRATA_FMAN_A006981
+    if ((p_FmPort->fmRevInfo.majorRev == 6) &&
+        (p_FmPort->fmRevInfo.minorRev == 0) &&
+        ((p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING) ||
+         (p_FmPort->portType == e_FM_PORT_TYPE_TX)))
+        {
+            p_FmPort->openDmas.num = 16;
+            p_FmPort->openDmas.extra = 0;
+        }
+#endif /* FM_HEAVY_TRAFFIC_SEQUENCER_HANG_ERRATA_FMAN_A006981 */
+
     if (p_FmPort->portType == e_FM_PORT_TYPE_OH_HOST_COMMAND)
         p_FmPort->p_FmPortDriverParam->syncReq                      = DEFAULT_PORT_syncReqForHc;
     else

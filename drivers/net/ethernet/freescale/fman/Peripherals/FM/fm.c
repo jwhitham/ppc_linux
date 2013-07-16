@@ -3313,6 +3313,10 @@ t_Error FmSetNumOfOpenDmas(t_Handle h_Fm,
                          p_Fm->p_FmStateStruct->fmId));
 #else
     if ((p_Fm->p_FmStateStruct->revInfo.majorRev >= 6) &&
+#ifdef FM_HEAVY_TRAFFIC_SEQUENCER_HANG_ERRATA_FMAN_A006981
+         !((p_Fm->p_FmStateStruct->revInfo.majorRev == 6) &&
+           (p_Fm->p_FmStateStruct->revInfo.minorRev == 0)) &&
+#endif /* FM_HEAVY_TRAFFIC_SEQUENCER_HANG_ERRATA_FMAN_A006981 */
         (p_Fm->p_FmStateStruct->accumulatedNumOfOpenDmas - oldVal + numOfOpenDmas > DMA_THRESH_MAX_COMMQ + 1))
         RETURN_ERROR(MAJOR, E_NOT_AVAILABLE,
                      ("Requested numOfOpenDmas for fm%d exceeds DMA Command queue (%d)",
