@@ -2430,6 +2430,10 @@ int dpa_cls_tbl_action_params_rcompatcpy(
 				kparam->next_table_params.next_td;
 		uparam->next_table_params.hmd = kparam->next_table_params.hmd;
 		break;
+	case DPA_CLS_TBL_ACTION_MCAST:
+		uparam->mcast_params.grpd = kparam->mcast_params.grpd;
+		uparam->mcast_params.hmd = kparam->mcast_params.hmd;
+		break;
 	default:
 		break;
 	}
