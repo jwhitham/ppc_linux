@@ -430,7 +430,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 
 	/* Fill the [miss_engine_params] structure w/ data */
 	errno = action_to_next_engine_params(miss_action, &miss_engine_params,
-		NULL, NULL, NULL);
+					NULL, ptable->params.distribution,
+					ptable->params.classification);
 	if (errno < 0) {
 		RELEASE_OBJECT(ptable);
 		log_err("Failed verification of miss action params for table "
