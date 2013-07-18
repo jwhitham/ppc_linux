@@ -131,15 +131,15 @@ static bool has_erratum_a005275(struct device_node *node)
 	 * P5020 and P5010 rev 1.0 and 2.0
 	 * P5040 and P1010 rev 1.0
 	 */
-	if ((fsl_svr_is(SVR_P3041)) || (fsl_svr_is(SVR_P3041_E)) ||
-			(fsl_svr_is(SVR_P2041)) || (fsl_svr_is(SVR_P2041_E)))
-		flag = (IS_SVR_REV(svr, 1, 0)) || (IS_SVR_REV(svr, 1, 1));
-	else if ((fsl_svr_is(SVR_P5020)) || (fsl_svr_is(SVR_P5020_E)) ||
-			(fsl_svr_is(SVR_P5010)) || (fsl_svr_is(SVR_P5010_E)))
-		flag = (IS_SVR_REV(svr, 1, 0)) || (IS_SVR_REV(svr, 2, 0));
-	else if ((fsl_svr_is(SVR_P5040)) || (fsl_svr_is(SVR_P5040_E)) ||
-			(fsl_svr_is(SVR_P1010)) || (fsl_svr_is(SVR_P1010_E)))
-		flag = IS_SVR_REV(svr, 1, 0);
+	if ((SVR_SOC_VER(svr) == SVR_P2041) ||
+			(SVR_SOC_VER(svr) == SVR_P3041))
+		flag = (SVR_REV(svr) == 0x10) || (SVR_REV(svr) == 0x11);
+	else if ((SVR_SOC_VER(svr) == SVR_P5010) ||
+			(SVR_SOC_VER(svr) == SVR_P5020))
+		flag = (SVR_REV(svr) == 0x10) || (SVR_REV(svr) == 0x20);
+	else if ((SVR_SOC_VER(svr) == SVR_P5040) ||
+			(SVR_SOC_VER(svr) == SVR_P1010))
+		flag = (SVR_REV(svr) == 0x10);
 
 	return flag;
 }

@@ -24,6 +24,9 @@
 
 #define VENDOR_V_22	0x12
 #define VENDOR_V_23	0x13
+
+static u32 svr;
+
 static u32 esdhc_readl(struct sdhci_host *host, int reg)
 {
 	u32 ret;
@@ -146,7 +149,7 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 		if (!host->pwr || !val)
 			return;
 
-		if (fsl_svr_is(SVR_T4240)) {
+		if (SVR_SOC_VER(svr) == SVR_T4240) {
 			u8 vol;
 
 			vol = sdhci_be32bs_readb(host, reg);
@@ -203,10 +206,15 @@ static void esdhci_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 	 * occurs on system transaction
 	 * Impact list:
 	 * T4240-R1.0 B4860-R1.0 P1010-R1.0
+	 * P3041-R1.0-R2.0-R1.1 P2041-R1.0-R1.1-R2.0
+	 * P5040-R2.0
 	 */
-	if (!((fsl_svr_is(SVR_T4240) && fsl_svr_rev_is(1, 0)) ||
-		(fsl_svr_is(SVR_B4860) && fsl_svr_rev_is(1, 0)) ||
-		(fsl_svr_is(SVR_P1010) && fsl_svr_rev_is(1, 0))))
+	if (!(((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) <= 0x20)) ||
+		((SVR_SOC_VER(svr) == SVR_P2041) && (SVR_REV(svr) <= 0x20)) ||
+		((SVR_SOC_VER(svr) == SVR_P5040) && (SVR_REV(svr) == 0x20))))
 		return;
 
 	if (host->flags & SDHCI_USE_ADMA) {
@@ -335,6 +343,7 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 {
 	u32 vvn;
 
+	svr =  mfspr(SPRN_SVR);
 	vvn = in_be32(host->ioaddr + SDHCI_SLOT_INT_STATUS);
 	vvn = (vvn & SDHCI_VENDOR_VER_MASK) >> SDHCI_VENDOR_VER_SHIFT;
 	if (vvn == VENDOR_V_22)
@@ -350,14 +359,12 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 	 * T4240-R1.0 B4860-R1.0 P3041-R1.0 P3041-R2.0 P2041-R1.0
 	 * P2041-R1.1 P2041-R2.0 P1010-R1.0
 	 */
-	if ((fsl_svr_is(SVR_T4240) && fsl_svr_rev_is(1, 0)) ||
-		(fsl_svr_is(SVR_B4860) && fsl_svr_rev_is(1, 0)) ||
-		(fsl_svr_is(SVR_P3041) && fsl_svr_rev_is(1, 0)) ||
-		(fsl_svr_is(SVR_P3041) && fsl_svr_rev_is(2, 0)) ||
-		(fsl_svr_is(SVR_P2041) && fsl_svr_rev_is(2, 0)) ||
-		(fsl_svr_is(SVR_P2041) && fsl_svr_rev_is(1, 1)) ||
-		(fsl_svr_is(SVR_P2041) && fsl_svr_rev_is(1, 0)) ||
-		(fsl_svr_is(SVR_P1010) && fsl_svr_rev_is(1, 0)))
+	if (((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) == 0x20)) ||
+		((SVR_SOC_VER(svr) == SVR_P2041) && (SVR_REV(svr) <= 0x20)))
 		host->quirks2 |= SDHCI_QUIRK2_BROKEN_RESET_ALL;
 }
 

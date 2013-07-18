@@ -190,6 +190,7 @@ static void setup_pci_atmu(struct pci_controller *hose)
 	const char *name = hose->dn->full_name;
 	const u64 *reg;
 	int len;
+	u32 svr = mfspr(SPRN_SVR);
 
 	if (of_device_is_compatible(hose->dn, "fsl,bsc9132-pcie")) {
 		/*
@@ -210,11 +211,11 @@ static void setup_pci_atmu(struct pci_controller *hose)
 	 */
 #define OWMSV 0x10
 #define ORMSV 0x08
-	if ((fsl_svr_is(SVR_8543) || fsl_svr_is(SVR_8543_E) ||
-	     fsl_svr_is(SVR_8545) || fsl_svr_is(SVR_8545_E) ||
-	     fsl_svr_is(SVR_8547) || fsl_svr_is(SVR_8547_E) ||
-	     fsl_svr_is(SVR_8548) || fsl_svr_is(SVR_8548_E)) &&
-	     fsl_svr_older_than(2, 1)) {
+	if (((SVR_SOC_VER(svr) == SVR_8543) ||
+			(SVR_SOC_VER(svr) == SVR_8545) ||
+			(SVR_SOC_VER(svr) == SVR_8547) ||
+			(SVR_SOC_VER(svr) == SVR_8548)) &&
+			(SVR_REV(svr) <= 0x20)) {
 		if (of_device_is_compatible(hose->dn, "fsl,mpc8540-pci")) {
 			/* disable OWMSV and ORMSV error capture */
 			setbits32(&pci->pcier.pecdr, OWMSV | ORMSV);
@@ -506,6 +507,7 @@ int __init fsl_add_bridge(struct platform_device *pdev, int is_primary)
 	struct device_node *dev;
 	struct ccsr_pci __iomem *pci;
 	u16 temp;
+	u32 svr = mfspr(SPRN_SVR);
 
 	dev = pdev->dev.of_node;
 
@@ -582,11 +584,11 @@ int __init fsl_add_bridge(struct platform_device *pdev, int is_primary)
 		 */
 #define PCI_BUS_FUNCTION 0x44
 #define PCI_BUS_FUNCTION_MDS 0x400	/* Master disable streaming */
-		if ((fsl_svr_is(SVR_8543) || fsl_svr_is(SVR_8543_E) ||
-		     fsl_svr_is(SVR_8545) || fsl_svr_is(SVR_8545_E) ||
-		     fsl_svr_is(SVR_8547) || fsl_svr_is(SVR_8547_E) ||
-		     fsl_svr_is(SVR_8548) || fsl_svr_is(SVR_8548_E)) &&
-		    !early_find_capability(hose, 0, 0, PCI_CAP_ID_PCIX)) {
+		if (((SVR_SOC_VER(svr) == SVR_8543) ||
+			(SVR_SOC_VER(svr) == SVR_8545) ||
+			(SVR_SOC_VER(svr) == SVR_8547) ||
+			(SVR_SOC_VER(svr) == SVR_8548)) &&
+			!early_find_capability(hose, 0, 0, PCI_CAP_ID_PCIX)) {
 			early_read_config_word(hose, 0, 0,
 						PCI_BUS_FUNCTION, &temp);
 			temp |= PCI_BUS_FUNCTION_MDS;
