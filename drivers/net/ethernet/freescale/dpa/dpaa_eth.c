@@ -750,8 +750,8 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	}
 
 	priv->buf_layout = buf_layout;
-	priv->tx_headroom =
-		dpa_get_headroom(&priv->buf_layout[TX]);
+	priv->tx_headroom = dpa_get_headroom(&priv->buf_layout[TX]);
+	priv->rx_headroom = dpa_get_headroom(&priv->buf_layout[RX]);
 
 	/* All real interfaces need their ports initialized */
 	dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,

@@ -663,7 +663,10 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 #endif
 	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[RX], &params);
 	layout[RX].manip_extra_space = params.manip_extra_space;
-	layout[RX].data_align = params.data_align;
+	/* a value of zero for data alignment means "don't care", so align to
+	 * a non-zero value to prevent FMD from using its own default
+	 */
+	layout[RX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 
 	/* Tx */
 	layout[TX].priv_data_size = DPA_TX_PRIV_DATA_SIZE;
@@ -674,7 +677,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 #endif
 	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[TX], &params);
 	layout[TX].manip_extra_space = params.manip_extra_space;
-	layout[TX].data_align = params.data_align;
+	layout[RX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 }
 
 static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)

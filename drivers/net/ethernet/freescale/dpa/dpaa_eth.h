@@ -222,6 +222,9 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 /* Maximum offset value for a contig or sg FD (represented on 9 bits) */
 #define DPA_MAX_FD_OFFSET	((1 << 9) - 1)
 
+/* Default alignment for start of data in an Rx FD */
+#define DPA_FD_DATA_ALIGNMENT  16
+
 /*
  * Values for the L3R field of the FM Parse Results
  */
@@ -465,6 +468,7 @@ struct dpa_priv_s {
 
 	struct dpa_buffer_layout_s *buf_layout;
 	u8 macless_idx;
+	uint16_t rx_headroom;
 };
 
 struct fm_port_fqs {

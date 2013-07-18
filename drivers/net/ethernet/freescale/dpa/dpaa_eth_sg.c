@@ -364,7 +364,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	if (unlikely(!skb))
 		return NULL;
 
-	BUG_ON(fd_off != priv->tx_headroom + dpa_get_rx_extra_headroom());
+	BUG_ON(fd_off != priv->rx_headroom);
 	skb_reserve(skb, fd_off);
 	skb_put(skb, dpa_fd_length(fd));
 
@@ -464,8 +464,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			/* Make sure forwarded skbs will have enough space
 			 * on Tx, if extra headers are added.
 			 */
-			BUG_ON(fd_off != priv->tx_headroom +
-				dpa_get_rx_extra_headroom());
+			BUG_ON(fd_off != priv->rx_headroom);
 			skb_reserve(skb, fd_off);
 			skb_put(skb, sgt[i].length);
 		} else {
