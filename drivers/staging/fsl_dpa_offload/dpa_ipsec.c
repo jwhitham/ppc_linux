@@ -808,7 +808,7 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 		return -ENOMEM;
 	}
 
-	/* fill with ids */
+	/* fill with IDs */
 	for (i = 0; i < sa_mng->max_num_sa; i++)
 		if (cq_put_4bytes(sa_mng->sa_id_cq, i) < 0) {
 			pr_err("Could not fill SA ID management CQ\n");
@@ -865,7 +865,8 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 			return -ENOMEM;
 		}
 
-		/* Allocate space for the SEC descriptor which is holding the
+		/*
+		 * Allocate space for the SEC descriptor which is holding the
 		 * preheader information and the share descriptor.
 		 * Required 64 byte align.
 		 */
@@ -2310,7 +2311,7 @@ static int create_sa_fq_pair(struct dpa_ipsec_sa *sa,
 }
 
 static inline int set_cipher_auth_alg(enum dpa_ipsec_cipher_alg alg_suite,
-			       uint16_t *cipher, uint16_t *auth)
+				      uint16_t *cipher, uint16_t *auth)
 {
 	*cipher = ipsec_algs[alg_suite].enc_alg;
 	*auth = ipsec_algs[alg_suite].auth_alg;
@@ -2969,7 +2970,7 @@ static int check_sa_params(struct dpa_ipsec_sa_params *sa_params)
 	/*
 	 * check crypto params:
 	 * - an authentication key must always be provided
-	 * - a cipher key must be provided if alg != NULL encryption
+	 * - a cipher key must be provided if algorithm != NULL encryption
 	 */
 
 	err = set_cipher_auth_alg(sa_params->crypto_params.alg_suite,
@@ -2977,20 +2978,23 @@ static int check_sa_params(struct dpa_ipsec_sa_params *sa_params)
 	if (err < 0)
 		return err;
 
-	if (sa_params->crypto_params.auth_key == NULL) {
+	if (!sa_params->crypto_params.auth_key ||
+	    sa_params->crypto_params.auth_key_len == 0) {
 		pr_err("A valid authentication key must be provided\n");
 		return -EINVAL;
 	}
 
-	/* TODO: check cipher_key ONLY if alg != null encryption */
-	if (sa_params->crypto_params.cipher_key == NULL) {
+	/* Check cipher_key only if the cipher algorithm isn't NULL encryption*/
+	if (cipher_alg != OP_PCL_IPSEC_NULL_ENC &&
+	    (!sa_params->crypto_params.cipher_key ||
+	    sa_params->crypto_params.cipher_key_len == 0)) {
 		pr_err("A valid cipher key must be provided\n");
 		return -EINVAL;
 	}
 
 	if (sa_params->sa_dir == DPA_IPSEC_OUTBOUND) {
-		if ((sa_params->sa_out_params.ip_hdr_size == 0) ||
-		    (sa_params->sa_out_params.outer_ip_header == NULL)) {
+		if (sa_params->sa_out_params.ip_hdr_size == 0 ||
+		    !sa_params->sa_out_params.outer_ip_header) {
 			pr_err("Transport mode is not currently supported."
 				   "Specify a valid encapsulation header\n");
 			return -EINVAL;
