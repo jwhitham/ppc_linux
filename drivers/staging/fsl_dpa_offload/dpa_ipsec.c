@@ -3439,6 +3439,7 @@ int dpa_ipsec_create_sa(int dpa_ipsec_id,
 			memset(&action, 0, sizeof(action));
 			action.type = DPA_CLS_TBL_ACTION_NEXT_TABLE;
 			action.next_table_params.next_td = inbpol_td;
+			action.next_table_params.hmd = DPA_OFFLD_DESC_NONE;
 			action.enable_statistics = FALSE;
 			err = set_flow_id_action(sa, &action);
 			if (err < 0) {
