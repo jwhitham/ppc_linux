@@ -245,7 +245,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 		return -ENODEV;
 
 	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count, NULL);
+	dpa_bp = dpa_bp_probe(_of_dev, &count);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
@@ -280,7 +280,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	/* bp init */
 
-	err = dpa_bp_create(net_dev, dpa_bp, count, NULL);
+	err = dpa_bp_create(net_dev, dpa_bp, count);
 
 	if (err < 0)
 		goto bp_create_failed;

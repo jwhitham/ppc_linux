@@ -361,7 +361,8 @@ struct dpa_bp {
 	 * the buffers
 	 */
 	void				*vaddr;
-	int kernel_pool;
+	/* some bpools need to be emptied before freeing */
+	bool requires_draining;
 	/* current number of buffers in the bpool alloted to this CPU */
 	int *percpu_count;
 	atomic_t refs;

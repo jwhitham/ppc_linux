@@ -687,8 +687,7 @@ static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 }
 
 struct dpa_bp * __cold __must_check /* __attribute__((nonnull)) */
-dpa_bp_probe(struct platform_device *_of_dev, size_t *count,
-		struct dpa_bp *default_pool)
+dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 {
 	int			 i, lenp, na, ns;
 	struct device		*dev;
@@ -697,21 +696,11 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count,
 	const uint32_t		*bpid;
 	const uint32_t		*bpool_cfg;
 	struct dpa_bp		*dpa_bp;
-	int has_kernel_pool = 0;
-	int has_shared_pool = 0;
 
 	dev = &_of_dev->dev;
 
 	/* The default is one, if there's no property */
 	*count = 1;
-
-	/* There are three types of buffer pool configuration:
-	 * 1) No bp assignment
-	 * 2) A static assignment to an empty configuration
-	 * 3) A static assignment to one or more configured pools
-	 *
-	 * We don't support using multiple unconfigured pools.
-	 */
 
 	/* Get the buffer pools to be used */
 	phandle_prop = of_get_property(dev->of_node,
@@ -720,10 +709,9 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count,
 	if (phandle_prop)
 		*count = lenp / sizeof(phandle);
 	else {
-		if (default_pool)
-			return default_pool;
-
-		has_kernel_pool = 1;
+		dev_err(dev,
+			"missing fsl,bman-buffer-pools device tree entry\n");
+		return ERR_PTR(-EINVAL);
 	}
 
 	dpa_bp = devm_kzalloc(dev, *count * sizeof(*dpa_bp), GFP_KERNEL);
@@ -780,24 +768,16 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count,
 					"fsl,bpool-ethernet-seeds", &lenp);
 			dpa_bp[i].seed_pool = !!seed_pool;
 
-			has_shared_pool = 1;
 		} else {
-			has_kernel_pool = 1;
+			dev_err(dev,
+				"Missing/invalid fsl,bpool-ethernet-cfg device tree entry for node %s\n",
+				dev_node->full_name);
+			dpa_bp = ERR_PTR(-EINVAL);
+			goto _return_of_node_put;
 		}
-
-		if (i > 0)
-			has_shared_pool = 1;
 	}
 
-	if (has_kernel_pool && has_shared_pool) {
-		dev_err(dev, "Invalid buffer pool configuration for node %s\n",
-			dev_node->full_name);
-		dpa_bp = ERR_PTR(-EINVAL);
-		goto _return_of_node_put;
-	} else if (has_kernel_pool) {
-		dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
-		dpa_bp->kernel_pool = 1;
-	}
+	dpa_bp->requires_draining = false;
 
 	sort(dpa_bp, *count, sizeof(*dpa_bp), dpa_bp_cmp, NULL);
 
@@ -810,7 +790,7 @@ _return_of_node_put:
 	return dpa_bp;
 }
 
-static void dpa_bp_depletion(struct bman_portal	*portal,
+void dpa_bp_depletion(struct bman_portal	*portal,
 		struct bman_pool *pool, void *cb_ctx, int depleted)
 {
 	if (net_ratelimit())
@@ -865,7 +845,7 @@ static int dpa_make_shared_port_pool(struct dpa_bp *bp)
 }
 
 static int __must_check /* __attribute__((nonnull)) */
-dpa_bp_alloc(struct dpa_bp *dpa_bp, struct dpa_bp **default_pool)
+dpa_bp_alloc(struct dpa_bp *dpa_bp)
 {
 	int err;
 	struct bman_pool_params	 bp_params;
@@ -878,19 +858,9 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp, struct dpa_bp **default_pool)
 	bp_params.cb = dpa_bp_depletion;
 	bp_params.cb_ctx = dpa_bp;
 
-	/* We support two options.  Either a global shared pool, or
-	 * a specified pool. If the pool is specified, we only
-	 * create one per bpid
-	 */
-	if (dpa_bp->kernel_pool && default_pool && *default_pool) {
-		atomic_inc(&(*default_pool)->refs);
+	/* If the pool is already specified, we only create one per bpid */
+	if (dpa_bpid2pool_use(dpa_bp->bpid))
 		return 0;
-	}
-
-	if (dpa_bp_array[dpa_bp->bpid]) {
-		atomic_inc(&dpa_bp_array[dpa_bp->bpid]->refs);
-		return 0;
-	}
 
 	if (dpa_bp->bpid == 0)
 		bp_params.flags |= BMAN_POOL_FLAG_DYNAMIC_BPID;
@@ -918,18 +888,11 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp, struct dpa_bp **default_pool)
 
 	dpa_bp->dev = &pdev->dev;
 
-	if (dpa_bp->kernel_pool) {
-		if (default_pool && !*default_pool)
-			*default_pool = dpa_bp;
-	} else {
-		err = dpa_make_shared_port_pool(dpa_bp);
-		if (err)
-			goto make_shared_pool_failed;
-	}
+	err = dpa_make_shared_port_pool(dpa_bp);
+	if (err)
+		goto make_shared_pool_failed;
 
-	dpa_bp_array[dpa_bp->bpid] = dpa_bp;
-
-	atomic_set(&dpa_bp->refs, 1);
+	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
 
 	return 0;
 
@@ -943,38 +906,24 @@ pdev_register_failed:
 }
 
 int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
-		size_t count, struct dpa_bp **default_pool)
+		size_t count)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 	int i;
 
-	if (dpa_bp->kernel_pool) {
-		priv->shared = 0;
-
-		if (netif_msg_probe(priv))
-			dev_info(net_dev->dev.parent,
-				"Using private BM buffer pools\n");
-	} else {
-		priv->shared = 1;
-	}
+	priv->shared = 1;
 
 	priv->dpa_bp = dpa_bp;
 	priv->bp_count = count;
 
 	for (i = 0; i < count; i++) {
 		int err;
-		err = dpa_bp_alloc(&dpa_bp[i], default_pool);
+		err = dpa_bp_alloc(&dpa_bp[i]);
 		if (err < 0) {
 			dpa_bp_free(priv, dpa_bp);
 			priv->dpa_bp = NULL;
 			return err;
 		}
-
-		/* For now, just point to the default pool.
-		 * We can add support for more pools, later
-		 */
-		if (dpa_bp->kernel_pool)
-			priv->dpa_bp = (default_pool) ? *default_pool : NULL;
 	}
 
 	return 0;
@@ -988,7 +937,7 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 	if (!atomic_dec_and_test(&bp->refs))
 		return;
 
-	if (bp->kernel_pool) {
+	if (bp->requires_draining) {
 		int num;
 
 		do {
@@ -1026,6 +975,21 @@ struct dpa_bp *dpa_bpid2pool(int bpid)
 	return dpa_bp_array[bpid];
 }
 
+void dpa_bpid2pool_map(int bpid, struct dpa_bp *dpa_bp)
+{
+	dpa_bp_array[bpid] = dpa_bp;
+	atomic_set(&dpa_bp->refs, 1);
+}
+
+bool dpa_bpid2pool_use(int bpid)
+{
+	if (dpa_bpid2pool(bpid)) {
+		atomic_inc(&dpa_bp_array[bpid]->refs);
+		return true;
+	}
+
+	return false;
+}
 
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)

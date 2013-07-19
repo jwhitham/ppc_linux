@@ -614,6 +614,117 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
 }
 
+static struct dpa_bp * __cold
+dpa_priv_bp_probe(struct device *dev)
+{
+	struct dpa_bp *dpa_bp;
+
+	dpa_bp = devm_kzalloc(dev, sizeof(*dpa_bp), GFP_KERNEL);
+	if (unlikely(dpa_bp == NULL)) {
+		dev_err(dev, "devm_kzalloc() failed\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
+	dpa_bp->requires_draining = true;
+
+	return dpa_bp;
+}
+
+static int
+dpa_priv_bp_alloc(struct dpa_bp *dpa_bp)
+{
+	int err;
+	struct bman_pool_params	 bp_params;
+	struct platform_device *pdev;
+
+	BUG_ON(dpa_bp->size == 0);
+	BUG_ON(dpa_bp->config_count == 0);
+
+	bp_params.flags = BMAN_POOL_FLAG_DEPLETION;
+	bp_params.cb = dpa_bp_depletion;
+	bp_params.cb_ctx = dpa_bp;
+
+	if (default_pool) {
+		atomic_inc(&default_pool->refs);
+		return 0;
+	}
+
+	/* If the pool is already specified, we only create one per bpid */
+	if (dpa_bpid2pool_use(dpa_bp->bpid))
+		return 0;
+
+	if (dpa_bp->bpid == 0)
+		bp_params.flags |= BMAN_POOL_FLAG_DYNAMIC_BPID;
+	else
+		bp_params.bpid = dpa_bp->bpid;
+
+	dpa_bp->pool = bman_new_pool(&bp_params);
+	if (unlikely(dpa_bp->pool == NULL)) {
+		pr_err("bman_new_pool() failed\n");
+		return -ENODEV;
+	}
+
+	dpa_bp->bpid = bman_get_params(dpa_bp->pool)->bpid;
+
+	pdev = platform_device_register_simple("dpaa_eth_bpool",
+			dpa_bp->bpid, NULL, 0);
+	if (IS_ERR(pdev)) {
+		err = PTR_ERR(pdev);
+		goto pdev_register_failed;
+	}
+
+	err = dma_set_mask(&pdev->dev, DMA_BIT_MASK(40));
+	if (err)
+		goto pdev_mask_failed;
+
+	dpa_bp->dev = &pdev->dev;
+
+	if (!default_pool)
+		default_pool = dpa_bp;
+
+	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
+
+	return 0;
+
+pdev_mask_failed:
+	platform_device_unregister(pdev);
+pdev_register_failed:
+	bman_free_pool(dpa_bp->pool);
+
+	return err;
+}
+
+static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
+		size_t count)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	int i;
+
+	priv->shared = 0;
+
+	if (netif_msg_probe(priv))
+		dev_dbg(net_dev->dev.parent,
+			"Using private BM buffer pools\n");
+
+	priv->dpa_bp = dpa_bp;
+	priv->bp_count = count;
+
+	for (i = 0; i < count; i++) {
+		int err;
+		err = dpa_priv_bp_alloc(&dpa_bp[i]);
+		if (err < 0) {
+			dpa_bp_free(priv, dpa_bp);
+			priv->dpa_bp = NULL;
+			return err;
+		}
+
+		priv->dpa_bp = default_pool;
+	}
+
+	return 0;
+}
+
 static const struct of_device_id dpa_match[];
 
 static int
@@ -624,7 +735,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	struct device_node *dpa_node;
 	struct dpa_bp *dpa_bp;
 	struct dpa_fq *dpa_fq, *tmp;
-	size_t count;
+	size_t count = 1;
 	struct net_device *net_dev = NULL;
 	struct dpa_priv_s *priv = NULL;
 	struct dpa_percpu_priv_s *percpu_priv;
@@ -640,8 +751,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	if (!of_device_is_available(dpa_node))
 		return -ENODEV;
 
-	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count, default_pool);
+	/* Get the buffer pools assigned to this interface;
+	 * run only once the default pool probing code
+	 */
+	dpa_bp = (default_pool) ? default_pool : dpa_priv_bp_probe(dev);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
@@ -703,7 +816,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	/* bp init */
 
-	err = dpa_bp_create(net_dev, dpa_bp, count, &default_pool);
+	err = dpa_priv_bp_create(net_dev, dpa_bp, count);
 
 	if (err < 0)
 		goto bp_create_failed;

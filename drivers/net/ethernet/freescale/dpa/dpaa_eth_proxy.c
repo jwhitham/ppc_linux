@@ -93,7 +93,7 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 		return -ENODEV;
 
 	/* Get the buffer pools assigned to this interface */
-	dpa_bp = dpa_bp_probe(_of_dev, &count, NULL);
+	dpa_bp = dpa_bp_probe(_of_dev, &count);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
