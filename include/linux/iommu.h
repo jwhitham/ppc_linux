@@ -76,6 +76,14 @@ struct iommu_domain {
 #define IOMMU_CAP_CACHE_COHERENCY	0x1
 #define IOMMU_CAP_INTR_REMAP		0x2	/* isolates device intrs */
 
+/* define indexes for each operation mapping scenario */
+enum omap_index {
+	OMI_QMAN,
+	OMI_FMAN,
+	OMI_QMAN_PRIV,
+	OMI_CAAM,
+};
+
 /*
  * Following constraints are specifc to PAMUV1:
  *  -aperture must be power of 2, and naturally aligned
