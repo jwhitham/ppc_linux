@@ -60,6 +60,11 @@ struct iommu_stash_attribute {
 	u32	window;	/* ~0 indicates all windows */
 };
 
+struct iommu_omi_attribute {
+	u32 omi;   /* index in the operation mapping table */
+	u32 window; /* ~0 indicates all windows */
+};
+
 struct iommu_domain_geometry {
 	dma_addr_t aperture_start; /* First address that can be mapped    */
 	dma_addr_t aperture_end;   /* Last address that can be mapped     */
@@ -105,6 +110,7 @@ enum iommu_attr {
 	DOMAIN_ATTR_PAMU_STASH,
 	DOMAIN_ATTR_PAMU_ENABLE,
 	DOMAIN_ATTR_FSL_PAMUV1,
+	DOMAIN_ATTR_PAMU_OP_MAP,
 	DOMAIN_ATTR_MAX,
 };
 

@@ -800,6 +800,49 @@ static  int configure_domain_geometry(struct iommu_domain *domain, void *data)
 	return 0;
 }
 
+/* Set the domain operation mapping attribute */
+static int configure_domain_op_map(struct fsl_dma_domain *dma_domain,
+				    void *data)
+{
+	struct dma_window *wnd;
+	unsigned long flags;
+	struct pamu_attr_info attr_info;
+	int ret, i;
+	struct iommu_omi_attribute *omi_attr = data;
+
+	spin_lock_irqsave(&dma_domain->domain_lock, flags);
+
+	if (!dma_domain->win_arr) {
+		pr_err("Number of windows not configured\n");
+		spin_unlock_irqrestore(&dma_domain->domain_lock, flags);
+		return -ENODEV;
+	}
+
+	if (omi_attr->omi >= OMI_MAX) {
+		pr_err("Invalid operation mapping index\n");
+		spin_unlock_irqrestore(&dma_domain->domain_lock, flags);
+		return -EINVAL;
+	}
+
+	if (~omi_attr->window == 0) {
+		wnd = &dma_domain->win_arr[0];
+		for (i = 0; i < dma_domain->win_cnt; i++)
+			wnd[i].omi = omi_attr->omi;
+	} else {
+		wnd = &dma_domain->win_arr[omi_attr->window];
+		wnd->omi = omi_attr->omi;
+	}
+
+	attr_info.window = omi_attr->window;
+	attr_info.field = PAACE_OMI_FIELD;
+	attr_info.value = omi_attr->omi;
+	ret = update_domain_attr(dma_domain, &attr_info);
+
+	spin_unlock_irqrestore(&dma_domain->domain_lock, flags);
+
+	return ret;
+}
+
 /* Set the domain stash attribute */
 static int configure_domain_stash(struct fsl_dma_domain *dma_domain, void *data)
 {
@@ -897,6 +940,9 @@ static int fsl_pamu_set_domain_attr(struct iommu_domain *domain,
 	case DOMAIN_ATTR_PAMU_ENABLE:
 		ret = configure_domain_dma_state(dma_domain, *(int *)data);
 		break;
+	case DOMAIN_ATTR_PAMU_OP_MAP:
+		ret = configure_domain_op_map(dma_domain, data);
+		break;
 	default:
 		pr_err("Unsupported attribute type\n");
 		ret = -EINVAL;
@@ -930,6 +976,18 @@ static int fsl_pamu_get_domain_attr(struct iommu_domain *domain,
 
 		wnd = &dma_domain->win_arr[stash_attr->window];
 		memcpy(stash_attr, &wnd->stash_attr, sizeof(struct iommu_stash_attribute));
+		break;
+	}
+	case DOMAIN_ATTR_PAMU_OP_MAP: {
+		struct iommu_omi_attribute *omi_attr = data;
+		struct dma_window *wnd;
+
+		if (omi_attr->window >= dma_domain->win_cnt ||
+			~omi_attr->window == 0)
+			return -EINVAL;
+
+		wnd = &dma_domain->win_arr[omi_attr->window];
+		omi_attr->omi = wnd->omi;
 		break;
 	}
 	default:

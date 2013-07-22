@@ -386,6 +386,7 @@ struct ome {
 
 enum  paace_field {
 	PAACE_STASH_FIELD,
+	PAACE_OMI_FIELD,
 	PAACE_FIELD_MAX,
 };
 
