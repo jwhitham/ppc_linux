@@ -273,7 +273,7 @@ void pamu_free_subwins(int liodn)
  * Function used for updating stash destination for the coressponding
  * LIODN.
  */
-int  pamu_update_paace_stash(int liodn, u32 subwin, u32 value)
+int  pamu_update_paace_field(int liodn, u32 subwin, int field, u32 value)
 {
 	struct paace *paace;
 
@@ -288,8 +288,15 @@ int  pamu_update_paace_stash(int liodn, u32 subwin, u32 value)
 			return -ENOENT;
 		}
 	}
-	set_bf(paace->impl_attr, PAACE_IA_CID, value);
 
+	switch (field) {
+	case PAACE_STASH_FIELD:
+		set_bf(paace->impl_attr, PAACE_IA_CID, value);
+		break;
+	default:
+		pr_debug("Invalid field, can't update\n");
+		return -EINVAL;
+	}
 	mb();
 
 	return 0;
