@@ -384,6 +384,12 @@ struct ome {
 #define EOE_WWSAOL      0x1e    /* Write with stash allocate only and lock */
 #define EOE_VALID       0x80
 
+enum  paace_field {
+	PAACE_STASH_FIELD,
+	PAACE_OMI_FIELD,
+	PAACE_FIELD_MAX,
+};
+
 /* Function prototypes */
 int pamu_domain_init(void);
 int pamu_enable_liodn(int liodn);

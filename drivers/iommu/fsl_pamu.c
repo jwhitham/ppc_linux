@@ -295,6 +295,18 @@ int  pamu_update_paace_stash(int liodn, u32 subwin, u32 value)
 	}
 	set_bf(paace->impl_attr, PAACE_IA_CID, value);
 
+	switch (field) {
+	case PAACE_STASH_FIELD:
+		set_bf(paace->impl_attr, PAACE_IA_CID, value);
+		break;
+	case PAACE_OMI_FIELD:
+		set_bf(paace->impl_attr, PAACE_IA_OTM, PAACE_OTM_INDEXED);
+		paace->op_encode.index_ot.omi = value;
+		break;
+	default:
+		pr_debug("Invalid field, can't update\n");
+		return -EINVAL;
+	}
 	mb();
 
 	return 0;
