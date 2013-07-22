@@ -56,7 +56,8 @@ enum stash_target {
 
 struct iommu_stash_attribute {
 	u32 	cpu;	/* cpu number */
-	u32 	cache;	/* cache to stash to: L1,L2,L3 */
+	u32 	cache;	/* cache to stash to L1,L2,L3 */
+	u32	window;	/* ~0 indicates all windows */
 };
 
 struct iommu_domain_geometry {
