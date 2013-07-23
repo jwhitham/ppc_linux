@@ -713,7 +713,7 @@ static inline void _dpa_bp_free_buf(void *addr)
 #else
 static inline void _dpa_bp_free_buf(void *addr)
 {
-	free_page((unsigned long)addr);
+	put_page(virt_to_head_page(addr));
 }
 #endif
 
