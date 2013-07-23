@@ -78,11 +78,7 @@ static int dpa_debugfs_show(struct seq_file *file, void *offset)
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 
-		/* Only private interfaces have an associated counter for bp
-		 * buffers. Also the counter isn't initialized before the first
-		 * ifconfig up
-		 */
-		if (!priv->shared && percpu_priv->dpa_bp_count)
+		if (percpu_priv->dpa_bp_count)
 			dpa_bp_count = *percpu_priv->dpa_bp_count;
 
 		total.in_interrupt += percpu_priv->in_interrupt;

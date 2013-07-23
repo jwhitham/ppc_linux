@@ -488,9 +488,31 @@ static const dpa_fq_cbs_t private_fq_cbs = {
 	.egress_ern = { .cb = { .ern = priv_ern } }
 };
 
+static void dpaa_eth_napi_enable(struct dpa_priv_s *priv)
+{
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i;
+
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		napi_enable(&percpu_priv->napi);
+	}
+}
+
+static void dpaa_eth_napi_disable(struct dpa_priv_s *priv)
+{
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i;
+
+	for_each_online_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		napi_disable(&percpu_priv->napi);
+	}
+}
+
 static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 {
-	int i;
+	int i, err;
 	struct dpa_priv_s *priv;
 	struct dpa_percpu_priv_s *percpu_priv;
 
@@ -515,7 +537,13 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 		}
 	}
 
-	return dpa_start(net_dev);
+	dpaa_eth_napi_enable(priv);
+
+	err = dpa_start(net_dev);
+	if (err < 0)
+		dpaa_eth_napi_disable(priv);
+
+	return err;
 }
 
 
@@ -701,8 +729,6 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 	int i;
 
-	priv->shared = 0;
-
 	if (netif_msg_probe(priv))
 		dev_dbg(net_dev->dev.parent,
 			"Using private BM buffer pools\n");
@@ -774,6 +800,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	priv = netdev_priv(net_dev);
 	priv->net_dev = net_dev;
+	strcpy(priv->if_type, "private");
 
 	priv->msg_enable = netif_msg_init(debug, -1);
 

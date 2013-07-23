@@ -120,34 +120,6 @@ int dpa_netdev_init(struct device_node *dpa_node,
 	return 0;
 }
 
-static void dpaa_eth_napi_enable(struct dpa_priv_s *priv)
-{
-	struct dpa_percpu_priv_s *percpu_priv;
-	int i;
-
-	if (priv->shared)
-		return;
-
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		napi_enable(&percpu_priv->napi);
-	}
-}
-
-void dpaa_eth_napi_disable(struct dpa_priv_s *priv)
-{
-	struct dpa_percpu_priv_s *percpu_priv;
-	int i;
-
-	if (priv->shared)
-		return;
-
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		napi_disable(&percpu_priv->napi);
-	}
-}
-
 int __cold dpa_start(struct net_device *net_dev)
 {
 	int err, i;
@@ -157,13 +129,11 @@ int __cold dpa_start(struct net_device *net_dev)
 	priv = netdev_priv(net_dev);
 	mac_dev = priv->mac_dev;
 
-	dpaa_eth_napi_enable(priv);
-
 	err = mac_dev->init_phy(net_dev);
 	if (err < 0) {
 		if (netif_msg_ifup(priv))
 			netdev_err(net_dev, "init_phy() = %d\n", err);
-		goto init_phy_failed;
+		return err;
 	}
 
 	for_each_port_device(i, mac_dev->port_dev)
@@ -183,9 +153,6 @@ int __cold dpa_start(struct net_device *net_dev)
 mac_start_failed:
 	for_each_port_device(i, mac_dev->port_dev)
 		fm_port_disable(mac_dev->port_dev[i]);
-
-init_phy_failed:
-	dpaa_eth_napi_disable(priv);
 
 	return err;
 }
@@ -911,8 +878,6 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 	int i;
 
-	priv->shared = 1;
-
 	priv->dpa_bp = dpa_bp;
 	priv->bp_count = count;
 
@@ -1316,7 +1281,6 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 			break;
 		case FQ_TYPE_TX_CONF_MQ:
 			BUG_ON(!priv->mac_dev);
-			BUG_ON(priv->shared);
 			dpa_setup_ingress(priv, fq, &fq_cbs->tx_defq);
 			priv->conf_fqs[conf_cnt++] = &fq->fq_base;
 			break;
@@ -1327,7 +1291,6 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 #ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 		case FQ_TYPE_TX_RECYCLE:
 			BUG_ON(!priv->mac_dev);
-			BUG_ON(priv->shared);
 			dpa_setup_egress(priv, fq, tx_port,
 					 &fq_cbs->egress_ern);
 			priv->recycle_fqs[recycle_cnt++] = &fq->fq_base;

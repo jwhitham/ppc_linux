@@ -58,13 +58,12 @@ static ssize_t dpaa_eth_show_type(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
+	ssize_t res = 0;
 
-	if (!priv->mac_dev)
-		return sprintf(buf, "macless%d", priv->macless_idx);
-	else if (priv->shared)
-		return sprintf(buf, "shared");
-	else
-		return sprintf(buf, "private");
+	if (priv)
+		res = sprintf(buf, "%s", priv->if_type);
+
+	return res;
 }
 
 static ssize_t dpaa_eth_show_fqids(struct device *dev,

@@ -416,7 +416,6 @@ struct dpa_priv_s {
 	 * (even though it can be computed based on the fields of buf_layout)
 	 */
 	uint16_t tx_headroom;
-	int shared;
 	struct net_device *net_dev;
 	struct mac_device	*mac_dev;
 	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
@@ -468,8 +467,8 @@ struct dpa_priv_s {
 #endif /* CONFIG_FSL_DPAA_TS */
 
 	struct dpa_buffer_layout_s *buf_layout;
-	u8 macless_idx;
 	uint16_t rx_headroom;
+	char if_type[30];
 };
 
 struct fm_port_fqs {

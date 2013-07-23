@@ -593,6 +593,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 
 	priv = netdev_priv(net_dev);
 	priv->net_dev = net_dev;
+	strcpy(priv->if_type, "shared");
 
 	priv->msg_enable = netif_msg_init(debug, -1);
 

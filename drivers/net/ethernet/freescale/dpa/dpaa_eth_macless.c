@@ -264,6 +264,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	priv = netdev_priv(net_dev);
 	priv->net_dev = net_dev;
+	sprintf(priv->if_type, "macless%d", macless_idx++);
 
 	priv->msg_enable = netif_msg_init(debug, -1);
 
@@ -340,11 +341,10 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		goto netdev_init_failed;
 
-	priv->macless_idx = macless_idx++;
-
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
-	printk(KERN_INFO "fsl_dpa_macless: Probed macless interface %s\n", net_dev->name);
+	printk(KERN_INFO "fsl_dpa_macless: Probed %s interface as %s\n",
+			priv->if_type, net_dev->name);
 
 	return 0;
 

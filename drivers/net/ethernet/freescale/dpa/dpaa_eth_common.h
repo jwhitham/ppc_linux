@@ -56,7 +56,6 @@ int dpa_netdev_init(struct device_node *dpa_node,
 		struct net_device *net_dev,
 		const uint8_t *mac_addr,
 		uint16_t tx_timeout);
-void dpaa_eth_napi_disable(struct dpa_priv_s *priv);
 int __cold dpa_start(struct net_device *net_dev);
 int __cold dpa_stop(struct net_device *net_dev);
 void __cold dpa_timeout(struct net_device *net_dev);
