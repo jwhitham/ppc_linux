@@ -379,7 +379,7 @@ int fsl_rio_setup(struct platform_device *dev)
 	u32 i;
 	static int tmp;
 	struct device_node *rmu_np[MAX_MSG_UNIT_NUM] = {NULL};
-	static u32 svr = mfspr(SPRN_SVR);
+	u32 svr = mfspr(SPRN_SVR);
 
 	if (!dev->dev.of_node) {
 		dev_err(&dev->dev, "Device OF-Node is NULL");
