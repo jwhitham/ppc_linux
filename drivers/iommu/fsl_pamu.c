@@ -35,11 +35,6 @@
 
 #include "fsl_pamu.h"
 
-/* define indexes for each operation mapping scenario */
-#define OMI_QMAN        0x00
-#define OMI_FMAN        0x01
-#define OMI_QMAN_PRIV   0x02
-#define OMI_CAAM        0x03
 
 /* Handling access violations */
 #define make64(high, low) (((u64)(high) << 32) | (low))
@@ -278,7 +273,7 @@ void pamu_free_subwins(int liodn)
  * Function used for updating stash destination for the coressponding
  * LIODN.
  */
-int  pamu_update_paace_stash(int liodn, u32 subwin, u32 value)
+int  pamu_update_paace_field(int liodn, u32 subwin, int field, u32 value)
 {
 	struct paace *paace;
 
@@ -293,8 +288,19 @@ int  pamu_update_paace_stash(int liodn, u32 subwin, u32 value)
 			return -ENOENT;
 		}
 	}
-	set_bf(paace->impl_attr, PAACE_IA_CID, value);
 
+	switch (field) {
+	case PAACE_STASH_FIELD:
+		set_bf(paace->impl_attr, PAACE_IA_CID, value);
+		break;
+	case PAACE_OMI_FIELD:
+		set_bf(paace->impl_attr, PAACE_IA_OTM, PAACE_OTM_INDEXED);
+		paace->op_encode.index_ot.omi = value;
+		break;
+	default:
+		pr_debug("Invalid field, can't update\n");
+		return -EINVAL;
+	}
 	mb();
 
 	return 0;
@@ -611,6 +617,7 @@ found_cpu_node:
 #define QMAN_PORTAL_PAACE 2
 #define BMAN_PAACE 3
 #define FMAN_PAACE 4
+#define PMAN_PAACE 5
 
 /**
  * Setup operation mapping and stash destinations for QMAN and QMAN portal.
@@ -645,6 +652,10 @@ static void setup_dpaa_paace(struct paace *ppaace, int  paace_type)
 		/*Set frame stashing for the L3 cache */
 		set_bf(ppaace->impl_attr, PAACE_IA_CID,
 		       get_stash_id(IOMMU_ATTR_CACHE_L3, 0));
+		break;
+	case PMAN_PAACE:
+		set_bf(ppaace->impl_attr, PAACE_IA_OTM, PAACE_OTM_INDEXED);
+		ppaace->op_encode.index_ot.omi = OMI_PMAN;
 		break;
 	}
 }
@@ -690,6 +701,32 @@ static void __init setup_omt(struct ome *omt)
 	ome = &omt[OMI_CAAM];
 	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_READI;
 	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WRITE;
+
+	/* Configure OMI_PMAN */
+	ome = &omt[OMI_PMAN];
+	ome->moe[IOE_DIRECT0_IDX] = EOE_LDEC | EOE_VALID;
+	ome->moe[IOE_DIRECT1_IDX] = EOE_LDEC | EOE_VALID;
+
+	/* Configure OMI_DMA */
+	ome = &omt[OMI_DMA];
+	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_RSA;
+	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_RSA;
+	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
+	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSA;
+
+	/* Configure OMI_DMA_READI */
+	ome = &omt[OMI_DMA_READI];
+	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_READI;
+	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_READI;
+	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
+	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSA;
+
+	/* Configure OMI_MAPLE */
+	ome = &omt[OMI_MAPLE];
+	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_RSA;
+	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_RSA;
+	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
+	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSA;
 }
 
 /*
@@ -809,6 +846,8 @@ static void __init setup_liodns(void)
 				setup_dpaa_paace(ppaace, QMAN_PAACE);
 			if (of_device_is_compatible(node, "fsl,bman"))
 				setup_dpaa_paace(ppaace, BMAN_PAACE);
+			if (of_device_is_compatible(node, "fsl,pman"))
+				setup_dpaa_paace(ppaace, PMAN_PAACE);
 #ifdef CONFIG_FSL_FMAN_CPC_STASH
 			if (of_device_is_compatible(node, "fsl,fman-port-10g-rx") ||
 			    of_device_is_compatible(node, "fsl,fman-port-1g-rx"))

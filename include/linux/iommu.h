@@ -56,7 +56,13 @@ enum stash_target {
 
 struct iommu_stash_attribute {
 	u32 	cpu;	/* cpu number */
-	u32 	cache;	/* cache to stash to: L1,L2,L3 */
+	u32 	cache;	/* cache to stash to L1,L2,L3 */
+	u32	window;	/* ~0 indicates all windows */
+};
+
+struct iommu_omi_attribute {
+	u32 omi;   /* index in the operation mapping table */
+	u32 window; /* ~0 indicates all windows */
 };
 
 struct iommu_domain_geometry {
@@ -75,6 +81,19 @@ struct iommu_domain {
 
 #define IOMMU_CAP_CACHE_COHERENCY	0x1
 #define IOMMU_CAP_INTR_REMAP		0x2	/* isolates device intrs */
+
+/* define indexes for each operation mapping scenario */
+enum omap_index {
+	OMI_QMAN,
+	OMI_FMAN,
+	OMI_QMAN_PRIV,
+	OMI_CAAM,
+	OMI_PMAN,
+	OMI_DMA,
+	OMI_DMA_READI,
+	OMI_MAPLE,
+	OMI_MAX,
+};
 
 /*
  * Following constraints are specifc to PAMUV1:
@@ -96,6 +115,7 @@ enum iommu_attr {
 	DOMAIN_ATTR_PAMU_STASH,
 	DOMAIN_ATTR_PAMU_ENABLE,
 	DOMAIN_ATTR_FSL_PAMUV1,
+	DOMAIN_ATTR_PAMU_OP_MAP,
 	DOMAIN_ATTR_MAX,
 };
 
