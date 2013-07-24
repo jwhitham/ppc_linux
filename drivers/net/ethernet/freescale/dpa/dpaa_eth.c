@@ -669,18 +669,12 @@ dpa_priv_bp_alloc(struct dpa_bp *dpa_bp)
 	BUG_ON(dpa_bp->size == 0);
 	BUG_ON(dpa_bp->config_count == 0);
 
-	bp_params.flags = BMAN_POOL_FLAG_DEPLETION;
-	bp_params.cb = dpa_bp_depletion;
-	bp_params.cb_ctx = dpa_bp;
+	bp_params.flags = 0;
 
 	if (default_pool) {
 		atomic_inc(&default_pool->refs);
 		return 0;
 	}
-
-	/* If the pool is already specified, we only create one per bpid */
-	if (dpa_bpid2pool_use(dpa_bp->bpid))
-		return 0;
 
 	if (dpa_bp->bpid == 0)
 		bp_params.flags |= BMAN_POOL_FLAG_DYNAMIC_BPID;
@@ -708,8 +702,7 @@ dpa_priv_bp_alloc(struct dpa_bp *dpa_bp)
 
 	dpa_bp->dev = &pdev->dev;
 
-	if (!default_pool)
-		default_pool = dpa_bp;
+	default_pool = dpa_bp;
 
 	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
 

@@ -757,13 +757,6 @@ _return_of_node_put:
 	return dpa_bp;
 }
 
-void dpa_bp_depletion(struct bman_portal	*portal,
-		struct bman_pool *pool, void *cb_ctx, int depleted)
-{
-	if (net_ratelimit())
-		pr_err("Invalid Pool depleted notification!\n");
-}
-
 static void dpaa_eth_seed_pool(struct dpa_bp *bp)
 {
 	int count = bp->target_count;
@@ -821,9 +814,7 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp)
 	BUG_ON(dpa_bp->size == 0);
 	BUG_ON(dpa_bp->config_count == 0);
 
-	bp_params.flags = BMAN_POOL_FLAG_DEPLETION;
-	bp_params.cb = dpa_bp_depletion;
-	bp_params.cb_ctx = dpa_bp;
+	bp_params.flags = 0;
 
 	/* If the pool is already specified, we only create one per bpid */
 	if (dpa_bpid2pool_use(dpa_bp->bpid))

@@ -90,8 +90,6 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count);
 void __cold __attribute__((nonnull))
 dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp);
-void dpa_bp_depletion(struct bman_portal	*portal,
-		struct bman_pool *pool, void *cb_ctx, int depleted);
 struct dpa_bp *dpa_bpid2pool(int bpid);
 void dpa_bpid2pool_map(int bpid, struct dpa_bp *dpa_bp);
 bool dpa_bpid2pool_use(int bpid);
