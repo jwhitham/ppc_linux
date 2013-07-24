@@ -241,7 +241,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 			BUG_ON(sgt[i].extension);
 
 			dma_unmap_page(dpa_bp->dev, sgt[i].addr,
-					dpa_bp->size, dma_dir);
+					sgt[i].length, dma_dir);
 		}
 
 		/*
@@ -671,7 +671,9 @@ no_recycle:
 	fd->format = qm_fd_contig;
 	fd->length20 = skb->len;
 
-	addr = dma_map_single(dpa_bp->dev, skbh, dpa_bp->size, dma_dir);
+	/* Map the entire buffer size that may be seen by FMan, but no more */
+	addr = dma_map_single(dpa_bp->dev, skbh,
+			skb_end_pointer(skb) - (unsigned char *)skbh, dma_dir);
 	if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
 		if (netif_msg_tx_err(priv) && net_ratelimit())
 			netdev_err(net_dev, "dma_map_single() failed\n");
@@ -750,7 +752,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		sgt[i].final = 0;
 
 		BUG_ON(!skb_frag_page(frag));
-		addr = skb_frag_dma_map(dpa_bp->dev, frag, 0, dpa_bp->size,
+		addr = skb_frag_dma_map(dpa_bp->dev, frag, 0, sgt[i].length,
 					dma_dir);
 		if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
 			dev_err(dpa_bp->dev, "DMA mapping failed");
@@ -772,7 +774,8 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	skbh = (struct sk_buff **)buffer_start;
 	*skbh = skb;
 
-	addr = dma_map_single(dpa_bp->dev, buffer_start, dpa_bp->size, dma_dir);
+	addr = dma_map_single(dpa_bp->dev, buffer_start,
+		skb_end_pointer(skb) - (unsigned char *)buffer_start, dma_dir);
 	if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
 		dev_err(dpa_bp->dev, "DMA mapping failed");
 		err = -EINVAL;
@@ -787,7 +790,7 @@ sgt_map_failed:
 sg_map_failed:
 	for (j = 0; j < i; j++)
 		dma_unmap_page(dpa_bp->dev, qm_sg_addr(&sgt[j]),
-			dpa_bp->size, dma_dir);
+			sgt[j].length, dma_dir);
 sg0_map_failed:
 csum_failed:
 	put_page(virt_to_head_page(sgt_buf));
