@@ -78,8 +78,8 @@ static int dpa_debugfs_show(struct seq_file *file, void *offset)
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 
-		if (percpu_priv->dpa_bp_count)
-			dpa_bp_count = *percpu_priv->dpa_bp_count;
+		if (dpa_bp->percpu_count)
+			dpa_bp_count = *(per_cpu_ptr(dpa_bp->percpu_count, i));
 
 		total.in_interrupt += percpu_priv->in_interrupt;
 		total.stats.rx_packets += percpu_priv->stats.rx_packets;

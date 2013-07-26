@@ -390,12 +390,6 @@ struct dpa_ern_cnt {
 
 struct dpa_percpu_priv_s {
 	struct net_device *net_dev;
-	/*
-	 * Pointer to the percpu_count of the shared buffer pool
-	 * used for the private ports; this assumes there is only
-	 * one bpool used
-	 */
-	int *dpa_bp_count;
 	struct dpa_bp *dpa_bp;
 	struct napi_struct napi;
 	u64 in_interrupt;

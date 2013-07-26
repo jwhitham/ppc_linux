@@ -529,12 +529,8 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 	}
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		if (!percpu_priv->dpa_bp) {
+		if (!percpu_priv->dpa_bp)
 			percpu_priv->dpa_bp = priv->dpa_bp;
-			percpu_priv->dpa_bp_count =
-				per_cpu_ptr(priv->dpa_bp->percpu_count,
-					    i);
-		}
 	}
 
 	dpaa_eth_napi_enable(priv);

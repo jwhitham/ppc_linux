@@ -157,9 +157,9 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
  */
 int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
-	int *countptr = percpu_priv->dpa_bp_count;
-	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+	int *countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
+	int count = *countptr;
 	int new_bufs;
 
 	/* Add pages to the buffer pool */
@@ -807,11 +807,13 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	int err = 0;
 	const int queue_mapping = dpa_get_queue_mapping(skb);
 	const bool nonlinear = skb_is_nonlinear(skb);
+	int *countptr;
 
 	priv = netdev_priv(net_dev);
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 	percpu_stats = &percpu_priv->stats;
+	countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
 
 	clear_fd(&fd);
 
@@ -891,7 +893,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		 * of the page containing the recycled buffer to make sure it
 		 * doesn't get freed.
 		 */
-		(*percpu_priv->dpa_bp_count)++;
+		(*countptr)++;
 		get_page(virt_to_head_page(skb->head));
 		percpu_priv->tx_returned++;
 	}
@@ -909,7 +911,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 xmit_failed:
 	if (fd.cmd & FM_FD_CMD_FCO) {
-		(*percpu_priv->dpa_bp_count)--;
+		(*countptr)--;
 		put_page(virt_to_head_page(skb->head));
 		percpu_priv->tx_returned--;
 	}

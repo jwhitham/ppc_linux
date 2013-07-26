@@ -87,6 +87,7 @@ static enum qman_cb_dqrr_result tx_unit_test_dqrr(
 	dma_addr_t addr;
 	unsigned char *startaddr;
 	struct dpa_percpu_priv_s *percpu_priv;
+	int *countptr;
 
 	tx_unit_test_passed = false;
 
@@ -126,9 +127,10 @@ static enum qman_cb_dqrr_result tx_unit_test_dqrr(
 		 * If we didn't recycle, but the buffer was big enough,
 		 * increment the counter to put it back
 		 */
+		countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 		if (skb_end_pointer(skb) - skb->head >=
 			dpa_get_max_frm())
-			(*percpu_priv->dpa_bp_count)++;
+			(*countptr)++;
 
 		/* If we didn't recycle, the data pointer should be good */
 		if (skb->data != startaddr + dpa_fd_offset(fd))
@@ -234,6 +236,8 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 		     headroom += 16) {
 			int ret;
 			struct sk_buff *skb;
+			int *countptr =
+				__this_cpu_ptr(priv->dpa_bp->percpu_count);
 
 			test_count++;
 
@@ -247,7 +251,7 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 
 			if (skb_end_pointer(skb) - skb->head >=
 					dpa_get_max_frm())
-				(*percpu_priv->dpa_bp_count)--;
+				(*countptr)--;
 
 			skb_put(skb, size + headroom);
 			skb_pull(skb, headroom);
@@ -368,7 +372,6 @@ void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		percpu_priv->dpa_bp = NULL;
-		percpu_priv->dpa_bp_count = NULL;
 	}
 }
 
@@ -387,9 +390,6 @@ void dpa_unit_test_seed_default_pool(struct net_device *net_dev)
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		if (!percpu_priv->dpa_bp) {
 			percpu_priv->dpa_bp = priv->dpa_bp;
-			percpu_priv->dpa_bp_count =
-				per_cpu_ptr(priv->dpa_bp->percpu_count,
-						i);
 		}
 	}
 }

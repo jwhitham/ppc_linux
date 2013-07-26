@@ -140,9 +140,9 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
  */
 int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
-	int *countptr = percpu_priv->dpa_bp_count;
-	int count = *countptr;
 	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
+	int count = *countptr;
 	/* this function is called in softirq context;
 	 * no need to protect smp_processor_id() on RT kernel
 	 */
@@ -256,8 +256,9 @@ static int dpa_process_one(struct dpa_percpu_priv_s *percpu_priv,
 	unsigned long skb_addr = virt_to_phys(skb->head);
 	u32 pad = fd_addr - skb_addr;
 	unsigned int data_start;
+	int *countptr = __this_cpu_ptr(bp->percpu_count);
 
-	(*percpu_priv->dpa_bp_count)--;
+	(*countptr)--;
 
 	/* The skb is currently pointed at head + headroom. The packet
 	 * starts at skb->head + pad + fd offset.
@@ -468,6 +469,7 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 	bool can_recycle = false;
 	int offset, extra_offset;
 	int err;
+	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
 
 	/* We are guaranteed that we have at least tx_headroom bytes.
 	 * Buffers we allocated are padded to improve cache usage. In order
@@ -490,7 +492,7 @@ static int skb_to_contig_fd(struct dpa_priv_s *priv,
 	if (likely(skb_is_recycleable(skb, dpa_bp->size) &&
 		   (skb_end_pointer(skb) - skb->head <=
 			DPA_RECYCLE_MAX_SIZE) &&
-		   (*percpu_priv->dpa_bp_count < dpa_bp->target_count))) {
+		   (*countptr < dpa_bp->target_count))) {
 		/* Compute the minimum necessary fd offset */
 		offset = dpa_bp->size - skb->len - skb_tailroom(skb);
 
@@ -585,6 +587,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	struct rtnl_link_stats64 *percpu_stats;
 	int queue_mapping;
 	int err;
+	int *countptr;
 
 	/* If there is a Tx hook, run it. */
 	if (dpaa_eth_hooks.tx &&
@@ -595,6 +598,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	priv = netdev_priv(net_dev);
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 	percpu_stats = &percpu_priv->stats;
+	countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 
 	clear_fd(&fd);
 	queue_mapping = dpa_get_queue_mapping(skb);
@@ -665,7 +669,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		 */
 		skb_recycle(skb);
 		skb = NULL;
-		(*percpu_priv->dpa_bp_count)++;
+		(*countptr)++;
 		percpu_priv->tx_returned++;
 	}
 
@@ -678,7 +682,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 
 xmit_failed:
 	if (fd.cmd & FM_FD_CMD_FCO) {
-		(*percpu_priv->dpa_bp_count)--;
+		(*countptr)--;
 		percpu_priv->tx_returned--;
 	}
 fd_create_failed:
