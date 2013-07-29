@@ -136,8 +136,6 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 {
 	int i;
 
-	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
-
 	/* Give each CPU an allotment of "config_count" buffers */
 	for_each_online_cpu(i) {
 		int j;

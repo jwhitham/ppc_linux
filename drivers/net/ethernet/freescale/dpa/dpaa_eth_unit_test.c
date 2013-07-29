@@ -346,7 +346,6 @@ void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 	int i;
 	int num;
 	struct dpa_priv_s *priv;
-	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
 
@@ -367,31 +366,20 @@ void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 	} while (num == 8);
 
 	/* restore counters to their previous state */
-	free_percpu(default_pool->percpu_count);
-
 	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		percpu_priv->dpa_bp = NULL;
+		int *countptr = per_cpu_ptr(default_pool->percpu_count, i);
+		*countptr = 0;
 	}
 }
 
 void dpa_unit_test_seed_default_pool(struct net_device *net_dev)
 {
-	int i;
 	struct dpa_priv_s *priv;
-	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
 
 	default_pool->size = default_buf_size;
 	dpa_make_private_pool(default_pool);
-
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		if (!percpu_priv->dpa_bp) {
-			percpu_priv->dpa_bp = priv->dpa_bp;
-		}
-	}
 }
 
 void dpa_unit_tests(struct net_device *net_dev)

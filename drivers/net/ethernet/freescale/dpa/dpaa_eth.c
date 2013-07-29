@@ -512,12 +512,12 @@ static void dpaa_eth_napi_disable(struct dpa_priv_s *priv)
 
 static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 {
-	int i, err;
+	int err;
 	struct dpa_priv_s *priv;
-	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
 
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/* Seed the global buffer pool at the first ifconfig up
 	 * of a private port. Update the percpu buffer counters
 	 * of each private interface.
@@ -527,11 +527,7 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 		dpa_make_private_pool(default_pool);
 		default_pool_seeded = true;
 	}
-	for_each_online_cpu(i) {
-		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		if (!percpu_priv->dpa_bp)
-			percpu_priv->dpa_bp = priv->dpa_bp;
-	}
+#endif
 
 	dpaa_eth_napi_enable(priv);
 
@@ -649,6 +645,7 @@ dpa_priv_bp_probe(struct device *dev)
 		return ERR_PTR(-ENOMEM);
 	}
 
+	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 	dpa_bp->requires_draining = true;
 
@@ -698,6 +695,9 @@ dpa_priv_bp_alloc(struct dpa_bp *dpa_bp)
 
 	dpa_bp->dev = &pdev->dev;
 
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+	dpa_make_private_pool(dpa_bp);
+#endif
 	default_pool = dpa_bp;
 
 	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
@@ -815,8 +815,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	 * the maximum buffer size for private ports if necessary
 	 */
 	dpa_bp->size = dpa_bp_size(&buf_layout[RX]);
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	if (dpa_bp->size > default_buf_size)
 		default_buf_size = dpa_bp->size;
+#endif
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
 
@@ -896,6 +898,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		memset(percpu_priv, 0, sizeof(*percpu_priv));
+		percpu_priv->dpa_bp = priv->dpa_bp;
 	}
 
 	err = dpa_private_netdev_init(dpa_node, net_dev);
