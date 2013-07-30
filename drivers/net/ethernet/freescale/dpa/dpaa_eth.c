@@ -647,7 +647,7 @@ dpa_priv_bp_probe(struct device *dev)
 
 	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
-	dpa_bp->requires_draining = true;
+	dpa_bp->drain_cb = dpa_bp_drain;
 
 	return dpa_bp;
 }

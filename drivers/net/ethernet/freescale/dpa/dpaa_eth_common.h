@@ -88,11 +88,13 @@ struct dpa_bp * __cold __must_check /* __attribute__((nonnull)) */
 dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
 int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count);
+int dpa_bp_shared_port_seed(struct dpa_bp *bp);
 void __cold __attribute__((nonnull))
 dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp);
 struct dpa_bp *dpa_bpid2pool(int bpid);
 void dpa_bpid2pool_map(int bpid, struct dpa_bp *dpa_bp);
 bool dpa_bpid2pool_use(int bpid);
+void dpa_bp_drain(struct dpa_bp *bp);
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb);
 #endif

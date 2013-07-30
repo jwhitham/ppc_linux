@@ -361,11 +361,13 @@ struct dpa_bp {
 	 * the buffers
 	 */
 	void				*vaddr;
-	/* some bpools need to be emptied before freeing */
-	bool requires_draining;
 	/* current number of buffers in the bpool alloted to this CPU */
 	int *percpu_count;
 	atomic_t refs;
+	/* some bpools need to be seeded before use by this cb */
+	int (*seed_cb)(struct dpa_bp *);
+	/* some bpools need to be emptied before freeing by this cb */
+	void (*drain_cb)(struct dpa_bp *);
 };
 
 struct dpa_rx_errors {

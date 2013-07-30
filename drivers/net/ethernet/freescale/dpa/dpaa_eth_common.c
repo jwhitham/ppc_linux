@@ -744,8 +744,6 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 		}
 	}
 
-	dpa_bp->requires_draining = false;
-
 	sort(dpa_bp, *count, sizeof(*dpa_bp), dpa_bp_cmp, NULL);
 
 	return dpa_bp;
@@ -757,29 +755,7 @@ _return_of_node_put:
 	return dpa_bp;
 }
 
-static void dpaa_eth_seed_pool(struct dpa_bp *bp)
-{
-	int count = bp->target_count;
-	size_t addr = bp->paddr;
-
-	while (count) {
-		struct bm_buffer bufs[8];
-		int num_bufs = 0;
-
-		do {
-			BUG_ON(addr > 0xffffffffffffull);
-			bufs[num_bufs].bpid = bp->bpid;
-			bm_buffer_set64(&bufs[num_bufs++], addr);
-			addr += bp->size;
-
-		} while (--count && (num_bufs < 8));
-
-		while (bman_release(bp->pool, bufs, num_bufs, 0))
-			cpu_relax();
-	}
-}
-
-static int dpa_make_shared_port_pool(struct dpa_bp *bp)
+int dpa_bp_shared_port_seed(struct dpa_bp *bp)
 {
 	/* In MAC-less and Shared-MAC scenarios the physical
 	 * address of the buffer pool in device tree is set
@@ -789,6 +765,7 @@ static int dpa_make_shared_port_pool(struct dpa_bp *bp)
 	if (!bp->paddr)
 		return 0;
 
+	/* allocate memory region for buffers */
 	devm_request_mem_region(bp->dev, bp->paddr,
 			bp->size * bp->config_count, KBUILD_MODNAME);
 	bp->vaddr = devm_ioremap_prot(bp->dev, bp->paddr,
@@ -798,8 +775,27 @@ static int dpa_make_shared_port_pool(struct dpa_bp *bp)
 		return -EIO;
 	}
 
-	if (bp->seed_pool)
-		dpaa_eth_seed_pool(bp);
+	/* seed pool with buffers from that memory region */
+	if (bp->seed_pool) {
+		int count = bp->target_count;
+		size_t addr = bp->paddr;
+
+		while (count) {
+			struct bm_buffer bufs[8];
+			int num_bufs = 0;
+
+			do {
+				BUG_ON(addr > 0xffffffffffffull);
+				bufs[num_bufs].bpid = bp->bpid;
+				bm_buffer_set64(&bufs[num_bufs++], addr);
+				addr += bp->size;
+
+			} while (--count && (num_bufs < 8));
+
+			while (bman_release(bp->pool, bufs, num_bufs, 0))
+				cpu_relax();
+		}
+	}
 
 	return 0;
 }
@@ -846,15 +842,17 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp)
 
 	dpa_bp->dev = &pdev->dev;
 
-	err = dpa_make_shared_port_pool(dpa_bp);
-	if (err)
-		goto make_shared_pool_failed;
+	if (dpa_bp->seed_cb) {
+		err = dpa_bp->seed_cb(dpa_bp);
+		if (err)
+			goto pool_seed_failed;
+	}
 
 	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
 
 	return 0;
 
-make_shared_pool_failed:
+pool_seed_failed:
 pdev_mask_failed:
 	platform_device_unregister(pdev);
 pdev_register_failed:
@@ -885,6 +883,27 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	return 0;
 }
 
+void dpa_bp_drain(struct dpa_bp *bp)
+{
+	int num;
+
+	do {
+		struct bm_buffer bmb[8];
+		int i;
+
+		num = bman_acquire(bp->pool, bmb, 8, 0);
+
+		for (i = 0; i < num; i++) {
+			dma_addr_t addr = bm_buf_addr(&bmb[i]);
+
+			dma_unmap_single(bp->dev, addr, bp->size,
+					DMA_BIDIRECTIONAL);
+
+			_dpa_bp_free_buf(phys_to_virt(addr));
+		}
+	} while (num == 8);
+}
+
 static void __cold __attribute__((nonnull))
 _dpa_bp_free(struct dpa_bp *dpa_bp)
 {
@@ -893,25 +912,8 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 	if (!atomic_dec_and_test(&bp->refs))
 		return;
 
-	if (bp->requires_draining) {
-		int num;
-
-		do {
-			struct bm_buffer bmb[8];
-			int i;
-
-			num = bman_acquire(bp->pool, bmb, 8, 0);
-
-			for (i = 0; i < num; i++) {
-				dma_addr_t addr = bm_buf_addr(&bmb[i]);
-
-				dma_unmap_single(bp->dev, addr, bp->size,
-						DMA_BIDIRECTIONAL);
-
-				_dpa_bp_free_buf(phys_to_virt(addr));
-			}
-		} while (num == 8);
-	}
+	if (bp->drain_cb)
+		bp->drain_cb(bp);
 
 	dpa_bp_array[bp->bpid] = 0;
 	bman_free_pool(bp->pool);
