@@ -205,15 +205,20 @@ static void esdhci_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 	 * Check for A-004388: eSDHC DMA might not stop if error
 	 * occurs on system transaction
 	 * Impact list:
-	 * T4240-R1.0 B4860-R1.0 P1010-R1.0
-	 * P3041-R1.0-R2.0-R1.1 P2041-R1.0-R1.1-R2.0
-	 * P5040-R2.0
+	 * T4240-4160-R1.0 B4860-4420-R1.0 P1010-1014-R1.0
+	 * P3041-R1.0-R2.0-R1.1 P2041-2040-R1.0-R1.1-R2.0
+	 * P5040-5021-R2.0
 	 */
 	if (!(((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_T4160) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_P1014) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) <= 0x20)) ||
 		((SVR_SOC_VER(svr) == SVR_P2041) && (SVR_REV(svr) <= 0x20)) ||
+		((SVR_SOC_VER(svr) == SVR_P2040) && (SVR_REV(svr) <= 0x20)) ||
+		((SVR_SOC_VER(svr) == SVR_P5021) && (SVR_REV(svr) == 0x20)) ||
 		((SVR_SOC_VER(svr) == SVR_P5040) && (SVR_REV(svr) == 0x20))))
 		return;
 
