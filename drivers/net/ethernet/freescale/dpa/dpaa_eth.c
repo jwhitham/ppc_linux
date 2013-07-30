@@ -642,66 +642,6 @@ dpa_priv_bp_probe(struct device *dev)
 	return dpa_bp;
 }
 
-static int
-dpa_priv_bp_alloc(struct dpa_bp *dpa_bp)
-{
-	int err;
-	struct bman_pool_params	 bp_params;
-	struct platform_device *pdev;
-
-	BUG_ON(dpa_bp->size == 0);
-	BUG_ON(dpa_bp->config_count == 0);
-
-	bp_params.flags = 0;
-
-	if (default_pool) {
-		atomic_inc(&default_pool->refs);
-		return 0;
-	}
-
-	if (dpa_bp->bpid == 0)
-		bp_params.flags |= BMAN_POOL_FLAG_DYNAMIC_BPID;
-	else
-		bp_params.bpid = dpa_bp->bpid;
-
-	dpa_bp->pool = bman_new_pool(&bp_params);
-	if (unlikely(dpa_bp->pool == NULL)) {
-		pr_err("bman_new_pool() failed\n");
-		return -ENODEV;
-	}
-
-	dpa_bp->bpid = bman_get_params(dpa_bp->pool)->bpid;
-
-	pdev = platform_device_register_simple("dpaa_eth_bpool",
-			dpa_bp->bpid, NULL, 0);
-	if (IS_ERR(pdev)) {
-		err = PTR_ERR(pdev);
-		goto pdev_register_failed;
-	}
-
-	err = dma_set_mask(&pdev->dev, DMA_BIT_MASK(40));
-	if (err)
-		goto pdev_mask_failed;
-
-	dpa_bp->dev = &pdev->dev;
-
-	if (dpa_bp->seed_cb)
-		dpa_bp->seed_cb(dpa_bp);
-
-	default_pool = dpa_bp;
-
-	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
-
-	return 0;
-
-pdev_mask_failed:
-	platform_device_unregister(pdev);
-pdev_register_failed:
-	bman_free_pool(dpa_bp->pool);
-
-	return err;
-}
-
 static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count)
 {
@@ -717,14 +657,15 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 
 	for (i = 0; i < count; i++) {
 		int err;
-		err = dpa_priv_bp_alloc(&dpa_bp[i]);
+		err = dpa_bp_alloc(&dpa_bp[i]);
+		default_pool = &dpa_bp[i];
 		if (err < 0) {
 			dpa_bp_free(priv, dpa_bp);
 			priv->dpa_bp = NULL;
 			return err;
 		}
 
-		priv->dpa_bp = default_pool;
+		priv->dpa_bp = &dpa_bp[i];
 	}
 
 	return 0;

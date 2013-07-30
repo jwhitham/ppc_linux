@@ -800,7 +800,7 @@ int dpa_bp_shared_port_seed(struct dpa_bp *bp)
 	return 0;
 }
 
-static int __must_check /* __attribute__((nonnull)) */
+int __attribute__((nonnull))
 dpa_bp_alloc(struct dpa_bp *dpa_bp)
 {
 	int err;
