@@ -376,7 +376,7 @@
 
 &rio {
 	compatible = "fsl,srio";
-	interrupts = <16 2 1 11>;
+	interrupts = <16 2 1 20>;
 	#address-cells = <2>;
 	#size-cells = <2>;
 	fsl,iommu-parent = <&pamu0>;
@@ -521,5 +521,6 @@
 /include/ "qoriq-rman-0.dtsi"
 	rman: rman@1e0000 {
 		fsl,qman-channels-id = <0x820 0x821>;
+		interrupts = <16 2 1 20>;
 	};
 };
