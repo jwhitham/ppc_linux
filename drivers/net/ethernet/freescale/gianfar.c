@@ -902,6 +902,9 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 				     FSL_GIANFAR_DEV_HAS_EXTENDED_HASH |
 				     FSL_GIANFAR_DEV_HAS_36BIT_ADDR;
 
+	/* default pause frame settings */
+	priv->rx_pause = priv->tx_pause = true;
+
 	ctype = of_get_property(np, "phy-connection-type", NULL);
 
 	/* We only care about rgmii-id.  The rest are autodetected */
@@ -1232,8 +1235,10 @@ static int gfar_probe(struct platform_device *ofdev)
 	/* We need to delay at least 3 TX clocks */
 	udelay(2);
 
-	tempval = (MACCFG1_TX_FLOW | MACCFG1_RX_FLOW);
-	gfar_write(&regs->maccfg1, tempval);
+	/* the soft reset bit is not self-resetting, so we need to
+	 * clear it before resuming normal operation
+	 */
+	gfar_write(&regs->maccfg1, 0);
 
 	/* Initialize MACCFG2. */
 	tempval = MACCFG2_INIT_SETTINGS;
@@ -3983,6 +3988,25 @@ static irqreturn_t gfar_interrupt(int irq, void *grp_id)
 	return IRQ_HANDLED;
 }
 
+/* toggle pause frame settings */
+void gfar_configure_pause(struct gfar_private *priv, bool en)
+{
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 tempval = gfar_read(&regs->maccfg1);
+
+	if (en && priv->rx_pause)
+		tempval |= MACCFG1_RX_FLOW;
+	else
+		tempval &= ~MACCFG1_RX_FLOW;
+
+	if (en && priv->tx_pause)
+		tempval |= MACCFG1_TX_FLOW;
+	else
+		tempval &= ~MACCFG1_TX_FLOW;
+
+	gfar_write(&regs->maccfg1, tempval);
+}
+
 /* Called every time the controller might need to be made
  * aware of new link state.  The PHY code conveys this
  * information through variables in the phydev structure, and this
@@ -4013,6 +4037,9 @@ static void adjust_link(struct net_device *dev)
 				tempval &= ~(MACCFG2_FULL_DUPLEX);
 			else
 				tempval |= MACCFG2_FULL_DUPLEX;
+
+			/* update pause frame settings */
+			gfar_configure_pause(priv, !!phydev->duplex);
 
 			priv->oldduplex = phydev->duplex;
 		}

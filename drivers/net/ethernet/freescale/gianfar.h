@@ -1319,6 +1319,8 @@ struct gfar_private {
 	int oldspeed;
 	int oldduplex;
 	int oldlink;
+	bool rx_pause;
+	bool tx_pause;
 
 	struct gfar_irqinfo *irqinfo[MAXGROUPS][GFAR_NUM_IRQS];
 
