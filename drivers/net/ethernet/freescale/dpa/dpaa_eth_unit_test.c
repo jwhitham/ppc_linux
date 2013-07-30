@@ -341,11 +341,14 @@ fq_create_fail:
 	return err;
 }
 
+extern struct dpa_bp *dpa_bpid2pool(int bpid);
+
 void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 {
 	int i;
 	int num;
 	struct dpa_priv_s *priv;
+	struct dpa_bp *default_pool = dpa_bpid2pool(dpa_priv_common_bpid);
 
 	priv = netdev_priv(net_dev);
 
@@ -375,13 +378,13 @@ void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 void dpa_unit_test_seed_default_pool(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv;
+	struct dpa_bp *default_pool = dpa_bpid2pool(dpa_priv_common_bpid);
 
 	priv = netdev_priv(net_dev);
 
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	default_pool->size = dpa_bp_default_buf_size_get();
 #endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
-
 	dpa_bp_priv_seed(default_pool);
 }
 
@@ -390,7 +393,7 @@ void dpa_unit_tests(struct net_device *net_dev)
 	int err;
 
 	/* the unit tests use the default pool */
-	if (!default_pool)
+	if (!dpa_priv_common_bpid)
 		return;
 
 	if (!tx_unit_test_ran) {

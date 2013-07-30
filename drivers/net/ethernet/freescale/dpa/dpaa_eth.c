@@ -118,7 +118,7 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 
 #define DPAA_ETH_MAX_PAD (L1_CACHE_BYTES * 8)
 
-struct dpa_bp *default_pool;
+uint8_t dpa_priv_common_bpid;
 
 /* A set of callbacks for hooking into the fastpath at different points. */
 struct dpaa_eth_hooks_s dpaa_eth_hooks;
@@ -512,7 +512,7 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 	 * of a private port. Update the percpu buffer counters
 	 * of each private interface.
 	 */
-	dpa_bp_priv_non_sg_seed(default_pool);
+	dpa_bp_priv_non_sg_seed(priv->dpa_bp);
 #endif
 
 	dpaa_eth_napi_enable(priv);
@@ -652,13 +652,11 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		dev_dbg(net_dev->dev.parent,
 			"Using private BM buffer pools\n");
 
-	priv->dpa_bp = dpa_bp;
 	priv->bp_count = count;
 
 	for (i = 0; i < count; i++) {
 		int err;
 		err = dpa_bp_alloc(&dpa_bp[i]);
-		default_pool = &dpa_bp[i];
 		if (err < 0) {
 			dpa_bp_free(priv, dpa_bp);
 			priv->dpa_bp = NULL;
@@ -668,6 +666,7 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		priv->dpa_bp = &dpa_bp[i];
 	}
 
+	dpa_priv_common_bpid = priv->dpa_bp->bpid;
 	return 0;
 }
 
@@ -700,7 +699,8 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	/* Get the buffer pools assigned to this interface;
 	 * run only once the default pool probing code
 	 */
-	dpa_bp = (default_pool) ? default_pool : dpa_priv_bp_probe(dev);
+	dpa_bp = (dpa_bpid2pool(dpa_priv_common_bpid)) ? :
+			dpa_priv_bp_probe(dev);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 

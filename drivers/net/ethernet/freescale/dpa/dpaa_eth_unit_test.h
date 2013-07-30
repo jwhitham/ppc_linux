@@ -34,7 +34,7 @@
 #define DPAA_ETH_UNIT_TEST_H_
 
 extern int dpa_max_frm;
-extern struct dpa_bp *default_pool;
+extern uint8_t dpa_priv_common_bpid;
 
 void dpa_unit_tests(struct net_device *net_dev);
 
