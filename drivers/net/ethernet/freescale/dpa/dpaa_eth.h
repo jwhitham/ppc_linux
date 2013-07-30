@@ -521,6 +521,7 @@ static inline int dpaa_eth_napi_schedule(struct dpa_percpu_priv_s *percpu_priv)
 		int ret = qman_irqsource_remove(QM_PIRQ_DQRI);
 		if (likely(!ret)) {
 			napi_schedule(&percpu_priv->napi);
+			percpu_priv->in_interrupt++;
 			return 1;
 		}
 	}

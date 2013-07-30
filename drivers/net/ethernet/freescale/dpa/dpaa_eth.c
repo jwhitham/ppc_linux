@@ -340,10 +340,8 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
-	if (dpaa_eth_napi_schedule(percpu_priv)) {
-		percpu_priv->in_interrupt++;
+	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
-	}
 
 	if (unlikely(dpaa_eth_refill_bpools(percpu_priv)))
 		/* Unable to refill the buffer pool due to insufficient
@@ -376,10 +374,8 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (unlikely(dpaa_eth_napi_schedule(percpu_priv))) {
-		percpu_priv->in_interrupt++;
+	if (unlikely(dpaa_eth_napi_schedule(percpu_priv)))
 		return qman_cb_dqrr_stop;
-	}
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
 
@@ -409,10 +405,8 @@ priv_tx_conf_error_dqrr(struct qman_portal		*portal,
 
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
-	if (dpaa_eth_napi_schedule(percpu_priv)) {
-		percpu_priv->in_interrupt++;
+	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
-	}
 
 	_dpa_tx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
@@ -437,10 +431,8 @@ priv_tx_conf_default_dqrr(struct qman_portal		*portal,
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (dpaa_eth_napi_schedule(percpu_priv)) {
-		percpu_priv->in_interrupt++;
+	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
-	}
 
 	_dpa_tx_conf(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
 
