@@ -119,8 +119,6 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 #define DPAA_ETH_MAX_PAD (L1_CACHE_BYTES * 8)
 
 struct dpa_bp *default_pool;
-bool default_pool_seeded;
-uint32_t default_buf_size;
 
 /* A set of callbacks for hooking into the fastpath at different points. */
 struct dpaa_eth_hooks_s dpaa_eth_hooks;
@@ -514,11 +512,7 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 	 * of a private port. Update the percpu buffer counters
 	 * of each private interface.
 	 */
-	if (!default_pool_seeded) {
-		default_pool->size = default_buf_size;
-		dpa_make_private_pool(default_pool);
-		default_pool_seeded = true;
-	}
+	dpa_bp_priv_non_sg_seed(default_pool);
 #endif
 
 	dpaa_eth_napi_enable(priv);
@@ -641,6 +635,10 @@ dpa_priv_bp_probe(struct device *dev)
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 	dpa_bp->drain_cb = dpa_bp_drain;
 
+#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+	dpa_bp->seed_cb = dpa_bp_priv_seed;
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
+
 	return dpa_bp;
 }
 
@@ -687,9 +685,9 @@ dpa_priv_bp_alloc(struct dpa_bp *dpa_bp)
 
 	dpa_bp->dev = &pdev->dev;
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-	dpa_make_private_pool(dpa_bp);
-#endif
+	if (dpa_bp->seed_cb)
+		dpa_bp->seed_cb(dpa_bp);
+
 	default_pool = dpa_bp;
 
 	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
@@ -808,8 +806,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	 */
 	dpa_bp->size = dpa_bp_size(&buf_layout[RX]);
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-	if (dpa_bp->size > default_buf_size)
-		default_buf_size = dpa_bp->size;
+	dpa_bp_default_buf_size_update(dpa_bp->size);
 #endif
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);

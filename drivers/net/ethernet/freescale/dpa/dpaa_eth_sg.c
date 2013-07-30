@@ -132,7 +132,7 @@ void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
 	*count_ptr += _dpa_bp_add_8_bufs(dpa_bp);
 }
 
-void dpa_make_private_pool(struct dpa_bp *dpa_bp)
+void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 {
 	int i;
 

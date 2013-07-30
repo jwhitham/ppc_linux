@@ -378,8 +378,11 @@ void dpa_unit_test_seed_default_pool(struct net_device *net_dev)
 
 	priv = netdev_priv(net_dev);
 
-	default_pool->size = default_buf_size;
-	dpa_make_private_pool(default_pool);
+#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+	default_pool->size = dpa_bp_default_buf_size_get();
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
+
+	dpa_bp_priv_seed(default_pool);
 }
 
 void dpa_unit_tests(struct net_device *net_dev)

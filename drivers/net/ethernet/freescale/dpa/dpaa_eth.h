@@ -118,14 +118,14 @@ struct dpa_buffer_layout_s {
 						SMP_CACHE_BYTES)
 /* We must ensure that skb_shinfo is always cacheline-aligned. */
 #define DPA_SKB_SIZE(size)	((size) & ~(SMP_CACHE_BYTES - 1))
-#else
+#else /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /* Default buffer size is based on L2 MAX_FRM value, minus the FCS which
  * is stripped down by hardware.
  */
 #define dpa_bp_size(buffer_layout) \
 	dpa_get_buffer_size(buffer_layout, (dpa_get_max_frm() - ETH_FCS_LEN))
-#endif
+#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /*
  * Maximum size of a buffer for which recycling is allowed.
@@ -475,7 +475,7 @@ struct fm_port_fqs {
 };
 
 /* functions with different implementation for SG and non-SG: */
-void dpa_make_private_pool(struct dpa_bp *dpa_bp);
+void dpa_bp_priv_seed(struct dpa_bp *dpa_bp);
 int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv);
 void __hot _dpa_rx(struct net_device *net_dev,
 		const struct dpa_priv_s *priv,
@@ -699,6 +699,10 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 #endif
 
 #ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
+void dpa_bp_default_buf_size_update(uint32_t size);
+uint32_t dpa_bp_default_buf_size_get(void);
+void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp);
+
 static inline void _dpa_bp_free_buf(void *addr)
 {
 	struct sk_buff **skbh = addr;

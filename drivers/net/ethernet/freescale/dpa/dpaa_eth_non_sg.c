@@ -52,6 +52,7 @@
 	dpa_get_buffer_size(&priv->buf_layout[TX], 256)
 
 extern struct dpaa_eth_hooks_s dpaa_eth_hooks;
+uint32_t default_buf_size;
 
 /* Allocate 8 socket buffers.
  * These buffers are counted for a particular CPU.
@@ -120,9 +121,21 @@ static void dpa_bp_add_8(const struct dpa_bp *dpa_bp, unsigned int cpu)
 	}
 }
 
-void dpa_make_private_pool(struct dpa_bp *dpa_bp)
+void dpa_bp_default_buf_size_update(uint32_t size)
+{
+	if (size > default_buf_size)
+		default_buf_size = size;
+}
+
+uint32_t dpa_bp_default_buf_size_get(void)
+{
+	return default_buf_size;
+}
+
+void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 {
 	int i;
+	dpa_bp->size = default_buf_size;
 
 	/* Give each cpu an allotment of "count" buffers */
 	for_each_online_cpu(i) {
@@ -131,6 +144,18 @@ void dpa_make_private_pool(struct dpa_bp *dpa_bp)
 		for (j = 0; j < dpa_bp->target_count; j += 8)
 			dpa_bp_add_8(dpa_bp, i);
 	}
+}
+
+void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp)
+{
+	static bool default_pool_seeded;
+
+	if (default_pool_seeded)
+		return;
+
+	default_pool_seeded = true;
+
+	dpa_bp_priv_seed(dpa_bp);
 }
 
 /* Add buffers/(skbuffs) for Rx processing whenever bpool count falls below
