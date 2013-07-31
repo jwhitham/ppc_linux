@@ -9,9 +9,6 @@
 #ifndef INTERN_H
 #define INTERN_H
 
-#define JOBR_UNASSIGNED 0
-#define JOBR_ASSIGNED 1
-
 /* Currently comes from Kconfig param as a ^2 (driver-required) */
 #define JOBR_DEPTH (1 << CONFIG_CRYPTO_DEV_FSL_CAAM_RINGSIZE)
 
@@ -49,7 +46,6 @@ struct caam_drv_private_jr {
 	struct napi_struct __percpu *irqtask;
 	struct net_device __percpu *net_dev;
 	int irq;			/* One per queue */
-	int assign;			/* busy/free */
 
 	/* Job ring info */
 	int ringsize;	/* Size of rings (assume input = output) */
@@ -74,7 +70,6 @@ struct caam_drv_private {
 #ifdef CONFIG_FSL_QMAN
 	struct device *qidev;
 #endif
-	spinlock_t jr_alloc_lock;
 	struct platform_device *pdev;
 
 	/* Physical-presence section */
