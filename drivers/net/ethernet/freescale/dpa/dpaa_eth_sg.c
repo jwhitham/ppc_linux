@@ -157,22 +157,23 @@ int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 	int count = *countptr;
 	int new_bufs;
 
-	/* Add pages to the buffer pool */
-	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
-		new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
-		if (unlikely(!new_bufs)) {
-			/* Avoid looping forever if we've temporarily
-			 * run out of memory. We'll try again at the next
-			 * NAPI cycle.
-			 */
-			break;
-		}
-		count += new_bufs;
-	}
-	*countptr = count;
+	if (unlikely(count < CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD)) {
+		do {
+			new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
+			if (unlikely(!new_bufs)) {
+				/* Avoid looping forever if we've temporarily
+				 * run out of memory. We'll try again at the
+				 * next NAPI cycle.
+				 */
+				break;
+			}
+			count += new_bufs;
+		} while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT);
 
-	if (unlikely(*countptr < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
-		return -ENOMEM;
+		*countptr = count;
+		if (unlikely(count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
+			return -ENOMEM;
+	}
 
 	return 0;
 }
