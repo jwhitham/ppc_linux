@@ -474,7 +474,8 @@ int bman_release(struct bman_pool *pool, const struct bm_buffer *bufs, u8 num,
  *
  * Issues an "Acquire" command via the portal's management command interface.
  * The return value will be the number of buffers obtained from the pool, or a
- * negative error code if a h/w error or pool starvation was encountered.
+ * negative error code if a h/w error or pool starvation was encountered. In
+ * the latter case, the content of @bufs is undefined.
  */
 int bman_acquire(struct bman_pool *pool, struct bm_buffer *bufs, u8 num,
 			u32 flags);
