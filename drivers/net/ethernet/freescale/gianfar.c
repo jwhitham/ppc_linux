@@ -1153,6 +1153,7 @@ static void gfar_init_recycle(struct gfar_private *priv)
 
 	rec->buff_size = priv->rx_buffer_size + RXBUF_ALIGNMENT;
 	skb_queue_head_init(&rec->recycle_q);
+	rec->local = NULL;
 
 	if (!gfar_skb_recycling_en)
 		goto disable_rec;
@@ -2140,6 +2141,9 @@ static void free_skb_recycle_q(struct gfar_priv_recycle *rec)
 
 	while ((skb = skb_dequeue(&rec->recycle_q)) != NULL)
 		dev_kfree_skb_any(skb);
+
+	if (!rec->local)
+		return;
 
 	for_each_possible_cpu(cpu) {
 		struct gfar_priv_recycle_local *local;
@@ -3489,6 +3493,9 @@ static struct sk_buff *gfar_new_skb(struct gfar_private *priv)
 	struct gfar_priv_recycle_local *local;
 	struct sk_buff_head *recycle_q;
 	int cpu;
+
+	if (unlikely(!rec->local))
+		goto alloc;
 
 	cpu = get_cpu();
 	local = per_cpu_ptr(rec->local, cpu);

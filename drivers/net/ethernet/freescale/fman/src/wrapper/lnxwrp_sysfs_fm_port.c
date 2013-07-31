@@ -147,10 +147,9 @@ static ssize_t show_fm_port_stats(struct device *dev,
 	}
 
 	local_irq_save(flags);
-	n = snprintf(buf, PAGE_SIZE, "\tFM %d Port %d counter: %d\n",
-		     p_LnxWrpFmDev->id,
-		     p_LnxWrpFmPortDev->id,
-		     FM_PORT_GetCounter(p_LnxWrpFmPortDev->h_Dev,
+	n = snprintf(buf, PAGE_SIZE, "\t%s counter: %d\n",
+		p_LnxWrpFmPortDev->name,
+		FM_PORT_GetCounter(p_LnxWrpFmPortDev->h_Dev,
 					(e_FmPortCounters) counter));
 	local_irq_restore(flags);
 
@@ -223,8 +222,8 @@ static struct attribute *fm_oh_port_dev_stats_attributes[] = {
 	&dev_attr_port_deq_total.attr,
 	&dev_attr_port_deq_from_default.attr,
 	&dev_attr_port_deq_confirm.attr,
-	 /*RX*/ &dev_attr_port_rx_bad_frame.attr,
-	&dev_attr_port_rx_large_frame.attr,
+	/* &dev_attr_port_rx_bad_frame.attr, */
+	/* &dev_attr_port_rx_large_frame.attr, */
 	&dev_attr_port_rx_out_of_buffers_discard.attr,
 	/*&dev_attr_port_rx_filter_frame.attr, */
 	NULL

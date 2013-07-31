@@ -430,7 +430,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 
 	/* Fill the [miss_engine_params] structure w/ data */
 	errno = action_to_next_engine_params(miss_action, &miss_engine_params,
-		NULL, NULL, NULL);
+					NULL, ptable->params.distribution,
+					ptable->params.classification);
 	if (errno < 0) {
 		RELEASE_OBJECT(ptable);
 		log_err("Failed verification of miss action params for table "
@@ -7226,7 +7227,8 @@ EXPORT_SYMBOL(dpa_classif_free_hm);
 #if (DPAA_VERSION >= 11)
 int dpa_classif_mcast_create_group(
 		const struct dpa_cls_mcast_group_params *group_params,
-		int *grpd)
+		int *grpd,
+		const struct dpa_cls_mcast_group_resources *res)
 {
 
 	t_Error err = 0;
@@ -7321,7 +7323,7 @@ int dpa_classif_mcast_create_group(
 	}
 
 	/* Group is not imported */
-	if (group_params->group == NULL) {
+	if (!res) {
 		/*
 		 * set parameters for the first member
 		 */
@@ -7439,7 +7441,7 @@ int dpa_classif_mcast_create_group(
 
 		kfree(replic_grp_params);
 	} else {
-		pgroup->group = group_params->group;
+		pgroup->group = res->group_node;
 		/* mark prefilled members in index array member */
 		for (member_id = 0; member_id < group_params->prefilled_members;
 		     member_id++) {

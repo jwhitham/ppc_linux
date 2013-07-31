@@ -909,8 +909,8 @@ void compat_copy_keys(
 #if (DPAA_VERSION >= 11)
         memcpy(&param->frame_length_ranges,
                 &compat_param->frame_length_ranges,
-                sizeof(param->frame_length_ranges[0] *
-                    IOC_FM_PCD_CC_STATS_MAX_NUM_OF_FLR));
+                sizeof(param->frame_length_ranges[0]) *
+                    IOC_FM_PCD_CC_STATS_MAX_NUM_OF_FLR);
 #endif /* (DPAA_VERSION >= 11) */
     }
     else {

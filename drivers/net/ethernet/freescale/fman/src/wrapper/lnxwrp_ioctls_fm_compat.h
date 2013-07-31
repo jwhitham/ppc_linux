@@ -52,7 +52,7 @@
 /* mapping kernel pointers w/ UserSpace id's { */
 /* Because compat_ptr(ptr_to_compat(X)) != X, this way we cannot exchange pointers
    back and forth (US - KS). compat_ptr is a cast and pointers are broken. */
-#define COMPAT_PTR2ID_ARRAY_MAX (256+1) /* first location is not used */
+#define COMPAT_PTR2ID_ARRAY_MAX (512+1) /* first location is not used */
 #define COMPAT_PTR2ID_WATERMARK 0xface0000
 #define COMPAT_PTR2ID_WM_MASK   0xffff0000
 

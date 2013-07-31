@@ -228,6 +228,7 @@ typedef struct {
 
     struct device_attribute     *dev_pcd_attr_stats;
     struct device_attribute     *dev_pcd_attr_regs;
+    struct device_attribute     *dev_attr_muram_free_size;
 
     struct qman_fq              *hc_tx_conf_fq, *hc_tx_err_fq, *hc_tx_fq;
 } t_LnxWrpFmDev;

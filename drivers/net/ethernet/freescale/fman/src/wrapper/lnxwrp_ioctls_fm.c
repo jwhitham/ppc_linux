@@ -124,18 +124,6 @@
 #error Error: please synchronize IOC_ defines!
 #endif
 
-#if CMP_IOC_DEFINE(FM_PCD_PRS_SW_PATCHES_SIZE)
-#error Error: please synchronize IOC_ defines!
-#endif
-
-#if CMP_IOC_DEFINE(FM_PCD_PRS_SW_TAIL_SIZE)
-#error Error: please synchronize IOC_ defines!
-#endif
-
-#if CMP_IOC_DEFINE(FM_SW_PRS_MAX_IMAGE_SIZE)
-#error Error: please synchronize IOC_ defines!
-#endif
-
 #if CMP_IOC_DEFINE(FM_PCD_MAX_MANIP_INSRT_TEMPLATE_SIZE)
 #error Error: please synchronize IOC_ defines!
 #endif
