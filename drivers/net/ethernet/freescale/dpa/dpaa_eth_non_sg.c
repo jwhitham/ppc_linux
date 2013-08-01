@@ -132,7 +132,7 @@ uint32_t dpa_bp_default_buf_size_get(void)
 	return default_buf_size;
 }
 
-void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
+int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 {
 	int i;
 	dpa_bp->size = default_buf_size;
@@ -144,6 +144,7 @@ void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 		for (j = 0; j < dpa_bp->target_count; j += 8)
 			dpa_bp_add_8(dpa_bp, i);
 	}
+	return 0;
 }
 
 void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp)
