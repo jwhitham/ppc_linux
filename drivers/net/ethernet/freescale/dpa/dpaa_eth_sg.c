@@ -130,7 +130,7 @@ void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
 	*count_ptr += _dpa_bp_add_8_bufs(dpa_bp);
 }
 
-void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
+int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 {
 	int i;
 
@@ -144,6 +144,7 @@ void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 		for (j = 0; j < dpa_bp->config_count; j += 8)
 			dpa_bp_add_8_bufs(dpa_bp, i);
 	}
+	return 0;
 }
 
 /* Add buffers/(pages) for Rx processing whenever bpool count falls below
