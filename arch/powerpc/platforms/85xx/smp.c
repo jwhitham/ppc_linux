@@ -235,7 +235,7 @@ void platform_cpu_die(unsigned int cpu)
 		/* enter PH20 status */
 		setbits32(&((struct ccsr_rcpm_v2 *)guts_regs)->pcph20setr,
 				1 << cpu_core_index_of_thread(hw_cpu));
-	} else if (!rcpmv2) {
+	} else if (!rcpmv2 && guts_regs) {
 		rcpm = guts_regs;
 		/* Core Nap Operation */
 		setbits32(&rcpm->cnapcr, 1 << hw_cpu);
@@ -605,6 +605,10 @@ void __init mpc85xx_smp_init(void)
 		smp_85xx_ops.message_pass = NULL;
 		smp_85xx_ops.cause_ipi = doorbell_cause_ipi;
 	}
+
+#ifdef CONFIG_HOTPLUG_CPU
+	ppc_md.cpu_die = generic_mach_cpu_die;
+#endif
 
 	np = of_find_matching_node(NULL, mpc85xx_smp_guts_ids);
 	if (np) {
