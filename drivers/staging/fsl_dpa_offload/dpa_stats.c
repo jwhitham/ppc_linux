@@ -114,6 +114,46 @@ static int check_dpa_stats_params(const struct dpa_stats_params *params)
 	return 0;
 }
 
+static int set_cnt_classif_tbl_retrieve_func(struct dpa_stats_cnt_cb *cnt_cb)
+{
+	switch (cnt_cb->tbl_cb.type) {
+	case DPA_CLS_TBL_HASH:
+		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_hash_stats;
+		break;
+	case DPA_CLS_TBL_INDEXED:
+		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_index_stats;
+		break;
+	case DPA_CLS_TBL_EXACT_MATCH:
+		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_match_stats;
+		break;
+	default:
+		log_err("Unsupported DPA Classifier table type %d\n",
+			cnt_cb->tbl_cb.type);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int set_cnt_classif_node_retrieve_func(struct dpa_stats_cnt_cb *cnt_cb,
+				enum dpa_stats_classif_node_type ccnode_type)
+{
+	switch (ccnode_type) {
+	case DPA_CLS_TBL_HASH:
+		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_hash_stats;
+		break;
+	case DPA_CLS_TBL_INDEXED:
+		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_index_stats;
+		break;
+	case DPA_CLS_TBL_EXACT_MATCH:
+		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_match_stats;
+		break;
+	default:
+		log_err("Unsupported Classification Node type %d", ccnode_type);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int check_tbl_cls_counter(struct dpa_stats_cnt_cb *cnt_cb,
 				 struct dpa_stats_lookup_key *entry)
 {
@@ -132,7 +172,6 @@ static int check_tbl_cls_counter(struct dpa_stats_cnt_cb *cnt_cb,
 			dump_lookup_key(&entry->key);
 			return -EIO;
 		}
-		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_hash_stats;
 		break;
 	case DPA_CLS_TBL_INDEXED:
 		err = FM_PCD_MatchTableGetKeyStatistics(
@@ -145,7 +184,6 @@ static int check_tbl_cls_counter(struct dpa_stats_cnt_cb *cnt_cb,
 			dump_lookup_key(&entry->key);
 			return -EIO;
 		}
-		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_index_stats;
 		break;
 	case DPA_CLS_TBL_EXACT_MATCH:
 		err = FM_PCD_MatchTableFindNGetKeyStatistics(entry->cc_node,
@@ -159,7 +197,6 @@ static int check_tbl_cls_counter(struct dpa_stats_cnt_cb *cnt_cb,
 			dump_lookup_key(&entry->key);
 			return -EINVAL;
 		}
-		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_match_stats;
 		break;
 	default:
 		log_err("Unsupported DPA Classifier table type %d\n",
@@ -189,7 +226,6 @@ static int check_ccnode_counter(struct dpa_stats_cnt_cb *cnt_cb,
 			dump_lookup_key(key);
 			return -EIO;
 		}
-		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_hash_stats;
 		break;
 	case DPA_STATS_CLASSIF_NODE_INDEXED:
 		err = FM_PCD_MatchTableGetKeyStatistics(
@@ -203,7 +239,6 @@ static int check_ccnode_counter(struct dpa_stats_cnt_cb *cnt_cb,
 			dump_lookup_key(key);
 			return -EIO;
 		}
-		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_index_stats;
 		break;
 	case DPA_STATS_CLASSIF_NODE_EXACT_MATCH:
 		err = FM_PCD_MatchTableFindNGetKeyStatistics(
@@ -217,11 +252,51 @@ static int check_ccnode_counter(struct dpa_stats_cnt_cb *cnt_cb,
 			dump_lookup_key(key);
 			return -EINVAL;
 		}
-		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_match_stats;
 		break;
 	default:
 		log_err("Unsupported Classification Node type %d",
 			cnt_cb->tbl_cb.type);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int check_ccnode_miss_counter(void *cc_node, uint32_t id,
+				enum dpa_stats_classif_node_type ccnode_type)
+{
+	t_FmPcdCcKeyStatistics stats;
+	int err;
+
+	switch (ccnode_type) {
+	case DPA_STATS_CLASSIF_NODE_HASH:
+		err = FM_PCD_HashTableGetMissStatistics(cc_node, &stats);
+		if (err != 0) {
+			log_err("Check failed for Classification Node counter "
+				"id %d due to incorrect parameters: handle="
+				"0x%p\n", id, cc_node);
+			return -EIO;
+		}
+		break;
+	case DPA_STATS_CLASSIF_NODE_INDEXED:
+		err = FM_PCD_MatchTableGetMissStatistics(cc_node, &stats);
+		if (err != 0) {
+			log_err("Check failed for Classification Node counter "
+				"id %d due to incorrect parameters: handle=0x%p"
+				"\n", id, cc_node);
+			return -EIO;
+		}
+		break;
+	case DPA_STATS_CLASSIF_NODE_EXACT_MATCH:
+		err = FM_PCD_MatchTableGetMissStatistics(cc_node, &stats);
+		if (err != 0) {
+			log_err("Check failed for Classification Node counter "
+				"id %d due to incorrect parameters: handle=0x%p"
+				"\n", id, cc_node);
+			return -EINVAL;
+		}
+		break;
+	default:
+		log_err("Unsupported Classification Node type %d", ccnode_type);
 		return -EINVAL;
 	}
 	return 0;
@@ -344,8 +419,7 @@ static int put_cnt(struct dpa_stats *dpa_stats, struct dpa_stats_cnt_cb *cnt_cb)
 	}
 
 	/* Mark the Counter id as 'not used' */
-	dpa_stats->used_cnt_ids[cnt_cb->index] =
-						DPA_OFFLD_INVALID_OBJECT_ID;
+	dpa_stats->used_cnt_ids[cnt_cb->index] = DPA_OFFLD_INVALID_OBJECT_ID;
 
 	/* Clear all 'cnt_cb' information  */
 	cnt_cb->index = DPA_OFFLD_INVALID_OBJECT_ID;
@@ -627,7 +701,7 @@ static int free_resources(void)
 	/* Sanity check */
 	if (!gbl_dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
-		return;
+		return 0;
 	}
 	dpa_stats = gbl_dpa_stats;
 
@@ -1149,11 +1223,20 @@ static int set_frag_manip(int td, struct dpa_stats_lookup_key *entry)
 	struct t_FmPcdManipStats stats;
 	int err = 0;
 
-	err = dpa_classif_table_lookup_by_key(td, &entry->key, &action);
-	if (err != 0) {
-		log_err("Cannot retrieve next action parameters from table "
-			"%d\n", td);
-		return -EINVAL;
+	if (entry->miss_key) {
+		err = dpa_classif_get_miss_action(td, &action);
+		if (err != 0) {
+			log_err("Cannot retrieve miss action parameters from "
+				"table %d\n", td);
+			return -EINVAL;
+		}
+	} else {
+		err = dpa_classif_table_lookup_by_key(td, &entry->key, &action);
+		if (err != 0) {
+			log_err("Cannot retrieve next action parameters from "
+				"table %d\n", td);
+			return -EINVAL;
+		}
 	}
 
 	if (action.type != DPA_CLS_TBL_ACTION_ENQ) {
@@ -1175,7 +1258,6 @@ static int set_frag_manip(int td, struct dpa_stats_lookup_key *entry)
 		log_err("Invalid Fragmentation manip handle\n");
 		return -EINVAL;
 	}
-
 	return 0;
 }
 
@@ -1447,13 +1529,6 @@ static int set_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EINVAL;
 	}
 
-	/* Copy the key descriptor */
-	err = copy_key_descriptor(&prm.key, &cnt_tbl_cb->keys[0].key);
-	if (err != 0) {
-		log_err("Cannot copy key descriptor from user parameters\n");
-		return -EINVAL;
-	}
-
 	/* Store CcNode handle and set number of keys to one */
 	cnt_tbl_cb->keys[0].cc_node = cls_tbl.cc_node;
 	cnt_tbl_cb->keys[0].valid = TRUE;
@@ -1462,10 +1537,34 @@ static int set_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	/* Store DPA Classifier Table type */
 	cnt_tbl_cb->type = cls_tbl.type;
 
-	/* Check the Classifier Table counter */
-	err = check_tbl_cls_counter(cnt_cb, &cnt_tbl_cb->keys[0]);
+	/* Set retrieve function depending on table type */
+	err = set_cnt_classif_tbl_retrieve_func(cnt_cb);
 	if (err != 0)
 		return -EINVAL;
+
+	/* Determine if counter is for 'miss' entry or for a valid key */
+	if (!prm.key) {
+		cnt_tbl_cb->keys[0].miss_key = TRUE;
+
+		/* Check the Classifier Table counter parameters for "miss" */
+		err = check_ccnode_miss_counter(cnt_tbl_cb->keys[0].cc_node,
+				cnt_cb->id, cnt_tbl_cb->type);
+		if (err != 0)
+			return -EINVAL;
+	} else {
+		/* Copy the key descriptor */
+		err = copy_key_descriptor(prm.key, &cnt_tbl_cb->keys[0].key);
+		if (err != 0) {
+			log_err("Cannot copy key descriptor from user "
+				"parameters\n");
+			return -EINVAL;
+		}
+
+		/* Check the Classifier Table counter */
+		err = check_tbl_cls_counter(cnt_cb, &cnt_tbl_cb->keys[0]);
+		if (err != 0)
+			return -EINVAL;
+	}
 
 	if (frag_stats) {
 		err = set_frag_manip(prm.td, &cnt_tbl_cb->keys[0]);
@@ -1518,22 +1617,39 @@ static int set_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EFAULT;
 	}
 
-	/* Copy the key descriptor */
-	err = copy_key_descriptor(&prm.key, &cnt_cb->ccnode_cb.keys[0]);
-	if (err != 0) {
-		log_err("Cannot copy key descriptor from user parameters\n");
-		return -EINVAL;
-	}
-
 	/* Store CcNode handle and set number of keys to one */
 	cnt_cb->ccnode_cb.cc_node = prm.cc_node;
 	cnt_cb->members_num = 1;
 
-	/* Check the Classifier Node counter parameters */
-	err = check_ccnode_counter(cnt_cb,
-				   prm.ccnode_type, &cnt_cb->ccnode_cb.keys[0]);
+	/* Set retrieve function depending on counter type */
+	err = set_cnt_classif_node_retrieve_func(cnt_cb, prm.ccnode_type);
 	if (err != 0)
 		return -EINVAL;
+
+	if (!params->classif_node_params.key) {
+		/* Set the key byte to NULL, to mark it for 'miss' entry */
+		cnt_cb->ccnode_cb.keys[0].byte = NULL;
+
+		/* Check the Classifier Node counter parameters for 'miss' */
+		err = check_ccnode_miss_counter(cnt_cb->ccnode_cb.cc_node,
+				cnt_cb->id, prm.ccnode_type);
+		if (err != 0)
+			return -EINVAL;
+	} else {
+		/* Copy the key descriptor */
+		err = copy_key_descriptor(prm.key, &cnt_cb->ccnode_cb.keys[0]);
+		if (err != 0) {
+			log_err("Cannot copy key descriptor from user "
+				"parameters\n");
+			return -EINVAL;
+		}
+
+		/* Check the Classifier Node counter parameters */
+		err = check_ccnode_counter(cnt_cb, prm.ccnode_type,
+					   &cnt_cb->ccnode_cb.keys[0]);
+		if (err != 0)
+			return -EINVAL;
+	}
 
 	/* Map Classif Node counter selection to CcNode statistics */
 	cnt_sel_to_stats(&cnt_cb->info,
@@ -1899,36 +2015,49 @@ static int set_cls_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 }
 
 static int set_cls_cnt_classif_tbl_pair(
-		struct dpa_stats_cnt_classif_tbl_cb *cnt_tbl_cb, int td,
+		struct dpa_stats_cnt_cb *cnt_cb, int td,
 		const struct dpa_offload_lookup_key_pair *pair,
 		struct dpa_stats_lookup_key *lookup_key)
 {
+	struct dpa_stats_cnt_classif_tbl_cb *cnt_tbl_cb = &cnt_cb->tbl_cb;
 	struct dpa_cls_tbl_params cls_tbl;
 	struct dpa_offload_lookup_key tbl_key;
 	struct dpa_cls_tbl_action action;
 	int err = 0;
 
-	/* Check that key byte is not NULL */
-	if (!pair->first_key.byte) {
-		log_err("First key descriptor byte of the user pair cannot be "
-			"NULL for table descriptor %d\n", td);
-		return -EFAULT;
-	}
+	/* If either the entire 'pair' or the first key is NULL, then retrieve
+	 * the action associated with the 'miss action '*/
+	if ((!pair) || (pair && !pair->first_key)) {
+		err = dpa_classif_get_miss_action(td, &action);
+		if (err != 0) {
+			log_err("Cannot retrieve miss action parameters for "
+				"table descriptor %d\n", td);
+			return -EINVAL;
+		}
+	} else {
+		/* Check that key byte is not NULL */
+		if (!pair->first_key->byte) {
+			log_err("First key descriptor byte of the user pair "
+				"cannot be NULL for table descriptor %d\n", td);
+			return -EFAULT;
+		}
 
-	/* Copy first key descriptor parameters*/
-	err = copy_key_descriptor(&pair->first_key, &tbl_key);
-	if (err != 0) {
-		log_err("Cannot copy first key descriptor of the user pair\n");
-		return -EINVAL;
-	}
+		/* Copy first key descriptor parameters*/
+		err = copy_key_descriptor(pair->first_key, &tbl_key);
+		if (err != 0) {
+			log_err("Cannot copy second key descriptor of "
+				"the user pair\n");
+			return -EINVAL;
+		}
 
-	/* Use the first key of the pair to lookup in the classifier
-	 * table the next table connected on a "next-action" */
-	err = dpa_classif_table_lookup_by_key(td, &tbl_key, &action);
-	if (err != 0) {
-		log_err("Cannot retrieve next action parameters for table "
-			"descriptor %d\n", td);
-		return -EINVAL;
+		/* Use the first key of the pair to lookup in the classifier
+		 * table the next table connected on a "next-action" */
+		err = dpa_classif_table_lookup_by_key(td, &tbl_key, &action);
+		if (err != 0) {
+			log_err("Cannot retrieve next action parameters for "
+				"table descriptor %d\n", td);
+			return -EINVAL;
+		}
 	}
 
 	if (action.type != DPA_CLS_TBL_ACTION_NEXT_TABLE) {
@@ -1948,23 +2077,41 @@ static int set_cls_cnt_classif_tbl_pair(
 	/* Store DPA Classifier Table type */
 	cnt_tbl_cb->type = cls_tbl.type;
 
+	/* Set retrieve function depending on table type */
+	set_cnt_classif_tbl_retrieve_func(cnt_cb);
+
 	/* Store CcNode handle */
 	lookup_key->cc_node = cls_tbl.cc_node;
 
-	/* Set as lookup key the second key descriptor from the pair */
-	err = copy_key_descriptor(&pair->second_key, &lookup_key->key);
-	if (err != 0) {
-		log_err("Cannot copy second key descriptor of the user pair\n");
-		return -EINVAL;
+	if (!pair || (pair && !pair->second_key)) {
+		/* Set as the key as "for miss" */
+		lookup_key->miss_key = TRUE;
+
+		/* Check the Classifier Table counter parameters for "miss" */
+		err = check_ccnode_miss_counter(lookup_key->cc_node,
+				cnt_cb->id, cnt_tbl_cb->type);
+	} else {
+		lookup_key->miss_key = FALSE;
+
+		/* Set as lookup key the second key descriptor from the pair */
+		err = copy_key_descriptor(pair->second_key, &lookup_key->key);
+		if (err != 0) {
+			log_err("Cannot copy second key descriptor of "
+				"the user pair\n");
+			return -EINVAL;
+		}
+
+		/* Check the Classifier Table counter */
+		err = check_tbl_cls_counter(cnt_cb, lookup_key);
 	}
 
-	return 0;
+	return err;
 }
 
 static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 				 const struct dpa_stats_cls_cnt_params *params)
 {
-	struct dpa_stats_cnt_classif_tbl_cb *cnt_tbl_cb = &cnt_cb->tbl_cb;
+	struct dpa_stats_cnt_classif_tbl_cb *tbl_cb = &cnt_cb->tbl_cb;
 	struct dpa_stats_cls_cnt_classif_tbl prm = params->classif_tbl_params;
 	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
 	struct dpa_cls_tbl_params cls_tbl;
@@ -2004,11 +2151,17 @@ static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EINVAL;
 	}
 
-	cnt_tbl_cb->td = params->classif_tbl_params.td;
+	tbl_cb->td = params->classif_tbl_params.td;
 	cnt_cb->members_num = params->class_members;
 
 	switch (prm.key_type) {
 	case DPA_STATS_CLASSIF_SINGLE_KEY:
+		if (!prm.keys) {
+			log_err("Pointer to the array of keys cannot be NULL "
+				"for counter id %d\n", cnt_cb->id);
+			return -EINVAL;
+		}
+
 		/* Get CcNode from table descriptor */
 		err = dpa_classif_table_get_params(prm.td, &cls_tbl);
 		if (err != 0) {
@@ -2018,21 +2171,37 @@ static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		}
 
 		/* Store DPA Classifier Table type */
-		cnt_tbl_cb->type = cls_tbl.type;
+		tbl_cb->type = cls_tbl.type;
+
+		/* Set retrieve function depending on table type */
+		set_cnt_classif_tbl_retrieve_func(cnt_cb);
 
 		for (i = 0; i < params->class_members; i++) {
 			/* Store CcNode handle */
-			cnt_tbl_cb->keys[i].cc_node = cls_tbl.cc_node;
+			tbl_cb->keys[i].cc_node = cls_tbl.cc_node;
 
-			if (!prm.keys[i].byte) {
+			/* Determine if key represents a 'miss' entry */
+			if (!prm.keys[i]) {
+				tbl_cb->keys[i].miss_key = TRUE;
+				tbl_cb->keys[i].valid = TRUE;
+
+				err = check_ccnode_miss_counter(
+						tbl_cb->keys[i].cc_node,
+						cnt_cb->id, tbl_cb->type);
+				if (err != 0)
+					return -EINVAL;
+				continue;
+			}
+
+			if (!prm.keys[i]->byte) {
 				/* Key is not valid for now */
-				cnt_tbl_cb->keys[i].valid = FALSE;
+				tbl_cb->keys[i].valid = FALSE;
 				continue;
 			}
 
 			/* Copy the key descriptor */
-			err = copy_key_descriptor(&prm.keys[i],
-						  &cnt_tbl_cb->keys[i].key);
+			err = copy_key_descriptor(prm.keys[i],
+						  &tbl_cb->keys[i].key);
 			if (err != 0) {
 				log_err("Cannot copy key descriptor from user "
 					"parameters\n");
@@ -2040,37 +2209,39 @@ static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			}
 
 			/* Check the Classifier Table counter */
-			err = check_tbl_cls_counter(cnt_cb,
-						    &cnt_tbl_cb->keys[i]);
+			err = check_tbl_cls_counter(cnt_cb, &tbl_cb->keys[i]);
 			if (err != 0)
 				return -EINVAL;
 
-			cnt_tbl_cb->keys[i].valid = TRUE;
+			tbl_cb->keys[i].valid = TRUE;
 		}
 		break;
 	case DPA_STATS_CLASSIF_PAIR_KEY:
+		if (!prm.pairs) {
+			log_err("Pointer to the array of pairs cannot be NULL "
+				"for counter id %d\n", cnt_cb->id);
+			return -EINVAL;
+		}
+
 		for (i = 0; i < params->class_members; i++) {
-			if (!prm.pairs[i].first_key.byte) {
-				/* Key is not valid for now */
-				cnt_tbl_cb->keys[i].valid = FALSE;
-				continue;
+			if (prm.pairs[i]) {
+				if (prm.pairs[i]->first_key) {
+					if (!prm.pairs[i]->first_key->byte) {
+						/* Key is not valid for now */
+						tbl_cb->keys[i].valid = FALSE;
+						continue;
+					}
+				}
 			}
 
-			err = set_cls_cnt_classif_tbl_pair(cnt_tbl_cb, prm.td,
-					&prm.pairs[i], &cnt_tbl_cb->keys[i]);
+			err = set_cls_cnt_classif_tbl_pair(cnt_cb, prm.td,
+					prm.pairs[i], &tbl_cb->keys[i]);
 			if (err != 0) {
 				log_err("Cannot set classifier table pair key "
 					"for counter id %d\n", cnt_cb->id);
 				return -EINVAL;
 			}
-
-			/* Check the Classifier Table counter */
-			err = check_tbl_cls_counter(cnt_cb,
-						    &cnt_tbl_cb->keys[i]);
-			if (err != 0)
-				return -EINVAL;
-
-			cnt_tbl_cb->keys[i].valid = TRUE;
+			tbl_cb->keys[i].valid = TRUE;
 		}
 		break;
 	default:
@@ -2084,7 +2255,7 @@ static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	if (frag_stats) {
 		/* For every valid key, retrieve the hmcd */
 		for (i = 0; i < params->class_members; i++) {
-			if (!cnt_tbl_cb->keys[i].valid)
+			if (!tbl_cb->keys[i].valid)
 				continue;
 
 			err = set_frag_manip(prm.td, &cnt_cb->tbl_cb.keys[i]);
@@ -2140,24 +2311,46 @@ static int set_cls_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EFAULT;
 	}
 
+	if (!prm.keys) {
+		log_err("Pointer to the array of keys cannot be NULL "
+			"for counter id %d\n", cnt_cb->id);
+		return -EINVAL;
+	}
+
 	cnt_cb->ccnode_cb.cc_node = prm.cc_node;
 	cnt_cb->members_num = params->class_members;
 
-	for (i = 0; i < params->class_members; i++) {
-		/* Copy the key descriptor */
-		err = copy_key_descriptor(&prm.keys[i],
-				&cnt_cb->ccnode_cb.keys[i]);
-		if (err != 0) {
-			log_err("Cannot copy key descriptor from user "
-				"parameters\n");
-			return -EINVAL;
-		}
+	/* Set retrieve function depending on counter type */
+	err = set_cnt_classif_node_retrieve_func(cnt_cb, prm.ccnode_type);
+	if (err != 0)
+		return -EINVAL;
 
-		/* Check the Classifier Node counter parameters */
-		err = check_ccnode_counter(cnt_cb,
-				prm.ccnode_type, &cnt_cb->ccnode_cb.keys[i]);
-		if (err != 0)
-			return -EINVAL;
+	for (i = 0; i < params->class_members; i++) {
+		if (!prm.keys[i]) {
+			/* Set the key byte to NULL, to mark it for 'miss' */
+			cnt_cb->ccnode_cb.keys[i].byte = NULL;
+
+			/* Check the Classifier Node counter parameters */
+			err = check_ccnode_miss_counter(prm.cc_node,
+						cnt_cb->id, prm.ccnode_type);
+			if (err != 0)
+				return -EINVAL;
+		} else {
+			/* Copy the key descriptor */
+			err = copy_key_descriptor(prm.keys[i],
+						  &cnt_cb->ccnode_cb.keys[i]);
+			if (err != 0) {
+				log_err("Cannot copy key descriptor from user "
+					"parameters\n");
+				return -EINVAL;
+			}
+
+			/* Check the Classifier Node counter parameters */
+			err = check_ccnode_counter(cnt_cb, prm.ccnode_type,
+						   &cnt_cb->ccnode_cb.keys[i]);
+			if (err != 0)
+				return -EINVAL;
+		}
 	}
 
 	/* Map Classif Node counter selection to CcNode statistics */
@@ -2321,8 +2514,7 @@ static int set_cls_cnt_traffic_mng_cb(struct dpa_stats_cnt_cb *cnt_cb,
 }
 
 int set_classif_tbl_member(const struct dpa_stats_cls_member_params *prm,
-			   int member_index,
-			   struct dpa_stats_cnt_cb *cnt_cb)
+			   int mbr_idx, struct dpa_stats_cnt_cb *cnt_cb)
 {
 	struct dpa_stats_cnt_classif_tbl_cb *tbl_cb = &cnt_cb->tbl_cb;
 	uint32_t i = 0;
@@ -2337,67 +2529,80 @@ int set_classif_tbl_member(const struct dpa_stats_cls_member_params *prm,
 	}
 
 	/* Check that member index does not exceeds class size */
-	if (member_index < 0 || member_index >= cnt_cb->members_num) {
+	if (mbr_idx < 0 || mbr_idx >= cnt_cb->members_num) {
 		log_err("Parameter member_index %d must be in range (0 - %d) "
-			"for counter id %d\n", member_index,
+			"for counter id %d\n", mbr_idx,
 			cnt_cb->members_num - 1, cnt_cb->id);
 		return -EINVAL;
 	}
 
 	/* Release the old key memory */
-	kfree(tbl_cb->keys[member_index].key.byte);
-	tbl_cb->keys[member_index].key.byte = NULL;
+	kfree(tbl_cb->keys[mbr_idx].key.byte);
+	tbl_cb->keys[mbr_idx].key.byte = NULL;
 
-	kfree(tbl_cb->keys[member_index].key.mask);
-	tbl_cb->keys[member_index].key.mask = NULL;
+	kfree(tbl_cb->keys[mbr_idx].key.mask);
+	tbl_cb->keys[mbr_idx].key.mask = NULL;
 
 	/* Reset the statistics */
 	for (i = 0; i < cnt_cb->info.stats_num; i++) {
-		cnt_cb->info.stats[member_index][i] = 0;
-		cnt_cb->info.last_stats[member_index][i] = 0;
+		cnt_cb->info.stats[mbr_idx][i] = 0;
+		cnt_cb->info.last_stats[mbr_idx][i] = 0;
 	}
 
-	if ((prm->type == DPA_STATS_CLS_MEMBER_SINGLE_KEY && !prm->key.byte) ||
-	    (prm->type == DPA_STATS_CLS_MEMBER_PAIR_KEY &&
-			    !prm->pair.first_key.byte)) {
-		/* Mark the key as invalid */
-		tbl_cb->keys[member_index].valid = FALSE;
-		return 0;
-	} else {
-		tbl_cb->keys[member_index].valid = TRUE;
-
-		if (prm->type == DPA_STATS_CLS_MEMBER_SINGLE_KEY) {
+	if (prm->type == DPA_STATS_CLS_MEMBER_SINGLE_KEY) {
+		if (!prm->key) {
+			/* Mark the key as 'miss' entry */
+			tbl_cb->keys[mbr_idx].miss_key = TRUE;
+			tbl_cb->keys[mbr_idx].valid = TRUE;
+			return 0;
+		} else if (!prm->key->byte) {
+			/* Mark the key as invalid */
+			tbl_cb->keys[mbr_idx].valid = FALSE;
+			tbl_cb->keys[mbr_idx].miss_key = FALSE;
+			return 0;
+		} else {
 			/* Copy the key descriptor */
-			err = copy_key_descriptor(&prm->key,
-					&tbl_cb->keys[member_index].key);
+			err = copy_key_descriptor(prm->key,
+						  &tbl_cb->keys[mbr_idx].key);
 			if (err != 0) {
 				log_err("Cannot copy key descriptor from user "
 					"parameters\n");
 				return -EINVAL;
 			}
-		} else {
-			err = set_cls_cnt_classif_tbl_pair(tbl_cb, tbl_cb->td,
-				&prm->pair, &tbl_cb->keys[member_index]);
-			if (err != 0) {
-				log_err("Cannot configure the pair key for "
-					"counter id %d of member %d\n",
-					cnt_cb->id, member_index);
-				return -EINVAL;
-			}
 		}
-		if (cnt_cb->f_get_cnt_stats != get_cnt_cls_tbl_frag_stats) {
+	} else {
+		if (prm->pair)
+			if (prm->pair->first_key)
+				if (!prm->pair->first_key->byte) {
+					/* Mark the key as invalid */
+					tbl_cb->keys[mbr_idx].valid = FALSE;
+					tbl_cb->keys[mbr_idx].miss_key = FALSE;
+					return 0;
+				}
+		err = set_cls_cnt_classif_tbl_pair(cnt_cb, tbl_cb->td,
+			prm->pair, &tbl_cb->keys[mbr_idx]);
+		if (err != 0) {
+			log_err("Cannot configure the pair key for counter id "
+				"%d of member %d\n", cnt_cb->id, mbr_idx);
+			return -EINVAL;
+		}
+	}
+
+	tbl_cb->keys[mbr_idx].valid = TRUE;
+
+	if (cnt_cb->f_get_cnt_stats != get_cnt_cls_tbl_frag_stats) {
+		if (!tbl_cb->keys[mbr_idx].miss_key) {
 			err = check_tbl_cls_counter(cnt_cb,
-					&tbl_cb->keys[member_index]);
+						    &tbl_cb->keys[mbr_idx]);
 			if (err != 0)
 				return -EINVAL;
-		} else{
-			err = set_frag_manip(tbl_cb->td,
-					&tbl_cb->keys[member_index]);
-			if (err < 0) {
-				log_err("Invalid Fragmentation manip handle for"
-					" counter id %d\n", cnt_cb->id);
-				return -EINVAL;
-			}
+		}
+	} else{
+		err = set_frag_manip(tbl_cb->td, &tbl_cb->keys[mbr_idx]);
+		if (err < 0) {
+			log_err("Invalid Fragmentation manip handle for"
+				" counter id %d\n", cnt_cb->id);
+			return -EINVAL;
 		}
 	}
 
@@ -2648,11 +2853,19 @@ static int get_cnt_cls_tbl_match_stats(struct dpa_stats_req_cb *req_cb,
 					cnt_cb->info.stats_num;
 			continue;
 		}
-		err = FM_PCD_MatchTableFindNGetKeyStatistics(
-				cnt_cb->tbl_cb.keys[i].cc_node,
-				cnt_cb->tbl_cb.keys[i].key.size,
-				cnt_cb->tbl_cb.keys[i].key.byte,
-				cnt_cb->tbl_cb.keys[i].key.mask, &stats);
+
+		if (cnt_cb->tbl_cb.keys[i].miss_key) {
+			err = FM_PCD_MatchTableGetMissStatistics(
+					cnt_cb->tbl_cb.keys[i].cc_node, &stats);
+		} else {
+			err = FM_PCD_MatchTableFindNGetKeyStatistics(
+					cnt_cb->tbl_cb.keys[i].cc_node,
+					cnt_cb->tbl_cb.keys[i].key.size,
+					cnt_cb->tbl_cb.keys[i].key.byte,
+					cnt_cb->tbl_cb.keys[i].key.mask,
+					&stats);
+		}
+
 		if (err != 0) {
 			log_err("Cannot retrieve Classifier Exact Match Table "
 				"statistics for counter id %d\n", cnt_cb->id);
@@ -2682,11 +2895,17 @@ static int get_cnt_cls_tbl_hash_stats(struct dpa_stats_req_cb *req_cb,
 					cnt_cb->info.stats_num;
 			continue;
 		}
-		err = FM_PCD_HashTableFindNGetKeyStatistics(
-				cnt_cb->tbl_cb.keys[i].cc_node,
-				cnt_cb->tbl_cb.keys[i].key.size,
-				cnt_cb->tbl_cb.keys[i].key.byte,
-				&stats);
+
+		if (cnt_cb->tbl_cb.keys[i].miss_key) {
+			err = FM_PCD_HashTableGetMissStatistics(
+					cnt_cb->tbl_cb.keys[i].cc_node, &stats);
+		} else {
+			err = FM_PCD_HashTableFindNGetKeyStatistics(
+					cnt_cb->tbl_cb.keys[i].cc_node,
+					cnt_cb->tbl_cb.keys[i].key.size,
+					cnt_cb->tbl_cb.keys[i].key.byte,
+					&stats);
+		}
 		if (err != 0) {
 			log_err("Cannot retrieve Classifier Hash Table "
 				"statistics for counter id %d\n", cnt_cb->id);
@@ -2716,10 +2935,17 @@ static int get_cnt_cls_tbl_index_stats(struct dpa_stats_req_cb *req_cb,
 					cnt_cb->info.stats_num;
 			continue;
 		}
-		err = FM_PCD_MatchTableGetKeyStatistics(
-				cnt_cb->tbl_cb.keys[i].cc_node,
-				cnt_cb->tbl_cb.keys[i].key.byte[0],
-				&stats);
+
+		if (cnt_cb->tbl_cb.keys[i].miss_key) {
+			err = FM_PCD_MatchTableGetMissStatistics(
+					cnt_cb->tbl_cb.keys[i].cc_node, &stats);
+		} else {
+			err = FM_PCD_MatchTableGetKeyStatistics(
+					cnt_cb->tbl_cb.keys[i].cc_node,
+					cnt_cb->tbl_cb.keys[i].key.byte[0],
+					&stats);
+		}
+
 		if (err != 0) {
 			log_err("Cannot retrieve Classifier Indexed Table "
 				"statistics for counter id %d\n", cnt_cb->id);
@@ -2772,11 +2998,16 @@ static int get_cnt_ccnode_match_stats(struct dpa_stats_req_cb *req_cb,
 	int err = 0;
 
 	for (i = 0; i < cnt_cb->members_num; i++) {
-		err = FM_PCD_MatchTableFindNGetKeyStatistics(
+		if (!cnt_cb->ccnode_cb.keys[i].byte) {
+			err = FM_PCD_MatchTableGetMissStatistics(
+					cnt_cb->ccnode_cb.cc_node, &stats);
+		} else {
+			err = FM_PCD_MatchTableFindNGetKeyStatistics(
 				cnt_cb->ccnode_cb.cc_node,
 				cnt_cb->ccnode_cb.keys[i].size,
 				cnt_cb->ccnode_cb.keys[i].byte,
 				cnt_cb->ccnode_cb.keys[i].mask, &stats);
+		}
 		if (err != 0) {
 			log_err("Cannot retrieve Classification Cc Node Exact "
 				"Match statistics for counter id %d\n",
@@ -2797,10 +3028,16 @@ static int get_cnt_ccnode_hash_stats(struct dpa_stats_req_cb *req_cb,
 	int err = 0;
 
 	for (i = 0; i < cnt_cb->members_num; i++) {
-		err = FM_PCD_HashTableFindNGetKeyStatistics(
+		if (!cnt_cb->ccnode_cb.keys[i].byte) {
+			err = FM_PCD_HashTableGetMissStatistics(
+					cnt_cb->ccnode_cb.cc_node, &stats);
+		} else {
+			err = FM_PCD_HashTableFindNGetKeyStatistics(
 				cnt_cb->ccnode_cb.cc_node,
 				cnt_cb->ccnode_cb.keys[i].size,
 				cnt_cb->ccnode_cb.keys[i].byte, &stats);
+		}
+
 		if (err != 0) {
 			log_err("Cannot retrieve Classification Cc Node Hash "
 				"statistics for counter id %d\n", cnt_cb->id);
@@ -2820,9 +3057,14 @@ static int get_cnt_ccnode_index_stats(struct dpa_stats_req_cb *req_cb,
 	int err = 0;
 
 	for (i = 0; i < cnt_cb->members_num; i++) {
-		err = FM_PCD_MatchTableGetKeyStatistics(
+		if (!cnt_cb->ccnode_cb.keys[i].byte) {
+			err = FM_PCD_MatchTableGetMissStatistics(
+					cnt_cb->ccnode_cb.cc_node, &stats);
+		} else {
+			err = FM_PCD_MatchTableGetKeyStatistics(
 				cnt_cb->ccnode_cb.cc_node,
 				cnt_cb->ccnode_cb.keys[i].byte[0], &stats);
+		}
 		if (err != 0) {
 			log_err("Cannot retrieve Classification Cc Node Index "
 				"statistics for counter id %d\n", cnt_cb->id);
@@ -3269,6 +3511,7 @@ int dpa_stats_create_class_counter(int dpa_stats_id,
 		break;
 	case DPA_STATS_CNT_CLASSIF_TBL:
 		cnt_cb->type = DPA_STATS_CNT_CLASSIF_TBL;
+		cnt_cb->f_get_cnt_stats = get_cnt_cls_tbl_match_stats;
 
 		err = set_cls_cnt_classif_tbl_cb(cnt_cb, params);
 		if (err != 0) {
@@ -3392,7 +3635,7 @@ int dpa_stats_modify_class_counter(int dpa_stats_cnt_id,
 	}
 
 	if (params->type == DPA_STATS_CLS_MEMBER_SINGLE_KEY ||
-		params->type == DPA_STATS_CLS_MEMBER_PAIR_KEY) {
+	    params->type == DPA_STATS_CLS_MEMBER_PAIR_KEY) {
 		/* Modify classifier table class member */
 		err = set_classif_tbl_member(params, member_index, cnt_cb);
 		if (err < 0) {

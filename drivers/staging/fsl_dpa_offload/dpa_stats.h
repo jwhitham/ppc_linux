@@ -114,6 +114,7 @@ struct dpa_stats_lookup_key {
 	struct dpa_offload_lookup_key key; /* Key descriptor */
 	bool valid; /* Lookup key is valid */
 	void *frag; /* Fragmentation handle corresponding to this key */
+	bool miss_key; /* Provide statistics for miss entry */
 };
 
 /* DPA Stats Classif Table control block */
