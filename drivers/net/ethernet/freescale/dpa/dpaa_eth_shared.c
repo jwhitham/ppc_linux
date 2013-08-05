@@ -44,6 +44,7 @@
 #include <linux/fsl_qman.h>
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
+#include "dpaa_eth_base.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
 
 /* forward declarations */
