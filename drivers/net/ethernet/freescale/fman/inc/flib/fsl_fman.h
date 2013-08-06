@@ -105,6 +105,10 @@ enum fman_dma_cache_option {
 	FMAN_DMA_STASH = 1         /**< Cacheable and Allocate (Stashing on) */
 };
 
+typedef struct t_FmPrsResult fm_prs_result_t;
+typedef enum e_EnetMode enet_mode_t;
+typedef t_Handle handle_t;
+
 /* sizes */
 #define CAPWAP_FRAG_EXTRA_SPACE                 32
 #define OFFSET_UNITS                            16

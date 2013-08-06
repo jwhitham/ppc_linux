@@ -167,8 +167,7 @@ static int dpa_ptp_find_and_remove(struct dpa_ptp_circ_buf *ptp_buf,
 	return 0;
 }
 
-/*
- * Parse the PTP packets
+/* Parse the PTP packets
  *
  * The PTP header can be found in an IPv4 packet, IPv6 patcket or in
  * an IEEE802.3 ethernet frame. This function returns the position of
@@ -188,7 +187,8 @@ static u8 *dpa_ptp_parse_packet(struct sk_buff *skb, u16 *eth_type)
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/* when we can receive S/G frames we need to check the data we want to
-	 * access is in the linear skb buffer */
+	 * access is in the linear skb buffer
+	 */
 	if (!pskb_may_pull(skb, access_len))
 		return NULL;
 #endif

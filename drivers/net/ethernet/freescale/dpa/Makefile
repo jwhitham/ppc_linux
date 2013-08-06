@@ -1,12 +1,12 @@
 #
 # Makefile for the Freescale Ethernet controllers
 #
-EXTRA_CFLAGS           += -DVERSION=\"\"
+ccflags-y += -DVERSION=\"\"
 #
 #Include netcomm SW specific definitions
 include $(srctree)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 
-EXTRA_CFLAGS += -I$(NET_DPA)
+ccflags-y += -I$(NET_DPA)
 
 obj-$(CONFIG_FSL_DPAA_1588) += dpaa_1588.o
 obj-$(CONFIG_FSL_DPAA_ETH_SG_SUPPORT) += fsl-dpa-sg.o
