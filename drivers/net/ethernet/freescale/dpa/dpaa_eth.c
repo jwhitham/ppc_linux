@@ -52,7 +52,7 @@
 #include <linux/highmem.h>
 #include <linux/percpu.h>
 #include <linux/dma-mapping.h>
-#include <asm/smp.h>		/* get_hard_smp_processor_id() */
+#include <linux/smp.h>		/* get_hard_smp_processor_id() */
 #include <linux/fsl_bman.h>
 
 #include "fsl_fman.h"
@@ -135,8 +135,7 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks)
 }
 EXPORT_SYMBOL(fsl_dpaa_eth_set_hooks);
 
-/*
- * Checks whether the checksum field in Parse Results array is valid
+/* Checks whether the checksum field in Parse Results array is valid
  * (equals 0xFFFF) and increments the .cse counter otherwise
  */
 static inline void
@@ -147,14 +146,14 @@ dpa_csum_validation(const struct dpa_priv_s	*priv,
 	dma_addr_t addr = qm_fd_addr(fd);
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
 	void *frm = phys_to_virt(addr);
-	t_FmPrsResult *parse_result;
+	fm_prs_result_t *parse_result;
 
 	if (unlikely(!frm))
 		return;
 
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
 
-	parse_result = (t_FmPrsResult *)(frm + DPA_RX_PRIV_DATA_SIZE);
+	parse_result = (fm_prs_result_t *)(frm + DPA_RX_PRIV_DATA_SIZE);
 
 	if (parse_result->cksum != DPA_CSUM_VALID)
 		percpu_priv->rx_errors.cse++;
@@ -221,8 +220,7 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 	dev_kfree_skb(skb);
 }
 
-/*
- * Helper function to factor out frame validation logic on all Rx paths. Its
+/* Helper function to factor out frame validation logic on all Rx paths. Its
  * purpose is to extract from the Parse Results structure information about
  * the integrity of the frame, its checksum, the length of the parsed headers
  * and whether the frame is suitable for GRO.
@@ -236,20 +234,18 @@ static void _dpa_tx_error(struct net_device		*net_dev,
  * @hdr_size	will be written with a safe value, at least the size of the
  *		headers' length.
  */
-void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
+void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 				      const struct qm_fd *fd,
 				      struct sk_buff *skb, int *use_gro)
 {
 	if (fd->status & FM_FD_STAT_L4CV) {
-		/*
-		 * The parser has run and performed L4 checksum validation.
+		/* The parser has run and performed L4 checksum validation.
 		 * We know there were no parser errors (and implicitly no
 		 * L4 csum error), otherwise we wouldn't be here.
 		 */
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-		/*
-		 * Don't go through GRO for certain types of traffic that
+		/* Don't go through GRO for certain types of traffic that
 		 * we know are not GRO-able, such as dgram-based protocols.
 		 * In the worst-case scenarios, such as small-pkt terminating
 		 * UDP, the extra GRO processing would be overkill.
@@ -263,8 +259,7 @@ void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
 		return;
 	}
 
-	/*
-	 * We're here because either the parser didn't run or the L4 checksum
+	/* We're here because either the parser didn't run or the L4 checksum
 	 * was not verified. This may include the case of a UDP frame with
 	 * checksum zero or an L4 proto other than TCP/UDP
 	 */
@@ -456,8 +451,7 @@ static void priv_ern(struct qman_portal	*portal,
 	percpu_priv->stats.tx_fifo_errors++;
 	count_ern(percpu_priv, msg);
 
-	/*
-	 * If we intended this buffer to go into the pool
+	/* If we intended this buffer to go into the pool
 	 * when the FM was done, we need to put it in
 	 * manually.
 	 */
@@ -583,8 +577,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	struct dpa_percpu_priv_s *percpu_priv;
 	const uint8_t *mac_addr;
 
-	/*
-	 * Although we access another CPU's private data here
+	/* Although we access another CPU's private data here
 	 * we do it at initialization so it is safe
 	 */
 	for_each_online_cpu(i) {
@@ -704,8 +697,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
-	/*
-	 * Allocate this early, so we can store relevant information in
+	/* Allocate this early, so we can store relevant information in
 	 * the private area (needed by 1588 code in dpa_mac_probe)
 	 */
 	net_dev = alloc_etherdev_mq(sizeof(*priv), DPAA_ETH_TX_QUEUES);
@@ -791,8 +783,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	dpa_fq_setup(priv, &private_fq_cbs, priv->mac_dev->port_dev[TX]);
 
-	/*
-	 * Create a congestion group for this netdev, with
+	/* Create a congestion group for this netdev, with
 	 * dynamically-allocated CGR ID.
 	 * Must be executed after probing the MAC, but before
 	 * assigning the egress FQs to the CGRs.
@@ -896,7 +887,8 @@ static int __init __cold dpa_load(void)
 {
 	int	 _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": "
+		DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();

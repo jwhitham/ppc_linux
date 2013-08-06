@@ -454,7 +454,7 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	int queue_mapping;
 	int err;
 	void *dpa_bp_vaddr;
-	t_FmPrsResult parse_results;
+	fm_prs_result_t parse_results;
 
 	priv = netdev_priv(net_dev);
 	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
@@ -704,7 +704,8 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
-	printk(KERN_INFO "fsl_dpa_shared: Probed shared interface %s\n", net_dev->name);
+	printk(KERN_INFO "fsl_dpa_shared: Probed shared interface %s\n",
+			net_dev->name);
 
 	return 0;
 
@@ -757,7 +758,8 @@ static int __init __cold dpa_shared_load(void)
 {
 	int	 _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": "
+		DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* Initialize dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();

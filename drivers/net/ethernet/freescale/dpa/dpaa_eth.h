@@ -61,8 +61,7 @@ extern int dpa_max_frm;
 #define dpa_get_rx_extra_headroom() dpa_rx_extra_headroom
 #define dpa_get_max_frm() dpa_max_frm
 
-/*
- * Currently we have the same max_frm on all interfaces, so these macros
+/* Currently we have the same max_frm on all interfaces, so these macros
  * don't get a net_device argument. This will change in the future.
  */
 #define dpa_get_min_mtu()	64
@@ -85,7 +84,7 @@ struct dpa_buffer_layout_s {
 };
 
 #define DPA_TX_PRIV_DATA_SIZE	16
-#define DPA_PARSE_RESULTS_SIZE sizeof(t_FmPrsResult)
+#define DPA_PARSE_RESULTS_SIZE sizeof(fm_prs_result_t)
 #define DPA_TIME_STAMP_SIZE 8
 #define DPA_HASH_RESULTS_SIZE 8
 #define DPA_RX_PRIV_DATA_SIZE   (DPA_TX_PRIV_DATA_SIZE + \
@@ -127,8 +126,7 @@ struct dpa_buffer_layout_s {
 	dpa_get_buffer_size(buffer_layout, (dpa_get_max_frm() - ETH_FCS_LEN))
 #endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
-/*
- * Maximum size of a buffer for which recycling is allowed.
+/* Maximum size of a buffer for which recycling is allowed.
  * We need an upper limit such that forwarded skbs that get reallocated on Tx
  * aren't allowed to grow unboundedly. On the other hand, we need to make sure
  * that skbs allocated by us will not fail to be recycled due to their size.
@@ -165,8 +163,7 @@ enum dpaa_eth_hook_result {
 	 * perform any fd cleanup, nor update the interface statistics.
 	 */
 	DPAA_ETH_STOLEN,
-	/*
-	 * fd/skb was returned to the Ethernet driver for regular processing.
+	/* fd/skb was returned to the Ethernet driver for regular processing.
 	 * The hook is not allowed to, for instance, reallocate the skb (as if
 	 * by linearizing, copying, cloning or reallocating the headroom).
 	 */
@@ -180,19 +177,16 @@ typedef enum dpaa_eth_hook_result (*dpaa_eth_egress_hook_t)(
 typedef enum dpaa_eth_hook_result (*dpaa_eth_confirm_hook_t)(
 		struct net_device *net_dev, const struct qm_fd *fd, u32 fqid);
 
-/*
- * Various hooks used for unit-testing and/or fastpath optimizations.
+/* Various hooks used for unit-testing and/or fastpath optimizations.
  * Currently only one set of such hooks is supported.
  */
 struct dpaa_eth_hooks_s {
-	/*
-	 * Invoked on the Tx private path, immediately after receiving the skb
+	/* Invoked on the Tx private path, immediately after receiving the skb
 	 * from the stack.
 	 */
 	dpaa_eth_egress_hook_t	tx;
 
-	/*
-	 * Invoked on the Rx private path, right before passing the skb
+	/* Invoked on the Rx private path, right before passing the skb
 	 * up the stack. At that point, the packet's protocol id has already
 	 * been set. The skb's data pointer is now at the L3 header, and
 	 * skb->mac_header points to the L2 header. skb->len has been adjusted
@@ -212,8 +206,7 @@ struct dpaa_eth_hooks_s {
 
 void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
-/*
- * Largest value that the FQD's OAL field can hold.
+/* Largest value that the FQD's OAL field can hold.
  * This is DPAA-1.x specific.
  * TODO: This rather belongs in fsl_qman.h
  */
@@ -225,24 +218,21 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 /* Default alignment for start of data in an Rx FD */
 #define DPA_FD_DATA_ALIGNMENT  16
 
-/*
- * Values for the L3R field of the FM Parse Results
+/* Values for the L3R field of the FM Parse Results
  */
 /* L3 Type field: First IP Present IPv4 */
 #define FM_L3_PARSE_RESULT_IPV4	0x8000
 /* L3 Type field: First IP Present IPv6 */
 #define FM_L3_PARSE_RESULT_IPV6	0x4000
 
-/*
- * Values for the L4R field of the FM Parse Results
+/* Values for the L4R field of the FM Parse Results
  * See $8.8.4.7.20 - L4 HXS - L4 Results from DPAA-Rev2 Reference Manual.
  */
 /* L4 Type field: UDP */
 #define FM_L4_PARSE_RESULT_UDP	0x40
 /* L4 Type field: TCP */
 #define FM_L4_PARSE_RESULT_TCP	0x20
-/*
- * This includes L4 checksum errors, but also other errors that the Hard Parser
+/* This includes L4 checksum errors, but also other errors that the Hard Parser
  * can detect, such as invalid combinations of TCP control flags, or bad UDP
  * lengths.
  */
@@ -250,8 +240,7 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 /* Check if the hardware parser has run */
 #define FM_L4_HXS_RUN		0xE0
 
-/*
- * FD status field indicating whether the FM Parser has attempted to validate
+/* FD status field indicating whether the FM Parser has attempted to validate
  * the L4 csum of the frame.
  * Note that having this bit set doesn't necessarily imply that the checksum
  * is valid. One would have to check the parse results to find that out.
@@ -261,24 +250,21 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
 #define FM_FD_STAT_ERR_PHYSICAL	FM_PORT_FRM_ERR_PHYSICAL
 
-/*
- * Check if the FMan Hardware Parser has run for L4 protocols.
+/* Check if the FMan Hardware Parser has run for L4 protocols.
  *
- * @parse_result_ptr must be of type (t_FmPrsResult *).
+ * @parse_result_ptr must be of type (fm_prs_result_t *).
  */
 #define fm_l4_hxs_has_run(parse_result_ptr) \
 	((parse_result_ptr)->l4r & FM_L4_HXS_RUN)
-/*
- * Iff the FMan Hardware Parser has run for L4 protocols, check error status.
+/* Iff the FMan Hardware Parser has run for L4 protocols, check error status.
  *
- * @parse_result_ptr must be of type (t_FmPrsResult *).
+ * @parse_result_ptr must be of type (fm_prs_result_t *).
  */
 #define fm_l4_hxs_error(parse_result_ptr) \
 	((parse_result_ptr)->l4r & FM_L4_PARSE_ERROR)
-/*
- * Check if the parsed frame was found to be a TCP segment.
+/* Check if the parsed frame was found to be a TCP segment.
  *
- * @parse_result_ptr must be of type (t_FmPrsResult *).
+ * @parse_result_ptr must be of type (fm_prs_result_t *).
  */
 #define fm_l4_frame_is_tcp(parse_result_ptr) \
 	((parse_result_ptr)->l4r & FM_L4_PARSE_RESULT_TCP)
@@ -336,28 +322,24 @@ struct dpa_bp {
 	uint8_t				bpid;
 	struct device			*dev;
 	union {
-		/*
-		 * The buffer pools used for the private ports are initialized
+		/* The buffer pools used for the private ports are initialized
 		 * with target_count buffers for each CPU; at runtime the
 		 * number of buffers per CPU is constantly brought back to this
 		 * level
 		 */
 		int target_count;
-		/*
-		 * The configured value for the number of buffers in the pool,
+		/* The configured value for the number of buffers in the pool,
 		 * used for shared port buffer pools
 		 */
 		int config_count;
 	};
 	size_t				size;
 	bool				seed_pool;
-	/*
-	 * physical address of the contiguous memory used by the pool to store
+	/* physical address of the contiguous memory used by the pool to store
 	 * the buffers
 	 */
 	dma_addr_t			paddr;
-	/*
-	 * virtual address of the contiguous memory used by the pool to store
+	/* virtual address of the contiguous memory used by the pool to store
 	 * the buffers
 	 */
 	void				*vaddr;
@@ -407,8 +389,7 @@ struct dpa_percpu_priv_s {
 struct dpa_priv_s {
 	struct dpa_percpu_priv_s	*percpu_priv;
 	struct dpa_bp *dpa_bp;
-	/*
-	 * Store here the needed Tx headroom for convenience and speed
+	/* Store here the needed Tx headroom for convenience and speed
 	 * (even though it can be computed based on the fields of buf_layout)
 	 */
 	uint16_t tx_headroom;
@@ -485,7 +466,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev);
 struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				   const struct qm_fd *fd);
-void __hot _dpa_process_parse_results(const t_FmPrsResult *parse_results,
+void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 				      const struct qm_fd *fd,
 				      struct sk_buff *skb,
 				      int *use_gro);
@@ -495,8 +476,7 @@ void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu_id);
 int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp);
 #endif
 
-/*
- * Turn on HW checksum computation for this outgoing frame.
+/* Turn on HW checksum computation for this outgoing frame.
  * If the current protocol is not something we support in this regard
  * (or if the stack has already computed the SW checksum), we do nothing.
  *
@@ -511,8 +491,7 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 
 static inline int dpaa_eth_napi_schedule(struct dpa_percpu_priv_s *percpu_priv)
 {
-	/*
-	 * In case of threaded ISR for RT enable kernel,
+	/* In case of threaded ISR for RT enable kernel,
 	 * in_irq() does not return appropriate value, so use
 	 * in_serving_softirq to distinguish softirq or irq context.
 	 */
@@ -601,7 +580,8 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 
 #ifdef CONFIG_FSL_DPAA_TX_RECYCLE
 	/* Choose egress fq based on whether we want
-	 * to recycle the frame or not */
+	 * to recycle the frame or not
+	 */
 	if (fd->cmd & FM_FD_CMD_FCO)
 		egress_fq = priv->recycle_fqs[queue];
 	else
@@ -634,8 +614,7 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 
 #if defined CONFIG_FSL_DPAA_ETH_WQ_LEGACY
 #define DPA_NUM_WQS 8
-/*
- * Older WQ assignment: statically-defined FQIDs (such as PCDs) are assigned
+/* Older WQ assignment: statically-defined FQIDs (such as PCDs) are assigned
  * round-robin to all WQs available. Dynamically-allocated FQIDs go to WQ7.
  *
  * Not necessarily the best scheme, but worked fine so far, so we might want
@@ -646,8 +625,7 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 	fq->wq = fq->fqid ? fq->fqid % DPA_NUM_WQS : DPA_NUM_WQS - 1;
 }
 #elif defined CONFIG_FSL_DPAA_ETH_WQ_MULTI
-/*
- * Use multiple WQs for FQ assignment:
+/* Use multiple WQs for FQ assignment:
  *	- Tx Confirmation queues go to WQ1.
  *	- Rx Default, Tx and PCD queues go to WQ3 (no differentiation between
  *	  Rx and Tx traffic, or between Rx Default and Rx PCD frames).
