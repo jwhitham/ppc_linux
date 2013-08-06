@@ -98,8 +98,7 @@ int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 	}
 
 release_bufs:
-	/*
-	 * Release the buffers. In case bman is busy, keep trying
+	/* Release the buffers. In case bman is busy, keep trying
 	 * until successful. bman_release() is guaranteed to succeed
 	 * in a reasonable amount of time
 	 */
@@ -113,8 +112,7 @@ bail_out:
 	WARN_ONCE(1, "Memory allocation failure on Rx\n");
 
 	bm_buffer_set64(&bmb[i], 0);
-	/*
-	 * Avoid releasing a completely null buffer; bman_release() requires
+	/* Avoid releasing a completely null buffer; bman_release() requires
 	 * at least one buffer.
 	 */
 	if (likely(i))
@@ -140,8 +138,7 @@ void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	for_each_online_cpu(i) {
 		int j;
 
-		/*
-		 * Although we access another CPU's counters here
+		/* Although we access another CPU's counters here
 		 * we do it at boot time so it is safe
 		 */
 		for (j = 0; j < dpa_bp->config_count; j += 8)
@@ -149,8 +146,7 @@ void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	}
 }
 
-/*
- * Add buffers/(pages) for Rx processing whenever bpool count falls below
+/* Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
 int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
@@ -210,8 +206,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	nr_frags = skb_shinfo(skb)->nr_frags;
 
 	if (fd->format == qm_fd_sg) {
-		/*
-		 * The sgt buffer has been allocated with netdev_alloc_frag(),
+		/* The sgt buffer has been allocated with netdev_alloc_frag(),
 		 * it's from lowmem.
 		 */
 		sgt = phys_to_virt(addr + dpa_fd_offset(fd));
@@ -242,8 +237,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 					sgt[i].length, dma_dir);
 		}
 
-		/*
-		 * TODO: dpa_bp_recycle_frag() ?
+		/* TODO: dpa_bp_recycle_frag() ?
 		 * We could put these in the pool, since we allocated them
 		 * and we know they're not used by anyone else
 		 */
@@ -325,8 +319,7 @@ static bool dpa_buf_is_recyclable(struct sk_buff *skb,
 #endif /* CONFIG_FSL_DPAA_TS */
 
 
-/*
- * Build a linear skb around the received buffer.
+/* Build a linear skb around the received buffer.
  * We are guaranteed there is enough room at the end of the data buffer to
  * accomodate the shared info area of the skb.
  */
@@ -337,7 +330,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	ssize_t fd_off = dpa_fd_offset(fd);
 	void *vaddr;
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
-	const t_FmPrsResult *parse_results;
+	const fm_prs_result_t *parse_results;
 	struct sk_buff *skb = NULL;
 
 	vaddr = phys_to_virt(addr);
@@ -367,7 +360,8 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	skb_put(skb, dpa_fd_length(fd));
 
 	/* Peek at the parse results for csum validation */
-	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
+	parse_results = (const fm_prs_result_t *)(vaddr +
+				DPA_RX_PRIV_DATA_SIZE);
 	_dpa_process_parse_results(parse_results, fd, skb, use_gro);
 
 #ifdef CONFIG_FSL_DPAA_TS
@@ -379,8 +373,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 }
 
 
-/*
- * Build an skb with the data of the first S/G entry in the linear portion and
+/* Build an skb with the data of the first S/G entry in the linear portion and
  * the rest of the frame as skb fragments.
  *
  * The page fragment holding the S/G Table is recycled here.
@@ -398,7 +391,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int frag_offset, frag_len;
 	int page_offset;
 	int i;
-	const t_FmPrsResult *parse_results;
+	const fm_prs_result_t *parse_results;
 	struct sk_buff *skb = NULL;
 	int *count_ptr;
 
@@ -454,7 +447,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			 * Context in the buffer containing the sgt.
 			 * Inspect the parse results before anything else.
 			 */
-			parse_results = (const t_FmPrsResult *)(vaddr +
+			parse_results = (const fm_prs_result_t *)(vaddr +
 						DPA_RX_PRIV_DATA_SIZE);
 			_dpa_process_parse_results(parse_results, fd, skb,
 						   use_gro);
@@ -468,8 +461,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 		} else {
 			dma_unmap_single(dpa_bp->dev, sg_addr, dpa_bp->size,
 				DMA_BIDIRECTIONAL);
-			/*
-			 * Not the first S/G entry; all data from buffer will
+			/* Not the first S/G entry; all data from buffer will
 			 * be added in an skb fragment; fragment index is offset
 			 * by one since first S/G entry was incorporated in the
 			 * linear part of the skb.
@@ -651,8 +643,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 no_recycle:
 	*skbh = skb;
 
-	/*
-	 * Enable L3/L4 hardware checksum computation.
+	/* Enable L3/L4 hardware checksum computation.
 	 *
 	 * We must do this before dma_map_single(DMA_TO_DEVICE), because we may
 	 * need to write into the skb.
@@ -710,8 +701,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		return -ENOMEM;
 	}
 
-	/*
-	 * Enable L3/L4 hardware checksum computation.
+	/* Enable L3/L4 hardware checksum computation.
 	 *
 	 * We must do this before dma_map_single(DMA_TO_DEVICE), because we may
 	 * need to write into the skb.
@@ -826,8 +816,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 #endif /* CONFIG_FSL_DPAA_TS */
 
-	/*
-	 * MAX_SKB_FRAGS is larger than our DPA_SGT_MAX_ENTRIES; make sure
+	/* MAX_SKB_FRAGS is larger than our DPA_SGT_MAX_ENTRIES; make sure
 	 * we don't feed FMan with more fragments than it supports.
 	 * Btw, we're using the first sgt entry to store the linear part of
 	 * the skb, so we're one extra frag short.
@@ -838,8 +827,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		err = skb_to_sg_fd(priv, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
 	} else {
-		/*
-		 * Make sure we have enough headroom to accomodate private
+		/* Make sure we have enough headroom to accomodate private
 		 * data, parse results, etc. Normally this shouldn't happen if
 		 * we're here via the standard kernel stack.
 		 */
@@ -856,8 +844,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 			skb = skb_new;
 		}
 
-		/*
-		 * We're going to store the skb backpointer at the beginning
+		/* We're going to store the skb backpointer at the beginning
 		 * of the data buffer, so we need a privately owned skb
 		 */
 
@@ -868,8 +855,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 			skb = nskb;
 			/* skb_copy() has now linearized the skbuff. */
 		} else if (unlikely(nonlinear)) {
-			/*
-			 * We are here because the egress skb contains
+			/* We are here because the egress skb contains
 			 * more fragments than we support. In this case,
 			 * we have no choice but to linearize it ourselves.
 			 */

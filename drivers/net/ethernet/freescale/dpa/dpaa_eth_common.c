@@ -1505,7 +1505,7 @@ void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	struct sk_buff *skb, struct qm_fd *fd, char *parse_results)
 {
-	t_FmPrsResult *parse_result;
+	fm_prs_result_t *parse_result;
 	struct iphdr *iph;
 	struct ipv6hdr *ipv6h = NULL;
 	int l4_proto;
@@ -1522,7 +1522,7 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	/* Fill in some fields of the Parse Results array, so the FMan
 	 * can find them as if they came from the FMan Parser.
 	 */
-	parse_result = (t_FmPrsResult *)parse_results;
+	parse_result = (fm_prs_result_t *)parse_results;
 
 	/* If we're dealing with VLAN, get the real Ethernet type */
 	if (ethertype == ETH_P_8021Q) {

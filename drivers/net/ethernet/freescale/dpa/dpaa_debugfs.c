@@ -34,7 +34,7 @@
 #include <linux/fsl_qman.h>	/* struct qm_mcr_querycgr */
 #include <linux/debugfs.h>
 #include <asm/debug.h>
-#include <asm/smp.h>		/* get_hard_smp_processor_id() if !CONFIG_SMP */
+#include <linux/smp.h>		/* get_hard_smp_processor_id() if !CONFIG_SMP */
 #include "dpaa_debugfs.h"
 #include "dpaa_eth.h" /* struct dpa_priv_s, dpa_percpu_priv_s, dpa_bp */
 
