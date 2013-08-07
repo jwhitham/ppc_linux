@@ -52,7 +52,6 @@
 #include <linux/highmem.h>
 #include <linux/percpu.h>
 #include <linux/dma-mapping.h>
-#include <linux/smp.h>		/* get_hard_smp_processor_id() */
 #include <linux/fsl_bman.h>
 
 #include "fsl_fman.h"
