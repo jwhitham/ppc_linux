@@ -742,6 +742,9 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 
 	dpa_bp_array[bp->bpid] = 0;
 	bman_free_pool(bp->pool);
+
+	if (bp->dev)
+		platform_device_unregister(to_platform_device(bp->dev));
 }
 
 void __cold __attribute__((nonnull))
