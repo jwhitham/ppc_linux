@@ -364,7 +364,7 @@ void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 					default_pool->size,
 					DMA_BIDIRECTIONAL);
 
-			_dpa_bp_free_buf(phys_to_virt(addr));
+			dpa_bp->free_buf_cb(phys_to_virt(addr));
 		}
 	} while (num == 8);
 

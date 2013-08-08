@@ -348,8 +348,10 @@ struct dpa_bp {
 	atomic_t refs;
 	/* some bpools need to be seeded before use by this cb */
 	int (*seed_cb)(struct dpa_bp *);
-	/* some bpools need to be emptied before freeing by this cb */
-	void (*drain_cb)(struct dpa_bp *);
+	/* some bpools need to be emptied before freeing; this cb is used
+	 * for freeing of individual buffers taken from the pool
+	 */
+	void (*free_buf_cb)(void *addr);
 };
 
 struct dpa_rx_errors {
@@ -681,7 +683,7 @@ void dpa_bp_default_buf_size_update(uint32_t size);
 uint32_t dpa_bp_default_buf_size_get(void);
 void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp);
 
-static inline void _dpa_bp_free_buf(void *addr)
+static inline void _dpa_bp_free_skb(void *addr)
 {
 	struct sk_buff **skbh = addr;
 	struct sk_buff *skb;
@@ -690,7 +692,7 @@ static inline void _dpa_bp_free_buf(void *addr)
 	dev_kfree_skb_any(skb);
 }
 #else
-static inline void _dpa_bp_free_buf(void *addr)
+static inline void _dpa_bp_free_pf(void *addr)
 {
 	put_page(virt_to_head_page(addr));
 }

@@ -625,10 +625,12 @@ dpa_priv_bp_probe(struct device *dev)
 
 	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
-	dpa_bp->drain_cb = dpa_bp_drain;
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	dpa_bp->seed_cb = dpa_bp_priv_seed;
+	dpa_bp->free_buf_cb = _dpa_bp_free_pf;
+#else
+	dpa_bp->free_buf_cb = _dpa_bp_free_skb;
 #endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 	return dpa_bp;
