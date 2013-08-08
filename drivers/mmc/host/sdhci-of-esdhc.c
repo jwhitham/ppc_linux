@@ -136,13 +136,28 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 	if (reg == SDHCI_HOST_CONTROL)
 		val &= ~ESDHC_HOST_CONTROL_RES;
 
-	/* If we have this quirk just use reset cmd and reset data to
-	 * instead of reset all.
+	/*
+	 * If we have this quirk:
+	 * 1. Disabled the clock.
+	 * 2. Perform reset all command.
+	 * 3. Enable the clock.
 	 */
 	if ((reg == SDHCI_SOFTWARE_RESET) &&
 			(host->quirks2 & SDHCI_QUIRK2_BROKEN_RESET_ALL) &&
-			(val & SDHCI_RESET_ALL))
-		val = SDHCI_RESET_CMD | SDHCI_RESET_DATA;
+			(val & SDHCI_RESET_ALL)) {
+		u32 temp;
+
+		temp = esdhc_readl(host, ESDHC_SYSTEM_CONTROL);
+		temp &= ~ESDHC_CLOCK_CRDEN;
+		esdhc_writel(host, temp, ESDHC_SYSTEM_CONTROL);
+
+		sdhci_be32bs_writeb(host, val, reg);
+
+		temp |= ESDHC_CLOCK_CRDEN;
+		esdhc_writel(host, temp, ESDHC_SYSTEM_CONTROL);
+
+		return;
+	}
 
 	if (reg == SDHCI_POWER_CONTROL) {
 		/* eSDHC don't support gate off power */
@@ -361,11 +376,14 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 	 * Check for A-005055: A glitch is generated on the card clock
 	 * due to software reset or a clock change
 	 * Impact list:
-	 * T4240-R1.0 B4860-R1.0 P3041-R1.0 P3041-R2.0 P2041-R1.0
-	 * P2041-R1.1 P2041-R2.0 P1010-R1.0
+	 * T4240-R1.0 B4860-4420-R1.0-R2.0 P3041-R1.0 P3041-R2.0
+	 * P2041-R1.0 P2041-R1.1 P2041-R2.0 P1010-R1.0
 	 */
 	if (((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x20)) ||
+		((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x20)) ||
 		((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) == 0x20)) ||
