@@ -7,9 +7,21 @@
  */
 #include <linux/of_platform.h>
 
+#include <asm/time.h>
+
 #include <sysdev/cpm2_pic.h>
 
 #include "mpc85xx.h"
+
+#define MAX_BIT				64
+
+#define ALTIVEC_COUNT_OFFSET		16
+#define ALTIVEC_IDLE_COUNT_MASK		0x003f0000
+
+/*
+ * FIXME - We don't know the AltiVec application scenarios.
+ */
+#define ALTIVEC_IDLE_TIME	1000 /* 1ms */
 
 static struct of_device_id __initdata mpc85xx_common_ids[] = {
 	{ .type = "soc", },
@@ -82,3 +94,53 @@ void __init mpc85xx_cpm2_pic_init(void)
 	irq_set_chained_handler(irq, cpm2_cascade);
 }
 #endif
+
+static unsigned int get_idle_ticks_bit(unsigned int us)
+{
+	unsigned int cycle;
+
+	/*
+	 * The time control by TB turn over bit, so we need
+	 * to be divided by 2.
+	 */
+	cycle = (us / 2) * tb_ticks_per_usec;
+
+	return ilog2(cycle) + 1;
+}
+
+static void setup_altivec_idle(void *unused)
+{
+	u32 altivec_idle, pvr, bit;
+
+	pvr = mfspr(SPRN_PVR);
+
+	/* AltiVec idle feature only exists for E6500 */
+	if (PVR_VER(pvr) != PVR_VER_E6500)
+		return;
+
+	/* Fix erratum, e6500 rev1 not support altivec idle */
+	if (PVR_REV(pvr) < 0x20)
+		return;
+
+	/* Enable Altivec Idle */
+	altivec_idle = mfspr(SPRN_PWRMGTCR0);
+	altivec_idle |= PWRMGTCR0_ALTIVEC_IDLE;
+
+	/* Set Automatic AltiVec Idle Count */
+	/* clear count */
+	altivec_idle &= ~ALTIVEC_IDLE_COUNT_MASK;
+
+	/* set count */
+	bit = get_idle_ticks_bit(ALTIVEC_IDLE_TIME);
+	altivec_idle |= ((MAX_BIT - bit) << ALTIVEC_COUNT_OFFSET);
+
+	mtspr(SPRN_PWRMGTCR0, altivec_idle);
+}
+
+static int __init setup_idle_hw_governor(void)
+{
+	on_each_cpu(setup_altivec_idle, NULL, 1);
+
+	return 0;
+}
+late_initcall(setup_idle_hw_governor);
