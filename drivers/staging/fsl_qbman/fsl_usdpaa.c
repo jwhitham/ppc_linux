@@ -1085,7 +1085,8 @@ static long ioctl_portal_map(struct file *fp, struct ctx *ctx,
 		return -ENOMEM;
 	memcpy(&mapping->user, arg, sizeof(mapping->user));
 	if (mapping->user.type == usdpaa_portal_qman) {
-		mapping->qportal = qm_get_unused_portal();
+		mapping->qportal =
+			qm_get_unused_portal_idx(mapping->user.index);
 		if (!mapping->qportal) {
 			ret = -ENODEV;
 			goto err_get_portal;
@@ -1093,13 +1094,16 @@ static long ioctl_portal_map(struct file *fp, struct ctx *ctx,
 		mapping->phys = &mapping->qportal->addr_phys[0];
 		mapping->user.channel = mapping->qportal->public_cfg.channel;
 		mapping->user.pools = mapping->qportal->public_cfg.pools;
+		mapping->user.index = mapping->qportal->public_cfg.index;
 	} else if (mapping->user.type == usdpaa_portal_bman) {
-		mapping->bportal = bm_get_unused_portal();
+		mapping->bportal =
+			bm_get_unused_portal_idx(mapping->user.index);
 		if (!mapping->bportal) {
 			ret = -ENODEV;
 			goto err_get_portal;
 		}
 		mapping->phys = &mapping->bportal->addr_phys[0];
+		mapping->user.index = mapping->bportal->public_cfg.index;
 	} else {
 		ret = -EINVAL;
 		goto err_copy_from_user;
@@ -1283,11 +1287,13 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 		if (copy_from_user(&input, a, sizeof(input)))
 			return -EFAULT;
 		converted.type = input.type;
+		converted.index = input.index;
 		ret = ioctl_portal_map(fp, ctx, &converted);
 		input.addr.cinh = ptr_to_compat(converted.addr.cinh);
 		input.addr.cena = ptr_to_compat(converted.addr.cena);
 		input.channel = converted.channel;
 		input.pools = converted.pools;
+		input.index = converted.index;
 		if (copy_to_user(a, &input, sizeof(input)))
 			return -EFAULT;
 		return ret;

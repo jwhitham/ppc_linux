@@ -455,6 +455,21 @@ static struct qm_portal_config *get_pcfg(struct list_head *list)
 	return pcfg;
 }
 
+static struct qm_portal_config *get_pcfg_idx(struct list_head *list, u32 idx)
+{
+	struct qm_portal_config *pcfg;
+	if (list_empty(list))
+		return NULL;
+	list_for_each_entry(pcfg, list, list) {
+		if (pcfg->public_cfg.index == idx) {
+			list_del(&pcfg->list);
+			return pcfg;
+		}
+	}
+	return NULL;
+}
+
+
 static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 {
 	int ret;
@@ -531,11 +546,14 @@ _iommu_domain_free:
 	iommu_domain_free(pcfg->iommu_domain);
 }
 
-struct qm_portal_config *qm_get_unused_portal(void)
+struct qm_portal_config *qm_get_unused_portal_idx(u32 idx)
 {
 	struct qm_portal_config *ret;
 	spin_lock(&unused_pcfgs_lock);
-	ret = get_pcfg(&unused_pcfgs);
+	if (idx == QBMAN_ANY_PORTAL_IDX)
+		ret = get_pcfg(&unused_pcfgs);
+	else
+		ret = get_pcfg_idx(&unused_pcfgs, idx);
 	spin_unlock(&unused_pcfgs_lock);
 	/* Bind stashing LIODNs to the CPU we are currently executing on, and
 	 * set the portal to use the stashing request queue corresonding to the
@@ -548,6 +566,11 @@ struct qm_portal_config *qm_get_unused_portal(void)
 	if (ret)
 		portal_set_cpu(ret, hard_smp_processor_id());
 	return ret;
+}
+
+struct qm_portal_config *qm_get_unused_portal()
+{
+	return qm_get_unused_portal_idx(QBMAN_ANY_PORTAL_IDX);
 }
 
 void qm_put_unused_portal(struct qm_portal_config *pcfg)
