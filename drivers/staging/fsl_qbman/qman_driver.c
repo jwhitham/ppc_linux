@@ -292,8 +292,8 @@ void qman_get_ip_revision(struct device_node *dn)
 			continue;
 		if (of_device_is_compatible(dn, "fsl,qman-portal-1.0") ||
 			of_device_is_compatible(dn, "fsl,qman-portal-1.0.0")) {
-			ip_rev = QMAN_REV10;
-			qman_portal_max = 10;
+			pr_err("QMAN rev1.0 on P4080 rev1 is not supported!\n");
+			BUG_ON(1);
 		} else if (of_device_is_compatible(dn, "fsl,qman-portal-1.1") ||
 			of_device_is_compatible(dn, "fsl,qman-portal-1.1.0")) {
 			ip_rev = QMAN_REV11;

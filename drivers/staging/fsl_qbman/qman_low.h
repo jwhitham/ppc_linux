@@ -208,28 +208,7 @@ struct qm_mc {
 #endif
 };
 
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-/* For workarounds that require storage. The struct alignment is required for
- * cases where operations on "shadow" structs need the same alignment as is
- * present on the corresponding h/w data structs (specifically, there is a
- * zero-bit present above the range required to address the ring, so that
- * iteration can be achieved by incrementing a ring pointer and clearing the
- * carry-bit). The "portal" struct needs the same alignment because this type
- * goes at its head, so it has a more radical alignment requirement if this
- * structure is used. (NB: "64" instead of "L1_CACHE_BYTES", because this
- * alignment relates to the h/w interface, not the CPU cache granularity!)*/
-#define QM_PORTAL_ALIGNMENT __attribute__((aligned(32 * 64)))
-struct qm_portal_bugs {
-	/* shadow MR ring, for QMAN9 workaround, 8-CL-aligned */
-	struct qm_mr_entry mr[QM_MR_SIZE];
-	/* shadow MC result, for QMAN6 and QMAN7 workarounds, CL-aligned */
-	struct qm_mc_result result;
-	/* boolean switch for QMAN7 workaround */
-	int initfq_and_sched;
-} QM_PORTAL_ALIGNMENT;
-#else
 #define QM_PORTAL_ALIGNMENT ____cacheline_aligned
-#endif
 
 struct qm_addr {
 	void __iomem *addr_ce;	/* cache-enabled */
@@ -237,9 +216,6 @@ struct qm_addr {
 };
 
 struct qm_portal {
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-	struct qm_portal_bugs bugs;
-#endif
 	/* In the non-CONFIG_FSL_DPA_CHECKING case, the following stuff up to
 	 * and including 'mc' fits within a cacheline (yay!). The 'config' part
 	 * is setup-only, so isn't a cause for a concern. In other words, don't
@@ -837,45 +813,15 @@ static inline const struct qm_mr_entry *MR_INC(const struct qm_mr_entry *e)
 	return MR_CARRYCLEAR(e + 1);
 }
 
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-static inline void __mr_copy_and_fixup(struct qm_portal *p, u8 idx)
-{
-	if (qman_ip_rev == QMAN_REV10) {
-		struct qm_mr_entry *shadow = qm_cl(p->bugs.mr, idx);
-		struct qm_mr_entry *res = qm_cl(p->mr.ring, idx);
-		copy_words(shadow, res, sizeof(*res));
-		/* Bypass the QM_MR_RC_*** definitions, and check the byte value
-		 * directly to handle the erratum. */
-		if (shadow->ern.rc == 0x06)
-			shadow->ern.rc = 0x60;
-	}
-}
-#else
-#define __mr_copy_and_fixup(p, idx) do { ; } while (0)
-#endif
-
 static inline int qm_mr_init(struct qm_portal *portal, enum qm_mr_pmode pmode,
 		enum qm_mr_cmode cmode)
 {
 	register struct qm_mr *mr = &portal->mr;
 	u32 cfg;
-	int loop;
 
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-	if ((qman_ip_rev == QMAN_REV10) && (pmode != qm_mr_pvb)) {
-		pr_err("Qman is rev1, so QMAN9 workaround requires 'pvb'\n");
-		return -EINVAL;
-	}
-#endif
 	mr->ring = portal->addr.addr_ce + QM_CL_MR;
 	mr->pi = qm_in(MR_PI_CINH) & (QM_MR_SIZE - 1);
 	mr->ci = qm_in(MR_CI_CINH) & (QM_MR_SIZE - 1);
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-	if (qman_ip_rev == QMAN_REV10)
-		/* Situate the cursor in the shadow ring */
-		mr->cursor = portal->bugs.mr + mr->ci;
-	else
-#endif
 	mr->cursor = mr->ring + mr->ci;
 	mr->fill = qm_cyc_diff(QM_MR_SIZE, mr->ci, mr->pi);
 	mr->vbit = (qm_in(MR_PI_CINH) & QM_MR_SIZE) ? QM_MR_VERB_VBIT : 0;
@@ -884,10 +830,6 @@ static inline int qm_mr_init(struct qm_portal *portal, enum qm_mr_pmode pmode,
 	mr->pmode = pmode;
 	mr->cmode = cmode;
 #endif
-	/* Only new entries get the copy-and-fixup treatment from
-	 * qm_mr_pvb_update(), so perform it here for any stale entries. */
-	for (loop = 0; loop < mr->fill; loop++)
-		__mr_copy_and_fixup(portal, (mr->ci + loop) & (QM_MR_SIZE - 1));
 	cfg = (qm_in(CFG) & 0xfffff0ff) |
 		((cmode & 1) << 8);		/* QCSP_CFG:MM */
 	qm_out(CFG, cfg);
@@ -961,7 +903,6 @@ static inline void qm_mr_pvb_update(struct qm_portal *portal)
 	/* when accessing 'verb', use __raw_readb() to ensure that compiler
 	 * inlining doesn't try to optimise out "excess reads". */
 	if ((__raw_readb(&res->verb) & QM_MR_VERB_VBIT) == mr->vbit) {
-		__mr_copy_and_fixup(portal, mr->pi);
 		mr->pi = (mr->pi + 1) & (QM_MR_SIZE - 1);
 		if (!mr->pi)
 			mr->vbit ^= QM_MR_VERB_VBIT;
@@ -1082,40 +1023,6 @@ static inline void qm_mc_commit(struct qm_portal *portal, u8 myverb)
 	struct qm_mc_result *rr = mc->rr + mc->rridx;
 	DPA_ASSERT(mc->state == qman_mc_user);
 	lwsync();
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-	if ((qman_ip_rev == QMAN_REV10) && ((myverb & QM_MCC_VERB_MASK) ==
-					QM_MCC_VERB_INITFQ_SCHED)) {
-		u32 fqid = mc->cr->initfq.fqid;
-		/* Do two commands to avoid the hw bug. Note, we poll locally
-		 * rather than using qm_mc_result() because from a DPA_CHECKING
-		 * perspective, we don't want to appear to have "finished" until
-		 * both commands are done. */
-		mc->cr->__dont_write_directly__verb = mc->vbit |
-					QM_MCC_VERB_INITFQ_PARKED;
-		dcbf(mc->cr);
-		portal->bugs.initfq_and_sched = 1;
-		do {
-			dcbit_ro(rr);
-		} while (!__raw_readb(&rr->verb));
-#ifdef CONFIG_FSL_DPA_CHECKING
-		mc->state = qman_mc_idle;
-#endif
-		if (rr->result != QM_MCR_RESULT_OK) {
-#ifdef CONFIG_FSL_DPA_CHECKING
-			mc->state = qman_mc_hw;
-#endif
-			return;
-		}
-		mc->rridx ^= 1;
-		mc->vbit ^= QM_MCC_VERB_VBIT;
-		rr = mc->rr + mc->rridx;
-		dcbz_64(mc->cr);
-		mc->cr->alterfq.fqid = fqid;
-		lwsync();
-		myverb = QM_MCC_VERB_ALTER_SCHED;
-	} else
-		portal->bugs.initfq_and_sched = 0;
-#endif
 	mc->cr->__dont_write_directly__verb = myverb | mc->vbit;
 	dcbf(mc->cr);
 	dcbit_ro(rr);
@@ -1136,25 +1043,6 @@ static inline struct qm_mc_result *qm_mc_result(struct qm_portal *portal)
 		dcbit_ro(rr);
 		return NULL;
 	}
-#ifdef CONFIG_FSL_QMAN_BUG_AND_FEATURE_REV1
-	if (qman_ip_rev == QMAN_REV10) {
-		if ((__raw_readb(&rr->verb) & QM_MCR_VERB_MASK) ==
-						QM_MCR_VERB_QUERYFQ) {
-			void *misplaced = (void *)rr + 50;
-			copy_words(&portal->bugs.result, rr, sizeof(*rr));
-			rr = &portal->bugs.result;
-			copy_shorts(&rr->queryfq.fqd.td, misplaced,
-				sizeof(rr->queryfq.fqd.td));
-		} else if (portal->bugs.initfq_and_sched) {
-			/* We split the user-requested command, make the final
-			 * result match the requested type. */
-			copy_words(&portal->bugs.result, rr, sizeof(*rr));
-			rr = &portal->bugs.result;
-			rr->verb = (rr->verb & QM_MCR_VERB_RRID) |
-					QM_MCR_VERB_INITFQ_SCHED;
-		}
-	}
-#endif
 	mc->rridx ^= 1;
 	mc->vbit ^= QM_MCC_VERB_VBIT;
 #ifdef CONFIG_FSL_DPA_CHECKING

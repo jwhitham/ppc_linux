@@ -1368,9 +1368,6 @@ int qman_init_fq(struct qman_fq *fq, u32 flags, struct qm_mcc_initfq *opts)
 		return -EINVAL;
 #endif
 	if (opts && (opts->we_mask & QM_INITFQ_WE_OAC)) {
-		/* OAC not supported on rev1.0 */
-		if (unlikely(qman_ip_rev == QMAN_REV10))
-			return -EINVAL;
 		/* And can't be set at the same time as TDTHRESH */
 		if (opts->we_mask & QM_INITFQ_WE_TDTHRESH)
 			return -EINVAL;
@@ -2026,34 +2023,7 @@ static inline struct qm_eqcr_entry *try_eq_start(struct qman_portal **p,
 #else
 	eq->tag = (u32)(uintptr_t)fq;
 #endif
-	/* From p4080 rev1 -> rev2, the FD struct's address went from 48-bit to
-	 * 40-bit but rev1 chips will still interpret it as 48-bit, meaning we
-	 * have to scrub the upper 8-bits, just in case the user left noise in
-	 * there. Doing this selectively via a run-time check of the h/w
-	 * revision (as we do for most errata, for example) is too slow in this
-	 * critical path code. The most inexpensive way to handle this is just
-	 * to reinterpret the FD as 4 32-bit words and to mask the first word
-	 * appropriately, irrespecitive of the h/w revision. The struct fields
-	 * corresponding to this word are;
-	 *     u8 dd:2;
-	 *     u8 liodn_offset:6;
-	 *     u8 bpid;
-	 *     u8 eliodn_offset:4;
-	 *     u8 __reserved:4;
-	 *     u8 addr_hi;
-	 * So we mask this word with 0xc0ff00ff, which implicitly scrubs out
-	 * liodn_offset, eliodn_offset, and __reserved - the latter two fields
-	 * are interpreted as the 8 msbits of the 48-bit address in the case of
-	 * rev1.
-	 */
-	{
-		const u32 *src = (const u32 *)fd;
-		u32 *dest = (u32 *)&eq->fd;
-		dest[0] = src[0] & 0xc0ff00ff;
-		dest[1] = src[1];
-		dest[2] = src[2];
-		dest[3] = src[3];
-	}
+	eq->fd = *fd;
 	return eq;
 }
 
@@ -2179,14 +2149,6 @@ int qman_modify_cgr(struct qman_cgr *cgr, u32 flags,
 	u8 res;
 	u8 verb = QM_MCC_VERB_MODIFYCGR;
 
-	/* frame mode not supported on rev1.0 */
-	if (unlikely(qman_ip_rev == QMAN_REV10)) {
-		if (opts && (opts->we_mask & QM_CGR_WE_MODE) &&
-				opts->cgr.mode == QMAN_CGR_MODE_FRAME) {
-			put_affine_portal();
-			return -EIO;
-		}
-	}
 	PORTAL_IRQ_LOCK(p, irqflags);
 	mcc = qm_mc_start(&p->p);
 	if (opts)
