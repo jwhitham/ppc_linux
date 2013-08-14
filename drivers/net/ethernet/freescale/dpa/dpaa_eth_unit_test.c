@@ -283,7 +283,7 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 			}
 
 			/* Was it good? */
-			if (tx_unit_test_passed == false) {
+			if (!tx_unit_test_passed) {
 				pr_err("Test failed:\n");
 				pr_err("size: %d pad: %d head: %p end: %p\n",
 					size, headroom, tx_unit_skb_head,
