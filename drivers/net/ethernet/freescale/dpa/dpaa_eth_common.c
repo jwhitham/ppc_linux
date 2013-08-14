@@ -335,7 +335,7 @@ static void dpa_ts_tx_enable(struct net_device *dev)
 	if (mac_dev->ptp_enable)
 		mac_dev->ptp_enable(mac_dev->get_mac_handle(mac_dev));
 
-	priv->ts_tx_en = TRUE;
+	priv->ts_tx_en = true;
 }
 
 static void dpa_ts_tx_disable(struct net_device *dev)
@@ -355,7 +355,7 @@ static void dpa_ts_tx_disable(struct net_device *dev)
 		mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
 #endif
 
-	priv->ts_tx_en = FALSE;
+	priv->ts_tx_en = false;
 }
 
 static void dpa_ts_rx_enable(struct net_device *dev)
@@ -368,7 +368,7 @@ static void dpa_ts_rx_enable(struct net_device *dev)
 	if (mac_dev->ptp_enable)
 		mac_dev->ptp_enable(mac_dev->get_mac_handle(mac_dev));
 
-	priv->ts_rx_en = TRUE;
+	priv->ts_rx_en = true;
 }
 
 static void dpa_ts_rx_disable(struct net_device *dev)
@@ -388,7 +388,7 @@ static void dpa_ts_rx_disable(struct net_device *dev)
 		mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
 #endif
 
-	priv->ts_rx_en = FALSE;
+	priv->ts_rx_en = false;
 }
 
 static int dpa_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
