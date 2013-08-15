@@ -17,11 +17,21 @@
 
 #define ALTIVEC_COUNT_OFFSET		16
 #define ALTIVEC_IDLE_COUNT_MASK		0x003f0000
+#define PW20_COUNT_OFFSET		8
+#define PW20_IDLE_COUNT_MASK		0x00003f00
 
 /*
  * FIXME - We don't know the AltiVec application scenarios.
  */
 #define ALTIVEC_IDLE_TIME	1000 /* 1ms */
+
+/*
+ * FIXME - We don't know, what time should we let the core into PW20 state.
+ * because we don't know the current state of the cpu load. And threads are
+ * independent, so we can not know the state of different thread has been
+ * idle.
+ */
+#define	PW20_IDLE_TIME		1000 /* 1ms */
 
 static struct of_device_id __initdata mpc85xx_common_ids[] = {
 	{ .type = "soc", },
@@ -95,6 +105,23 @@ void __init mpc85xx_cpm2_pic_init(void)
 }
 #endif
 
+static bool has_pw20_altivec_idle(void)
+{
+	u32 pvr;
+
+	pvr = mfspr(SPRN_PVR);
+
+	/* PW20 & AltiVec idle feature only exists for E6500 */
+	if (PVR_VER(pvr) != PVR_VER_E6500)
+		return false;
+
+	/* Fix erratum, e6500 rev1 does not support PW20 & AltiVec idle */
+	if (PVR_REV(pvr) < 0x20)
+		return false;
+
+	return true;
+}
+
 static unsigned int get_idle_ticks_bit(unsigned int us)
 {
 	unsigned int cycle;
@@ -110,16 +137,9 @@ static unsigned int get_idle_ticks_bit(unsigned int us)
 
 static void setup_altivec_idle(void *unused)
 {
-	u32 altivec_idle, pvr, bit;
+	u32 altivec_idle, bit;
 
-	pvr = mfspr(SPRN_PVR);
-
-	/* AltiVec idle feature only exists for E6500 */
-	if (PVR_VER(pvr) != PVR_VER_E6500)
-		return;
-
-	/* Fix erratum, e6500 rev1 not support altivec idle */
-	if (PVR_REV(pvr) < 0x20)
+	if (!has_pw20_altivec_idle())
 		return;
 
 	/* Enable Altivec Idle */
@@ -137,9 +157,33 @@ static void setup_altivec_idle(void *unused)
 	mtspr(SPRN_PWRMGTCR0, altivec_idle);
 }
 
+static void setup_pw20_idle(void *unused)
+{
+	u32 pw20_idle, bit;
+
+	if (!has_pw20_altivec_idle())
+		return;
+
+	pw20_idle = mfspr(SPRN_PWRMGTCR0);
+
+	/* set PW20_WAIT bit, enable pw20 */
+	pw20_idle |= PWRMGTCR0_PW20_WAIT;
+
+	/* Set Automatic PW20 Core Idle Count */
+	/* clear count */
+	pw20_idle &= ~PW20_IDLE_COUNT_MASK;
+
+	/* set count */
+	bit = get_idle_ticks_bit(PW20_IDLE_TIME);
+	pw20_idle |= ((MAX_BIT - bit) << PW20_COUNT_OFFSET);
+
+	mtspr(SPRN_PWRMGTCR0, pw20_idle);
+}
+
 static int __init setup_idle_hw_governor(void)
 {
 	on_each_cpu(setup_altivec_idle, NULL, 1);
+	on_each_cpu(setup_pw20_idle, NULL, 1);
 
 	return 0;
 }
