@@ -45,6 +45,7 @@ enum stash_target {
 	IOMMU_ATTR_CACHE_L1 = 1,
 	IOMMU_ATTR_CACHE_L2,
 	IOMMU_ATTR_CACHE_L3,
+	IOMMU_ATTR_CACHE_DSP_L2,
 };
 
 /* This attribute corresponds to IOMMUs capable of generating
