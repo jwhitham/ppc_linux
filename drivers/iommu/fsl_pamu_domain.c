@@ -800,6 +800,11 @@ static  int configure_domain_geometry(struct iommu_domain *domain, void *data)
 	return 0;
 }
 
+static inline int check_attr_window(u32 wnd, struct fsl_dma_domain *dma_domain)
+{
+	return ((~wnd != 0) && (wnd >= dma_domain->win_cnt));
+}
+
 /* Set the domain operation mapping attribute */
 static int configure_domain_op_map(struct fsl_dma_domain *dma_domain,
 				    void *data)
@@ -818,7 +823,8 @@ static int configure_domain_op_map(struct fsl_dma_domain *dma_domain,
 		return -ENODEV;
 	}
 
-	if (omi_attr->omi >= OMI_MAX) {
+	if (omi_attr->omi >= OMI_MAX ||
+		check_attr_window(omi_attr->window, dma_domain)) {
 		pr_err("Invalid operation mapping index\n");
 		spin_unlock_irqrestore(&dma_domain->domain_lock, flags);
 		return -EINVAL;
@@ -863,7 +869,8 @@ static int configure_domain_stash(struct fsl_dma_domain *dma_domain, void *data)
 
 	stash_id = get_stash_id(stash_attr->cache,
 					    stash_attr->cpu);
-	if (~stash_id == 0) {
+	if ((~stash_id == 0) ||
+		 check_attr_window(stash_attr->window, dma_domain)) {
 		pr_err("Invalid stash attributes\n");
 		spin_unlock_irqrestore(&dma_domain->domain_lock, flags);
 		return -EINVAL;
