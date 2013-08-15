@@ -228,6 +228,7 @@
 
 /* Bit definitions for PWRMGTCR0. */
 #define PWRMGTCR0_ALTIVEC_IDLE	(1 << 22) /* Altivec idle enable */
+#define PWRMGTCR0_PW20_WAIT	(1 << 14) /* PW20 state enable bit */
 
 /* Bit definitions for the MCSR. */
 #define MCSR_MCS	0x80000000 /* Machine Check Summary */
