@@ -39,8 +39,8 @@ struct caam_jrentry_info {
 
 /* Private sub-storage for a single JobR */
 struct caam_drv_private_jr {
-	struct device *parentdev;	/* points back to controller dev */
-	struct platform_device *jr_pdev;/* points to platform device for JR */
+	struct list_head	list_node;
+	struct device		*dev;
 	int ridx;
 	struct caam_job_ring __iomem *rregs;	/* JobR's register space */
 	struct napi_struct __percpu *irqtask;
@@ -66,7 +66,7 @@ struct caam_drv_private_jr {
 struct caam_drv_private {
 
 	struct device *dev;
-	struct device **jrdev; /* Alloc'ed array per sub-device */
+	struct platform_device **jrpdev; /* Alloc'ed array per sub-device */
 #ifdef CONFIG_FSL_QMAN
 	struct device *qidev;
 #endif
