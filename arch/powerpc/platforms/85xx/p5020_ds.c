@@ -39,9 +39,6 @@
 static int __init p5020_ds_probe(void)
 {
 	unsigned long root = of_get_flat_dt_root();
-#ifdef CONFIG_SMP
-	extern struct smp_ops_t smp_85xx_ops;
-#endif
 
 	if (of_flat_dt_is_compatible(root, "fsl,P5020DS"))
 		return 1;
