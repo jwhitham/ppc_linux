@@ -1387,7 +1387,7 @@ static int query_ceetm_xsfdr_show(struct seq_file *file, void *offset)
 	enum qm_dc_portal portal;
 
 
-	if ((qman_ip_rev & 0xFF00) < QMAN_REV31)
+	if (qman_ip_rev < QMAN_REV31)
 		return -EINVAL;
 
 	portal = query_ceetm_xsfdr_data.dcp_portal;
@@ -1399,7 +1399,7 @@ static int query_ceetm_xsfdr_show(struct seq_file *file, void *offset)
 	}
 
 	seq_printf(file, "DCP%d: CEETM_XSFDR_IN_USE number is %u\n", portal,
-						(xsfdr_in_use & 0x1FF));
+						(xsfdr_in_use & 0x1FFF));
 	return 0;
 }
 
