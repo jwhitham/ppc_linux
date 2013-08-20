@@ -339,7 +339,7 @@ skb_copied:
 	}
 
 	if (unlikely(netif_rx(skb) != NET_RX_SUCCESS))
-		percpu_priv->stats.rx_dropped++;
+		goto out;
 	else {
 		percpu_priv->stats.rx_packets++;
 		percpu_priv->stats.rx_bytes += dpa_fd_length(fd);

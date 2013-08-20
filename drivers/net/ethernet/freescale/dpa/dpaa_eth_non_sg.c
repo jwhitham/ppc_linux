@@ -373,14 +373,13 @@ void __hot _dpa_rx(struct net_device *net_dev,
 		gro_result_t gro_result;
 
 		gro_result = napi_gro_receive(&percpu_priv->napi, skb);
-		if (unlikely(gro_result == GRO_DROP)) {
-			percpu_priv->stats.rx_dropped++;
+		/* If frame is dropped by the stack, rx_dropped counter is
+		 * incremented automatically, so no need for us to update it
+		 */
+		if (unlikely(gro_result == GRO_DROP))
 			goto packet_dropped;
-		}
-	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP)) {
-		percpu_priv->stats.rx_dropped++;
+	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP))
 		goto packet_dropped;
-	}
 
 	percpu_priv->stats.rx_packets++;
 	percpu_priv->stats.rx_bytes += skb_len;
