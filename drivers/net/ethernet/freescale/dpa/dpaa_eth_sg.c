@@ -269,7 +269,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	return skb;
 }
 
-#ifndef CONFIG_FSL_DPAA_TS
+#if (!defined(CONFIG_FSL_DPAA_TS) && !defined(CONFIG_FSL_DPAA_1588))
 static bool dpa_skb_is_recyclable(struct sk_buff *skb)
 {
 	/* No recycling possible if skb buffer is kmalloc'ed  */
@@ -317,7 +317,7 @@ static bool dpa_buf_is_recyclable(struct sk_buff *skb,
 
 	return false;
 }
-#endif /* CONFIG_FSL_DPAA_TS */
+#endif /* (!defined(CONFIG_FSL_DPAA_TS) && !defined(CONFIG_FSL_DPAA_1588)) */
 
 
 /* Build a linear skb around the received buffer.
@@ -605,10 +605,11 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	struct net_device *net_dev = priv->net_dev;
 	int err;
 	enum dma_data_direction dma_dir;
-	int *count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	unsigned char *buffer_start;
 
-#ifndef CONFIG_FSL_DPAA_TS
+#if (!defined(CONFIG_FSL_DPAA_TS) && !defined(CONFIG_FSL_DPAA_1588))
+	int *count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
+
 	/* Check recycling conditions; only if timestamp support is not
 	 * enabled, otherwise we need the fd back on tx confirmation
 	 */
