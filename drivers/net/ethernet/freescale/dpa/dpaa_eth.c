@@ -216,6 +216,14 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 
 	percpu_priv->stats.tx_errors++;
 
+	/* If we intended the buffers from this frame to go into the bpools
+	 * when the FMan transmit was done, we need to put it in manually.
+	 */
+	if (fd->cmd & FM_FD_CMD_FCO) {
+		dpa_fd_release(net_dev, fd);
+		return;
+	}
+
 	skb = _dpa_cleanup_tx_fd(priv, fd);
 	dev_kfree_skb(skb);
 }
