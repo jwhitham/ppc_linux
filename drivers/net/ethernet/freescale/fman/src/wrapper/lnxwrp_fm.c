@@ -80,6 +80,8 @@
 #include "lnxwrp_exp_sym.h"
 #endif
 
+#define __ERR_MODULE__  MODULE_FM
+
 extern struct device_node *GetFmPortAdvArgsDevTreeNode (struct device_node *fm_node,
                                                          e_FmPortType       portType,
                                                          uint8_t            portId);

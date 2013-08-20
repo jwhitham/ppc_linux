@@ -71,6 +71,8 @@
 #include "fm_port_ioctls.h"
 #include "fm_vsp_ext.h"
 
+#define __ERR_MODULE__  MODULE_FM
+
 #if defined(CONFIG_COMPAT)
 #include "lnxwrp_ioctls_fm_compat.h"
 #endif

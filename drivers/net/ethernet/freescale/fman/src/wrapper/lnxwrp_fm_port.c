@@ -61,6 +61,8 @@
 #include "lnxwrp_resources.h"
 #include "lnxwrp_sysfs_fm_port.h"
 
+#define __ERR_MODULE__  MODULE_FM
+
 extern struct device_node *GetFmAdvArgsDevTreeNode (uint8_t fmIndx);
 
 /* TODO: duplicated, see lnxwrp_fm.c */

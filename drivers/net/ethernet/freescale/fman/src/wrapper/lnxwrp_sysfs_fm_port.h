@@ -45,4 +45,8 @@
 int fm_port_sysfs_create(struct device *dev);
 void fm_port_sysfs_destroy(struct device *dev);
 
+int fm_port_dump_regs(void *h_dev, char *buf, int n);
+int fm_port_dump_regs_bmi(void *h_dev, char *buf, int n);
+int fm_port_dump_regs_qmi(void *h_dev, char *buf, int n);
+
 #endif /* LNXWRP_SYSFS_FM_PORT_H_ */

@@ -50,8 +50,6 @@
 
 #include "lnxwrp_fm_ext.h"
 
-#define __ERR_MODULE__      MODULE_FM
-
 #define FM_MAX_NUM_OF_ADV_SETTINGS          10
 
 #define LNXWRP_FM_NUM_OF_SHARED_PROFILES    16
@@ -115,6 +113,8 @@ typedef struct {
     struct device               *dev;
     struct device_attribute     *dev_attr_stats;
     struct device_attribute     *dev_attr_regs;
+    struct device_attribute     *dev_attr_bmi_regs;
+    struct device_attribute     *dev_attr_qmi_regs;
 } t_LnxWrpFmPortDev;
 
 typedef struct {
@@ -227,8 +227,14 @@ typedef struct {
     struct device_attribute     *dev_attr_regs;
 
     struct device_attribute     *dev_pcd_attr_stats;
-    struct device_attribute     *dev_pcd_attr_regs;
+    struct device_attribute     *dev_plcr_attr_regs;
+    struct device_attribute     *dev_prs_attr_regs;
+    struct device_attribute     *dev_fm_fpm_attr_regs;
+    struct device_attribute     *dev_fm_kg_attr_regs;
+    struct device_attribute     *dev_fm_kg_pe_attr_regs;
     struct device_attribute     *dev_attr_muram_free_size;
+    struct device_attribute     *dev_attr_fm_ctrl_code_ver;
+
 
     struct qman_fq              *hc_tx_conf_fq, *hc_tx_err_fq, *hc_tx_fq;
 } t_LnxWrpFmDev;
@@ -243,6 +249,7 @@ t_Error  LnxwrpFmIOCTL(t_LnxWrpFmDev *p_LnxWrpFmDev, unsigned int cmd, unsigned 
 t_Error  LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd, unsigned long arg, bool compat);
 
 
+#if 0
 static __inline__ t_Error AllocSchemesForPort(t_LnxWrpFmDev *p_LnxWrpFmDev, uint8_t numSchemes, uint8_t *p_BaseSchemeNum)
 {
     uint32_t    schemeMask;
@@ -269,6 +276,7 @@ static __inline__ t_Error AllocSchemesForPort(t_LnxWrpFmDev *p_LnxWrpFmDev, uint
         RETURN_ERROR(MINOR, E_FULL, ("schemes!!!"));
     return E_OK;
 }
+#endif
 
 void LnxWrpPCDIOCTLTypeChecking(void);
 void LnxWrpPCDIOCTLEnumChecking(void);
