@@ -190,7 +190,7 @@ void __cold dpa_timeout(struct net_device *net_dev)
 	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	if (netif_msg_timer(priv))
 		netdev_crit(net_dev, "Transmit timeout latency: %u ms\n",

@@ -330,7 +330,7 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
@@ -395,7 +395,7 @@ priv_tx_conf_error_dqrr(struct qman_portal		*portal,
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
@@ -537,7 +537,7 @@ static void dpaa_eth_poll_controller(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 	struct dpa_percpu_priv_s *percpu_priv =
-		this_cpu_ptr(priv->percpu_priv);
+		__this_cpu_ptr(priv->percpu_priv);
 	struct napi_struct napi = percpu_priv->napi;
 
 	qman_irqsource_remove(QM_PIRQ_DQRI);
