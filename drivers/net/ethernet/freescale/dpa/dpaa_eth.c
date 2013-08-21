@@ -335,7 +335,7 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
 
-	if (unlikely(dpaa_eth_refill_bpools(percpu_priv)))
+	if (unlikely(dpaa_eth_refill_bpools(priv->dpa_bp)))
 		/* Unable to refill the buffer pool due to insufficient
 		 * system memory. Just release the frame back into the pool,
 		 * otherwise we'll soon end up with an empty buffer pool.
@@ -371,7 +371,7 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
 
-	if (unlikely(dpaa_eth_refill_bpools(percpu_priv)))
+	if (unlikely(dpaa_eth_refill_bpools(priv->dpa_bp)))
 		/* Unable to refill the buffer pool due to insufficient
 		 * system memory. Just release the frame back into the pool,
 		 * otherwise we'll soon end up with an empty buffer pool.
@@ -820,7 +820,6 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		memset(percpu_priv, 0, sizeof(*percpu_priv));
-		percpu_priv->dpa_bp = priv->dpa_bp;
 	}
 
 	err = dpa_private_netdev_init(dpa_node, net_dev);

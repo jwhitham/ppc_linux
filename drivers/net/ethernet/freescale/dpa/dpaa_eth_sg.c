@@ -150,10 +150,9 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 /* Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp)
 {
-	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
-	int *countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
+	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	int count = *countptr;
 	int new_bufs;
 
@@ -797,7 +796,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 	percpu_stats = &percpu_priv->stats;
-	countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
+	countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 
 	clear_fd(&fd);
 
