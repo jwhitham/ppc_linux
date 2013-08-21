@@ -620,7 +620,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		goto done;
 
 	priv = netdev_priv(net_dev);
-	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
+	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 	percpu_stats = &percpu_priv->stats;
 	countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 
