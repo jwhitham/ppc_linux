@@ -16,6 +16,7 @@
 #include "sg_sw_qm.h"
 #include "key_gen.h"
 #include "qi.h"
+#include "jr.h"
 
 /*
  * crypto alg
@@ -1434,15 +1435,16 @@ static int caam_cra_init(struct crypto_tfm *tfm)
 		 container_of(alg, struct caam_crypto_alg, crypto_alg);
 	struct caam_ctx *ctx = crypto_tfm_ctx(tfm);
 	struct caam_drv_private *priv = dev_get_drvdata(caam_alg->ctrldev);
-	int tgt_jr = atomic_inc_return(&priv->tfm_count);
-	struct platform_device *pdev;
 
 	/*
 	 * distribute tfms across job rings to ensure in-order
 	 * crypto request processing per tfm
 	 */
-	pdev = priv->jrpdev[(tgt_jr / 2) % priv->total_jobrs];
-	ctx->jrdev = &pdev->dev;
+	ctx->jrdev = caam_jr_alloc();
+	if (IS_ERR(ctx->jrdev)) {
+		pr_err("Job Ring Device allocation for transform failed\n");
+		return PTR_ERR(ctx->jrdev);
+	}
 
 	/* copy descriptor header template value */
 	ctx->class1_alg_type = OP_TYPE_CLASS1_ALG | caam_alg->class1_alg_type;
@@ -1471,6 +1473,8 @@ static void caam_cra_exit(struct crypto_tfm *tfm)
 
 	if (ctx->drv_ctx[GIVENCRYPT])
 		caam_drv_ctx_rel(ctx->drv_ctx[GIVENCRYPT]);
+
+	caam_jr_free(ctx->jrdev);
 }
 
 static struct list_head alg_list;
@@ -1558,8 +1562,6 @@ static int __init caam_qi_algapi_init(void)
 	of_node_put(dev_node);
 
 	INIT_LIST_HEAD(&alg_list);
-
-	atomic_set(&priv->tfm_count, -1);
 
 	/* register crypto algorithms the device supports */
 	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {
