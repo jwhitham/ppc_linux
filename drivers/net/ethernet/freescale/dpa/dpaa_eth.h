@@ -376,7 +376,6 @@ struct dpa_ern_cnt {
 
 struct dpa_percpu_priv_s {
 	struct net_device *net_dev;
-	struct dpa_bp *dpa_bp;
 	struct napi_struct napi;
 	u64 in_interrupt;
 	u64 tx_returned;
@@ -459,7 +458,7 @@ struct fm_port_fqs {
 
 /* functions with different implementation for SG and non-SG: */
 int dpa_bp_priv_seed(struct dpa_bp *dpa_bp);
-int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv);
+int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp);
 void __hot _dpa_rx(struct net_device *net_dev,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,

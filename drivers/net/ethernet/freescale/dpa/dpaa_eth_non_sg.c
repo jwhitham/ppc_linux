@@ -162,9 +162,8 @@ void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp)
 /* Add buffers/(skbuffs) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+int dpaa_eth_refill_bpools(struct dpa_bp* dpa_bp)
 {
-	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
 	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	int count = *countptr;
 	/* this function is called in softirq context;
