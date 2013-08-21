@@ -778,26 +778,12 @@ static void __init setup_omt(struct ome *omt)
 	ome->moe[IOE_DIRECT0_IDX] = EOE_LDEC | EOE_VALID;
 	ome->moe[IOE_DIRECT1_IDX] = EOE_LDEC | EOE_VALID;
 
-	/* Configure OMI_DMA */
-	ome = &omt[OMI_DMA];
-	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_RSA;
-	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_RSA;
-	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
-	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSA;
-
-	/* Configure OMI_DMA_READI */
-	ome = &omt[OMI_DMA_READI];
-	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_READI;
-	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_READI;
-	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
-	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSA;
-
-	/* Configure OMI_MAPLE */
-	ome = &omt[OMI_MAPLE];
-	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_RSA;
-	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_RSA;
-	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSA;
-	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSA;
+	/* Configure OMI_DSP */
+	ome = &omt[OMI_DSP];
+	ome->moe[IOE_READ_IDX]  = EOE_VALID | EOE_RWNITC;
+	ome->moe[IOE_EREAD0_IDX] = EOE_VALID | EOE_RWNITC;
+	ome->moe[IOE_WRITE_IDX] = EOE_VALID | EOE_WWSAO;
+	ome->moe[IOE_EWRITE0_IDX] = EOE_VALID | EOE_WWSAO;
 }
 
 /*

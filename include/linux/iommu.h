@@ -90,9 +90,7 @@ enum omap_index {
 	OMI_QMAN_PRIV,
 	OMI_CAAM,
 	OMI_PMAN,
-	OMI_DMA,
-	OMI_DMA_READI,
-	OMI_MAPLE,
+	OMI_DSP,
 	OMI_MAX,
 };
 
