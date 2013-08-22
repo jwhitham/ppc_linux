@@ -373,9 +373,16 @@ int mpc85xx_pci_err_probe(struct platform_device *op)
 	}
 
 	if (pdata->is_pcie) {
-		/* enable all pcie error interrupt & error detect */
-		out_be32(pdata->pci_vbase + MPC85XX_PCI_ERR_EN, ~0);
-		out_be32(pdata->pci_vbase + MPC85XX_PCI_ERR_ADDR, 0);
+		/* enable all pcie error interrupt & error detect
+		 * except invalid PEX_CONFIG_ADDR/PEX_CONFIG_DATA
+		 * access interrupt generation enable bit and
+		 * invalid PEX_CONFIG_ADDR/PEX_CONFIG_DATA access
+		 * detection enable bit.
+		 */
+		out_be32(pdata->pci_vbase + MPC85XX_PCI_ERR_EN, ~0
+			 & ~PEX_ERR_ICCAIE_EN_BIT);
+		out_be32(pdata->pci_vbase + MPC85XX_PCI_ERR_ADDR, 0
+			 | PEX_ERR_ICCAD_DISR_BIT);
 	}
 
 	devres_remove_group(&op->dev, mpc85xx_pci_err_probe);
