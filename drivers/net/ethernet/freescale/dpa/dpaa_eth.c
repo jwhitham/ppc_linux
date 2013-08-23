@@ -704,7 +704,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	net_dev = alloc_etherdev_mq(sizeof(*priv), DPAA_ETH_TX_QUEUES);
 	if (!net_dev) {
 		dev_err(dev, "alloc_etherdev_mq() failed\n");
-		return -ENOMEM;
+		goto alloc_etherdev_mq_failed;
 	}
 
 	/* Do this here, so we can be verbose early */
@@ -862,6 +862,8 @@ mac_probe_failed:
 	dev_set_drvdata(dev, NULL);
 	if (net_dev)
 		free_netdev(net_dev);
+alloc_etherdev_mq_failed:
+	devm_kfree(dev, dpa_bp);
 
 	return err;
 }
