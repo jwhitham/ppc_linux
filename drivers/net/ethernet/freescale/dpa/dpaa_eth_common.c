@@ -474,6 +474,8 @@ int __cold dpa_remove(struct platform_device *of_dev)
 	free_percpu(priv->percpu_priv);
 
 	dpa_bp_free(priv, priv->dpa_bp);
+	devm_kfree(dev, priv->dpa_bp);
+
 	if (priv->buf_layout)
 		devm_kfree(dev, priv->buf_layout);
 
@@ -710,13 +712,25 @@ pdev_register_failed:
 
 void dpa_bp_drain(struct dpa_bp *bp)
 {
-	int num;
+	int ret, num = 8;
 
 	do {
 		struct bm_buffer bmb[8];
 		int i;
 
-		num = bman_acquire(bp->pool, bmb, 8, 0);
+		ret = bman_acquire(bp->pool, bmb, 8, 0);
+		if (ret < 0) {
+			if (num == 8) {
+				/* we have less than 8 buffers left;
+				 * drain them one by one
+				 */
+				num = 1;
+				continue;
+			} else {
+				/* Pool is fully drained */
+				break;
+			}
+		}
 
 		for (i = 0; i < num; i++) {
 			dma_addr_t addr = bm_buf_addr(&bmb[i]);
@@ -726,7 +740,7 @@ void dpa_bp_drain(struct dpa_bp *bp)
 
 			bp->free_buf_cb(phys_to_virt(addr));
 		}
-	} while (num == 8);
+	} while (ret > 0);
 }
 
 static void __cold __attribute__((nonnull))
