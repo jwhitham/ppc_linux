@@ -559,13 +559,25 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 		return;
 
 	if (bp->kernel_pool) {
-		int num;
+		int ret, num = 8;
 
 		do {
 			struct bm_buffer bmb[8];
 			int i;
 
-			num = bman_acquire(bp->pool, bmb, 8, 0);
+			ret = bman_acquire(bp->pool, bmb, num, 0);
+			if (ret < 0) {
+				if (num == 8) {
+					/* We have less than 8 buffers left;
+					 * drain them one by one
+					 */
+					num = 1;
+					continue;
+				} else {
+					/* Pool is fully drained */
+					break;
+				}
+			}
 
 			for (i = 0; i < num; i++) {
 				dma_addr_t addr = bm_buf_addr(&bmb[i]);
@@ -575,7 +587,7 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 
 				_dpa_bp_free_buf(phys_to_virt(addr));
 			}
-		} while (num == 8);
+		} while (ret > 0);
 	}
 
 	dpa_bp_array[bp->bpid] = 0;
@@ -4270,6 +4282,7 @@ tx_fq_probe_failed:
 rx_fq_probe_failed:
 alloc_failed:
 mac_probe_failed:
+	devm_kfree(dev, dpa_bp);
 bp_probe_failed:
 	dev_set_drvdata(dev, NULL);
 	if (net_dev)
@@ -4310,6 +4323,7 @@ static int __cold dpa_remove(struct platform_device *of_dev)
 	free_percpu(priv->percpu_priv);
 
 	dpa_bp_free(priv, priv->dpa_bp);
+	devm_kfree(dev, priv->dpa_bp);
 
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	/* remove debugfs entry for this net_device */
