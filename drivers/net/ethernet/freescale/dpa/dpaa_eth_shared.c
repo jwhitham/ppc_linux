@@ -195,6 +195,7 @@ dpa_fd_release_sg(const struct net_device *net_dev,
 	_bmb.lo	= fd->addr_lo;
 
 	_dpa_bp = dpa_bpid2pool(fd->bpid);
+	BUG_ON(!_dpa_bp);
 
 	if (_dpa_bp->vaddr) {
 		sgt = dpa_phys2virt(_dpa_bp, bm_buf_addr(&_bmb)) +
@@ -240,7 +241,7 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(dpa_bp));
+	BUG_ON(!dpa_bp);
 
 	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
@@ -369,7 +370,7 @@ shared_tx_error_dqrr(struct qman_portal                *portal,
 	priv = netdev_priv(net_dev);
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(dpa_bp));
+	BUG_ON(!dpa_bp);
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
@@ -402,7 +403,7 @@ shared_tx_default_dqrr(struct qman_portal              *portal,
 	priv = netdev_priv(net_dev);
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(dpa_bp));
+	BUG_ON(!dpa_bp);
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
@@ -465,7 +466,7 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	queue_mapping = smp_processor_id();
 
 	dpa_bp = dpa_size2pool(priv, skb_headlen(skb));
-	if (unlikely(IS_ERR(dpa_bp))) {
+	if (unlikely(!dpa_bp)) {
 		percpu_priv->stats.tx_errors++;
 		err = PTR_ERR(dpa_bp);
 		goto bpools_too_small_error;
