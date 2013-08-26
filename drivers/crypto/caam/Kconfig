@@ -14,6 +14,7 @@ config CRYPTO_DEV_FSL_CAAM
 config CRYPTO_DEV_FSL_CAAM_JR
 	tristate "Freescale CAAM Job Ring driver backend"
 	depends on CRYPTO_DEV_FSL_CAAM
+	default y
 	help
 	  Enables the driver module for Job Rings which are part of
 	  Freescale's Cryptographic Accelerator
