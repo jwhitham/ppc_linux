@@ -131,10 +131,6 @@ enum qm_eqcr_pmode {		/* matches QCSP_CFG::EPM */
 	qm_eqcr_pce = 1,	/* PI index, cache-enabled */
 	qm_eqcr_pvb = 2		/* valid-bit */
 };
-enum qm_eqcr_cmode {		/* s/w-only */
-	qm_eqcr_cci,		/* CI index, cache-inhibited */
-	qm_eqcr_cce		/* CI index, cache-enabled */
-};
 enum qm_dqrr_dmode {		/* matches QCSP_CFG::DP */
 	qm_dqrr_dpush = 0,	/* SDQCR  + VDQCR */
 	qm_dqrr_dpull = 1	/* PDQCR */
@@ -170,10 +166,10 @@ enum qm_mr_cmode {		/* matches QCSP_CFG::MM */
 struct qm_eqcr {
 	struct qm_eqcr_entry *ring, *cursor;
 	u8 ci, available, ithresh, vbit;
+	u32 use_eqcr_ci_stashing;
 #ifdef CONFIG_FSL_DPA_CHECKING
 	u32 busy;
 	enum qm_eqcr_pmode pmode;
-	enum qm_eqcr_cmode cmode;
 #endif
 };
 
@@ -283,7 +279,8 @@ static inline void EQCR_INC(struct qm_eqcr *eqcr)
 
 static inline int qm_eqcr_init(struct qm_portal *portal,
 				enum qm_eqcr_pmode pmode,
-				__maybe_unused enum qm_eqcr_cmode cmode)
+				unsigned int eq_stash_thresh,
+				int eq_stash_prio)
 {
 	/* This use of 'register', as well as all other occurances, is because
 	 * it has been observed to generate much faster code with gcc than is
@@ -305,9 +302,10 @@ static inline int qm_eqcr_init(struct qm_portal *portal,
 #ifdef CONFIG_FSL_DPA_CHECKING
 	eqcr->busy = 0;
 	eqcr->pmode = pmode;
-	eqcr->cmode = cmode;
 #endif
 	cfg = (qm_in(CFG) & 0x00ffffff) |
+		(eq_stash_thresh << 28) | /* QCSP_CFG: EST */
+		(eq_stash_prio << 26)	| /* QCSP_CFG: EP */
 		((pmode & 0x3) << 24);	/* QCSP_CFG::EPM */
 	qm_out(CFG, cfg);
 	return 0;
@@ -328,7 +326,8 @@ static inline void qm_eqcr_finish(struct qm_portal *portal)
 		pr_crit("EQCR destroyed unquiesced\n");
 }
 
-static inline struct qm_eqcr_entry *qm_eqcr_start(struct qm_portal *portal)
+static inline struct qm_eqcr_entry *qm_eqcr_start_no_stash(struct qm_portal
+								 *portal)
 {
 	register struct qm_eqcr *eqcr = &portal->eqcr;
 	DPA_ASSERT(!eqcr->busy);
@@ -336,6 +335,28 @@ static inline struct qm_eqcr_entry *qm_eqcr_start(struct qm_portal *portal)
 		return NULL;
 
 
+#ifdef CONFIG_FSL_DPA_CHECKING
+	eqcr->busy = 1;
+#endif
+	dcbz_64(eqcr->cursor);
+	return eqcr->cursor;
+}
+
+static inline struct qm_eqcr_entry *qm_eqcr_start_stash(struct qm_portal
+								*portal)
+{
+	register struct qm_eqcr *eqcr = &portal->eqcr;
+	u8 diff, old_ci;
+
+	DPA_ASSERT(!eqcr->busy);
+	if (!eqcr->available) {
+		old_ci = eqcr->ci;
+		eqcr->ci = qm_cl_in(EQCR_CI) & (QM_EQCR_SIZE - 1);
+		diff = qm_cyc_diff(QM_EQCR_SIZE, old_ci, eqcr->ci);
+		eqcr->available += diff;
+		if (!diff)
+			return NULL;
+	}
 #ifdef CONFIG_FSL_DPA_CHECKING
 	eqcr->busy = 1;
 #endif
@@ -436,7 +457,6 @@ static inline u8 qm_eqcr_cci_update(struct qm_portal *portal)
 {
 	register struct qm_eqcr *eqcr = &portal->eqcr;
 	u8 diff, old_ci = eqcr->ci;
-	DPA_ASSERT(eqcr->cmode == qm_eqcr_cci);
 	eqcr->ci = qm_in(EQCR_CI_CINH) & (QM_EQCR_SIZE - 1);
 	diff = qm_cyc_diff(QM_EQCR_SIZE, old_ci, eqcr->ci);
 	eqcr->available += diff;
@@ -446,7 +466,6 @@ static inline u8 qm_eqcr_cci_update(struct qm_portal *portal)
 static inline void qm_eqcr_cce_prefetch(struct qm_portal *portal)
 {
 	__maybe_unused register struct qm_eqcr *eqcr = &portal->eqcr;
-	DPA_ASSERT(eqcr->cmode == qm_eqcr_cce);
 	qm_cl_touch_ro(EQCR_CI);
 }
 
@@ -454,7 +473,6 @@ static inline u8 qm_eqcr_cce_update(struct qm_portal *portal)
 {
 	register struct qm_eqcr *eqcr = &portal->eqcr;
 	u8 diff, old_ci = eqcr->ci;
-	DPA_ASSERT(eqcr->cmode == qm_eqcr_cce);
 	eqcr->ci = qm_cl_in(EQCR_CI) & (QM_EQCR_SIZE - 1);
 	qm_cl_invalidate(EQCR_CI);
 	diff = qm_cyc_diff(QM_EQCR_SIZE, old_ci, eqcr->ci);

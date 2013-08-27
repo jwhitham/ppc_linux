@@ -90,7 +90,10 @@ static long wrp_dpa_stats_do_ioctl(struct file *filp,
 				   unsigned int cmd, unsigned long args);
 
 static int copy_key_descriptor(struct dpa_offload_lookup_key *src,
-			       struct dpa_offload_lookup_key *dst);
+			       struct dpa_offload_lookup_key **dst);
+
+static int copy_pair_descriptor(struct dpa_offload_lookup_key_pair *src,
+				struct dpa_offload_lookup_key_pair **dst);
 
 static int copy_class_members(void *objs, unsigned int size, void *dst);
 
@@ -103,8 +106,12 @@ static long wrp_dpa_stats_do_compat_ioctl(struct file *filp,
 					  unsigned long args);
 
 static int copy_key_descriptor_compatcpy(
-		struct dpa_offload_lookup_key *kprm,
-		const struct compat_ioc_dpa_offld_lookup_key *uprm);
+		struct dpa_offload_lookup_key **kprm,
+		compat_uptr_t uparam);
+
+static int copy_pair_descriptor_compatcpy(
+		struct dpa_offload_lookup_key_pair **ks_pair,
+		struct compat_ioc_dpa_offld_lookup_key_pair pair);
 
 static void dpa_stats_init_compatcpy(
 		struct ioc_dpa_stats_params *kprm,
@@ -625,39 +632,70 @@ static long do_ioctl_stats_free(void *args)
 static int do_ioctl_stats_create_counter(void *args)
 {
 	struct ioc_dpa_stats_cnt_params prm;
-	struct dpa_offload_lookup_key key;
+	struct dpa_offload_lookup_key *us_key = NULL;
 	long ret = 0;
 
 	if (copy_from_user(&prm, args, sizeof(prm))) {
-		log_err("Cannot copy from user the counter parameters\n");
+		log_err("Could not copy counter parameters\n");
 		return -EINVAL;
 	}
 
-	if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_NODE)
-		ret = copy_key_descriptor(
-				&prm.cnt_params.classif_node_params.key, &key);
-	else if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_TBL)
-		ret = copy_key_descriptor(
-				&prm.cnt_params.classif_tbl_params.key, &key);
-	if (ret != 0) {
-		log_err("Cannot copy the key descriptor\n");
-		return -EINVAL;
+	if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_NODE &&
+	    prm.cnt_params.classif_node_params.key) {
+		/* Save user-space provided key */
+		us_key = prm.cnt_params.classif_node_params.key;
+
+		/* Override user-space pointers with kernel memory */
+		ret = copy_key_descriptor(us_key,
+			&prm.cnt_params.classif_node_params.key);
+		if (ret != 0) {
+			log_err("Could not copy the key descriptor\n");
+			kfree(prm.cnt_params.classif_node_params.key);
+			return ret;
+		}
+	}
+
+	if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_TBL &&
+	    prm.cnt_params.classif_tbl_params.key) {
+		/* Save user-space provided key */
+		us_key = prm.cnt_params.classif_tbl_params.key;
+
+		/* Override user-space pointers with kernel memory */
+		ret = copy_key_descriptor(us_key,
+			&prm.cnt_params.classif_tbl_params.key);
+		if (ret != 0) {
+			log_err("Could not copy the key descriptor\n");
+			kfree(prm.cnt_params.classif_tbl_params.key);
+			return ret;
+		}
 	}
 
 	ret = dpa_stats_create_counter(prm.stats_id,
 				       &prm.cnt_params, &prm.cnt_id);
-	if (ret < 0)
-		return ret;
 
-	if (copy_to_user(args, &prm, sizeof(prm))) {
-		log_err("Cannot copy to user the counter parameters\n");
-		ret = -EINVAL;
+	if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_NODE &&
+	    prm.cnt_params.classif_node_params.key) {
+		/* Release kernel-allocated memory */
+		kfree(prm.cnt_params.classif_node_params.key->byte);
+		kfree(prm.cnt_params.classif_node_params.key->mask);
+		kfree(prm.cnt_params.classif_node_params.key);
+		/* Restore user-provided key */
+		prm.cnt_params.classif_node_params.key = us_key;
 	}
 
-	if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_NODE ||
-	    prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_TBL) {
-		kfree(key.byte);
-		kfree(key.mask);
+	if (prm.cnt_params.type == DPA_STATS_CNT_CLASSIF_TBL &&
+	    prm.cnt_params.classif_tbl_params.key) {
+		/* Release kernel-allocated memory */
+		kfree(prm.cnt_params.classif_tbl_params.key->byte);
+		kfree(prm.cnt_params.classif_tbl_params.key->mask);
+		kfree(prm.cnt_params.classif_tbl_params.key);
+		/* Restore user-provided key */
+		prm.cnt_params.classif_tbl_params.key = us_key;
+	}
+
+	if (copy_to_user(args, &prm, sizeof(prm))) {
+		log_err("Could not copy to user the Counter ID\n");
+		ret = -EINVAL;
 	}
 
 	return ret;
@@ -702,14 +740,14 @@ static int do_ioctl_stats_compat_create_counter(void *args)
 					&kprm.cnt_params.classif_tbl_params,
 					&uprm.cnt_params.classif_tbl_params);
 		if (ret < 0)
-			return ret;
+			goto compat_create_counter_cleanup;
 		break;
 	case DPA_STATS_CNT_CLASSIF_NODE:
 		ret = dpa_stats_ccnode_cnt_compatcpy(
 					&kprm.cnt_params.classif_node_params,
 					&uprm.cnt_params.classif_node_params);
 		if (ret < 0)
-			return ret;
+			goto compat_create_counter_cleanup;
 		break;
 	case DPA_STATS_CNT_IPSEC:
 		memcpy(&kprm.cnt_params.ipsec_params,
@@ -728,7 +766,7 @@ static int do_ioctl_stats_compat_create_counter(void *args)
 	ret = dpa_stats_create_counter(kprm.stats_id,
 				       &kprm.cnt_params, &kprm.cnt_id);
 	if (ret < 0)
-		return ret;
+		goto compat_create_counter_cleanup;
 
 	uprm.cnt_id = kprm.cnt_id;
 
@@ -737,14 +775,20 @@ static int do_ioctl_stats_compat_create_counter(void *args)
 		ret = -EINVAL;
 	}
 
-	if (kprm.cnt_params.type == DPA_STATS_CNT_CLASSIF_NODE) {
-		kfree(kprm.cnt_params.classif_node_params.key.byte);
-		kfree(kprm.cnt_params.classif_node_params.key.mask);
-	} else if (kprm.cnt_params.type == DPA_STATS_CNT_CLASSIF_TBL) {
-		kfree(kprm.cnt_params.classif_tbl_params.key.byte);
-		kfree(kprm.cnt_params.classif_tbl_params.key.mask);
+compat_create_counter_cleanup:
+	if (kprm.cnt_params.type == DPA_STATS_CNT_CLASSIF_NODE &&
+	    compat_ptr(uprm.cnt_params.classif_node_params.key)) {
+		kfree(kprm.cnt_params.classif_node_params.key->byte);
+		kfree(kprm.cnt_params.classif_node_params.key->mask);
+		kfree(kprm.cnt_params.classif_node_params.key);
 	}
 
+	if (kprm.cnt_params.type == DPA_STATS_CNT_CLASSIF_TBL &&
+	    compat_ptr(uprm.cnt_params.classif_tbl_params.key)) {
+		kfree(kprm.cnt_params.classif_tbl_params.key->byte);
+		kfree(kprm.cnt_params.classif_tbl_params.key->mask);
+		kfree(kprm.cnt_params.classif_tbl_params.key);
+	}
 	return ret;
 }
 #endif
@@ -754,9 +798,10 @@ static int do_ioctl_stats_create_class_counter(void *args)
 	struct ioc_dpa_stats_cls_cnt_params prm;
 	struct dpa_stats_cls_cnt_classif_node *cnode;
 	struct dpa_stats_cls_cnt_classif_tbl  *tbl;
-	struct dpa_offload_lookup_key key;
-	struct dpa_stats_cnt_eth_src *eth_src = NULL;
-	uint32_t i = 0, eth_src_size = 0;
+	struct dpa_offload_lookup_key **us_keys = NULL;
+	struct dpa_offload_lookup_key_pair **us_pairs = NULL;
+	uint32_t i = 0;
+	unsigned int cls_mbrs;
 	void *cls_objs = NULL;
 	int *sa_ids = NULL;
 	long ret = 0;
@@ -766,13 +811,14 @@ static int do_ioctl_stats_create_class_counter(void *args)
 		return -EINVAL;
 	}
 
+	cls_mbrs = prm.cnt_params.class_members;
+
 	switch (prm.cnt_params.type) {
-	case DPA_STATS_CNT_ETH:
-		eth_src_size = prm.cnt_params.class_members *
-				sizeof(struct dpa_stats_cnt_eth_src);
+	case DPA_STATS_CNT_ETH: {
+		struct dpa_stats_cnt_eth_src *eth_src = NULL;
 
 		/* Allocate memory to store the sources array */
-		eth_src = kmalloc(eth_src_size, GFP_KERNEL);
+		eth_src = kmalloc(sizeof(*eth_src) * cls_mbrs, GFP_KERNEL);
 		if (!eth_src) {
 			log_err("Cannot allocate memory for Ethernet sources "
 				"array\n");
@@ -781,17 +827,17 @@ static int do_ioctl_stats_create_class_counter(void *args)
 
 		if (copy_from_user(eth_src,
 				   prm.cnt_params.eth_params.src,
-				   eth_src_size)) {
+				   sizeof(*eth_src) * cls_mbrs)) {
 			log_err("Cannot copy array of Ethernet sources\n");
 			kfree(eth_src);
 			return -EBUSY;
 		}
 		prm.cnt_params.eth_params.src = eth_src;
 		break;
+	}
 	case DPA_STATS_CNT_REASS:
-		ret = copy_class_members(cls_objs,
-					 prm.cnt_params.class_members,
-					 prm.cnt_params.reass_params.reass);
+		ret = copy_class_members(cls_objs, cls_mbrs,
+					prm.cnt_params.reass_params.reass);
 		if (ret < 0) {
 			log_err("Cannot copy array of Reassembly objects\n");
 			kfree(cls_objs);
@@ -799,8 +845,7 @@ static int do_ioctl_stats_create_class_counter(void *args)
 		}
 		break;
 	case DPA_STATS_CNT_FRAG:
-		ret = copy_class_members(cls_objs,
-					 prm.cnt_params.class_members,
+		ret = copy_class_members(cls_objs, cls_mbrs,
 					 prm.cnt_params.frag_params.frag);
 		if (ret < 0) {
 			log_err("Cannot copy array of Fragmentation objects\n");
@@ -809,8 +854,7 @@ static int do_ioctl_stats_create_class_counter(void *args)
 		}
 		break;
 	case DPA_STATS_CNT_POLICER:
-		ret = copy_class_members(cls_objs,
-					 prm.cnt_params.class_members,
+		ret = copy_class_members(cls_objs, cls_mbrs,
 					 prm.cnt_params.plcr_params.plcr);
 		if (ret < 0) {
 			log_err("Cannot copy array of Policer objects\n");
@@ -822,36 +866,50 @@ static int do_ioctl_stats_create_class_counter(void *args)
 		tbl = &prm.cnt_params.classif_tbl_params;
 
 		if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
-			for (i = 0; i < prm.cnt_params.class_members; i++) {
-				if (!tbl->keys[i].byte)
-					continue;
+			/* Save array of user-space provided key pointers */
+			us_keys = tbl->keys;
 
-				ret = copy_key_descriptor(&tbl->keys[i], &key);
+			/* Override user-space pointers with kernel memory */
+			tbl->keys = kzalloc(cls_mbrs *
+					    sizeof(**tbl->keys), GFP_KERNEL);
+			if (!tbl->keys) {
+				log_err("Cannot allocate kernel memory for "
+					"lookup keys array\n");
+				return -ENOMEM;
+			}
+
+			for (i = 0; i < cls_mbrs; i++) {
+				if (!us_keys[i])
+					continue;
+				ret = copy_key_descriptor(us_keys[i],
+						&tbl->keys[i]);
 				if (ret != 0) {
-					log_err("Cannot copy the key descriptor"
-						"\n");
-					return -EINVAL;
+					log_err("Cannot copy key descriptor\n");
+					goto create_cls_counter_cleanup;
 				}
 			}
 		} else if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
-			for (i = 0; i < prm.cnt_params.class_members; i++) {
-				if (!tbl->pairs[i].first_key.byte)
+			/* Save array of user-space provided pairs pointers */
+			us_pairs = tbl->pairs;
+
+			/* Override user-space pointers with kernel memory */
+			tbl->pairs = kzalloc(cls_mbrs *
+					    sizeof(**tbl->pairs), GFP_KERNEL);
+			if (!tbl->pairs) {
+				log_err("Cannot allocate kernel memory for "
+					"lookup pairs array\n");
+				return -ENOMEM;
+			}
+
+			for (i = 0; i < cls_mbrs; i++) {
+				if (!us_pairs[i])
 					continue;
-
-				ret = copy_key_descriptor(
-						&tbl->pairs[i].first_key, &key);
+				ret = copy_pair_descriptor(us_pairs[i],
+						&tbl->pairs[i]);
 				if (ret != 0) {
-					log_err("Cannot copy the first key "
-						"descriptor of pair-key\n");
-					return -EINVAL;
-				}
-
-				ret = copy_key_descriptor(
-					&tbl->pairs[i].second_key, &key);
-				if (ret != 0) {
-					log_err("Cannot copy the second key "
-						"descriptor of pair-key\n");
-					return -EINVAL;
+					log_err("Could not copy the "
+					       "pair key descriptor\n");
+					goto create_cls_counter_cleanup;
 				}
 			}
 		}
@@ -859,11 +917,28 @@ static int do_ioctl_stats_create_class_counter(void *args)
 	case DPA_STATS_CNT_CLASSIF_NODE:
 		cnode = &prm.cnt_params.classif_node_params;
 
-		for (i = 0; i < prm.cnt_params.class_members; i++) {
-			ret = copy_key_descriptor(&cnode->keys[i], &key);
+		if (!cnode->keys) {
+			log_err("Pointer to array of keys can't be NULL\n");
+			return -EINVAL;
+		}
+		/* Save array of user-space provided key pointers */
+		us_keys = cnode->keys;
+
+		/* Override user-space pointers with kernel memory */
+		cnode->keys = kzalloc(cls_mbrs *
+				    sizeof(**cnode->keys), GFP_KERNEL);
+		if (!cnode->keys) {
+			log_err("No more memory to store array of keys\n");
+			return -ENOMEM;
+		}
+
+		for (i = 0; i < cls_mbrs; i++) {
+			if (!us_keys[i])
+				continue;
+			ret = copy_key_descriptor(us_keys[i], &cnode->keys[i]);
 			if (ret != 0) {
 				log_err("Cannot copy the key descriptor\n");
-				return -EINVAL;
+				goto create_cls_counter_cleanup;
 			}
 		}
 		break;
@@ -891,17 +966,10 @@ static int do_ioctl_stats_create_class_counter(void *args)
 
 	ret = dpa_stats_create_class_counter(prm.stats_id,
 					     &prm.cnt_params, &prm.cnt_id);
-	if (ret < 0)
-		return ret;
-
-	if (copy_to_user(args, &prm, sizeof(prm))) {
-		log_err("Cannot copy to user class counter parameters\n");
-		ret = -EINVAL;
-	}
-
+create_cls_counter_cleanup:
 	switch (prm.cnt_params.type) {
 	case DPA_STATS_CNT_ETH:
-		kfree(eth_src);
+		kfree(prm.cnt_params.eth_params.src);
 		break;
 	case DPA_STATS_CNT_REASS:
 	case DPA_STATS_CNT_FRAG:
@@ -911,25 +979,53 @@ static int do_ioctl_stats_create_class_counter(void *args)
 	case DPA_STATS_CNT_CLASSIF_TBL:
 		tbl = &prm.cnt_params.classif_tbl_params;
 
-		for (i = 0; i < prm.cnt_params.class_members; i++) {
-			if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
-				kfree(tbl->keys[i].byte);
-				kfree(tbl->keys[i].mask);
+		if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
+			for (i = 0; i < cls_mbrs; i++) {
+				if (!tbl->keys[i])
+					continue;
+				/* Free allocated memory */
+				kfree(tbl->keys[i]->byte);
+				kfree(tbl->keys[i]->mask);
+				kfree(tbl->keys[i]);
 			}
+			/* Restore user-space pointers */
+			tbl->keys = us_keys;
+		}
 
-			if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
-				kfree(tbl->pairs[i].first_key.byte);
-				kfree(tbl->pairs[i].first_key.mask);
-				kfree(tbl->pairs[i].second_key.byte);
-				kfree(tbl->pairs[i].second_key.mask);
+		if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
+			for (i = 0; i < cls_mbrs; i++) {
+				if (!tbl->pairs[i])
+					continue;
+
+				if (tbl->pairs[i]->first_key) {
+					kfree(tbl->pairs[i]->first_key->byte);
+					kfree(tbl->pairs[i]->first_key->mask);
+					kfree(tbl->pairs[i]->first_key);
+				}
+
+				if (tbl->pairs[i]->second_key) {
+					kfree(tbl->pairs[i]->second_key->byte);
+					kfree(tbl->pairs[i]->second_key->mask);
+					kfree(tbl->pairs[i]->second_key);
+				}
 			}
+			/* Restore user-space pointers */
+			tbl->keys = us_keys;
 		}
 		break;
 	case DPA_STATS_CNT_CLASSIF_NODE:
-		for (i = 0; i < prm.cnt_params.class_members; i++) {
-			kfree(prm.cnt_params.classif_node_params.keys[i].byte);
-			kfree(prm.cnt_params.classif_node_params.keys[i].mask);
+		cnode = &prm.cnt_params.classif_node_params;
+
+		for (i = 0; i < cls_mbrs; i++) {
+			if (!cnode->keys[i])
+				continue;
+			/* Free allocated memory */
+			kfree(cnode->keys[i]->byte);
+			kfree(cnode->keys[i]->mask);
+			kfree(cnode->keys[i]);
 		}
+		/* Restore user-space pointers */
+		tbl->keys = us_keys;
 		break;
 	case DPA_STATS_CNT_IPSEC:
 		kfree(sa_ids);
@@ -937,6 +1033,11 @@ static int do_ioctl_stats_create_class_counter(void *args)
 
 	default:
 		break;
+	}
+
+	if (copy_to_user(args, &prm, sizeof(prm))) {
+		log_err("Cannot copy to user class counter parameters\n");
+		ret = -EINVAL;
 	}
 
 	return ret;
@@ -988,46 +1089,18 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 			return ret;
 		break;
 	case DPA_STATS_CNT_CLASSIF_TBL:
-	{
-		struct dpa_stats_cls_cnt_classif_tbl *tbl =
-						&kprm_cls->classif_tbl_params;
-
-		ret = dpa_stats_tbl_cls_compatcpy(tbl,
+		ret = dpa_stats_tbl_cls_compatcpy(&kprm_cls->classif_tbl_params,
 			&uprm_cls->classif_tbl_params, kprm_cls->class_members);
 		if (!ret)
 			break;
-
-		if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
-			for (i = 0; i < kprm_cls->class_members; i++) {
-				kfree(tbl->keys[i].byte);
-				kfree(tbl->keys[i].mask);
-			}
-			kfree(tbl->keys);
-
-		} else if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
-			for (i = 0; i < kprm_cls->class_members; i++) {
-				kfree(tbl->pairs[i].first_key.byte);
-				kfree(tbl->pairs[i].first_key.mask);
-				kfree(tbl->pairs[i].second_key.byte);
-				kfree(tbl->pairs[i].second_key.mask);
-			}
-			kfree(tbl->pairs);
-		}
-		return ret;
-	}
+		goto compat_create_cls_counter_cleanup;
 	case DPA_STATS_CNT_CLASSIF_NODE:
 		ret = dpa_stats_ccnode_cls_compatcpy(
-					&kprm_cls->classif_node_params,
-					&uprm_cls->ccnode_params,
-					kprm_cls->class_members);
+			&kprm_cls->classif_node_params,
+			&uprm_cls->ccnode_params, kprm_cls->class_members);
 		if (!ret)
 			break;
-		for (i = 0; i < kprm_cls->class_members; i++) {
-			kfree(kprm_cls->classif_node_params.keys[i].byte);
-			kfree(kprm_cls->classif_node_params.keys[i].mask);
-		}
-		kfree(kprm_cls->classif_node_params.keys);
-		return ret;
+		goto compat_create_cls_counter_cleanup;
 	case DPA_STATS_CNT_IPSEC:
 		ret = dpa_stats_ipsec_cls_compatcpy(&kprm_cls->ipsec_params,
 			&uprm_cls->ipsec_params, kprm_cls->class_members);
@@ -1038,10 +1111,10 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 		break;
 	}
 
-	ret = dpa_stats_create_class_counter(
-			kprm.stats_id, kprm_cls, &kprm.cnt_id);
+	ret = dpa_stats_create_class_counter(kprm.stats_id,
+					     kprm_cls, &kprm.cnt_id);
 	if (ret < 0)
-		return ret;
+		goto compat_create_cls_counter_cleanup;
 
 	uprm.cnt_id = kprm.cnt_id;
 
@@ -1050,6 +1123,7 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 		ret = -EINVAL;
 	}
 
+compat_create_cls_counter_cleanup:
 	switch (uprm.cnt_params.type) {
 	case DPA_STATS_CNT_ETH:
 		kfree(kprm_cls->eth_params.src);
@@ -1070,17 +1144,29 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 
 		if (tbl->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
 			for (i = 0; i < kprm_cls->class_members; i++) {
-				kfree(tbl->keys[i].byte);
-				kfree(tbl->keys[i].mask);
+				if (!tbl->keys[i])
+					continue;
+				kfree(tbl->keys[i]->byte);
+				kfree(tbl->keys[i]->mask);
+				kfree(tbl->keys[i]);
 			}
 			kfree(tbl->keys);
 
 		} else if (tbl->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
 			for (i = 0; i < kprm_cls->class_members; i++) {
-				kfree(tbl->pairs[i].first_key.byte);
-				kfree(tbl->pairs[i].first_key.mask);
-				kfree(tbl->pairs[i].second_key.byte);
-				kfree(tbl->pairs[i].second_key.mask);
+				if (!tbl->pairs[i])
+					continue;
+				if (tbl->pairs[i]->first_key) {
+					kfree(tbl->pairs[i]->first_key->byte);
+					kfree(tbl->pairs[i]->first_key->mask);
+					kfree(tbl->pairs[i]->first_key);
+				}
+				if (tbl->pairs[i]->second_key) {
+					kfree(tbl->pairs[i]->second_key->byte);
+					kfree(tbl->pairs[i]->second_key->mask);
+					kfree(tbl->pairs[i]->second_key);
+				}
+				kfree(tbl->pairs[i]);
 			}
 			kfree(tbl->pairs);
 		}
@@ -1088,11 +1174,15 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 	}
 	case DPA_STATS_CNT_CLASSIF_NODE:
 		for (i = 0; i < kprm_cls->class_members; i++) {
-			kfree(kprm_cls->classif_node_params.keys[i].byte);
-			kfree(kprm_cls->classif_node_params.keys[i].mask);
+			if (!kprm_cls->classif_node_params.keys[i])
+					continue;
+			kfree(kprm_cls->classif_node_params.keys[i]->byte);
+			kfree(kprm_cls->classif_node_params.keys[i]->mask);
+			kfree(kprm_cls->classif_node_params.keys[i]);
 		}
 		kfree(kprm_cls->classif_node_params.keys);
 		break;
+
 	case DPA_STATS_CNT_IPSEC:
 		kfree(kprm_cls->ipsec_params.sa_id);
 		break;
@@ -1108,8 +1198,9 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 static int do_ioctl_stats_modify_class_counter(void *args)
 {
 	struct ioc_dpa_stats_cls_member_params prm;
-	struct dpa_offload_lookup_key key;
-	int ret;
+	struct dpa_offload_lookup_key *us_key = NULL;
+	struct dpa_offload_lookup_key_pair *us_pair = NULL;
+	int ret = 0;
 
 	if (copy_from_user(&prm, args, sizeof(prm))) {
 		log_err("Cannot copy from user the class counter parameters\n");
@@ -1118,32 +1209,32 @@ static int do_ioctl_stats_modify_class_counter(void *args)
 
 	switch (prm.params.type) {
 	case DPA_STATS_CLS_MEMBER_SINGLE_KEY:
-		if (prm.params.key.byte) {
-			ret = copy_key_descriptor(&prm.params.key, &key);
-			if (ret != 0) {
-				log_err("Cannot copy the key descriptor\n");
-				return -EINVAL;
-			}
+		if (!prm.params.key)
+			break;
+
+		/* Save user-space provided key */
+		us_key = prm.params.key;
+
+		/* Override user-space pointers with kernel memory */
+		ret = copy_key_descriptor(us_key, &prm.params.key);
+		if (ret != 0) {
+			log_err("Could not copy the key descriptor\n");
+			goto modify_counter_cleanup;
 		}
+
 		break;
 	case DPA_STATS_CLS_MEMBER_PAIR_KEY:
-		if (prm.params.pair.first_key.byte &&
-				prm.params.pair.first_key.mask) {
-			ret = copy_key_descriptor(
-					&prm.params.pair.first_key, &key);
-			if (ret != 0) {
-				log_err("Cannot copy the first key descriptor "
-					"of the pair-key\n");
-				return -EINVAL;
-			}
+		if (!prm.params.pair)
+			break;
 
-			ret = copy_key_descriptor(
-					&prm.params.pair.second_key, &key);
-			if (ret != 0) {
-				log_err("Cannot copy the second key descriptor "
-					"of the pair-key\n");
-				return -EINVAL;
-			}
+		/* Save array of user-space provided pairs pointers */
+		us_pair = prm.params.pair;
+
+		/* Override user-space pointers with kernel memory */
+		ret = copy_pair_descriptor(us_pair, &prm.params.pair);
+		if (ret != 0) {
+			log_err("Could not copy the pair key descriptor\n");
+			goto modify_counter_cleanup;
 		}
 		break;
 	case DPA_STATS_CLS_MEMBER_SA_ID:
@@ -1154,32 +1245,53 @@ static int do_ioctl_stats_modify_class_counter(void *args)
 
 	ret = dpa_stats_modify_class_counter(prm.cnt_id,
 					     &prm.params, prm.member_index);
-	if (ret < 0)
-		return ret;
-
+modify_counter_cleanup:
 	switch (prm.params.type) {
 	case DPA_STATS_CLS_MEMBER_SINGLE_KEY:
-		kfree(prm.params.key.byte);
-		kfree(prm.params.key.mask);
+		if (prm.params.key) {
+			/* Release kernel-allocated memory */
+			kfree(prm.params.key->byte);
+			kfree(prm.params.key->mask);
+			kfree(prm.params.key);
+			/* Restore user-provided key */
+			prm.params.key = us_key;
+		}
 		break;
 	case DPA_STATS_CLS_MEMBER_PAIR_KEY:
-		kfree(prm.params.pair.first_key.byte);
-		kfree(prm.params.pair.first_key.mask);
-		kfree(prm.params.pair.second_key.byte);
-		kfree(prm.params.pair.second_key.mask);
+		if (prm.params.pair) {
+			if (prm.params.pair->first_key) {
+				/* Release kernel-allocated memory */
+				kfree(prm.params.pair->first_key->byte);
+				kfree(prm.params.pair->first_key->mask);
+				kfree(prm.params.pair->first_key);
+			}
+			if (prm.params.pair->second_key) {
+				/* Release kernel-allocated memory */
+				kfree(prm.params.pair->second_key->byte);
+				kfree(prm.params.pair->second_key->mask);
+				kfree(prm.params.pair->second_key);
+			}
+			kfree(prm.params.pair);
+			/* Restore user-provided key */
+			prm.params.pair->first_key = us_pair->first_key;
+			prm.params.pair->second_key = us_pair->second_key;
+			prm.params.pair = us_pair;
+		}
 		break;
 	case DPA_STATS_CLS_MEMBER_SA_ID:
 		break;
 	default:
+		log_err("Invalid class member type\n");
 		break;
 	}
 
 	if (copy_to_user(args, &prm, sizeof(prm))) {
-		log_err("Cannot copy to user the class counter result\n");
-		return -EBUSY;
+		log_err("Could not write "
+		       "dpa_stats_modify_class_counter result\n");
+		ret = -EBUSY;
 	}
 
-	return 0;
+	return ret;
 }
 
 #ifdef CONFIG_COMPAT
@@ -1187,10 +1299,11 @@ static int do_ioctl_stats_compat_modify_class_counter(void *args)
 {
 	struct ioc_dpa_stats_cls_member_params kprm;
 	struct compat_ioc_dpa_stats_cls_member_params uprm;
+	struct compat_ioc_dpa_offld_lookup_key_pair pair;
 	int ret;
 
 	if (copy_from_user(&uprm, args, sizeof(uprm))) {
-		log_err("Cannot copy from user the class counter parameters\n");
+		log_err("Cannot copy from user the modify counter parameters\n");
 		return -EINVAL;
 	}
 
@@ -1201,35 +1314,35 @@ static int do_ioctl_stats_compat_modify_class_counter(void *args)
 
 	switch (kprm.params.type) {
 	case DPA_STATS_CLS_MEMBER_SINGLE_KEY:
-		if (compat_ptr(uprm.params.key.byte)) {
-			ret = copy_key_descriptor_compatcpy(
-					&kprm.params.key,
-					&uprm.params.key);
-			if (ret < 0) {
-				log_err("Cannot copy the key descriptor\n");
-				return ret;
-			}
-
+		if (!compat_ptr(uprm.params.key))
+			break;
+		/* Copy user-provided key descriptor */
+		ret = copy_key_descriptor_compatcpy(&kprm.params.key,
+				uprm.params.key);
+		if (ret < 0) {
+			log_err("Cannot copy the key descriptor\n");
+			goto compat_modify_counter_cleanup;
 		}
 		break;
 	case DPA_STATS_CLS_MEMBER_PAIR_KEY:
-		if (compat_ptr(uprm.params.pair.first_key.byte)) {
-			ret = copy_key_descriptor_compatcpy(
-					&kprm.params.pair.first_key,
-					&uprm.params.pair.first_key);
-			if (ret < 0)
-				return ret;
+		if (!compat_ptr(uprm.params.pair))
+			break;
 
-			ret = copy_key_descriptor_compatcpy(
-					&kprm.params.pair.second_key,
-					&uprm.params.pair.second_key);
-			if (ret != 0) {
-				log_err("Cannot copy the key descriptor of the "
-					"pair-key\n");
-				return -EINVAL;
-			}
+		if (copy_from_user(&pair, compat_ptr(uprm.params.pair),
+				   (sizeof(pair)))) {
+			log_err("Cannot copy from user array of "
+				"lookup pairs\n");
+			return -EBUSY;
+		}
+
+		/* Copy user-provided lookup pair descriptor */
+		ret = copy_pair_descriptor_compatcpy(&kprm.params.pair, pair);
+		if (ret < 0) {
+			log_err("Cannot copy the pair key descriptor\n");
+			goto compat_modify_counter_cleanup;
 		}
 		break;
+
 	case DPA_STATS_CLS_MEMBER_SA_ID:
 		kprm.params.sa_id = uprm.params.sa_id;
 		break;
@@ -1238,34 +1351,45 @@ static int do_ioctl_stats_compat_modify_class_counter(void *args)
 	}
 
 	ret = dpa_stats_modify_class_counter(kprm.cnt_id,
-			&kprm.params, kprm.member_index);
+					&kprm.params, kprm.member_index);
 	if (ret < 0)
-		return ret;
+		goto compat_modify_counter_cleanup;
 
 	uprm.cnt_id = kprm.cnt_id;
-
-	switch (kprm.params.type) {
-	case DPA_STATS_CLS_MEMBER_SINGLE_KEY:
-		kfree(kprm.params.key.byte);
-		kfree(kprm.params.key.mask);
-		break;
-	case DPA_STATS_CLS_MEMBER_PAIR_KEY:
-		kfree(kprm.params.pair.first_key.byte);
-		kfree(kprm.params.pair.first_key.mask);
-		kfree(kprm.params.pair.second_key.byte);
-		kfree(kprm.params.pair.second_key.mask);
-		break;
-	case DPA_STATS_CLS_MEMBER_SA_ID:
-		break;
-	default:
-		break;
-	}
 
 	if (copy_to_user(args, &uprm, sizeof(uprm))) {
 		log_err("Cannot copy to user class counter result\n");
 		return -EBUSY;
 	}
 
+compat_modify_counter_cleanup:
+	switch (kprm.params.type) {
+	case DPA_STATS_CLS_MEMBER_SINGLE_KEY:
+		if (!kprm.params.key)
+			break;
+		kfree(kprm.params.key->byte);
+		kfree(kprm.params.key->mask);
+		kfree(kprm.params.key);
+		break;
+	case DPA_STATS_CLS_MEMBER_PAIR_KEY:
+		if (!kprm.params.pair)
+			break;
+		if (kprm.params.pair->first_key) {
+			kfree(kprm.params.pair->first_key->byte);
+			kfree(kprm.params.pair->first_key->mask);
+			kfree(kprm.params.pair->first_key);
+		}
+		if (kprm.params.pair->second_key) {
+			kfree(kprm.params.pair->second_key->byte);
+			kfree(kprm.params.pair->second_key->mask);
+			kfree(kprm.params.pair->second_key);
+		}
+		break;
+	case DPA_STATS_CLS_MEMBER_SA_ID:
+		break;
+	default:
+		break;
+	}
 	return 0;
 }
 #endif
@@ -1720,89 +1844,196 @@ static long store_get_cnts_async_params(
 }
 
 static int copy_key_descriptor(struct dpa_offload_lookup_key *src,
-			       struct dpa_offload_lookup_key *tmp)
+			       struct dpa_offload_lookup_key **ks_key)
 {
-	if (!src->byte) {
-		log_err("Key descriptor byte from user cannot be NULL\n");
-		return -EINVAL;
-	}
+	struct dpa_offload_lookup_key *tmp = NULL;
 
-	/* Allocate memory to store the key byte array */
-	tmp->byte = kmalloc(src->size, GFP_KERNEL);
-	if (!tmp->byte) {
-		log_err("Cannot allocate memory for key descriptor byte\n");
+	/* Allocate kernel memory for key descriptor */
+	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
+	if (!tmp) {
+		log_err("Cannot allocate kernel memory for key descriptor\n");
 		return -ENOMEM;
 	}
 
-	if (copy_from_user(tmp->byte, src->byte, src->size)) {
-		log_err("Cannot copy from user the key descriptor byte\n");
-		kfree(tmp->byte);
-		return -EBUSY;
+	if (src->byte) {
+		/* Allocate memory to store the key byte array */
+		tmp->byte = kmalloc(src->size, GFP_KERNEL);
+		if (!tmp->byte) {
+			log_err("Cannot allocate memory for key "
+				"descriptor byte\n");
+			return -ENOMEM;
+		}
+
+		if (copy_from_user(tmp->byte, src->byte, src->size)) {
+			log_err("Cannot copy from user the key "
+				"descriptor byte\n");
+			kfree(tmp->byte);
+			kfree(tmp);
+			return -EBUSY;
+		}
 	}
-	src->byte = tmp->byte;
 
 	if (src->mask) {
 		/* Allocate memory to store the key mask array */
 		tmp->mask = kmalloc(src->size, GFP_KERNEL);
 		if (!tmp->mask) {
-			log_err("Cannot allocate memory for key descriptor "
-				"mask\n");
+			log_err("Cannot allocate memory for key "
+				"descriptor mask\n");
 			kfree(tmp->byte);
+			kfree(tmp);
 			return -ENOMEM;
 		}
 
 		if (copy_from_user(tmp->mask, src->mask, src->size)) {
-			log_err("Cannot copy from user the key descriptor "
-				"mask\n");
+			log_err("Cannot copy from user the "
+				"key descriptor mask\n");
 			kfree(tmp->byte);
 			kfree(tmp->mask);
+			kfree(tmp);
 			return -EBUSY;
 		}
-		src->mask = tmp->mask;
 	}
+
+	tmp->size = src->size;
+	*ks_key = tmp;
+	return 0;
+}
+
+static int copy_pair_descriptor(struct dpa_offload_lookup_key_pair *src,
+				struct dpa_offload_lookup_key_pair **ks_pair)
+{
+	struct dpa_offload_lookup_key_pair *tmp;
+	int ret = 0;
+
+	/* Allocate kernel memory for pair descriptor*/
+	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
+	if (!tmp) {
+		log_err("Cannot allocate kernel memory for pair descriptor\n");
+		return -ENOMEM;
+	}
+
+	if (src->first_key) {
+		ret = copy_key_descriptor(src->first_key, &tmp->first_key);
+		if (ret != 0) {
+			log_err("Could not copy the first key descriptor\n");
+			kfree(tmp);
+			return ret;
+		}
+	}
+
+	if (src->second_key) {
+		ret = copy_key_descriptor(src->second_key, &tmp->second_key);
+		if (ret != 0) {
+			log_err("Could not copy the second key descriptor\n");
+			kfree(tmp);
+			return ret;
+		}
+	}
+	*ks_pair = tmp;
 	return 0;
 }
 
 #ifdef CONFIG_COMPAT
 static int copy_key_descriptor_compatcpy(
-		struct dpa_offload_lookup_key *kparam,
-		const struct compat_ioc_dpa_offld_lookup_key *uparam)
+		struct dpa_offload_lookup_key **ks_key, compat_uptr_t uparam)
 {
-	BUG_ON(uparam->size <= 0);
+	struct compat_ioc_dpa_offld_lookup_key key;
+	struct dpa_offload_lookup_key *kparam;
 
-	kparam->size = uparam->size;
+	if (copy_from_user(&key, (compat_ptr)(uparam),
+			   sizeof(struct compat_ioc_dpa_offld_lookup_key))) {
+		log_err("Cannot copy from user key descriptor\n");
+		return -EBUSY;
+	}
 
-	/* Allocate memory to store the key byte array */
-	kparam->byte = kmalloc(kparam->size, GFP_KERNEL);
-	if (!kparam->byte) {
-		log_err("Cannot allocate memory for key descriptor byte\n");
+	/* Allocate kernel memory for key descriptor */
+	kparam = kzalloc(sizeof(*kparam), GFP_KERNEL);
+	if (!kparam) {
+		log_err("Cannot allocate kernel memory for key descriptor\n");
 		return -ENOMEM;
 	}
 
-	if (copy_from_user(kparam->byte, compat_ptr(uparam->byte),
-		uparam->size)) {
-		log_err("Cannot copy from user the key descriptor byte\n");
-		return -EBUSY;
+	if (compat_ptr(key.byte)) {
+		/* Allocate memory to store the key byte array */
+		kparam->byte = kmalloc(key.size, GFP_KERNEL);
+		if (!kparam->byte) {
+			log_err("Cannot allocate memory for key descriptor "
+				"byte\n");
+			kfree(kparam);
+			return -ENOMEM;
+		}
+
+		if (copy_from_user(kparam->byte,
+				   compat_ptr(key.byte), key.size)) {
+			log_err("Cannot copy from user the key descriptor "
+				"byte\n");
+			kfree(kparam->byte);
+			kfree(kparam);
+			return -EBUSY;
+		}
 	}
-	if (compat_ptr(uparam->mask)) {
+
+	if (compat_ptr(key.mask)) {
 		/* Allocate memory to store the key mask array */
-		kparam->mask = kmalloc(kparam->size, GFP_KERNEL);
+		kparam->mask = kmalloc(key.size, GFP_KERNEL);
 		if (!kparam->mask) {
 			log_err("Cannot allocate memory for key descriptor "
 				"mask\n");
 			kfree(kparam->byte);
+			kfree(kparam);
 			return -ENOMEM;
 		}
 
-		if (copy_from_user(kparam->mask, compat_ptr(uparam->mask),
-			uparam->size)) {
+		if (copy_from_user(kparam->mask,
+				   compat_ptr(key.mask), key.size)) {
 			log_err("Cannot copy from user the key descriptor "
 				"mask\n");
+			kfree(kparam->byte);
+			kfree(kparam->mask);
+			kfree(kparam);
 			return -EBUSY;
 		}
-	} else
-		kparam->mask = NULL;
+	}
+	kparam->size = key.size;
+	*ks_key = kparam;
+	return 0;
+}
 
+static int copy_pair_descriptor_compatcpy(
+		struct dpa_offload_lookup_key_pair **ks_pair,
+		struct compat_ioc_dpa_offld_lookup_key_pair pair)
+{
+	struct dpa_offload_lookup_key_pair *kpair;
+	int ret = 0;
+
+	/* Allocate kernel memory for lookup pair descriptor */
+	kpair = kzalloc(sizeof(*kpair), GFP_KERNEL);
+	if (!kpair) {
+		log_err("Cannot allocate kernel memory for pair descriptor\n");
+		return -ENOMEM;
+	}
+
+	if (compat_ptr(pair.first_key)) {
+		/* Copy user-provided key descriptor */
+		ret = copy_key_descriptor_compatcpy(
+					&kpair->first_key, pair.first_key);
+		if (ret != 0) {
+			log_err("Cannot copy first key of the pair\n");
+			kfree(kpair);
+			return ret;
+		}
+	}
+
+	if (compat_ptr(pair.second_key)) {
+		ret = copy_key_descriptor_compatcpy(
+					&kpair->second_key, pair.second_key);
+		if (ret != 0) {
+			log_err("Cannot copy second key of the pair\n");
+			kfree(kpair);
+			return ret;
+		}
+	}
+	*ks_pair = kpair;
 	return 0;
 }
 #endif
@@ -1859,12 +2090,25 @@ static void dpa_stats_plcr_cnt_compatcpy(struct dpa_stats_cnt_plcr *kprm,
 	kprm->cnt_sel = uprm->cnt_sel;
 }
 
+
 static long dpa_stats_tbl_cnt_compatcpy(struct dpa_stats_cnt_classif_tbl *kprm,
 				struct dpa_stats_compat_cnt_classif_tbl *uprm)
 {
 	kprm->td = uprm->td;
 	kprm->cnt_sel = uprm->cnt_sel;
-	return copy_key_descriptor_compatcpy(&kprm->key, &uprm->key);
+	/* If different than NULL, it will be overwritten */
+	kprm->key = compat_ptr(uprm->key);
+
+	if (compat_ptr(uprm->key)) {
+		/* Allocate memory for kernel-space key descriptor */
+		kprm->key = kmalloc(sizeof(*kprm->key), GFP_KERNEL);
+		if (!kprm->key) {
+			log_err("Cannot allocate memory for key descriptor\n");
+			return -ENOMEM;
+		}
+		return copy_key_descriptor_compatcpy(&kprm->key, uprm->key);
+	}
+	return 0;
 }
 
 static long dpa_stats_ccnode_cnt_compatcpy(
@@ -1874,7 +2118,19 @@ static long dpa_stats_ccnode_cnt_compatcpy(
 	kprm->cnt_sel = uprm->cnt_sel;
 	kprm->ccnode_type = uprm->ccnode_type;
 	kprm->cc_node = compat_get_id2ptr(uprm->cc_node, FM_MAP_TYPE_PCD_NODE);
-	return copy_key_descriptor_compatcpy(&kprm->key, &uprm->key);
+	/* If different than NULL, it will be overwritten */
+	kprm->key = compat_ptr(uprm->key);
+
+	if (compat_ptr(uprm->key)) {
+		/* Allocate memory for kernel-space key descriptor */
+		kprm->key = kmalloc(sizeof(*kprm->key), GFP_KERNEL);
+		if (!kprm->key) {
+			log_err("Cannot allocate memory for key descriptor\n");
+			return -ENOMEM;
+		}
+		return copy_key_descriptor_compatcpy(&kprm->key, uprm->key);
+	}
+	return 0;
 }
 
 static long dpa_stats_eth_cls_compatcpy(struct dpa_stats_cls_cnt_eth *kprm,
@@ -2016,102 +2272,117 @@ static long dpa_stats_tbl_cls_compatcpy(
 		struct dpa_stats_compat_cls_cnt_classif_tbl *uprm,
 		uint32_t cls_members)
 {
-	struct compat_ioc_dpa_offld_lookup_key *keys;
-	struct compat_ioc_dpa_offld_lookup_key_pair *pairs;
-	uint32_t size = 0, i;
+	struct compat_ioc_dpa_offld_lookup_key_pair pair;
+	compat_uptr_t *us_keys;
+	uint32_t i;
 	long ret;
 
 	kprm->cnt_sel = uprm->cnt_sel;
 	kprm->td = uprm->td;
 	kprm->key_type = uprm->key_type;
 
+	/* Allocate memory to store array of user-space keys descriptors */
+	us_keys = kzalloc(sizeof(compat_uptr_t) * cls_members, GFP_KERNEL);
+	if (!us_keys) {
+		log_err("Cannot allocate memory array of lookup keys\n");
+		return -ENOMEM;
+	}
+
 	if (kprm->key_type == DPA_STATS_CLASSIF_SINGLE_KEY) {
-		size = sizeof(struct dpa_offload_lookup_key) * cls_members;
-		kprm->keys = kzalloc(size, GFP_KERNEL);
+		if (copy_from_user(us_keys, compat_ptr(uprm->keys),
+				  (sizeof(compat_uptr_t) * cls_members))) {
+			log_err("Cannot copy from user-space array of keys "
+				"descriptors\n");
+			kfree(us_keys);
+			return -EBUSY;
+		}
+
+		/* Allocate memory for array of kernel-space keys descriptors */
+		kprm->keys = kzalloc((sizeof(*kprm->keys) * cls_members),
+				     GFP_KERNEL);
 		if (!kprm->keys) {
 			log_err("Cannot allocate kernel memory for lookup keys "
 				"array\n");
+			kfree(us_keys);
 			return -ENOMEM;
 		}
-
-		size = sizeof(struct compat_ioc_dpa_offld_lookup_key) *
-				cls_members;
-		keys = kzalloc(size, GFP_KERNEL);
-		if (!keys) {
-			log_err("Cannot allocate memory for lookup keys "
-				"array\n");
-			return -ENOMEM;
-		}
-
-		if (copy_from_user(keys, (compat_ptr)(uprm->keys), size)) {
-			log_err("Cannot copy from user array of lookup keys\n");
-			kfree(keys);
-			return -EBUSY;
-		}
-
 		for (i = 0; i < cls_members; i++) {
-			if (!compat_ptr(keys[i].byte))
+			if (!compat_ptr(us_keys[i]))
 				continue;
-
+			/* Copy user-provided key descriptor */
 			ret = copy_key_descriptor_compatcpy(&kprm->keys[i],
-					&keys[i]);
+							    us_keys[i]);
 			if (ret != 0) {
 				log_err("Cannot copy the key descriptor\n");
-				kfree(keys);
-				return -EINVAL;
+				kfree(us_keys);
+				return ret;
 			}
 		}
-		kfree(keys);
-	} else if (kprm->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
-		size = sizeof(struct dpa_offload_lookup_key_pair) * cls_members;
-		kprm->pairs = kzalloc(size, GFP_KERNEL);
-		if (!kprm->pairs) {
-			log_err("Cannot allocate kernel memory for pair lookup "
-				"keys array\n");
-			return -ENOMEM;
-		}
+		kfree(us_keys);
+	}
 
-		size = sizeof(struct compat_ioc_dpa_offld_lookup_key_pair) *
-				cls_members;
-		pairs = kzalloc(size, GFP_KERNEL);
-		if (!pairs) {
-			log_err("Cannot allocate memory for pair lookup keys "
-				"array\n");
-			return -ENOMEM;
-		}
-
-		if (copy_from_user(pairs, (compat_ptr)(uprm->pairs), size)) {
-			log_err("Cannot copy from user array of pair lookup "
-				"keys\n");
-			kfree(pairs);
+	if (kprm->key_type == DPA_STATS_CLASSIF_PAIR_KEY) {
+		if (copy_from_user(us_keys, compat_ptr(uprm->pairs),
+				  (sizeof(compat_uptr_t) * cls_members))) {
+			log_err("Cannot copy from user-space array of pairs "
+				"descriptors\n");
+			kfree(us_keys);
 			return -EBUSY;
 		}
 
+		/* Allocate memory for array of kernel-space pairs descriptors*/
+		kprm->pairs = kzalloc((sizeof(*kprm->pairs) * cls_members),
+				      GFP_KERNEL);
+		if (!kprm->pairs) {
+			log_err("Cannot allocate kernel memory for lookup pairs"
+				"array\n");
+			kfree(us_keys);
+			return -ENOMEM;
+		}
+
 		for (i = 0; i < cls_members; i++) {
-			if (!compat_ptr(pairs[i].first_key.byte))
+			if (!compat_ptr(us_keys[i]))
 				continue;
 
-			ret = copy_key_descriptor_compatcpy(
-					&kprm->pairs[i].first_key,
-					&pairs[i].first_key);
-			if (ret != 0) {
-				log_err("Cannot copy the key descriptor for the"
-					" first lookup key\n");
-				kfree(pairs);
-				return -EINVAL;
+			/* Allocate memory for kernel pair descriptor */
+			kprm->pairs[i] = kzalloc(sizeof(*kprm->pairs[i]),
+						GFP_KERNEL);
+			if (!kprm->pairs[i]) {
+				log_err("Cannot allocate kernel memory for pair"
+					" descriptor\n");
+				return -ENOMEM;
 			}
 
-			ret = copy_key_descriptor_compatcpy(
-					&kprm->pairs[i].second_key,
-					&pairs[i].second_key);
-			if (ret != 0) {
-				log_err("Cannot copy the key descriptor for the"
-					" second lookup key\n", uprm->td);
-				kfree(pairs);
-				return -EINVAL;
+			if (copy_from_user(&pair, compat_ptr(us_keys[i]),
+					   (sizeof(pair)))) {
+				log_err("Cannot copy pair descriptor\n");
+				return -EBUSY;
+			}
+
+			if (compat_ptr(pair.first_key)) {
+				/* Copy user-provided first key descriptor */
+				ret = copy_key_descriptor_compatcpy(
+						&kprm->pairs[i]->first_key,
+						pair.first_key);
+				if (ret != 0) {
+					log_err("Cannot copy first key\n");
+					kfree(us_keys);
+					return ret;
+				}
+			}
+
+			if (compat_ptr(pair.second_key)) {
+				/* Copy user-provided second key descriptor */
+				ret = copy_key_descriptor_compatcpy(
+						&kprm->pairs[i]->second_key,
+						pair.second_key);
+				if (ret != 0) {
+					log_err("Cannot copy second key\n");
+					kfree(us_keys);
+					return ret;
+				}
 			}
 		}
-		kfree(pairs);
 	}
 	return 0;
 }
@@ -2121,45 +2392,50 @@ static long dpa_stats_ccnode_cls_compatcpy(
 		struct dpa_stats_compat_cls_cnt_classif_node *uprm,
 		uint32_t cls_members)
 {
-	struct compat_ioc_dpa_offld_lookup_key *keys;
-	uint32_t size, i;
+	compat_uptr_t *us_keys;
+	uint32_t i;
 	long ret = 0;
 
 	kprm->cc_node = compat_get_id2ptr(uprm->cc_node, FM_MAP_TYPE_PCD_NODE);
 	kprm->cnt_sel = uprm->cnt_sel;
 	kprm->ccnode_type = uprm->ccnode_type;
 
-	size = sizeof(struct dpa_offload_lookup_key) * cls_members;
-	kprm->keys = kzalloc(size, GFP_KERNEL);
-	if (!kprm->keys) {
-		log_err("Cannot allocate kernel memory for lookup keys "
-			"array\n");
+	/* Allocate memory to store array of user-space keys descriptors */
+	us_keys = kzalloc(sizeof(compat_uptr_t) * cls_members, GFP_KERNEL);
+	if (!us_keys) {
+		log_err("Cannot allocate memory array of lookup keys\n");
 		return -ENOMEM;
 	}
 
-	size = sizeof(struct compat_ioc_dpa_offld_lookup_key) * cls_members;
-	keys = kzalloc(size, GFP_KERNEL);
-	if (!keys) {
-		log_err("Cannot allocate memory for lookup keys array\n");
-		return -ENOMEM;
-	}
-
-	if (copy_from_user(keys, (compat_ptr)(uprm->keys), size)) {
-		log_err("Cannot copy from user array of lookup keys\n");
-		kfree(keys);
+	if (copy_from_user(us_keys, compat_ptr(uprm->keys),
+			  (sizeof(compat_uptr_t) * cls_members))) {
+		log_err("Cannot copy from user-space array of keys "
+			"descriptors\n");
+		kfree(us_keys);
 		return -EBUSY;
 	}
 
+	/* Allocate memory to store array of kernel-space keys descriptors */
+	kprm->keys = kzalloc((sizeof(*kprm->keys) * cls_members), GFP_KERNEL);
+	if (!kprm->keys) {
+		log_err("Cannot allocate kernel memory for lookup keys "
+			"array\n");
+		kfree(us_keys);
+		return -ENOMEM;
+	}
 	for (i = 0; i < cls_members; i++) {
-		ret = copy_key_descriptor_compatcpy(&kprm->keys[i], &keys[i]);
+		if (!compat_ptr(us_keys[i]))
+			continue;
+		/* Copy user-provided key descriptor */
+		ret = copy_key_descriptor_compatcpy(&kprm->keys[i], us_keys[i]);
 		if (ret != 0) {
 			log_err("Cannot copy the key descriptor\n");
-			kfree(keys);
-			return -EINVAL;
+			kfree(us_keys);
+			return ret;
 		}
 	}
-	kfree(keys);
-	return ret;
+	kfree(us_keys);
+	return 0;
 }
 
 static long dpa_stats_ipsec_cls_compatcpy(struct dpa_stats_cls_cnt_ipsec *kprm,

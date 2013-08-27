@@ -521,6 +521,12 @@ typedef struct ioc_compat_fm_ctrl_mon_counters_params_t {
     compat_uptr_t p_mon;
 } ioc_compat_fm_ctrl_mon_counters_params_t;
 
+typedef struct ioc_compat_fm_pcd_cc_tbl_get_miss_params_t {
+    compat_uptr_t                   id;
+    ioc_fm_pcd_cc_key_statistics_t  miss_statistics;
+} ioc_compat_fm_pcd_cc_tbl_get_miss_params_t;
+
+
 /* } pcd compat structures */
 
 void compat_obj_delete(
@@ -566,6 +572,11 @@ void compat_copy_fm_pcd_cc_grp(
 void compat_copy_fm_pcd_cc_tree(
         ioc_compat_fm_pcd_cc_tree_params_t *compat_param,
         ioc_fm_pcd_cc_tree_params_t *param,
+        uint8_t compat);
+
+void compat_copy_fm_pcd_cc_tbl_get_miss(
+        ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *compat_param,
+        ioc_fm_pcd_cc_tbl_get_miss_params_t *param,
         uint8_t compat);
 
 void compat_fm_pcd_prs_sw(

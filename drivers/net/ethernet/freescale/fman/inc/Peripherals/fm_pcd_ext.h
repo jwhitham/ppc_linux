@@ -1058,7 +1058,9 @@ typedef enum e_FmPcdPlcrRateMode {
 *//***************************************************************************/
 typedef enum e_FmPcdDoneAction {
     e_FM_PCD_ENQ_FRAME = 0,        /**< Enqueue frame */
-    e_FM_PCD_DROP_FRAME            /**< Drop frame */
+    e_FM_PCD_DROP_FRAME            /**< Mark this frame as error frame and continue
+                                        to error flow; 'FM_PORT_FRM_ERR_CLS_DISCARD'
+                                        flag will be set for this frame. */
 } e_FmPcdDoneAction;
 
 /**************************************************************************//**
@@ -2070,8 +2072,7 @@ typedef struct t_FmPcdPlcrProfileParams {
 /**************************************************************************//**
  @Description   Parameters for selecting a location for requested manipulation
 *//***************************************************************************/
-typedef struct t_FmManipHdrInfo
-{
+typedef struct t_FmManipHdrInfo {
     e_NetHeaderType                     hdr;            /**< Header selection */
     e_FmPcdHdrIndex                     hdrIndex;       /**< Relevant only for MPLS, VLAN and tunneled IP. Otherwise should be cleared. */
     bool                                byField;        /**< TRUE if the location of manipulation is according to some field in the specific header*/
@@ -2565,7 +2566,7 @@ typedef struct t_FmPcdManipParams {
 *//***************************************************************************/
 typedef struct t_FmPcdManipReassemIpStats {
     /* common counters for both IPv4 and IPv6 */
-    uint32_t        timeout;                    /**< Counts the number of TimeOut occurrences */
+    uint32_t        timeout;                    /**< Counts the number of timeout occurrences */
     uint32_t        rfdPoolBusy;                /**< Counts the number of failed attempts to allocate
                                                      a Reassembly Frame Descriptor */
     uint32_t        internalBufferBusy;         /**< Counts the number of times an internal buffer busy occurred */
@@ -2932,7 +2933,8 @@ t_Error FM_PCD_MatchTableDelete(t_Handle h_CcNode);
 
  @Return        E_OK on success; Error code otherwise.
 
- @Cautions      Allowed only following FM_PCD_MatchTableSet().
+ @Cautions      Allowed only following FM_PCD_MatchTableSet();
+                Not relevant in the case the node is of type 'INDEXED_LOOKUP'.
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableModifyMissNextEngine(t_Handle                  h_CcNode,
                                               t_FmPcdCcNextEngineParams *p_FmPcdCcNextEngineParams);
@@ -3185,6 +3187,29 @@ t_Error FM_PCD_MatchTableGetKeyStatistics(t_Handle                  h_CcNode,
                                           t_FmPcdCcKeyStatistics    *p_KeyStatistics);
 
 /**************************************************************************//**
+ @Function      FM_PCD_MatchTableGetMissStatistics
+
+ @Description   This routine may be used to get statistics counters of miss entry
+                in a CC Node.
+
+                If 'e_FM_PCD_CC_STATS_MODE_FRAME' and
+                'e_FM_PCD_CC_STATS_MODE_BYTE_AND_FRAME' were set for this node,
+                these counters reflect how many frames were not matched to any
+                existing key and therefore passed through the miss entry; The
+                total frames count will be returned in the counter of the
+                first range (as only one frame length range was defined).
+
+ @Param[in]     h_CcNode            A handle to the node
+ @Param[out]    p_MissStatistics    Statistics counters for 'miss'
+
+ @Return        The statistics for 'miss'.
+
+ @Cautions      Allowed only following FM_PCD_MatchTableSet().
+*//***************************************************************************/
+t_Error FM_PCD_MatchTableGetMissStatistics(t_Handle                  h_CcNode,
+                                           t_FmPcdCcKeyStatistics    *p_MissStatistics);
+
+/**************************************************************************//**
  @Function      FM_PCD_MatchTableFindNGetKeyStatistics
 
  @Description   This routine may be used to get statistics counters of specific key
@@ -3434,6 +3459,27 @@ t_Error FM_PCD_HashTableFindNGetKeyStatistics(t_Handle                 h_HashTbl
                                               uint8_t                  keySize,
                                               uint8_t                  *p_Key,
                                               t_FmPcdCcKeyStatistics   *p_KeyStatistics);
+
+/**************************************************************************//**
+ @Function      FM_PCD_HashTableGetMissStatistics
+
+ @Description   This routine may be used to get statistics counters of 'miss'
+                entry of the a hash table.
+
+                If 'e_FM_PCD_CC_STATS_MODE_FRAME' and
+                'e_FM_PCD_CC_STATS_MODE_BYTE_AND_FRAME' were set for this node,
+                these counters reflect how many frames were not matched to any
+                existing key and therefore passed through the miss entry;
+
+ @Param[in]     h_HashTbl           A handle to a hash table
+ @Param[out]    p_MissStatistics    Statistics counters for 'miss'
+
+ @Return        The statistics for 'miss'.
+
+ @Cautions      Allowed only following FM_PCD_HashTableSet().
+*//***************************************************************************/
+t_Error FM_PCD_HashTableGetMissStatistics(t_Handle                 h_HashTbl,
+                                          t_FmPcdCcKeyStatistics   *p_MissStatistics);
 
 /**************************************************************************//**
  @Function      FM_PCD_ManipNodeSet

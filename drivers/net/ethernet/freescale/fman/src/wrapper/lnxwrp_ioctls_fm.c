@@ -1932,6 +1932,155 @@ invalid_port_id:
             XX_Free(param);
             break;
         }
+        
+        
+#if defined(CONFIG_COMPAT)
+        case FM_PCD_IOC_MATCH_TABLE_GET_MISS_STAT_COMPAT:
+#endif
+        case FM_PCD_IOC_MATCH_TABLE_GET_MISS_STAT:
+        {
+            ioc_fm_pcd_cc_tbl_get_miss_params_t param;
+
+#if defined(CONFIG_COMPAT)
+            if (compat)
+            {
+                ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *compat_param;
+
+                compat_param = (ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *) XX_Malloc(
+                        sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                if (!compat_param)
+                    RETURN_ERROR(MINOR, E_NO_MEMORY, ("IOCTL FM PCD"));
+
+                memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                if (copy_from_user(compat_param,
+                            (ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *)compat_ptr(arg),
+                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)))
+                {
+                    XX_Free(compat_param);
+                    RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+                }
+
+                compat_copy_fm_pcd_cc_tbl_get_miss(compat_param, &param, COMPAT_US_TO_K);
+
+                XX_Free(compat_param);
+            }
+            else
+#endif
+            {
+                if (copy_from_user(&param, (ioc_fm_pcd_cc_tbl_get_miss_params_t *)arg,
+                            sizeof(ioc_fm_pcd_cc_tbl_get_miss_params_t)))
+                    RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+            }
+
+  
+            err = FM_PCD_MatchTableGetMissStatistics((t_Handle) param.id,
+                                                     (t_FmPcdCcKeyStatistics *) &param.miss_statistics);
+         
+#if defined(CONFIG_COMPAT)
+            if (compat)
+            {
+                ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *compat_param;
+
+                compat_param = (ioc_compat_fm_pcd_cc_tbl_get_miss_params_t*) XX_Malloc(
+                        sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                if (!compat_param)
+                    RETURN_ERROR(MINOR, E_NO_MEMORY, ("IOCTL FM PCD"));
+
+                memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                compat_copy_fm_pcd_cc_tbl_get_miss(compat_param, &param, COMPAT_K_TO_US);
+                if (copy_to_user((ioc_compat_fm_pcd_cc_tbl_get_miss_params_t*) compat_ptr(arg),
+                            compat_param,
+                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)))
+                    RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
+
+                XX_Free(compat_param);
+            }
+            else
+#endif
+            {
+                if (copy_to_user((ioc_fm_pcd_hash_table_params_t *)arg,
+                                  &param,
+                                  sizeof(ioc_fm_pcd_cc_tbl_get_miss_params_t)))
+                    RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
+            }
+
+            break;
+        }
+        
+
+#if defined(CONFIG_COMPAT)
+        case FM_PCD_IOC_HASH_TABLE_GET_MISS_STAT_COMPAT:
+#endif
+        case FM_PCD_IOC_HASH_TABLE_GET_MISS_STAT:
+        {
+            ioc_fm_pcd_cc_tbl_get_miss_params_t param;
+
+#if defined(CONFIG_COMPAT)
+            if (compat)
+            {
+                ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *compat_param;
+
+                compat_param = (ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *) XX_Malloc(
+                        sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                if (!compat_param)
+                    RETURN_ERROR(MINOR, E_NO_MEMORY, ("IOCTL FM PCD"));
+
+                memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                if (copy_from_user(compat_param,
+                            (ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *)compat_ptr(arg),
+                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)))
+                {
+                    XX_Free(compat_param);
+                    RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+                }
+
+                compat_copy_fm_pcd_cc_tbl_get_miss(compat_param, &param, COMPAT_US_TO_K);
+
+                XX_Free(compat_param);
+            }
+            else
+#endif
+            {
+                if (copy_from_user(&param, (ioc_fm_pcd_cc_tbl_get_miss_params_t *)arg,
+                            sizeof(ioc_fm_pcd_cc_tbl_get_miss_params_t)))
+                    RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+            }
+
+  
+            err = FM_PCD_HashTableGetMissStatistics((t_Handle) param.id,
+                                                     (t_FmPcdCcKeyStatistics *) &param.miss_statistics);
+         
+#if defined(CONFIG_COMPAT)
+            if (compat)
+            {
+                ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *compat_param;
+
+                compat_param = (ioc_compat_fm_pcd_cc_tbl_get_miss_params_t*) XX_Malloc(
+                        sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                if (!compat_param)
+                    RETURN_ERROR(MINOR, E_NO_MEMORY, ("IOCTL FM PCD"));
+
+                memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t));
+                compat_copy_fm_pcd_cc_tbl_get_miss(compat_param, &param, COMPAT_K_TO_US);
+                if (copy_to_user((ioc_compat_fm_pcd_cc_tbl_get_miss_params_t*) compat_ptr(arg),
+                            compat_param,
+                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)))
+                    RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
+
+                XX_Free(compat_param);
+            }
+            else
+#endif
+            {
+                if (copy_to_user((ioc_fm_pcd_hash_table_params_t *)arg,
+                                  &param,
+                                  sizeof(ioc_fm_pcd_cc_tbl_get_miss_params_t)))
+                    RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
+            }
+
+            break;
+        }
+      
 #if defined(CONFIG_COMPAT)
         case FM_PCD_IOC_HASH_TABLE_SET_COMPAT:
 #endif

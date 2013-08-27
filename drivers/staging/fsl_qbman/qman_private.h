@@ -219,6 +219,8 @@ void qman_destroy_portal(struct qman_portal *qm);
 
 /* Hooks from fsl_usdpaa.c to qman_driver.c */
 struct qm_portal_config *qm_get_unused_portal(void);
+struct qm_portal_config *qm_get_unused_portal_idx(uint32_t idx);
+
 void qm_put_unused_portal(struct qm_portal_config *pcfg);
 void qm_set_liodns(struct qm_portal_config *pcfg);
 
