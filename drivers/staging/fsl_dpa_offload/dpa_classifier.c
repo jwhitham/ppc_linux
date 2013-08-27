@@ -430,7 +430,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 
 	/* Fill the [miss_engine_params] structure w/ data */
 	errno = action_to_next_engine_params(miss_action, &miss_engine_params,
-		NULL, NULL, NULL);
+					NULL, ptable->params.distribution,
+					ptable->params.classification);
 	if (errno < 0) {
 		RELEASE_OBJECT(ptable);
 		log_err("Failed verification of miss action params for table "
@@ -461,6 +462,9 @@ int dpa_classif_table_modify_miss_action(int			td,
 			return -EBUSY;
 		}
 	}
+
+	memcpy(&ptable->miss_action, miss_action, sizeof(*miss_action));
+
 	RELEASE_OBJECT(ptable);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
@@ -3227,6 +3231,26 @@ static inline void key_apply_mask(const struct dpa_offload_lookup_key *key,
 	memset(new_key, 0, key->size);
 	for (i = 0; i < key->size; i++)
 		new_key[i] = key->byte[i] & key->mask[i];
+}
+
+int dpa_classif_get_miss_action(int td, struct dpa_cls_tbl_action *miss_action)
+{
+	struct dpa_cls_table *ptable;
+
+	if (!miss_action)
+		return -EINVAL;
+
+	LOCK_OBJECT(table_array, td, ptable, -EINVAL);
+	if (ptable->miss_action.type == DPA_CLS_TBL_ACTION_NONE) {
+		/* No miss action was specified for this table */
+		RELEASE_OBJECT(ptable);
+		return -ENODEV;
+	} else
+		memcpy(miss_action, &ptable->miss_action, sizeof(*miss_action));
+
+	RELEASE_OBJECT(ptable);
+
+	return 0;
 }
 
 static int nat_hm_check_params(const struct dpa_cls_hm_nat_params *nat_params)
@@ -7226,7 +7250,8 @@ EXPORT_SYMBOL(dpa_classif_free_hm);
 #if (DPAA_VERSION >= 11)
 int dpa_classif_mcast_create_group(
 		const struct dpa_cls_mcast_group_params *group_params,
-		int *grpd)
+		int *grpd,
+		const struct dpa_cls_mcast_group_resources *res)
 {
 
 	t_Error err = 0;
@@ -7321,7 +7346,7 @@ int dpa_classif_mcast_create_group(
 	}
 
 	/* Group is not imported */
-	if (group_params->group == NULL) {
+	if (!res) {
 		/*
 		 * set parameters for the first member
 		 */
@@ -7439,7 +7464,7 @@ int dpa_classif_mcast_create_group(
 
 		kfree(replic_grp_params);
 	} else {
-		pgroup->group = group_params->group;
+		pgroup->group = res->group_node;
 		/* mark prefilled members in index array member */
 		for (member_id = 0; member_id < group_params->prefilled_members;
 		     member_id++) {

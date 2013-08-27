@@ -137,12 +137,12 @@
 			dsp2: dsp@2 {
 				compatible = "fsl,sc3900";
 				reg = <2>;
-				next-level-cache = <&L2_2>;
+				next-level-cache = <&L2_3>;
 			};
 			dsp3: dsp@3 {
 				compatible = "fsl,sc3900";
 				reg = <3>;
-				next-level-cache = <&L2_2>;
+				next-level-cache = <&L2_3>;
 			};
 		};
 
@@ -155,12 +155,12 @@
 			dsp4: dsp@4 {
 				compatible = "fsl,sc3900";
 				reg = <4>;
-				next-level-cache = <&L2_2>;
+				next-level-cache = <&L2_4>;
 			};
 			dsp5: dsp@5 {
 				compatible = "fsl,sc3900";
 				reg = <5>;
-				next-level-cache = <&L2_2>;
+				next-level-cache = <&L2_4>;
 			};
 		};
 	};

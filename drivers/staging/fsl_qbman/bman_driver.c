@@ -198,11 +198,34 @@ static struct bm_portal_config *get_pcfg(struct list_head *list)
 	return pcfg;
 }
 
+static struct bm_portal_config *get_pcfg_idx(struct list_head *list,
+					     uint32_t idx)
+{
+	struct bm_portal_config *pcfg;
+	if (list_empty(list))
+		return NULL;
+	list_for_each_entry(pcfg, list, list) {
+		if (pcfg->public_cfg.index == idx) {
+			list_del(&pcfg->list);
+			return pcfg;
+		}
+	}
+	return NULL;
+}
+
 struct bm_portal_config *bm_get_unused_portal(void)
+{
+	return bm_get_unused_portal_idx(QBMAN_ANY_PORTAL_IDX);
+}
+
+struct bm_portal_config *bm_get_unused_portal_idx(uint32_t idx)
 {
 	struct bm_portal_config *ret;
 	spin_lock(&unused_pcfgs_lock);
-	ret = get_pcfg(&unused_pcfgs);
+	if (idx == QBMAN_ANY_PORTAL_IDX)
+		ret = get_pcfg(&unused_pcfgs);
+	else
+		ret = get_pcfg_idx(&unused_pcfgs, idx);
 	spin_unlock(&unused_pcfgs_lock);
 	return ret;
 }

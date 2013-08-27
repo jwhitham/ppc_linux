@@ -308,6 +308,37 @@ static ssize_t show_fm_stats(struct device *dev,
 	return n;
 }
 
+static ssize_t show_fm_muram_free_size(struct device *dev,
+			     struct device_attribute *attr, char *buf)
+{
+	t_LnxWrpFmDev *p_LnxWrpFmDev = NULL;
+	unsigned long flags = 0;
+	unsigned n = 0;
+	uint64_t muram_free_size = 0;
+
+	if (attr == NULL || buf == NULL || dev == NULL)
+		return -EINVAL;
+
+	p_LnxWrpFmDev = (t_LnxWrpFmDev *) dev_get_drvdata(dev);
+	if (WARN_ON(p_LnxWrpFmDev == NULL))
+		return -EINVAL;
+
+	if (!p_LnxWrpFmDev->active || !p_LnxWrpFmDev->h_Dev)
+		return -EIO;
+
+	muram_free_size = FM_MURAM_GetFreeMemSize(p_LnxWrpFmDev->h_MuramDev);
+
+	local_irq_save(flags);
+
+	n = snprintf(buf, PAGE_SIZE, "\tFM %d muram_free_size: %lld\n",
+		     p_LnxWrpFmDev->id, muram_free_size);
+
+	local_irq_restore(flags);
+
+	return n;
+}
+
+
 static ssize_t show_fm_pcd_stats(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
@@ -530,6 +561,7 @@ static ssize_t show_pcd_regs(struct device *dev,
 
 static DEVICE_ATTR(fm_regs, S_IRUGO, show_fm_regs, NULL);
 static DEVICE_ATTR(fm_pcd_regs, S_IRUGO, show_pcd_regs, NULL);
+static DEVICE_ATTR(fm_muram_free_size, S_IRUGO, show_fm_muram_free_size, NULL);
 
 int fm_sysfs_create(struct device *dev)
 {
@@ -543,6 +575,7 @@ int fm_sysfs_create(struct device *dev)
 	/* store to remove them when module is disabled */
 	p_LnxWrpFmDev->dev_attr_regs = &dev_attr_fm_regs;
 	p_LnxWrpFmDev->dev_pcd_attr_regs = &dev_attr_fm_pcd_regs;
+	p_LnxWrpFmDev->dev_attr_muram_free_size = &dev_attr_fm_muram_free_size;
 
 	/* Create sysfs statistics group for FM module */
 	if (sysfs_create_group(&dev->kobj, &fm_dev_stats_attr_grp) != 0)
@@ -551,6 +584,10 @@ int fm_sysfs_create(struct device *dev)
 	/* Registers dump entry - in future will be moved to debugfs */
 	if (device_create_file(dev, &dev_attr_fm_regs) != 0 ||
 	    device_create_file(dev, &dev_attr_fm_pcd_regs) != 0)
+		return -EIO;
+
+	/* muram free size */
+	if (device_create_file(dev, &dev_attr_fm_muram_free_size) != 0 )
 		return -EIO;
 
 	return 0;
@@ -570,4 +607,5 @@ void fm_sysfs_destroy(struct device *dev)
 	sysfs_remove_group(&dev->kobj, &fm_dev_stats_attr_grp);
 	device_remove_file(dev, p_LnxWrpFmDev->dev_attr_regs);
 	device_remove_file(dev, p_LnxWrpFmDev->dev_pcd_attr_regs);
+	device_remove_file(dev, p_LnxWrpFmDev->dev_attr_muram_free_size);	
 }
