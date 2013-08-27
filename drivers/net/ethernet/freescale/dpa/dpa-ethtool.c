@@ -50,8 +50,8 @@ static int __cold dpa_get_settings(struct net_device *net_dev,
 		return -ENODEV;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		netdev_err(net_dev, "phy device not initialized\n");
-		return -ENODEV;
+		netdev_dbg(net_dev, "phy device not initialized\n");
+		return 0;
 	}
 
 	_errno = phy_ethtool_gset(priv->mac_dev->phy_dev, et_cmd);
