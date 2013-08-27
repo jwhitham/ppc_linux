@@ -6,3 +6,5 @@ source "drivers/platform/goldfish/Kconfig"
 endif
 
 source "drivers/platform/chrome/Kconfig"
+
+source "drivers/platform/fsl/Kconfig"
