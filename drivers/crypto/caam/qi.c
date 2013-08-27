@@ -18,7 +18,7 @@
 #define CAAM_REQ_CGR_THRESHOLD	0x1000000
 #define PRE_HDR_LEN		2	/* Length in u32 words */
 #define PREHDR_RSLS_SHIFT	31
-
+#define PENDING_JOBS_DEPTH	512
 /*
  * The jobs are processed by the driver against a driver context.
  * With every cryptographic context, a driver context is attached.
@@ -79,7 +79,7 @@ bool caam_drv_ctx_busy(struct caam_drv_ctx *drv_ctx)
 		return true;
 
 	pending = atomic_read(&per_cpu(pcpu_qipriv.pending, drv_ctx->cpu));
-	if (pending >= JOBR_DEPTH)
+	if (pending >= PENDING_JOBS_DEPTH)
 		return true;
 
 	return false;
