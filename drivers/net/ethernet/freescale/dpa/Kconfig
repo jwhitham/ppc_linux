@@ -127,3 +127,10 @@ config FSL_DPAA_ETH_DEBUGFS
 	default y
 	---help---
 	  This option compiles debugfs code for the DPAA Ethernet driver.
+
+config FSL_DPAA_ETH_DEBUG
+	bool "DPAA Ethernet Debug Support"
+	depends on FSL_DPAA_ETH
+	default n
+	---help---
+	  This option compiles debug code for the DPAA Ethernet driver.

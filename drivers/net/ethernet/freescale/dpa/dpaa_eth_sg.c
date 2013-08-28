@@ -232,7 +232,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 		/* remaining pages were mapped with dma_map_page() */
 		for (i = 1; i < nr_frags; i++) {
-			BUG_ON(sgt[i].extension);
+			DPA_BUG_ON(sgt[i].extension);
 
 			dma_unmap_page(dpa_bp->dev, sgt[i].addr,
 					sgt[i].length, dma_dir);
@@ -335,7 +335,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	struct sk_buff *skb = NULL;
 
 	vaddr = phys_to_virt(addr);
-	BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
+	DPA_BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 
 	/* do we need the timestamp for bad frames? */
 #ifdef CONFIG_FSL_DPAA_1588
@@ -356,7 +356,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	if (unlikely(!skb))
 		return NULL;
 
-	BUG_ON(fd_off != priv->rx_headroom);
+	DPA_BUG_ON(fd_off != priv->rx_headroom);
 	skb_reserve(skb, fd_off);
 	skb_put(skb, dpa_fd_length(fd));
 
@@ -397,7 +397,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int *count_ptr;
 
 	vaddr = phys_to_virt(addr);
-	BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
+	DPA_BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(priv, skb, vaddr);
@@ -412,15 +412,16 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	sgt = vaddr + fd_off;
 	for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
 		/* Extension bit is not supported */
-		BUG_ON(sgt[i].extension);
+		DPA_BUG_ON(sgt[i].extension);
 
 		dpa_bp = dpa_bpid2pool(sgt[i].bpid);
-		BUG_ON(!dpa_bp);
+		DPA_BUG_ON(!dpa_bp);
 		count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 
 		sg_addr = qm_sg_addr(&sgt[i]);
 		sg_vaddr = phys_to_virt(sg_addr);
-		BUG_ON(!IS_ALIGNED((unsigned long)sg_vaddr, SMP_CACHE_BYTES));
+		DPA_BUG_ON(!IS_ALIGNED((unsigned long)sg_vaddr,
+				SMP_CACHE_BYTES));
 
 		if (i == 0) {
 			/* Tentatively access the first buffer, but don't unmap
@@ -456,7 +457,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			/* Make sure forwarded skbs will have enough space
 			 * on Tx, if extra headers are added.
 			 */
-			BUG_ON(fd_off != priv->rx_headroom);
+			DPA_BUG_ON(fd_off != priv->rx_headroom);
 			skb_reserve(skb, fd_off);
 			skb_put(skb, sgt[i].length);
 		} else {
@@ -497,7 +498,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 
 	/* recycle the SGT fragment */
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(!dpa_bp);
+	DPA_BUG_ON(!dpa_bp);
 	dpa_bp_recycle_frag(dpa_bp, (unsigned long)vaddr);
 	return skb;
 }
@@ -527,7 +528,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	}
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(!dpa_bp);
+	DPA_BUG_ON(!dpa_bp);
 	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	/* Prepare to read from the buffer, but don't unmap it until
 	 * we know the skb allocation succeeded. At this point we already
@@ -539,13 +540,12 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	/* prefetch the first 64 bytes of the frame or the SGT start */
 	prefetch(phys_to_virt(addr) + dpa_fd_offset(fd));
 
+	/* The only FD types that we may receive are contig and S/G */
+	DPA_BUG_ON((fd->format != qm_fd_contig) && (fd->format != qm_fd_sg));
 	if (likely(fd->format == qm_fd_contig))
 		skb = contig_fd_to_skb(priv, fd, &use_gro);
-	else if (fd->format == qm_fd_sg)
-		skb = sg_fd_to_skb(priv, fd, &use_gro);
 	else
-		/* The only FD types that we may receive are contig and S/G */
-		BUG();
+		skb = sg_fd_to_skb(priv, fd, &use_gro);
 	if (unlikely(!skb))
 		/* We haven't yet touched the DMA mapping or the pool count;
 		 * dpa_fd_release() will just put the buffer back in the pool
@@ -628,7 +628,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 		 */
 		fd->cmd |= FM_FD_CMD_FCO;
 		fd->bpid = dpa_bp->bpid;
-		BUG_ON(skb->data - buffer_start > DPA_MAX_FD_OFFSET);
+		DPA_BUG_ON(skb->data - buffer_start > DPA_MAX_FD_OFFSET);
 		fd->offset = (uint16_t)(skb->data - buffer_start);
 		dma_dir = DMA_BIDIRECTIONAL;
 	} else
@@ -737,12 +737,13 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	for (i = 1; i <= nr_frags; i++) {
 		frag = &skb_shinfo(skb)->frags[i - 1];
 		sgt[i].bpid = dpa_bp->bpid;
+
 		sgt[i].offset = 0;
 		sgt[i].length = frag->size;
 		sgt[i].extension = 0;
 		sgt[i].final = 0;
 
-		BUG_ON(!skb_frag_page(frag));
+		DPA_BUG_ON(!skb_frag_page(frag));
 		addr = skb_frag_dma_map(dpa_bp->dev, frag, 0, sgt[i].length,
 					dma_dir);
 		if (unlikely(dma_mapping_error(dpa_bp->dev, addr))) {
