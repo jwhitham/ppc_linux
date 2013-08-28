@@ -87,6 +87,7 @@ struct qman_portal {
 	struct qm_portal p;
 	unsigned long bits; /* PORTAL_BITS_*** - dynamic, strictly internal */
 	unsigned long irq_sources;
+	u32 use_eqcr_ci_stashing;
 	u32 slowpoll;	/* only used when interrupts are off */
 	struct qman_fq *vdqcr_owned; /* only 1 volatile dequeue at a time */
 #ifdef CONFIG_FSL_DPA_CAN_WAIT_SYNC
@@ -377,7 +378,7 @@ struct qman_portal *qman_create_portal(
 
 	__p = &portal->p;
 
-	portal->p.eqcr.use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ?
+	portal->use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ?
 								1 : 0);
 
 	/* prep the low-level portal struct with the mapped addresses from the
@@ -390,7 +391,7 @@ struct qman_portal *qman_create_portal(
 	 * and stash with high-than-DQRR priority.
 	 */
 	if (qm_eqcr_init(__p, qm_eqcr_pvb,
-			portal->p.eqcr.use_eqcr_ci_stashing ? 3 : 0, 1)) {
+			portal->use_eqcr_ci_stashing ? 3 : 0, 1)) {
 		pr_err("Qman EQCR initialisation failed\n");
 		goto fail_eqcr;
 	}
@@ -1985,7 +1986,7 @@ static inline struct qm_eqcr_entry *try_eq_start(struct qman_portal **p,
 		(*p)->eqci_owned = fq;
 	}
 #endif
-	if ((*p)->p.eqcr.use_eqcr_ci_stashing) {
+	if ((*p)->use_eqcr_ci_stashing) {
 		/*
 		 * The stashing case is easy, only update if we need to in
 		 * order to try and liberate ring entries.

@@ -166,7 +166,6 @@ enum qm_mr_cmode {		/* matches QCSP_CFG::MM */
 struct qm_eqcr {
 	struct qm_eqcr_entry *ring, *cursor;
 	u8 ci, available, ithresh, vbit;
-	u32 use_eqcr_ci_stashing;
 #ifdef CONFIG_FSL_DPA_CHECKING
 	u32 busy;
 	enum qm_eqcr_pmode pmode;
@@ -285,6 +284,11 @@ static inline int qm_eqcr_init(struct qm_portal *portal,
 		((pmode & 0x3) << 24);	/* QCSP_CFG::EPM */
 	qm_out(CFG, cfg);
 	return 0;
+}
+
+static inline unsigned int qm_eqcr_get_ci_stashing(struct qm_portal *portal)
+{
+	return ((qm_in(CFG) >> 28) & 0x7);
 }
 
 static inline void qm_eqcr_finish(struct qm_portal *portal)
