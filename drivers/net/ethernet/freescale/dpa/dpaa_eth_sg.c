@@ -265,16 +265,16 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 
 	vaddr = phys_to_virt(addr);
 
+	/* Build the skb and adjust data and tail pointers */
+	skb = build_skb(vaddr, dpa_bp->size + DPA_SKB_TAILROOM);
+	if (unlikely(!skb))
+		return NULL;
+
 	/* do we need the timestamp for bad frames? */
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
 		dpa_ptp_store_rxstamp(priv, skb, vaddr);
 #endif
-
-	/* Build the skb and adjust data and tail pointers */
-	skb = build_skb(vaddr, dpa_bp->size + DPA_SKB_TAILROOM);
-	if (unlikely(!skb))
-		return NULL;
 
 	/* Make sure forwarded skbs will have enough space on Tx,
 	 * if extra headers are added.
@@ -318,15 +318,6 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int *count_ptr;
 
 	vaddr = phys_to_virt(addr);
-#ifdef CONFIG_FSL_DPAA_1588
-	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
-		dpa_ptp_store_rxstamp(priv, skb, vaddr);
-#endif
-
-#ifdef CONFIG_FSL_DPAA_TS
-	if (priv->ts_rx_en)
-		dpa_get_ts(priv, RX, skb_hwtstamps(skb), vaddr);
-#endif /* CONFIG_FSL_DPAA_TS */
 
 	/* Iterate through the SGT entries and add data buffers to the skb */
 	sgt = vaddr + dpa_fd_offset(fd);
@@ -359,6 +350,17 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 				 * not changed, nor have the pool counts.
 				 */
 				return NULL;
+
+#ifdef CONFIG_FSL_DPAA_1588
+			if (priv->tsu && priv->tsu->valid &&
+			    priv->tsu->hwts_rx_en_ioctl)
+				dpa_ptp_store_rxstamp(priv, skb, vaddr);
+#endif
+
+#ifdef CONFIG_FSL_DPAA_TS
+			if (priv->ts_rx_en)
+				dpa_get_ts(priv, RX, skb_hwtstamps(skb), vaddr);
+#endif /* CONFIG_FSL_DPAA_TS */
 
 			dma_unmap_single(dpa_bp->dev, sg_addr, dpa_bp->size,
 				DMA_BIDIRECTIONAL);
