@@ -462,6 +462,12 @@ static const struct qe_firmware *FindFmanMicrocode(void)
     /* Returning NULL here forces the reuse of the IRAM content */
     return NULL;
 }
+#define SVR_SECURITY_MASK    0x00080000
+#define SVR_PERSONALITY_MASK 0x0000FF00
+#define SVR_VER_IGNORE_MASK (SVR_SECURITY_MASK | SVR_PERSONALITY_MASK)
+#define SVR_B4860_REV1_VALUE 0x86800010
+#define SVR_B4860_REV2_VALUE 0x86800020
+
 
 static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
 {
@@ -515,6 +521,17 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
     if (unlikely(_errno < 0)) {
         REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("of_address_to_resource() = %d", _errno));
         return NULL;
+    }
+
+    {
+        uint32_t svr;
+
+        svr = mfspr(SPRN_SVR);
+
+        if ((svr & ~SVR_VER_IGNORE_MASK) == SVR_B4860_REV2_VALUE) {
+            res.end = 0x80000;
+            res.start = 0;
+        }
     }
 
     p_LnxWrpFmDev->fmBaseAddr = 0;

@@ -352,7 +352,7 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 			goto _return_dev_set_drvdata;
 		}
 
-		sprintf(mac_dev->fixed_bus_id, PHY_ID_FMT, "0", phy_id[0]);
+		sprintf(mac_dev->fixed_bus_id, PHY_ID_FMT, "fixed-0", phy_id[0]);
 	}
 
 	_errno = mac_dev->init(mac_dev);
