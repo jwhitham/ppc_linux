@@ -78,7 +78,6 @@ struct dpa_stats_req_cb {
 	struct work_struct async_req_work; /* Asynchronous request work */
 	struct dpa_stats_cnt_request_params config;
 				/* Parameters provided to the request */
-	int *cnts_ids; /* Copy of user-provided array of counter IDs */
 	uint32_t id; /* Request id */
 	int index; /* Request index in the 'used_req_ids'*/
 	void *request_area;

@@ -51,8 +51,6 @@
 #define CLASSIF_STATS_SHIFT 4
 #define WORKQUEUE_MAX_ACTIVE 3
 
-#define DPA_STATS_US_CNT 0x80000000
-
 /* Global dpa_stats component */
 struct dpa_stats *gbl_dpa_stats;
 
@@ -82,9 +80,6 @@ static int get_cnt_traffic_mng_cq_stats(struct dpa_stats_req_cb *req_cb,
 
 static int get_cnt_traffic_mng_ccg_stats(struct dpa_stats_req_cb *req_cb,
 					 struct dpa_stats_cnt_cb *cnt_cb);
-
-static int get_cnt_us_stats(struct dpa_stats_req_cb *req_cb,
-			    struct dpa_stats_cnt_cb *cnt_cb);
 
 static void async_req_work_func(struct work_struct *work);
 
@@ -730,18 +725,11 @@ static int treat_cnts_request(struct dpa_stats *dpa_stats,
 {
 	struct dpa_stats_cnt_request_params params = req_cb->config;
 	struct dpa_stats_cnt_cb *cnt_cb = NULL;
-	int id = 0, err = 0, *unblock_cnts;
+	int id = 0, err = 0;
 	uint32_t i = 0;
-
-	unblock_cnts = kzalloc(sizeof(int) * params.cnts_ids_len, GFP_KERNEL);
-	if (!unblock_cnts) {
-		log_err("Cannot allocate memory for local counter ids array\n");
-		return -ENOMEM;
-	}
 
 	for (i = 0; i < params.cnts_ids_len; i++) {
 		id = params.cnts_ids[i];
-		unblock_cnts[i] = id;
 
 		/* Get counter's control block */
 		cnt_cb = &dpa_stats->cnts_cb[id];
@@ -772,7 +760,7 @@ static int treat_cnts_request(struct dpa_stats *dpa_stats,
 		mutex_unlock(&cnt_cb->lock);
 	}
 
-	unblock_sched_cnts(dpa_stats, unblock_cnts, params.cnts_ids_len);
+	unblock_sched_cnts(dpa_stats, params.cnts_ids, params.cnts_ids_len);
 
 	return 0;
 }
@@ -1066,10 +1054,10 @@ static void create_cnt_traffic_mng_stats(struct dpa_stats *dpa_stats)
 {
 	/* DPA_STATS_CNT_NUM_OF_BYTES */
 	dpa_stats->stats_sel[DPA_STATS_CNT_TRAFFIC_MNG][0] =
-				DPA_STATS_CNT_NUM_OF_BYTES * sizeof(uint64_t);
+						DPA_STATS_CNT_NUM_OF_BYTES;
 	/* DPA_STATS_CNT_NUM_OF_PACKETS */
 	dpa_stats->stats_sel[DPA_STATS_CNT_TRAFFIC_MNG][1] =
-				DPA_STATS_CNT_NUM_OF_PACKETS * sizeof(uint64_t);
+						DPA_STATS_CNT_NUM_OF_PACKETS;
 }
 
 static int copy_key_descriptor(const struct dpa_offload_lookup_key *src,
@@ -1227,39 +1215,6 @@ static void cnt_sel_to_stats(struct stats_info *stats_info,
 	}
 
 	stats_info->stats_num = cntPos - 1;
-}
-
-static int cnt_gen_sel_to_stats(struct dpa_stats_cnt_cb *cnt_cb,
-				enum dpa_stats_cnt_sel cnt_sel)
-{
-	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
-
-	if (cnt_sel == DPA_STATS_CNT_NUM_OF_BYTES) {
-		cnt_cb->info.stats_off[0] =
-		dpa_stats->stats_sel[cnt_cb->type][DPA_STATS_CNT_NUM_OF_BYTES];
-		cnt_cb->info.stats_num = 1;
-	} else if (cnt_sel == DPA_STATS_CNT_NUM_OF_PACKETS) {
-		cnt_cb->info.stats_off[0] =
-	dpa_stats->stats_sel[cnt_cb->type][DPA_STATS_CNT_NUM_OF_PACKETS];
-		cnt_cb->info.stats_num = 1;
-	} else if (cnt_sel == DPA_STATS_CNT_NUM_ALL) {
-		cnt_cb->info.stats_off[0] =
-		dpa_stats->stats_sel[cnt_cb->type][DPA_STATS_CNT_NUM_OF_BYTES];
-		cnt_cb->info.stats_off[1] =
-	dpa_stats->stats_sel[cnt_cb->type][DPA_STATS_CNT_NUM_OF_PACKETS];
-		cnt_cb->info.stats_num = 2;
-	} else {
-		log_err("Parameter cnt_sel %d must be in range (%d - %d) for "
-			"counter id %d\n", cnt_sel, DPA_STATS_CNT_NUM_OF_BYTES,
-			DPA_STATS_CNT_NUM_ALL, cnt_cb->id);
-		return -EINVAL;
-	}
-
-	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
-
-	return 0;
 }
 
 static int set_frag_manip(int td, struct dpa_stats_lookup_key *entry)
@@ -1710,14 +1665,37 @@ static int set_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 static int set_cnt_ipsec_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			    const struct dpa_stats_cnt_params *params)
 {
+	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
 	struct dpa_ipsec_sa_stats stats;
+	uint32_t cnt_sel = params->ipsec_params.cnt_sel;
 	int err = 0;
 
-	if (!cnt_cb->dpa_stats) {
+	if (!dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
 		return -EFAULT;
 	}
 
+	/* Map IPSec counter selection to statistics */
+	if (cnt_sel == DPA_STATS_CNT_NUM_OF_BYTES) {
+		cnt_cb->info.stats_off[0] = dpa_stats->stats_sel[
+			DPA_STATS_CNT_IPSEC][DPA_STATS_CNT_NUM_OF_BYTES];
+		cnt_cb->info.stats_num = 1;
+	} else if (cnt_sel == DPA_STATS_CNT_NUM_OF_PACKETS) {
+		cnt_cb->info.stats_off[0] = dpa_stats->stats_sel[
+			DPA_STATS_CNT_IPSEC][DPA_STATS_CNT_NUM_OF_PACKETS];
+		cnt_cb->info.stats_num = 1;
+	} else if (cnt_sel == DPA_STATS_CNT_NUM_ALL) {
+		cnt_cb->info.stats_off[0] = dpa_stats->stats_sel[
+			DPA_STATS_CNT_IPSEC][DPA_STATS_CNT_NUM_OF_BYTES];
+		cnt_cb->info.stats_off[1] = dpa_stats->stats_sel[
+			DPA_STATS_CNT_IPSEC][DPA_STATS_CNT_NUM_OF_PACKETS];
+		cnt_cb->info.stats_num = 2;
+	} else {
+		log_err("Parameter cnt_sel %d must be in range (%d - %d) for "
+			"counter id %d\n", cnt_sel, DPA_STATS_CNT_NUM_OF_BYTES,
+			DPA_STATS_CNT_NUM_ALL, cnt_cb->id);
+		return -EINVAL;
+	}
 
 	cnt_cb->ipsec_cb.sa_id[0] = params->ipsec_params.sa_id;
 	cnt_cb->ipsec_cb.valid[0] = TRUE;
@@ -1731,10 +1709,8 @@ static int set_cnt_ipsec_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EINVAL;
 	}
 
-	/* Map IPSec counter selection to statistics */
-	err = cnt_gen_sel_to_stats(cnt_cb, params->ipsec_params.cnt_sel);
-	if (err < 0)
-		return err;
+	/* Set number of bytes that will be written by this counter */
+	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
 
 	return 0;
 }
@@ -1745,47 +1721,28 @@ static int set_cnt_traffic_mng_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
 	uint32_t cnt_sel = params->traffic_mng_params.cnt_sel;
 	uint32_t cnt_src = params->traffic_mng_params.src;
-	u64 frames = 0, bytes = 0;
+	uint64_t frames, bytes;
 	int err = 0;
-	bool us_cnt = FALSE;
 
 	if (!dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
 		return -EFAULT;
 	}
 
-	/* Check if this is an users-space counter and if so, reset the flag */
-	if (cnt_sel & DPA_STATS_US_CNT) {
-		us_cnt = TRUE;
-		cnt_sel &= ~DPA_STATS_US_CNT;
+	if (!params->traffic_mng_params.traffic_mng) {
+		log_err("Parameter traffic_mng handle cannot be NULL\n");
+		return -EFAULT;
 	}
 
-	if (!params->traffic_mng_params.traffic_mng && !us_cnt) {
-		log_err("Parameter traffic_mng handle cannot be NULL for "
-			"counter id %d\n", cnt_cb->id);
+	if (cnt_sel == 0 || cnt_sel > DPA_STATS_CNT_NUM_ALL) {
+		log_err("Parameter cnt_sel %d must be in range (1 - %d) for "
+			"counter id %d\n", cnt_sel, DPA_STATS_CNT_NUM_ALL,
+			cnt_cb->id);
 		return -EINVAL;
 	}
 
-	/* Check and store the counter source */
-	if (cnt_src > DPA_STATS_CNT_TRAFFIC_CG) {
-		log_err("Parameter src %d must be in range (%d - %d) for "
-			"counter id %d\n", cnt_src, DPA_STATS_CNT_TRAFFIC_CLASS,
-			DPA_STATS_CNT_TRAFFIC_CG, cnt_cb->id);
-		return -EINVAL;
-	}
 	cnt_cb->gen_cb.objs[0] = params->traffic_mng_params.traffic_mng;
 	cnt_cb->members_num = 1;
-
-	/* Map Traffic Manager counter selection to statistics */
-	err = cnt_gen_sel_to_stats(cnt_cb, cnt_sel);
-	if (err < 0)
-		return err;
-
-	/* For user-space counters there is a different retrieve function */
-	if (us_cnt) {
-		cnt_cb->f_get_cnt_stats = get_cnt_us_stats;
-		return 0;
-	}
 
 	/* Check the counter source and the Traffic Manager object */
 	switch (cnt_src) {
@@ -1811,7 +1768,22 @@ static int set_cnt_traffic_mng_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			return -EINVAL;
 		}
 		break;
+	default:
+		log_err("Parameter src %d must be in range (%d - %d) for "
+			"counter id %d\n", cnt_src, DPA_STATS_CNT_TRAFFIC_CLASS,
+			DPA_STATS_CNT_TRAFFIC_CG, cnt_cb->id);
+		return -EINVAL;
 	}
+
+	/* Decrease one to obtain the mask for all statistics */
+	if (cnt_sel == DPA_STATS_CNT_NUM_ALL)
+		cnt_sel -= 1;
+
+	cnt_sel_to_stats(&cnt_cb->info,
+		dpa_stats->stats_sel[DPA_STATS_CNT_TRAFFIC_MNG], cnt_sel);
+
+	/* Set number of bytes that will be written by this counter */
+	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
 
 	return 0;
 }
@@ -2458,84 +2430,85 @@ static int set_cls_cnt_ipsec_cb(struct dpa_stats_cnt_cb *cnt_cb,
 static int set_cls_cnt_traffic_mng_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		const struct dpa_stats_cls_cnt_params *params)
 {
-	struct dpa_stats_cls_cnt_traffic_mng prm = params->traffic_mng_params;
-	uint32_t cnt_sel = prm.cnt_sel, i;
-	u64 frames = 0, bytes = 0;
+	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
+	uint32_t cnt_sel = params->traffic_mng_params.cnt_sel;
+	uint32_t cnt_src = params->traffic_mng_params.src;
+	uint32_t i = 0;
+	uint64_t frames, bytes;
 	int err = 0;
-	bool us_cnt = FALSE;
 
-	if (!cnt_cb->dpa_stats) {
+	if (!dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
 		return -EFAULT;
 	}
 
-	/* Check if this is an users-space counter and if so, reset the flag */
-	if (cnt_sel & DPA_STATS_US_CNT) {
-		us_cnt = TRUE;
-		cnt_sel &= ~DPA_STATS_US_CNT;
+	/* First check the counter src */
+	if (cnt_src > DPA_STATS_CNT_TRAFFIC_CG ||
+			cnt_src < DPA_STATS_CNT_TRAFFIC_CLASS) {
+		log_err("Parameter src %d must be in range (%d - %d) for "
+			"counter id %d\n", cnt_src, DPA_STATS_CNT_TRAFFIC_CLASS,
+			DPA_STATS_CNT_TRAFFIC_CG, cnt_cb->id);
+		return -EINVAL;
+	}
+
+	/* Then check the counter selection */
+	if (cnt_sel == 0 || cnt_sel > DPA_STATS_CNT_NUM_ALL) {
+		log_err("Parameter cnt_sel %d must be in range (1 - %d) for "
+			"counter id %d\n", cnt_sel, DPA_STATS_CNT_NUM_ALL,
+			cnt_cb->id);
+		return -EINVAL;
 	}
 
 	cnt_cb->members_num = params->class_members;
 
-	/* Map Traffic Manager counter selection to statistics */
-	err = cnt_gen_sel_to_stats(cnt_cb, cnt_sel);
-	if (err < 0)
-		return err;
+	/* Check the user provided Traffic Manager object */
+	for (i = 0; i < params->class_members; i++) {
+		if (!params->traffic_mng_params.traffic_mng[i]) {
+			log_err("Parameter traffic_mng handle cannot be NULL "
+				"for member %d\n", i);
+			return -EFAULT;
+		}
+		cnt_cb->gen_cb.objs[i] =
+				params->traffic_mng_params.traffic_mng[i];
 
-	/* For user-space counters there is a different retrieve function */
-	if (us_cnt) {
-		cnt_cb->f_get_cnt_stats = get_cnt_us_stats;
-		return 0;
-	}
-
-	/* Check the counter source and the Traffic Manager object */
-	switch (prm.src) {
-	case DPA_STATS_CNT_TRAFFIC_CLASS:
-		cnt_cb->f_get_cnt_stats = get_cnt_traffic_mng_cq_stats;
-		for (i = 0; i < params->class_members; i++) {
-			if (!prm.traffic_mng[i]) {
-				log_err("Parameter traffic_mng handle cannot "
-					"be NULL for member %d\n", i);
-				return -EFAULT;
-			}
-
-			/* Check the provided Traffic Manager object */
+		switch (cnt_src) {
+		case DPA_STATS_CNT_TRAFFIC_CLASS:
+			cnt_cb->f_get_cnt_stats = get_cnt_traffic_mng_cq_stats;
 			err = qman_ceetm_cq_get_dequeue_statistics(
-					prm.traffic_mng[i], 0, &frames, &bytes);
+				params->traffic_mng_params.traffic_mng[i], 0,
+				&frames, &bytes);
 			if (err < 0) {
-				log_err("Invalid traffic_mng handle for counter"
-					" id %d\n", cnt_cb->id);
+				log_err("Invalid Traffic Manager qm_ceetm_cq "
+					"object for counter id %d\n",
+					cnt_cb->id);
 				return -EINVAL;
 			}
-			cnt_cb->gen_cb.objs[i] = prm.traffic_mng[i];
-		}
-		break;
-	case DPA_STATS_CNT_TRAFFIC_CG:
-		cnt_cb->f_get_cnt_stats = get_cnt_traffic_mng_ccg_stats;
-		for (i = 0; i < params->class_members; i++) {
-			if (!prm.traffic_mng[i])	{
-				log_err("Parameter traffic_mng handle cannot"
-					"be NULL for member %d\n", i);
-				return -EFAULT;
-			}
-
-			/* Check the provided Traffic Manager object */
+			break;
+		case DPA_STATS_CNT_TRAFFIC_CG:
+			cnt_cb->f_get_cnt_stats = get_cnt_traffic_mng_ccg_stats;
 			err = qman_ceetm_ccg_get_reject_statistics(
-					prm.traffic_mng[i], 0, &frames, &bytes);
+				params->traffic_mng_params.traffic_mng[i], 0,
+				&frames, &bytes);
 			if (err < 0) {
-				log_err("Invalid traffic_mng handle for counter"
-					" id %d\n", cnt_cb->id);
+				log_err("Invalid Traffic Manager qm_ceetm_ccg "
+					"object for counter id %d\n",
+					cnt_cb->id);
 				return -EINVAL;
 			}
-			cnt_cb->gen_cb.objs[i] = prm.traffic_mng[i];
+			break;
 		}
-		break;
-	default:
-		log_err("Parameter src %d must be in range (%d - %d) for "
-			"counter id %d\n", prm.src, DPA_STATS_CNT_TRAFFIC_CLASS,
-			DPA_STATS_CNT_TRAFFIC_CG, cnt_cb->id);
-		return -EINVAL;
 	}
+
+	/* Decrease one to obtain the mask for all statistics */
+	if (cnt_sel == DPA_STATS_CNT_NUM_ALL)
+		cnt_sel -= 1;
+
+	cnt_sel_to_stats(&cnt_cb->info,
+		dpa_stats->stats_sel[DPA_STATS_CNT_TRAFFIC_MNG], cnt_sel);
+
+	/* Set number of bytes that will be written by this counter */
+	cnt_cb->bytes_num = cnt_cb->members_num *
+					STATS_VAL_SIZE * cnt_cb->info.stats_num;
 
 	return 0;
 }
@@ -3140,14 +3113,14 @@ static int get_cnt_traffic_mng_cq_stats(struct dpa_stats_req_cb *req_cb,
 					struct dpa_stats_cnt_cb *cnt_cb)
 {
 	uint32_t i = 0;
-	u64 stats_val[2];
+	uint64_t stats_val[2];
 	int err = 0;
 
 	for (i = 0; i < cnt_cb->members_num; i++) {
 		/* Retrieve statistics for the current member */
 		err = qman_ceetm_cq_get_dequeue_statistics(
 				cnt_cb->gen_cb.objs[i], 0,
-				&stats_val[1], &stats_val[0]);
+				stats_val[1], stats_val[0]);
 		if (err < 0) {
 			log_err("Cannot retrieve Traffic Manager Class Queue "
 				"statistics for counter id %d\n", cnt_cb->id);
@@ -3162,13 +3135,13 @@ static int get_cnt_traffic_mng_ccg_stats(struct dpa_stats_req_cb *req_cb,
 					 struct dpa_stats_cnt_cb *cnt_cb)
 {
 	uint32_t i = 0;
-	u64 stats_val[2];
+	uint64_t stats_val[2];
 	int err = 0;
 
 	for (i = 0; i < cnt_cb->members_num; i++) {
 		err = qman_ceetm_ccg_get_reject_statistics(
 				cnt_cb->gen_cb.objs[i], 0,
-				&stats_val[1], &stats_val[0]);
+				stats_val[1], stats_val[0]);
 		if (err < 0) {
 			log_err("Cannot retrieve Traffic Manager Class "
 				"Congestion Group statistics for counter id "
@@ -3176,23 +3149,6 @@ static int get_cnt_traffic_mng_ccg_stats(struct dpa_stats_req_cb *req_cb,
 			return -EINVAL;
 		}
 		get_cnt_64bit_stats(req_cb, &cnt_cb->info, stats_val, i);
-	}
-	return 0;
-}
-
-static int get_cnt_us_stats(struct dpa_stats_req_cb *req_cb,
-			    struct dpa_stats_cnt_cb *cnt_cb)
-{
-	uint32_t i = 0, j = 0;
-	req_cb->config.cnts_ids[cnt_cb->id] = req_cb->bytes_num;
-
-	for (i = 0; i < cnt_cb->members_num; i++) {
-		for (j = 0; j < cnt_cb->info.stats_num; j++) {
-			/* Write the memory location */
-			*(uint32_t *)(req_cb->request_area) = 0;
-			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE;
-		}
 	}
 	return 0;
 }
@@ -3877,22 +3833,14 @@ int dpa_stats_get_counters(struct dpa_stats_cnt_request_params params,
 		return err;
 	}
 
-	req_cb->config.cnts_ids = params.cnts_ids;
+	/* Store user-provided request parameters */
+	memcpy(req_cb->config.cnts_ids,
+			params.cnts_ids, params.cnts_ids_len * sizeof(int));
+
 	req_cb->config.reset_cnts = params.reset_cnts;
 	req_cb->config.storage_area_offset = params.storage_area_offset;
 	req_cb->config.cnts_ids_len = params.cnts_ids_len;
 	req_cb->request_done = request_done;
-
-	/* Copy user-provided array of counter ids */
-	req_cb->cnts_ids = kzalloc(params.cnts_ids_len * sizeof(int),
-								GFP_KERNEL);
-	if (!req_cb->cnts_ids) {
-		log_err("Cannot allocate memory for internal DPA Stats request "
-								"structure\n");
-		return -ENOMEM;
-	}
-	memcpy(req_cb->cnts_ids, params.cnts_ids,
-					params.cnts_ids_len * sizeof(int));
 
 	/* Set memory area where the request should write */
 	req_cb->request_area = dpa_stats->config.storage_area +
@@ -3962,7 +3910,7 @@ int dpa_stats_reset_counters(int *cnts_ids, unsigned int cnts_ids_len)
 
 		/* Acquire counter lock */
 		err = mutex_trylock(&cnt_cb->lock);
-		if (err != 0) {
+		if (err == 0) {
 			log_err("Counter id (cnt_ids[%d]) %d is in use\n", i,
 				cnts_ids[i]);
 			unblock_sched_cnts(dpa_stats,
