@@ -98,7 +98,8 @@ static int copy_pair_descriptor(struct dpa_offload_lookup_key_pair *src,
 static int copy_class_members(void *objs, unsigned int size, void *dst);
 
 static long store_get_cnts_async_params(
-		struct ioc_dpa_stats_cnt_request_params *kprm);
+		struct ioc_dpa_stats_cnt_request_params *kprm,
+		struct dpa_stats_async_req_ev **async_request_event);
 
 #ifdef CONFIG_COMPAT
 static long wrp_dpa_stats_do_compat_ioctl(struct file *filp,
@@ -289,6 +290,15 @@ ssize_t wrp_dpa_stats_read(struct file *file,
 		ev_prm.dpa_stats_id = event->params.dpa_stats_id;
 		ev_prm.storage_area_offset = event->params.storage_area_offset;
 		ev_prm.request_done = ptr_to_compat(event->params.request_done);
+		ev_prm.us_cnt_ids = event->params.us_cnt_ids;
+		ev_prm.cnt_ids_len = event->params.cnt_ids_len;
+
+		if (copy_to_user((compat_ptr)(ev_prm.us_cnt_ids),
+				event->ks_cnt_ids,
+				(event->params.cnt_ids_len * sizeof(int)))) {
+			kfree(event);
+			return -EFAULT;
+		}
 
 		if (copy_to_user(buf + c, &ev_prm, sizeof(ev_prm)) != 0) {
 			kfree(event);
@@ -498,6 +508,15 @@ void do_ioctl_req_done_cb(int dpa_stats_id,
 	event->params.cnts_written = cnts_written;
 	event->params.bytes_written = bytes_written;
 	event->params.request_done = async_req_ev->request_done;
+#ifdef CONFIG_COMPAT
+	event->ks_cnt_ids = async_req_ev->ks_cnt_ids;
+	event->params.us_cnt_ids = async_req_ev->us_cnt_ids;
+	event->params.cnt_ids_len = async_req_ev->cnt_ids_len;
+#else
+	event->ks_cnt_ids = NULL;
+	event->params.us_cnt_ids = NULL;
+	event->params.cnt_ids_len = 0;
+#endif /* CONFIG_COMPAT */
 
 	mutex_unlock(&wrp_dpa_stats.async_req_lock);
 
@@ -755,9 +774,10 @@ static int do_ioctl_stats_compat_create_counter(void *args)
 		       sizeof(struct dpa_stats_cnt_ipsec));
 		break;
 	case DPA_STATS_CNT_TRAFFIC_MNG:
-		memcpy(&kprm.cnt_params.traffic_mng_params,
-		       &uprm.cnt_params.traffic_mng_params,
-		       sizeof(struct dpa_stats_cnt_traffic_mng));
+		kprm.cnt_params.traffic_mng_params.cnt_sel =
+				uprm.cnt_params.traffic_mng_params.cnt_sel;
+		kprm.cnt_params.traffic_mng_params.src =
+				uprm.cnt_params.traffic_mng_params.src;
 		break;
 	default:
 		break;
@@ -1107,6 +1127,12 @@ static int do_ioctl_stats_compat_create_class_counter(void *args)
 		if (ret < 0)
 			return ret;
 		break;
+	case DPA_STATS_CNT_TRAFFIC_MNG:
+		kprm_cls->traffic_mng_params.cnt_sel =
+				uprm_cls->traffic_mng_params.cnt_sel;
+		kprm_cls->traffic_mng_params.src =
+				uprm_cls->traffic_mng_params.src;
+		break;
 	default:
 		break;
 	}
@@ -1428,7 +1454,7 @@ static int do_ioctl_stats_get_counters(void *args)
 
 	/* If counters request is asynchronous */
 	if (prm.request_done) {
-		ret = store_get_cnts_async_params(&prm);
+		ret = store_get_cnts_async_params(&prm, NULL);
 		if (ret < 0)
 			return ret;
 	}
@@ -1439,9 +1465,6 @@ static int do_ioctl_stats_get_counters(void *args)
 		kfree(prm.req_params.cnts_ids);
 		return ret;
 	}
-
-	/* Request was sent, release the array of counter ids */
-	kfree(prm.req_params.cnts_ids);
 
 	/* If request is synchronous copy counters length to user space */
 	if (!prm.request_done) {
@@ -1461,6 +1484,9 @@ static int do_ioctl_stats_get_counters(void *args)
 			ret = -EINVAL;
 		}
 	}
+
+	/* Request was sent, release the array of counter ids */
+	kfree(prm.req_params.cnts_ids);
 
 	return ret;
 }
@@ -1507,9 +1533,14 @@ static int do_ioctl_stats_compat_get_counters(void *args)
 
 	/* If counters request is asynchronous */
 	if (kprm.request_done) {
-		ret = store_get_cnts_async_params(&kprm);
+		struct dpa_stats_async_req_ev *async_request_ev = NULL;
+
+		ret = store_get_cnts_async_params(&kprm, &async_request_ev);
 		if (ret < 0)
 			return ret;
+		/* Store user-space pointer to array of ids */
+		async_request_ev->us_cnt_ids = uprm.req_params.cnts_ids;
+		async_request_ev->cnt_ids_len = uprm.req_params.cnts_ids_len;
 	}
 
 	ret = dpa_stats_get_counters(kprm.req_params,
@@ -1518,9 +1549,6 @@ static int do_ioctl_stats_compat_get_counters(void *args)
 		kfree(kprm.req_params.cnts_ids);
 		return ret;
 	}
-
-	/* Request was sent, release the array of counter ids */
-	kfree(kprm.req_params.cnts_ids);
 
 	/* If request is synchronous copy counters length to user space */
 	if (!kprm.request_done) {
@@ -1532,16 +1560,28 @@ static int do_ioctl_stats_compat_get_counters(void *args)
 					kprm.cnts_len)) {
 				log_err("Cannot copy counter values to storage "
 					"area\n");
+				kfree(kprm.req_params.cnts_ids);
 				return -EINVAL;
 			}
 
 		uprm.cnts_len = kprm.cnts_len;
+
+		if (copy_to_user((compat_ptr)(uprm.req_params.cnts_ids),
+				kprm.req_params.cnts_ids,
+				(kprm.req_params.cnts_ids_len * sizeof(int)))) {
+			log_err("Cannot copy to user the array of requested "
+				"counter ids\n");
+			kfree(kprm.req_params.cnts_ids);
+			return -EINVAL;
+		}
 
 		if (copy_to_user(args, &uprm, sizeof(uprm))) {
 			log_err("Cannot copy to user the counter parameters\n");
 			ret = -EINVAL;
 		}
 	}
+	/* Request was sent, release the array of counter ids */
+	kfree(kprm.req_params.cnts_ids);
 
 	return ret;
 }
@@ -1559,7 +1599,7 @@ static int do_ioctl_stats_reset_counters(void *args)
 	}
 
 	/* Allocate kernel-space memory area to copy the counters ids */
-	cnt_ids = kzalloc(prm.cnts_ids_len * sizeof(int), GFP_KERNEL);
+	cnt_ids = kcalloc(prm.cnts_ids_len, sizeof(int), GFP_KERNEL);
 	if (!cnt_ids) {
 		log_err("Cannot allocate memory for counter ids array\n");
 		return -ENOMEM;
@@ -1608,7 +1648,7 @@ static int do_ioctl_stats_compat_reset_counters(void *args)
 	kprm.cnts_ids_len = uprm.cnts_ids_len;
 
 	/* Allocate kernel-space memory area to copy the counters ids */
-	kprm.cnts_ids = kzalloc(kprm.cnts_ids_len * sizeof(int), GFP_KERNEL);
+	kprm.cnts_ids = kcalloc(kprm.cnts_ids_len, sizeof(int), GFP_KERNEL);
 	if (!kprm.cnts_ids) {
 		log_err("Cannot allocate memory for counter ids array\n");
 		return -ENOMEM;
@@ -1807,7 +1847,8 @@ static long wrp_dpa_stats_do_compat_ioctl(struct file *filp,
 #endif
 
 static long store_get_cnts_async_params(
-		struct ioc_dpa_stats_cnt_request_params *kprm)
+		struct ioc_dpa_stats_cnt_request_params *kprm,
+		struct dpa_stats_async_req_ev **async_request_event)
 {
 	struct dpa_stats_async_req_ev *async_req_ev;
 	struct list_head *async_req_grp;
@@ -1835,11 +1876,17 @@ static long store_get_cnts_async_params(
 	async_req_ev->request_done = kprm->request_done;
 	async_req_ev->storage_area_offset =
 			kprm->req_params.storage_area_offset;
+
+	async_req_ev->ks_cnt_ids = kprm->req_params.cnts_ids;
 	list_add_tail(&async_req_ev->node, async_req_grp);
 	mutex_unlock(&wrp_dpa_stats.async_req_lock);
 
 	/* Replace the application callback with wrapper function */
 	kprm->request_done = do_ioctl_req_done_cb;
+
+	/* If calling function requested, return the pointer to async_req_ev */
+	if (async_request_event)
+		*async_request_event = async_req_ev;
 	return 0;
 }
 
@@ -2041,7 +2088,7 @@ static int copy_pair_descriptor_compatcpy(
 static int copy_class_members(void *objs, unsigned int size, void *dst)
 {
 	/* Allocate memory to store the array of objects */
-	objs = kmalloc(size * sizeof(void *), GFP_KERNEL);
+	objs = kcalloc(size, sizeof(void *), GFP_KERNEL);
 	if (!objs) {
 		log_err("Cannot allocate memory for objects array\n");
 		return -ENOMEM;
@@ -2445,7 +2492,7 @@ static long dpa_stats_ipsec_cls_compatcpy(struct dpa_stats_cls_cnt_ipsec *kprm,
 	kprm->cnt_sel = uprm->cnt_sel;
 
 	/* Allocate memory to store the sa ids array */
-	kprm->sa_id = kmalloc(cls_members * sizeof(int), GFP_KERNEL);
+	kprm->sa_id = kcalloc(cls_members, sizeof(int), GFP_KERNEL);
 	if (!kprm->sa_id) {
 		log_err("Cannot allocate memory for SA ids array\n");
 		return -ENOMEM;
