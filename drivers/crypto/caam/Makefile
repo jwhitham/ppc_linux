@@ -16,3 +16,4 @@ ifeq ($(CONFIG_FSL_QMAN), y)
 endif
 
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI) += caamalg_qi.o
+obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_JR_UIO) += fsl_jr_uio.o
