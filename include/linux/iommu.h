@@ -45,6 +45,7 @@ enum stash_target {
 	IOMMU_ATTR_CACHE_L1 = 1,
 	IOMMU_ATTR_CACHE_L2,
 	IOMMU_ATTR_CACHE_L3,
+	IOMMU_ATTR_CACHE_DSP_L2,
 };
 
 /* This attribute corresponds to IOMMUs capable of generating
@@ -89,9 +90,7 @@ enum omap_index {
 	OMI_QMAN_PRIV,
 	OMI_CAAM,
 	OMI_PMAN,
-	OMI_DMA,
-	OMI_DMA_READI,
-	OMI_MAPLE,
+	OMI_DSP,
 	OMI_MAX,
 };
 
