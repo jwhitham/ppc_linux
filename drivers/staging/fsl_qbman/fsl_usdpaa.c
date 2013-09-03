@@ -475,17 +475,6 @@ static bool check_portal_channel(void *ctx, u32 channel)
 	return false;
 }
 
-__maybe_unused static void dump_frags(void)
-{
-	struct mem_fragment *frag;
-	int i = 0;
-	list_for_each_entry(frag, &mem_list, list) {
-		pr_info("FRAG %d: base 0x%llx len 0x%llx root_len 0x%llx\n",
-			i, frag->base, frag->len, frag->root_len);
-		++i;
-	}
-}
-
 
 __maybe_unused static void dump_frags(void)
 {
