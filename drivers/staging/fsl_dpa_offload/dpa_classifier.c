@@ -3585,7 +3585,7 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 	t_Error error;
 	struct dpa_cls_hm_node *pcurrent, *pnext;
 	t_FmPcdManipParams params;
-	static int index;
+	static int index = 0;
 	static int num_int_nodes;
 
 	BUG_ON(!chain_head);
@@ -3798,7 +3798,7 @@ int remove_hm_chain(struct list_head *chain_head, struct list_head *item)
 	int err = 0;
 	struct dpa_cls_hm_node *pcurrent;
 	t_Error error;
-	static int index;
+	static int index = 0;
 
 	BUG_ON(!chain_head);
 	BUG_ON(!item);
@@ -3828,6 +3828,8 @@ int remove_hm_chain(struct list_head *chain_head, struct list_head *item)
 	list_del(item);
 
 	remove_hm_node(pcurrent);
+
+	index--;
 
 	return err;
 }
