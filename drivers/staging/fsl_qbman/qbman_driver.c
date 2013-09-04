@@ -35,10 +35,21 @@
 
 static __init int qbman_init(void)
 {
+	struct device_node *dn;
+	u32 is_portal_available;
 
 	bman_init();
 	qman_init();
-	if (!qman_have_ccsr()) {
+
+	is_portal_available = 0;
+	for_each_compatible_node(dn, NULL, "fsl,qman-portal") {
+		if (!of_device_is_available(dn))
+			continue;
+		else
+			is_portal_available = 1;
+	}
+
+	if (!qman_have_ccsr() && is_portal_available ) {
 		struct qman_fq fq = {
 				.fqid = 1
 		};
