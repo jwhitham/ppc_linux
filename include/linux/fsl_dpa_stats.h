@@ -46,7 +46,7 @@
 #define DPA_STATS_MAX_NUM_OF_REQUESTS      256
 
 /* Maximum number of single and class counters */
-#define DPA_STATS_MAX_NUM_OF_COUNTERS      128
+#define DPA_STATS_MAX_NUM_OF_COUNTERS      512
 
 /* Maximum number of class counter members */
 #define DPA_STATS_MAX_NUM_OF_CLASS_MEMBERS 256
