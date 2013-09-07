@@ -577,17 +577,11 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	skb_len = skb->len;
 
 	if (use_gro) {
-		gro_result_t gro_result;
-
-		gro_result = napi_gro_receive(&percpu_priv->napi, skb);
-		if (unlikely(gro_result == GRO_DROP)) {
-			percpu_stats->rx_dropped++;
+		if (unlikely(napi_gro_receive(&percpu_priv->napi, skb) ==
+				GRO_DROP))
 			goto packet_dropped;
-		}
-	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP)) {
-		percpu_stats->rx_dropped++;
+	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP))
 		goto packet_dropped;
-	}
 
 	percpu_stats->rx_packets++;
 	percpu_stats->rx_bytes += skb_len;
