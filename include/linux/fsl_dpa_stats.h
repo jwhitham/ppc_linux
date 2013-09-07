@@ -469,7 +469,7 @@ struct dpa_stats_cnt_traffic_mng {
 	enum dpa_stats_cnt_traffic_mng_src src;
 
 	/*
-	 * Depending on the Traffic Manager source, the 'traffic_obj' has a
+	 * Depending on the Traffic Manager source, the 'traffic_mng' has a
 	 * different meaning: it represents a pointer to a structure of type
 	 * 'qm_ceetm_cq' in case the traffic source is a "Class Queue" or a
 	 * pointer to a structure of type 'qm_ceetm_ccg' in case the traffic
@@ -690,7 +690,7 @@ struct dpa_stats_cls_cnt_traffic_mng {
 	enum dpa_stats_cnt_traffic_mng_src src;
 
 	/*
-	 * Depending on the Traffic Manager source, the 'traffic_obj' has a
+	 * Depending on the Traffic Manager source, the 'traffic_mng' has a
 	 * different meaning: it represents an array of pointers to structures
 	 * of type 'qm_ceetm_cq' in case the traffic source is a "Class Queue"
 	 * or an array of pointers to structures of type 'qm_ceetm_ccg' in case
