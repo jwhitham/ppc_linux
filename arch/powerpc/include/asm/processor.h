@@ -218,6 +218,7 @@ struct thread_struct {
 	struct debug_reg debug;
 
 	struct thread_fp_state	fp_state;
+	struct thread_fp_state	*fp_save_area;
 	int		fpexc_mode;	/* floating-point exception mode */
 	unsigned int	align_ctl;	/* alignment handling control */
 #ifdef CONFIG_PPC64
@@ -236,6 +237,7 @@ struct thread_struct {
 	unsigned long	trap_nr;	/* last trap # on this thread */
 #ifdef CONFIG_ALTIVEC
 	struct thread_vr_state vr_state;
+	struct thread_vr_state *vr_save_area;
 	unsigned long	vrsave;
 	int		used_vr;	/* set if process has used altivec */
 #endif /* CONFIG_ALTIVEC */
@@ -363,6 +365,11 @@ extern int set_endian(struct task_struct *tsk, unsigned int val);
 
 extern int get_unalign_ctl(struct task_struct *tsk, unsigned long adr);
 extern int set_unalign_ctl(struct task_struct *tsk, unsigned int val);
+
+extern void load_fp_state(struct thread_fp_state *fp);
+extern void store_fp_state(struct thread_fp_state *fp);
+extern void load_vr_state(struct thread_vr_state *vr);
+extern void store_vr_state(struct thread_vr_state *vr);
 
 static inline unsigned int __unpack_fe01(unsigned long msr_bits)
 {
