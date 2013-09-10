@@ -518,16 +518,6 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
         return NULL;
     }
 
-    {
-        uint32_t svr;
-
-        svr = mfspr(SPRN_SVR);
-
-        if ((svr & ~SVR_VER_IGNORE_MASK) == SVR_B4860_REV2_VALUE) {
-            res.end = 0x80000;
-            res.start = 0;
-        }
-    }
 
     p_LnxWrpFmDev->fmBaseAddr = 0;
     p_LnxWrpFmDev->fmPhysBaseAddr = res.start;
@@ -561,6 +551,13 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
             p_LnxWrpFmDev->fmMuramBaseAddr = 0;
             p_LnxWrpFmDev->fmMuramPhysBaseAddr = res.start;
             p_LnxWrpFmDev->fmMuramMemSize = res.end + 1 - res.start;
+            {
+               uint32_t svr;
+                svr = mfspr(SPRN_SVR);
+
+                if ((svr & ~SVR_VER_IGNORE_MASK) == SVR_B4860_REV2_VALUE)
+                    p_LnxWrpFmDev->fmMuramMemSize = 0x80000;
+            }
         }
     }
 
