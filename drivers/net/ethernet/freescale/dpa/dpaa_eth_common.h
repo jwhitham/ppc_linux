@@ -84,6 +84,11 @@ int dpa_set_mac_address(struct net_device *net_dev, void *addr);
 void dpa_set_rx_mode(struct net_device *net_dev);
 void dpa_set_buffers_layout(struct mac_device *mac_dev,
 		struct dpa_buffer_layout_s *layout);
+struct dpa_bp * __cold __must_check /* __attribute__((nonnull)) */
+dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
+int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
+		size_t count);
+int dpa_bp_shared_port_seed(struct dpa_bp *bp);
 int __attribute__((nonnull))
 dpa_bp_alloc(struct dpa_bp *dpa_bp);
 void __cold __attribute__((nonnull))

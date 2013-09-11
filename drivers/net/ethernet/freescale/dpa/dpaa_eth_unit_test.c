@@ -283,7 +283,7 @@ static int dpa_tx_unit_test(struct net_device *net_dev)
 			}
 
 			/* Was it good? */
-			if (!tx_unit_test_passed) {
+			if (tx_unit_test_passed == false) {
 				pr_err("Test failed:\n");
 				pr_err("size: %d pad: %d head: %p end: %p\n",
 					size, headroom, tx_unit_skb_head,
@@ -364,7 +364,7 @@ void dpa_unit_test_drain_default_pool(struct net_device *net_dev)
 					default_pool->size,
 					DMA_BIDIRECTIONAL);
 
-			dpa_bp->free_buf_cb(phys_to_virt(addr));
+			_dpa_bp_free_buf(phys_to_virt(addr));
 		}
 	} while (num == 8);
 

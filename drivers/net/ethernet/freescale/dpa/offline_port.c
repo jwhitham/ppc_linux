@@ -134,7 +134,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	uint32_t		 queues_count;
 	uint32_t		 crt_fqid_base;
 	uint32_t		 crt_fq_count;
-	bool			frag_enabled = false;
+	bool			frag_enabled = FALSE;
 	struct fm_port_params	oh_port_tx_params;
 	struct fm_port_pcd_param	oh_port_pcd_params;
 	struct dpa_buffer_layout_s buf_layout;
@@ -369,7 +369,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	    buf_layout.manip_extra_space != FRAG_MANIP_SPACE)
 		goto init_port;
 
-	frag_enabled = true;
+	frag_enabled = TRUE;
 	dev_info(dpa_oh_dev, "IP Fragmentation enabled for OH port %d",
 		     *port_id);
 

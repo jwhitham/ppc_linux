@@ -65,12 +65,14 @@ const size_t	 mac_sizeof_priv[] = {
 	[MEMAC] = sizeof(struct mac_priv_s)
 };
 
-static const enet_mode_t _100[] = {
+static const e_EnetMode _100[] =
+{
 	[PHY_INTERFACE_MODE_MII]	= e_ENET_MODE_MII_100,
 	[PHY_INTERFACE_MODE_RMII]	= e_ENET_MODE_RMII_100
 };
 
-static const enet_mode_t _1000[] = {
+static const e_EnetMode _1000[] =
+{
 	[PHY_INTERFACE_MODE_GMII]	= e_ENET_MODE_GMII_1000,
 	[PHY_INTERFACE_MODE_SGMII]	= e_ENET_MODE_SGMII_1000,
 	[PHY_INTERFACE_MODE_TBI]	= e_ENET_MODE_TBI_1000,
@@ -81,7 +83,7 @@ static const enet_mode_t _1000[] = {
 	[PHY_INTERFACE_MODE_RTBI]	= e_ENET_MODE_RTBI_1000
 };
 
-static enet_mode_t __cold __attribute__((nonnull))
+static e_EnetMode __cold __attribute__((nonnull))
 macdev2enetinterface(const struct mac_device *mac_dev)
 {
 	switch (mac_dev->max_speed) {
@@ -96,7 +98,7 @@ macdev2enetinterface(const struct mac_device *mac_dev)
 	}
 }
 
-static void mac_exception(handle_t _mac_dev, e_FmMacExceptions exception)
+static void mac_exception(t_Handle _mac_dev, e_FmMacExceptions exception)
 {
 	struct mac_device	*mac_dev;
 
@@ -106,8 +108,7 @@ static void mac_exception(handle_t _mac_dev, e_FmMacExceptions exception)
 		/* don't flag RX FIFO after the first */
 		fm_mac_set_exception(mac_dev->get_mac_handle(mac_dev),
 		    e_FM_MAC_EX_10G_RX_FIFO_OVFL, false);
-		dev_err(mac_dev->dev, "10G MAC got RX FIFO Error = %x\n",
-				exception);
+		printk(KERN_ERR "10G MAC got RX FIFO Error = %x\n", exception);
 	}
 
 	dev_dbg(mac_dev->dev, "%s:%s() -> %d\n", KBUILD_BASENAME".c", __func__,
@@ -129,7 +130,7 @@ static int __cold init(struct mac_device *mac_dev)
 	memcpy(&param.addr, mac_dev->addr, min(sizeof(param.addr),
 		sizeof(mac_dev->addr)));
 	param.macId		= mac_dev->cell_index;
-	param.h_Fm		= (handle_t)mac_dev->fm;
+	param.h_Fm		= (t_Handle)mac_dev->fm;
 	param.mdioIrq		= NO_IRQ;
 	param.f_Exception	= mac_exception;
 	param.f_Event		= mac_exception;
@@ -160,7 +161,8 @@ static int __cold init(struct mac_device *mac_dev)
 				mac_dev->half_duplex);
 		if (unlikely(_errno < 0))
 			goto _return_fm_mac_free;
-	} else {
+	}
+	else  {
 		_errno = fm_mac_config_reset_on_init(priv->fm_mac, true);
 		if (unlikely(_errno < 0))
 			goto _return_fm_mac_free;
@@ -219,7 +221,7 @@ static int __cold memac_init(struct mac_device *mac_dev)
 	param.enetMode	= macdev2enetinterface(mac_dev);
 	memcpy(&param.addr, mac_dev->addr, sizeof(mac_dev->addr));
 	param.macId		= mac_dev->cell_index;
-	param.h_Fm		= (handle_t)mac_dev->fm;
+	param.h_Fm		= (t_Handle)mac_dev->fm;
 	param.mdioIrq		= NO_IRQ;
 	param.f_Exception	= mac_exception;
 	param.f_Event		= mac_exception;
@@ -282,12 +284,12 @@ static int __cold stop(struct mac_device *mac_dev)
 
 static int __cold set_multi(struct net_device *net_dev)
 {
-	struct dpa_priv_s	*priv;
-	struct mac_device	*mac_dev;
-	struct mac_priv_s	*mac_priv;
+	struct dpa_priv_s       *priv;
+	struct mac_device       *mac_dev;
+	struct mac_priv_s 	*mac_priv;
 	struct mac_address	*old_addr, *tmp;
 	struct netdev_hw_addr	*ha;
-	int			_errno;
+	int 			 _errno;
 
 	priv = netdev_priv(net_dev);
 	mac_dev = priv->mac_dev;
@@ -444,8 +446,9 @@ static int __cold uninit(struct fm_mac_dev *fm_mac_dev)
 	_errno = fm_mac_disable(fm_mac_dev);
 	__errno = fm_mac_free(fm_mac_dev);
 
-	if (unlikely(__errno < 0))
+	if (unlikely(__errno < 0)) {
 		_errno = __errno;
+	}
 
 	return _errno;
 }

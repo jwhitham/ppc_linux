@@ -190,7 +190,7 @@ void __cold dpa_timeout(struct net_device *net_dev)
 	struct dpa_percpu_priv_s *percpu_priv;
 
 	priv = netdev_priv(net_dev);
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
 	if (netif_msg_timer(priv))
 		netdev_crit(net_dev, "Transmit timeout latency: %u ms\n",
@@ -335,7 +335,7 @@ static void dpa_ts_tx_enable(struct net_device *dev)
 	if (mac_dev->ptp_enable)
 		mac_dev->ptp_enable(mac_dev->get_mac_handle(mac_dev));
 
-	priv->ts_tx_en = true;
+	priv->ts_tx_en = TRUE;
 }
 
 static void dpa_ts_tx_disable(struct net_device *dev)
@@ -355,7 +355,7 @@ static void dpa_ts_tx_disable(struct net_device *dev)
 		mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
 #endif
 
-	priv->ts_tx_en = false;
+	priv->ts_tx_en = FALSE;
 }
 
 static void dpa_ts_rx_enable(struct net_device *dev)
@@ -368,7 +368,7 @@ static void dpa_ts_rx_enable(struct net_device *dev)
 	if (mac_dev->ptp_enable)
 		mac_dev->ptp_enable(mac_dev->get_mac_handle(mac_dev));
 
-	priv->ts_rx_en = true;
+	priv->ts_rx_en = TRUE;
 }
 
 static void dpa_ts_rx_disable(struct net_device *dev)
@@ -388,7 +388,7 @@ static void dpa_ts_rx_disable(struct net_device *dev)
 		mac_dev->ptp_disable(mac_dev->get_mac_handle(mac_dev));
 #endif
 
-	priv->ts_rx_en = false;
+	priv->ts_rx_en = FALSE;
 }
 
 static int dpa_ts_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
@@ -474,8 +474,6 @@ int __cold dpa_remove(struct platform_device *of_dev)
 	free_percpu(priv->percpu_priv);
 
 	dpa_bp_free(priv, priv->dpa_bp);
-	devm_kfree(dev, priv->dpa_bp);
-
 	if (priv->buf_layout)
 		devm_kfree(dev, priv->buf_layout);
 
@@ -649,6 +647,159 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 	layout[RX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 }
 
+static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
+{
+	return ((struct dpa_bp *)dpa_bp0)->size -
+			((struct dpa_bp *)dpa_bp1)->size;
+}
+
+struct dpa_bp * __cold __must_check /* __attribute__((nonnull)) */
+dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
+{
+	int			 i, lenp, na, ns;
+	struct device		*dev;
+	struct device_node	*dev_node;
+	const phandle		*phandle_prop;
+	const uint32_t		*bpid;
+	const uint32_t		*bpool_cfg;
+	struct dpa_bp		*dpa_bp;
+
+	dev = &_of_dev->dev;
+
+	/* The default is one, if there's no property */
+	*count = 1;
+
+	/* Get the buffer pools to be used */
+	phandle_prop = of_get_property(dev->of_node,
+					"fsl,bman-buffer-pools", &lenp);
+
+	if (phandle_prop)
+		*count = lenp / sizeof(phandle);
+	else {
+		dev_err(dev,
+			"missing fsl,bman-buffer-pools device tree entry\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	dpa_bp = devm_kzalloc(dev, *count * sizeof(*dpa_bp), GFP_KERNEL);
+	if (unlikely(dpa_bp == NULL)) {
+		dev_err(dev, "devm_kzalloc() failed\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	dev_node = of_find_node_by_path("/");
+	if (unlikely(dev_node == NULL)) {
+		dev_err(dev, "of_find_node_by_path(/) failed\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	na = of_n_addr_cells(dev_node);
+	ns = of_n_size_cells(dev_node);
+
+	for (i = 0; i < *count && phandle_prop; i++) {
+		of_node_put(dev_node);
+		dev_node = of_find_node_by_phandle(phandle_prop[i]);
+		if (unlikely(dev_node == NULL)) {
+			dev_err(dev, "of_find_node_by_phandle() failed\n");
+			return ERR_PTR(-EFAULT);
+		}
+
+		if (unlikely(!of_device_is_compatible(dev_node, "fsl,bpool"))) {
+			dev_err(dev,
+				"!of_device_is_compatible(%s, fsl,bpool)\n",
+				dev_node->full_name);
+			dpa_bp = ERR_PTR(-EINVAL);
+			goto _return_of_node_put;
+		}
+
+		bpid = of_get_property(dev_node, "fsl,bpid", &lenp);
+		if ((bpid == NULL) || (lenp != sizeof(*bpid))) {
+			dev_err(dev, "fsl,bpid property not found.\n");
+			dpa_bp = ERR_PTR(-EINVAL);
+			goto _return_of_node_put;
+		}
+		dpa_bp[i].bpid = *bpid;
+
+		bpool_cfg = of_get_property(dev_node, "fsl,bpool-ethernet-cfg",
+					&lenp);
+		if (bpool_cfg && (lenp == (2 * ns + na) * sizeof(*bpool_cfg))) {
+			const uint32_t *seed_pool;
+
+			dpa_bp[i].config_count =
+				(int)of_read_number(bpool_cfg, ns);
+			dpa_bp[i].size	= of_read_number(bpool_cfg + ns, ns);
+			dpa_bp[i].paddr	=
+				of_read_number(bpool_cfg + 2 * ns, na);
+
+			seed_pool = of_get_property(dev_node,
+					"fsl,bpool-ethernet-seeds", &lenp);
+			dpa_bp[i].seed_pool = !!seed_pool;
+
+		} else {
+			dev_err(dev,
+				"Missing/invalid fsl,bpool-ethernet-cfg device tree entry for node %s\n",
+				dev_node->full_name);
+			dpa_bp = ERR_PTR(-EINVAL);
+			goto _return_of_node_put;
+		}
+	}
+
+	sort(dpa_bp, *count, sizeof(*dpa_bp), dpa_bp_cmp, NULL);
+
+	return dpa_bp;
+
+_return_of_node_put:
+	if (dev_node)
+		of_node_put(dev_node);
+
+	return dpa_bp;
+}
+
+int dpa_bp_shared_port_seed(struct dpa_bp *bp)
+{
+	/* In MAC-less and Shared-MAC scenarios the physical
+	 * address of the buffer pool in device tree is set
+	 * to 0 to specify that another entity (USDPAA) will
+	 * allocate and seed the buffers
+	 */
+	if (!bp->paddr)
+		return 0;
+
+	/* allocate memory region for buffers */
+	devm_request_mem_region(bp->dev, bp->paddr,
+			bp->size * bp->config_count, KBUILD_MODNAME);
+	bp->vaddr = devm_ioremap_prot(bp->dev, bp->paddr,
+			bp->size * bp->config_count, 0);
+	if (bp->vaddr == NULL) {
+		pr_err("Could not map memory for pool %d\n", bp->bpid);
+		return -EIO;
+	}
+
+	/* seed pool with buffers from that memory region */
+	if (bp->seed_pool) {
+		int count = bp->target_count;
+		size_t addr = bp->paddr;
+
+		while (count) {
+			struct bm_buffer bufs[8];
+			int num_bufs = 0;
+
+			do {
+				BUG_ON(addr > 0xffffffffffffull);
+				bufs[num_bufs].bpid = bp->bpid;
+				bm_buffer_set64(&bufs[num_bufs++], addr);
+				addr += bp->size;
+
+			} while (--count && (num_bufs < 8));
+
+			while (bman_release(bp->pool, bufs, num_bufs, 0))
+				cpu_relax();
+		}
+	}
+
+	return 0;
+}
+
 int __attribute__((nonnull))
 dpa_bp_alloc(struct dpa_bp *dpa_bp)
 {
@@ -710,27 +861,37 @@ pdev_register_failed:
 	return err;
 }
 
+int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
+		size_t count)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	int i;
+
+	priv->dpa_bp = dpa_bp;
+	priv->bp_count = count;
+
+	for (i = 0; i < count; i++) {
+		int err;
+		err = dpa_bp_alloc(&dpa_bp[i]);
+		if (err < 0) {
+			dpa_bp_free(priv, dpa_bp);
+			priv->dpa_bp = NULL;
+			return err;
+		}
+	}
+
+	return 0;
+}
+
 void dpa_bp_drain(struct dpa_bp *bp)
 {
-	int ret, num = 8;
+	int num;
 
 	do {
 		struct bm_buffer bmb[8];
 		int i;
 
-		ret = bman_acquire(bp->pool, bmb, 8, 0);
-		if (ret < 0) {
-			if (num == 8) {
-				/* we have less than 8 buffers left;
-				 * drain them one by one
-				 */
-				num = 1;
-				continue;
-			} else {
-				/* Pool is fully drained */
-				break;
-			}
-		}
+		num = bman_acquire(bp->pool, bmb, 8, 0);
 
 		for (i = 0; i < num; i++) {
 			dma_addr_t addr = bm_buf_addr(&bmb[i]);
@@ -738,9 +899,9 @@ void dpa_bp_drain(struct dpa_bp *bp)
 			dma_unmap_single(bp->dev, addr, bp->size,
 					DMA_BIDIRECTIONAL);
 
-			bp->free_buf_cb(phys_to_virt(addr));
+			_dpa_bp_free_buf(phys_to_virt(addr));
 		}
-	} while (ret > 0);
+	} while (num == 8);
 }
 
 static void __cold __attribute__((nonnull))
@@ -751,14 +912,11 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 	if (!atomic_dec_and_test(&bp->refs))
 		return;
 
-	if (bp->free_buf_cb)
-		dpa_bp_drain(bp);
+	if (bp->drain_cb)
+		bp->drain_cb(bp);
 
 	dpa_bp_array[bp->bpid] = 0;
 	bman_free_pool(bp->pool);
-
-	if (bp->dev)
-		platform_device_unregister(to_platform_device(bp->dev));
 }
 
 void __cold __attribute__((nonnull))
@@ -1522,7 +1680,7 @@ void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	struct sk_buff *skb, struct qm_fd *fd, char *parse_results)
 {
-	fm_prs_result_t *parse_result;
+	t_FmPrsResult *parse_result;
 	struct iphdr *iph;
 	struct ipv6hdr *ipv6h = NULL;
 	int l4_proto;
@@ -1539,7 +1697,7 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	/* Fill in some fields of the Parse Results array, so the FMan
 	 * can find them as if they came from the FMan Parser.
 	 */
-	parse_result = (fm_prs_result_t *)parse_results;
+	parse_result = (t_FmPrsResult *)parse_results;
 
 	/* If we're dealing with VLAN, get the real Ethernet type */
 	if (ethertype == ETH_P_8021Q) {

@@ -132,7 +132,7 @@ uint32_t dpa_bp_default_buf_size_get(void)
 	return default_buf_size;
 }
 
-int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
+void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 {
 	int i;
 	dpa_bp->size = default_buf_size;
@@ -144,7 +144,6 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 		for (j = 0; j < dpa_bp->target_count; j += 8)
 			dpa_bp_add_8(dpa_bp, i);
 	}
-	return 0;
 }
 
 void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp)
@@ -162,8 +161,9 @@ void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp)
 /* Add buffers/(skbuffs) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-int dpaa_eth_refill_bpools(struct dpa_bp* dpa_bp)
+int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
+	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
 	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	int count = *countptr;
 	/* this function is called in softirq context;
@@ -305,7 +305,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	dma_addr_t addr = qm_fd_addr(fd);
 	u32 fd_status = fd->status;
 	unsigned int skb_len;
-	fm_prs_result_t *parse_result;
+	t_FmPrsResult *parse_result;
 	int use_gro = net_dev->features & NETIF_F_GRO;
 
 	skbh = (struct sk_buff **)phys_to_virt(addr);
@@ -360,7 +360,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	skb_len = skb->len;
 
 	/* Validate the skb csum and figure out whether GRO is appropriate */
-	parse_result = (fm_prs_result_t *)((u8 *)skbh + DPA_RX_PRIV_DATA_SIZE);
+	parse_result = (t_FmPrsResult *)((u8 *)skbh + DPA_RX_PRIV_DATA_SIZE);
 	_dpa_process_parse_results(parse_result, fd, skb, &use_gro);
 
 #ifdef CONFIG_FSL_DPAA_TS
@@ -619,7 +619,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		goto done;
 
 	priv = netdev_priv(net_dev);
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 	percpu_stats = &percpu_priv->stats;
 	countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 

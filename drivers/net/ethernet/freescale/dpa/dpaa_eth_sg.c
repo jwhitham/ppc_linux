@@ -98,7 +98,8 @@ int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 	}
 
 release_bufs:
-	/* Release the buffers. In case bman is busy, keep trying
+	/*
+	 * Release the buffers. In case bman is busy, keep trying
 	 * until successful. bman_release() is guaranteed to succeed
 	 * in a reasonable amount of time
 	 */
@@ -112,7 +113,8 @@ bail_out:
 	WARN_ONCE(1, "Memory allocation failure on Rx\n");
 
 	bm_buffer_set64(&bmb[i], 0);
-	/* Avoid releasing a completely null buffer; bman_release() requires
+	/*
+	 * Avoid releasing a completely null buffer; bman_release() requires
 	 * at least one buffer.
 	 */
 	if (likely(i))
@@ -130,7 +132,7 @@ void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
 	*count_ptr += _dpa_bp_add_8_bufs(dpa_bp);
 }
 
-int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
+void dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 {
 	int i;
 
@@ -138,41 +140,42 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	for_each_online_cpu(i) {
 		int j;
 
-		/* Although we access another CPU's counters here
+		/*
+		 * Although we access another CPU's counters here
 		 * we do it at boot time so it is safe
 		 */
 		for (j = 0; j < dpa_bp->config_count; j += 8)
 			dpa_bp_add_8_bufs(dpa_bp, i);
 	}
-	return 0;
 }
 
-/* Add buffers/(pages) for Rx processing whenever bpool count falls below
+/*
+ * Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp)
+int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
 {
-	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
+	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
+	int *countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
 	int count = *countptr;
 	int new_bufs;
 
-	if (unlikely(count < CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD)) {
-		do {
-			new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
-			if (unlikely(!new_bufs)) {
-				/* Avoid looping forever if we've temporarily
-				 * run out of memory. We'll try again at the
-				 * next NAPI cycle.
-				 */
-				break;
-			}
-			count += new_bufs;
-		} while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT);
-
-		*countptr = count;
-		if (unlikely(count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
-			return -ENOMEM;
+	/* Add pages to the buffer pool */
+	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
+		new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
+		if (unlikely(!new_bufs)) {
+			/* Avoid looping forever if we've temporarily
+			 * run out of memory. We'll try again at the next
+			 * NAPI cycle.
+			 */
+			break;
+		}
+		count += new_bufs;
 	}
+	*countptr = count;
+
+	if (unlikely(*countptr < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
+		return -ENOMEM;
 
 	return 0;
 }
@@ -207,7 +210,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	nr_frags = skb_shinfo(skb)->nr_frags;
 
 	if (fd->format == qm_fd_sg) {
-		/* The sgt buffer has been allocated with netdev_alloc_frag(),
+		/*
+		 * The sgt buffer has been allocated with netdev_alloc_frag(),
 		 * it's from lowmem.
 		 */
 		sgt = phys_to_virt(addr + dpa_fd_offset(fd));
@@ -238,7 +242,8 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 					sgt[i].length, dma_dir);
 		}
 
-		/* TODO: dpa_bp_recycle_frag() ?
+		/*
+		 * TODO: dpa_bp_recycle_frag() ?
 		 * We could put these in the pool, since we allocated them
 		 * and we know they're not used by anyone else
 		 */
@@ -272,17 +277,17 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 #ifndef CONFIG_FSL_DPAA_TS
 static bool dpa_skb_is_recyclable(struct sk_buff *skb)
 {
-	/* No recycling possible if skb buffer is kmalloc'ed  */
-	if (skb->head_frag == 0)
-		return false;
-
-	/* or if it's an userspace buffer */
+	/* No recycling possible if skb has an userspace buffer */
 	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY)
 		return false;
 
 	/* or if it's cloned or shared */
 	if (skb_shared(skb) || skb_cloned(skb) ||
 	    skb->fclone != SKB_FCLONE_UNAVAILABLE)
+		return false;
+
+	/* or if it's kmalloc'ed  */
+	if (skb->head_frag == 0)
 		return false;
 
 	return true;
@@ -320,7 +325,8 @@ static bool dpa_buf_is_recyclable(struct sk_buff *skb,
 #endif /* CONFIG_FSL_DPAA_TS */
 
 
-/* Build a linear skb around the received buffer.
+/*
+ * Build a linear skb around the received buffer.
  * We are guaranteed there is enough room at the end of the data buffer to
  * accomodate the shared info area of the skb.
  */
@@ -331,7 +337,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	ssize_t fd_off = dpa_fd_offset(fd);
 	void *vaddr;
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
-	const fm_prs_result_t *parse_results;
+	const t_FmPrsResult *parse_results;
 	struct sk_buff *skb = NULL;
 
 	vaddr = phys_to_virt(addr);
@@ -361,8 +367,7 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	skb_put(skb, dpa_fd_length(fd));
 
 	/* Peek at the parse results for csum validation */
-	parse_results = (const fm_prs_result_t *)(vaddr +
-				DPA_RX_PRIV_DATA_SIZE);
+	parse_results = (const t_FmPrsResult *)(vaddr + DPA_RX_PRIV_DATA_SIZE);
 	_dpa_process_parse_results(parse_results, fd, skb, use_gro);
 
 #ifdef CONFIG_FSL_DPAA_TS
@@ -374,7 +379,8 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 }
 
 
-/* Build an skb with the data of the first S/G entry in the linear portion and
+/*
+ * Build an skb with the data of the first S/G entry in the linear portion and
  * the rest of the frame as skb fragments.
  *
  * The page fragment holding the S/G Table is recycled here.
@@ -392,7 +398,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	int frag_offset, frag_len;
 	int page_offset;
 	int i;
-	const fm_prs_result_t *parse_results;
+	const t_FmPrsResult *parse_results;
 	struct sk_buff *skb = NULL;
 	int *count_ptr;
 
@@ -448,7 +454,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			 * Context in the buffer containing the sgt.
 			 * Inspect the parse results before anything else.
 			 */
-			parse_results = (const fm_prs_result_t *)(vaddr +
+			parse_results = (const t_FmPrsResult *)(vaddr +
 						DPA_RX_PRIV_DATA_SIZE);
 			_dpa_process_parse_results(parse_results, fd, skb,
 						   use_gro);
@@ -462,7 +468,8 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 		} else {
 			dma_unmap_single(dpa_bp->dev, sg_addr, dpa_bp->size,
 				DMA_BIDIRECTIONAL);
-			/* Not the first S/G entry; all data from buffer will
+			/*
+			 * Not the first S/G entry; all data from buffer will
 			 * be added in an skb fragment; fragment index is offset
 			 * by one since first S/G entry was incorporated in the
 			 * linear part of the skb.
@@ -570,11 +577,17 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	skb_len = skb->len;
 
 	if (use_gro) {
-		if (unlikely(napi_gro_receive(&percpu_priv->napi, skb) ==
-				GRO_DROP))
+		gro_result_t gro_result;
+
+		gro_result = napi_gro_receive(&percpu_priv->napi, skb);
+		if (unlikely(gro_result == GRO_DROP)) {
+			percpu_stats->rx_dropped++;
 			goto packet_dropped;
-	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP))
+		}
+	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP)) {
+		percpu_stats->rx_dropped++;
 		goto packet_dropped;
+	}
 
 	percpu_stats->rx_packets++;
 	percpu_stats->rx_bytes += skb_len;
@@ -602,43 +615,44 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	int *count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	unsigned char *rec_buf_start;
 
+	/* We are guaranteed to have at least tx_headroom bytes */
+	skbh = (struct sk_buff **)(skb->data - priv->tx_headroom);
+	fd->offset = priv->tx_headroom;
+
 #ifndef CONFIG_FSL_DPAA_TS
 	/* Check recycling conditions; only if timestamp support is not
 	 * enabled, otherwise we need the fd back on tx confirmation
 	 */
 
-	/* We can recycle the buffer if:
-	 * - the pool is not full
-	 * - the buffer meets the skb recycling conditions
-	 * - the buffer meets our own (size, offset, align) conditions
-	 */
-	if (likely((*count_ptr < dpa_bp->target_count) &&
-		   dpa_skb_is_recyclable(skb) &&
-		   dpa_buf_is_recyclable(skb, dpa_bp->size,
-					 priv->tx_headroom, &rec_buf_start))) {
-		/* Buffer is recyclable; use the new start address */
-		skbh = (struct sk_buff **)rec_buf_start;
+	/* We cannot recycle the buffer if the pool is already full */
+	if (unlikely(*count_ptr >= dpa_bp->target_count))
+		goto no_recycle;
 
-		/* and set fd parameters and DMA mapping direction */
-		fd->cmd |= FM_FD_CMD_FCO;
-		fd->bpid = dpa_bp->bpid;
-		BUG_ON(skb->data - rec_buf_start > DPA_MAX_FD_OFFSET);
-		fd->offset = (uint16_t)(skb->data - rec_buf_start);
-		dma_dir = DMA_BIDIRECTIONAL;
-	} else
+	/* ... or if the skb doesn't meet the recycling criteria */
+	if (unlikely(!dpa_skb_is_recyclable(skb)))
+		goto no_recycle;
+
+	/* ... or if buffer recycling conditions are not met */
+	if (unlikely(!dpa_buf_is_recyclable(skb, dpa_bp->size,
+			priv->tx_headroom, &rec_buf_start)))
+		goto no_recycle;
+
+	/* Buffer is recyclable; use the new start address */
+	skbh = (struct sk_buff **)rec_buf_start;
+
+	/* and set fd parameters and DMA mapping direction */
+	fd->cmd |= FM_FD_CMD_FCO;
+	fd->bpid = dpa_bp->bpid;
+	BUG_ON(skb->data - rec_buf_start > DPA_MAX_FD_OFFSET);
+	fd->offset = (uint16_t)(skb->data - rec_buf_start);
+	dma_dir = DMA_BIDIRECTIONAL;
 #endif
-	{
-		/* Not recyclable.
-		 * We are guaranteed to have at least tx_headroom bytes
-		 * available, so just use that for offset.
-		 */
-		skbh = (struct sk_buff **)(skb->data - priv->tx_headroom);
-		fd->offset = priv->tx_headroom;
-	}
 
+no_recycle:
 	*skbh = skb;
 
-	/* Enable L3/L4 hardware checksum computation.
+	/*
+	 * Enable L3/L4 hardware checksum computation.
 	 *
 	 * We must do this before dma_map_single(DMA_TO_DEVICE), because we may
 	 * need to write into the skb.
@@ -651,7 +665,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 		return err;
 	}
 
-	/* Fill in the rest of the FD fields */
+	/* Fill in the FD */
 	fd->format = qm_fd_contig;
 	fd->length20 = skb->len;
 
@@ -696,7 +710,8 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		return -ENOMEM;
 	}
 
-	/* Enable L3/L4 hardware checksum computation.
+	/*
+	 * Enable L3/L4 hardware checksum computation.
 	 *
 	 * We must do this before dma_map_single(DMA_TO_DEVICE), because we may
 	 * need to write into the skb.
@@ -796,7 +811,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 	percpu_stats = &percpu_priv->stats;
-	countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
+	countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
 
 	clear_fd(&fd);
 
@@ -811,7 +826,8 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 #endif /* CONFIG_FSL_DPAA_TS */
 
-	/* MAX_SKB_FRAGS is larger than our DPA_SGT_MAX_ENTRIES; make sure
+	/*
+	 * MAX_SKB_FRAGS is larger than our DPA_SGT_MAX_ENTRIES; make sure
 	 * we don't feed FMan with more fragments than it supports.
 	 * Btw, we're using the first sgt entry to store the linear part of
 	 * the skb, so we're one extra frag short.
@@ -822,7 +838,8 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		err = skb_to_sg_fd(priv, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
 	} else {
-		/* Make sure we have enough headroom to accomodate private
+		/*
+		 * Make sure we have enough headroom to accomodate private
 		 * data, parse results, etc. Normally this shouldn't happen if
 		 * we're here via the standard kernel stack.
 		 */
@@ -839,7 +856,8 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 			skb = skb_new;
 		}
 
-		/* We're going to store the skb backpointer at the beginning
+		/*
+		 * We're going to store the skb backpointer at the beginning
 		 * of the data buffer, so we need a privately owned skb
 		 */
 
@@ -850,7 +868,8 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 			skb = nskb;
 			/* skb_copy() has now linearized the skbuff. */
 		} else if (unlikely(nonlinear)) {
-			/* We are here because the egress skb contains
+			/*
+			 * We are here because the egress skb contains
 			 * more fragments than we support. In this case,
 			 * we have no choice but to linearize it ourselves.
 			 */

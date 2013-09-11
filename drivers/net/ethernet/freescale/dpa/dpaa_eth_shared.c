@@ -44,7 +44,6 @@
 #include <linux/fsl_qman.h>
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
-#include "dpaa_eth_base.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
 
 /* forward declarations */
@@ -237,7 +236,7 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(IS_ERR(dpa_bp));
@@ -371,7 +370,7 @@ shared_tx_error_dqrr(struct qman_portal                *portal,
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(IS_ERR(dpa_bp));
 
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
 	if (netif_msg_hw(priv) && net_ratelimit())
 		netdev_warn(net_dev, "FD status = 0x%08x\n",
@@ -404,7 +403,7 @@ shared_tx_default_dqrr(struct qman_portal              *portal,
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(IS_ERR(dpa_bp));
 
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
 	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
@@ -435,7 +434,7 @@ static void shared_ern(struct qman_portal	*portal,
 
 	net_dev = dpa_fq->net_dev;
 	priv = netdev_priv(net_dev);
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv,  smp_processor_id());
 
 	dpa_fd_release(net_dev, &msg->ern.fd);
 
@@ -454,10 +453,10 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	int queue_mapping;
 	int err;
 	void *dpa_bp_vaddr;
-	fm_prs_result_t parse_results;
+	t_FmPrsResult parse_results;
 
 	priv = netdev_priv(net_dev);
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv = per_cpu_ptr(priv->percpu_priv, smp_processor_id());
 
 	memset(&fd, 0, sizeof(fd));
 	fd.format = qm_fd_contig;
@@ -704,8 +703,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
-	printk(KERN_INFO "fsl_dpa_shared: Probed shared interface %s\n",
-			net_dev->name);
+	printk(KERN_INFO "fsl_dpa_shared: Probed shared interface %s\n", net_dev->name);
 
 	return 0;
 
@@ -758,8 +756,7 @@ static int __init __cold dpa_shared_load(void)
 {
 	int	 _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": "
-		DPA_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* Initialize dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();

@@ -37,8 +37,7 @@
 
 #include "dpaa_eth.h"
 
-static int __cold dpa_get_settings(struct net_device *net_dev,
-		struct ethtool_cmd *et_cmd)
+static int __cold dpa_get_settings(struct net_device *net_dev, struct ethtool_cmd *et_cmd)
 {
 	int			 _errno;
 	struct dpa_priv_s	*priv;
@@ -50,8 +49,8 @@ static int __cold dpa_get_settings(struct net_device *net_dev,
 		return -ENODEV;
 	}
 	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
-		netdev_dbg(net_dev, "phy device not initialized\n");
-		return 0;
+		netdev_err(net_dev, "phy device not initialized\n");
+		return -ENODEV;
 	}
 
 	_errno = phy_ethtool_gset(priv->mac_dev->phy_dev, et_cmd);
@@ -61,8 +60,7 @@ static int __cold dpa_get_settings(struct net_device *net_dev,
 	return _errno;
 }
 
-static int __cold dpa_set_settings(struct net_device *net_dev,
-		struct ethtool_cmd *et_cmd)
+static int __cold dpa_set_settings(struct net_device *net_dev, struct ethtool_cmd *et_cmd)
 {
 	int			 _errno;
 	struct dpa_priv_s	*priv;
@@ -85,8 +83,7 @@ static int __cold dpa_set_settings(struct net_device *net_dev,
 	return _errno;
 }
 
-static void __cold dpa_get_drvinfo(struct net_device *net_dev,
-		struct ethtool_drvinfo *drvinfo)
+static void __cold dpa_get_drvinfo(struct net_device *net_dev, struct ethtool_drvinfo *drvinfo)
 {
 	int		 _errno;
 
@@ -94,18 +91,16 @@ static void __cold dpa_get_drvinfo(struct net_device *net_dev,
 		sizeof(drvinfo->driver) - 1)[sizeof(drvinfo->driver)-1] = 0;
 	strncpy(drvinfo->version, VERSION,
 		sizeof(drvinfo->driver) - 1)[sizeof(drvinfo->version)-1] = 0;
-	_errno = snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version),
-			  "%X", 0);
+	_errno = snprintf(drvinfo->fw_version, sizeof(drvinfo->fw_version), "%X", 0);
 
-	if (unlikely(_errno >= sizeof(drvinfo->fw_version))) {
-		/* Truncated output */
+	if (unlikely(_errno >= sizeof(drvinfo->fw_version))) {	/* Truncated output */
 		netdev_notice(net_dev, "snprintf() = %d\n", _errno);
 	} else if (unlikely(_errno < 0)) {
 		netdev_warn(net_dev, "snprintf() = %d\n", _errno);
 		memset(drvinfo->fw_version, 0, sizeof(drvinfo->fw_version));
 	}
 	strncpy(drvinfo->bus_info, dev_name(net_dev->dev.parent->parent),
-		sizeof(drvinfo->bus_info)-1)[sizeof(drvinfo->bus_info)-1] = 0;
+		sizeof(drvinfo->bus_info) - 1)[sizeof(drvinfo->bus_info)-1] = 0;
 }
 
 uint32_t __cold dpa_get_msglevel(struct net_device *net_dev)
@@ -145,8 +140,7 @@ int __cold dpa_nway_reset(struct net_device *net_dev)
 	return _errno;
 }
 
-void __cold dpa_get_ringparam(struct net_device *net_dev,
-		struct ethtool_ringparam *et_ringparam)
+void __cold dpa_get_ringparam(struct net_device *net_dev, struct ethtool_ringparam *et_ringparam)
 {
 	et_ringparam->rx_max_pending	   = 0;
 	et_ringparam->rx_mini_max_pending  = 0;
@@ -159,8 +153,7 @@ void __cold dpa_get_ringparam(struct net_device *net_dev,
 	et_ringparam->tx_pending	   = 0;
 }
 
-void __cold dpa_get_pauseparam(struct net_device *net_dev,
-		struct ethtool_pauseparam *et_pauseparam)
+void __cold dpa_get_pauseparam(struct net_device *net_dev, struct ethtool_pauseparam *et_pauseparam)
 {
 	struct dpa_priv_s	*priv;
 
@@ -180,8 +173,7 @@ void __cold dpa_get_pauseparam(struct net_device *net_dev,
 	et_pauseparam->tx_pause	= priv->mac_dev->tx_pause;
 }
 
-int __cold dpa_set_pauseparam(struct net_device *net_dev,
-		struct ethtool_pauseparam *et_pauseparam)
+int __cold dpa_set_pauseparam(struct net_device *net_dev, struct ethtool_pauseparam *et_pauseparam)
 {
 	struct dpa_priv_s	*priv;
 	int _errno;

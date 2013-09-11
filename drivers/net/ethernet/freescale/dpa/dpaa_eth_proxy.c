@@ -39,7 +39,6 @@
 #include <linux/of_platform.h>
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
-#include "dpaa_eth_base.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
 
 #define DPA_DESCRIPTION "FSL DPAA Proxy initialization driver"
@@ -159,8 +158,7 @@ static int __init __cold dpa_proxy_load(void)
 {
 	int	 _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": "
-		DPA_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": " DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* Initialize dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
