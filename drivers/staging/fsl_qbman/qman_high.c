@@ -87,6 +87,7 @@ struct qman_portal {
 	struct qm_portal p;
 	unsigned long bits; /* PORTAL_BITS_*** - dynamic, strictly internal */
 	unsigned long irq_sources;
+	u32 use_eqcr_ci_stashing;
 	u32 slowpoll;	/* only used when interrupts are off */
 	struct qman_fq *vdqcr_owned; /* only 1 volatile dequeue at a time */
 #ifdef CONFIG_FSL_DPA_CAN_WAIT_SYNC
@@ -377,7 +378,7 @@ struct qman_portal *qman_create_portal(
 
 	__p = &portal->p;
 
-	portal->p.eqcr.use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ?
+	portal->use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ?
 								1 : 0);
 
 	/* prep the low-level portal struct with the mapped addresses from the
@@ -390,7 +391,7 @@ struct qman_portal *qman_create_portal(
 	 * and stash with high-than-DQRR priority.
 	 */
 	if (qm_eqcr_init(__p, qm_eqcr_pvb,
-			portal->p.eqcr.use_eqcr_ci_stashing ? 3 : 0, 1)) {
+			portal->use_eqcr_ci_stashing ? 3 : 0, 1)) {
 		pr_err("Qman EQCR initialisation failed\n");
 		goto fail_eqcr;
 	}
@@ -1368,9 +1369,6 @@ int qman_init_fq(struct qman_fq *fq, u32 flags, struct qm_mcc_initfq *opts)
 		return -EINVAL;
 #endif
 	if (opts && (opts->we_mask & QM_INITFQ_WE_OAC)) {
-		/* OAC not supported on rev1.0 */
-		if (unlikely(qman_ip_rev == QMAN_REV10))
-			return -EINVAL;
 		/* And can't be set at the same time as TDTHRESH */
 		if (opts->we_mask & QM_INITFQ_WE_TDTHRESH)
 			return -EINVAL;
@@ -1988,7 +1986,7 @@ static inline struct qm_eqcr_entry *try_eq_start(struct qman_portal **p,
 		(*p)->eqci_owned = fq;
 	}
 #endif
-	if ((*p)->p.eqcr.use_eqcr_ci_stashing) {
+	if ((*p)->use_eqcr_ci_stashing) {
 		/*
 		 * The stashing case is easy, only update if we need to in
 		 * order to try and liberate ring entries.
@@ -2026,34 +2024,7 @@ static inline struct qm_eqcr_entry *try_eq_start(struct qman_portal **p,
 #else
 	eq->tag = (u32)(uintptr_t)fq;
 #endif
-	/* From p4080 rev1 -> rev2, the FD struct's address went from 48-bit to
-	 * 40-bit but rev1 chips will still interpret it as 48-bit, meaning we
-	 * have to scrub the upper 8-bits, just in case the user left noise in
-	 * there. Doing this selectively via a run-time check of the h/w
-	 * revision (as we do for most errata, for example) is too slow in this
-	 * critical path code. The most inexpensive way to handle this is just
-	 * to reinterpret the FD as 4 32-bit words and to mask the first word
-	 * appropriately, irrespecitive of the h/w revision. The struct fields
-	 * corresponding to this word are;
-	 *     u8 dd:2;
-	 *     u8 liodn_offset:6;
-	 *     u8 bpid;
-	 *     u8 eliodn_offset:4;
-	 *     u8 __reserved:4;
-	 *     u8 addr_hi;
-	 * So we mask this word with 0xc0ff00ff, which implicitly scrubs out
-	 * liodn_offset, eliodn_offset, and __reserved - the latter two fields
-	 * are interpreted as the 8 msbits of the 48-bit address in the case of
-	 * rev1.
-	 */
-	{
-		const u32 *src = (const u32 *)fd;
-		u32 *dest = (u32 *)&eq->fd;
-		dest[0] = src[0] & 0xc0ff00ff;
-		dest[1] = src[1];
-		dest[2] = src[2];
-		dest[3] = src[3];
-	}
+	eq->fd = *fd;
 	return eq;
 }
 
@@ -2169,6 +2140,47 @@ int qman_enqueue_orp(struct qman_fq *fq, const struct qm_fd *fd, u32 flags,
 }
 EXPORT_SYMBOL(qman_enqueue_orp);
 
+int qman_enqueue_precommit(struct qman_fq *fq, const struct qm_fd *fd,
+		u32 flags, qman_cb_precommit cb, void *cb_arg)
+{
+	struct qman_portal *p;
+	struct qm_eqcr_entry *eq;
+	unsigned long irqflags __maybe_unused;
+
+#ifdef CONFIG_FSL_DPA_CAN_WAIT
+	if (flags & QMAN_ENQUEUE_FLAG_WAIT)
+		eq = wait_eq_start(&p, &irqflags, fq, fd, flags);
+	else
+#endif
+	eq = try_eq_start(&p, &irqflags, fq, fd, flags);
+	if (!eq)
+		return -EBUSY;
+	/* invoke user supplied callback function before writing commit verb */
+	if (cb(cb_arg)) {
+		PORTAL_IRQ_UNLOCK(p, irqflags);
+		put_affine_portal();
+		return -EINVAL;
+	}
+	/* Note: QM_EQCR_VERB_INTERRUPT == QMAN_ENQUEUE_FLAG_WAIT_SYNC */
+	qm_eqcr_pvb_commit(&p->p, QM_EQCR_VERB_CMD_ENQUEUE |
+		(flags & (QM_EQCR_VERB_COLOUR_MASK | QM_EQCR_VERB_INTERRUPT)));
+	/* Factor the below out, it's used from qman_enqueue_orp() too */
+	PORTAL_IRQ_UNLOCK(p, irqflags);
+	put_affine_portal();
+#ifdef CONFIG_FSL_DPA_CAN_WAIT_SYNC
+	if (unlikely((flags & QMAN_ENQUEUE_FLAG_WAIT) &&
+			(flags & QMAN_ENQUEUE_FLAG_WAIT_SYNC))) {
+		if (flags & QMAN_ENQUEUE_FLAG_WAIT_INT)
+			wait_event_interruptible(affine_queue,
+					(p->eqci_owned != fq));
+		else
+			wait_event(affine_queue, (p->eqci_owned != fq));
+	}
+#endif
+	return 0;
+}
+EXPORT_SYMBOL(qman_enqueue_precommit);
+
 int qman_modify_cgr(struct qman_cgr *cgr, u32 flags,
 			struct qm_mcc_initcgr *opts)
 {
@@ -2179,14 +2191,6 @@ int qman_modify_cgr(struct qman_cgr *cgr, u32 flags,
 	u8 res;
 	u8 verb = QM_MCC_VERB_MODIFYCGR;
 
-	/* frame mode not supported on rev1.0 */
-	if (unlikely(qman_ip_rev == QMAN_REV10)) {
-		if (opts && (opts->we_mask & QM_CGR_WE_MODE) &&
-				opts->cgr.mode == QMAN_CGR_MODE_FRAME) {
-			put_affine_portal();
-			return -EIO;
-		}
-	}
 	PORTAL_IRQ_LOCK(p, irqflags);
 	mcc = qm_mc_start(&p->p);
 	if (opts)

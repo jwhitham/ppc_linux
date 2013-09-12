@@ -89,19 +89,6 @@ config FSL_QMAN
 
 if FSL_QMAN
 
-config FSL_QMAN_BUG_AND_FEATURE_REV1
-	bool "workarounds for errata and missing features in p4080 rev1"
-	default y
-	---help---
-	  If this option is selected, the driver will be compiled with
-	  workarounds for errata as well as feature limitations (relative to
-	  more recent parts) of p4080 rev1. On unaffected revisions, this
-	  support incurs only a negligable overhead, typically only a couple of
-	  instructions per non-fast-path operation (the fast-path operations are
-	  unaffected).
-
-	  If in doubt, say Y.
-
 config FSL_QMAN_POLL_LIMIT
 	int
 	default 32

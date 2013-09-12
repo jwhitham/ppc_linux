@@ -540,11 +540,9 @@ static int query_cgr_show(struct seq_file *file, void *offset)
 	seq_printf(file, " cs_thresh_TA: %u, cs_thresh_Tn: %u\n",
 		cgrd.cgr.cs_thres.TA, cgrd.cgr.cs_thres.Tn);
 
-	if (qman_ip_rev != QMAN_REV10) {
-		seq_printf(file, " mode: %s\n",
-			(cgrd.cgr.mode & QMAN_CGR_MODE_FRAME) ?
-			"frame count" : "byte count");
-	}
+	seq_printf(file, " mode: %s\n",
+		(cgrd.cgr.mode & QMAN_CGR_MODE_FRAME) ?
+		"frame count" : "byte count");
 	seq_printf(file, " i_bcnt: %llu\n", qm_mcr_querycgr_i_get64(&cgrd));
 	seq_printf(file, " a_bcnt: %llu\n", qm_mcr_querycgr_a_get64(&cgrd));
 
@@ -625,11 +623,9 @@ static int testwrite_cgr_show(struct seq_file *file, void *offset)
 		result.cgr.cs_thres.TA, result.cgr.cs_thres.Tn);
 
 	/* Add Mode for Si 2 */
-	if (qman_ip_rev != QMAN_REV10) {
-		seq_printf(file, " mode: %s\n",
-			(result.cgr.mode & QMAN_CGR_MODE_FRAME) ?
-			"frame count" : "byte count");
-	}
+	seq_printf(file, " mode: %s\n",
+		(result.cgr.mode & QMAN_CGR_MODE_FRAME) ?
+		"frame count" : "byte count");
 
 	seq_printf(file, " i_bcnt: %llu\n",
 		qm_mcr_cgrtestwrite_i_get64(&result));

@@ -184,7 +184,6 @@ struct qm_portal_config {
 };
 
 /* Revision info (for errata and feature handling) */
-#define QMAN_REV10 0x0100
 #define QMAN_REV11 0x0101
 #define QMAN_REV12 0x0102
 #define QMAN_REV20 0x0200

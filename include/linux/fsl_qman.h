@@ -2021,6 +2021,23 @@ int qman_volatile_dequeue(struct qman_fq *fq, u32 flags, u32 vdqcr);
  */
 int qman_enqueue(struct qman_fq *fq, const struct qm_fd *fd, u32 flags);
 
+typedef int (*qman_cb_precommit) (void *arg);
+/**
+ * qman_enqueue_precommit - Enqueue a frame to a frame queue and call cb
+ * @fq: the frame queue object to enqueue to
+ * @fd: a descriptor of the frame to be enqueued
+ * @flags: bit-mask of QMAN_ENQUEUE_FLAG_*** options
+ * @cb: user supplied callback function to invoke before writing commit verb.
+ * @cb_arg: callback function argument
+ *
+ * This is similar to qman_enqueue except that it will invoke a user supplied
+ * callback function just before writng the commit verb. This is useful
+ * when the user want to do something *just before* enqueuing the request and
+ * the enqueue can't fail.
+ */
+int qman_enqueue_precommit(struct qman_fq *fq, const struct qm_fd *fd,
+		u32 flags, qman_cb_precommit cb, void *cb_arg);
+
 /**
  * qman_enqueue_orp - Enqueue a frame to a frame queue using an ORP
  * @fq: the frame queue object to enqueue to
