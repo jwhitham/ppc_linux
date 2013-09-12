@@ -227,8 +227,12 @@
 #define	CCR1_TCS	0x00000080 /* Timer Clock Select */
 
 /* Bit definitions for PWRMGTCR0. */
-#define PWRMGTCR0_ALTIVEC_IDLE	(1 << 22) /* Altivec idle enable */
-#define PWRMGTCR0_PW20_WAIT	(1 << 14) /* PW20 state enable bit */
+#define PWRMGTCR0_PW20_WAIT		(1 << 14) /* PW20 state enable bit */
+#define PWRMGTCR0_PW20_ENT_SHIFT	8
+#define PWRMGTCR0_PW20_ENT		0x3F00
+#define PWRMGTCR0_AV_IDLE_PD_EN		(1 << 22) /* Altivec idle enable */
+#define PWRMGTCR0_AV_IDLE_CNT_SHIFT	16
+#define PWRMGTCR0_AV_IDLE_CNT		0x3F0000
 
 /* Bit definitions for the MCSR. */
 #define MCSR_MCS	0x80000000 /* Machine Check Summary */
