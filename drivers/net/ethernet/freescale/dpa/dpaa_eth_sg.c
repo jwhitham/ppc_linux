@@ -150,29 +150,29 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 /* Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
  */
-int dpaa_eth_refill_bpools(struct dpa_percpu_priv_s *percpu_priv)
+int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp)
 {
-	const struct dpa_bp *dpa_bp = percpu_priv->dpa_bp;
-	int *countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
+	int *countptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	int count = *countptr;
 	int new_bufs;
 
-	/* Add pages to the buffer pool */
-	while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT) {
-		new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
-		if (unlikely(!new_bufs)) {
-			/* Avoid looping forever if we've temporarily
-			 * run out of memory. We'll try again at the next
-			 * NAPI cycle.
-			 */
-			break;
-		}
-		count += new_bufs;
-	}
-	*countptr = count;
+	if (unlikely(count < CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD)) {
+		do {
+			new_bufs = _dpa_bp_add_8_bufs(dpa_bp);
+			if (unlikely(!new_bufs)) {
+				/* Avoid looping forever if we've temporarily
+				 * run out of memory. We'll try again at the
+				 * next NAPI cycle.
+				 */
+				break;
+			}
+			count += new_bufs;
+		} while (count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT);
 
-	if (unlikely(*countptr < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
-		return -ENOMEM;
+		*countptr = count;
+		if (unlikely(count < CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT))
+			return -ENOMEM;
+	}
 
 	return 0;
 }
@@ -272,17 +272,17 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 #ifndef CONFIG_FSL_DPAA_TS
 static bool dpa_skb_is_recyclable(struct sk_buff *skb)
 {
-	/* No recycling possible if skb has an userspace buffer */
+	/* No recycling possible if skb buffer is kmalloc'ed  */
+	if (skb->head_frag == 0)
+		return false;
+
+	/* or if it's an userspace buffer */
 	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY)
 		return false;
 
 	/* or if it's cloned or shared */
 	if (skb_shared(skb) || skb_cloned(skb) ||
 	    skb->fclone != SKB_FCLONE_UNAVAILABLE)
-		return false;
-
-	/* or if it's kmalloc'ed  */
-	if (skb->head_frag == 0)
 		return false;
 
 	return true;
@@ -573,14 +573,13 @@ void __hot _dpa_rx(struct net_device *net_dev,
 		gro_result_t gro_result;
 
 		gro_result = napi_gro_receive(&percpu_priv->napi, skb);
-		if (unlikely(gro_result == GRO_DROP)) {
-			percpu_stats->rx_dropped++;
+		/* If frame is dropped by the stack, rx_dropped counter is
+		 * incremented automatically, so no need for us to update it
+		 */
+		if (unlikely(gro_result == GRO_DROP))
 			goto packet_dropped;
-		}
-	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP)) {
-		percpu_stats->rx_dropped++;
+	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP))
 		goto packet_dropped;
-	}
 
 	percpu_stats->rx_packets++;
 	percpu_stats->rx_bytes += skb_len;
@@ -608,40 +607,40 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	int *count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	unsigned char *rec_buf_start;
 
-	/* We are guaranteed to have at least tx_headroom bytes */
-	skbh = (struct sk_buff **)(skb->data - priv->tx_headroom);
-	fd->offset = priv->tx_headroom;
-
 #ifndef CONFIG_FSL_DPAA_TS
 	/* Check recycling conditions; only if timestamp support is not
 	 * enabled, otherwise we need the fd back on tx confirmation
 	 */
 
-	/* We cannot recycle the buffer if the pool is already full */
-	if (unlikely(*count_ptr >= dpa_bp->target_count))
-		goto no_recycle;
+	/* We can recycle the buffer if:
+	 * - the pool is not full
+	 * - the buffer meets the skb recycling conditions
+	 * - the buffer meets our own (size, offset, align) conditions
+	 */
+	if (likely((*count_ptr < dpa_bp->target_count) &&
+		   dpa_skb_is_recyclable(skb) &&
+		   dpa_buf_is_recyclable(skb, dpa_bp->size,
+					 priv->tx_headroom, &rec_buf_start))) {
+		/* Buffer is recyclable; use the new start address */
+		skbh = (struct sk_buff **)rec_buf_start;
 
-	/* ... or if the skb doesn't meet the recycling criteria */
-	if (unlikely(!dpa_skb_is_recyclable(skb)))
-		goto no_recycle;
-
-	/* ... or if buffer recycling conditions are not met */
-	if (unlikely(!dpa_buf_is_recyclable(skb, dpa_bp->size,
-			priv->tx_headroom, &rec_buf_start)))
-		goto no_recycle;
-
-	/* Buffer is recyclable; use the new start address */
-	skbh = (struct sk_buff **)rec_buf_start;
-
-	/* and set fd parameters and DMA mapping direction */
-	fd->cmd |= FM_FD_CMD_FCO;
-	fd->bpid = dpa_bp->bpid;
-	BUG_ON(skb->data - rec_buf_start > DPA_MAX_FD_OFFSET);
-	fd->offset = (uint16_t)(skb->data - rec_buf_start);
-	dma_dir = DMA_BIDIRECTIONAL;
+		/* and set fd parameters and DMA mapping direction */
+		fd->cmd |= FM_FD_CMD_FCO;
+		fd->bpid = dpa_bp->bpid;
+		BUG_ON(skb->data - rec_buf_start > DPA_MAX_FD_OFFSET);
+		fd->offset = (uint16_t)(skb->data - rec_buf_start);
+		dma_dir = DMA_BIDIRECTIONAL;
+	} else
 #endif
+	{
+		/* Not recyclable.
+		 * We are guaranteed to have at least tx_headroom bytes
+		 * available, so just use that for offset.
+		 */
+		skbh = (struct sk_buff **)(skb->data - priv->tx_headroom);
+		fd->offset = priv->tx_headroom;
+	}
 
-no_recycle:
 	*skbh = skb;
 
 	/* Enable L3/L4 hardware checksum computation.
@@ -657,7 +656,7 @@ no_recycle:
 		return err;
 	}
 
-	/* Fill in the FD */
+	/* Fill in the rest of the FD fields */
 	fd->format = qm_fd_contig;
 	fd->length20 = skb->len;
 
@@ -802,7 +801,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 	percpu_stats = &percpu_priv->stats;
-	countptr = __this_cpu_ptr(percpu_priv->dpa_bp->percpu_count);
+	countptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 
 	clear_fd(&fd);
 

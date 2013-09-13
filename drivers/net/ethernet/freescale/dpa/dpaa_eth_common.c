@@ -738,7 +738,7 @@ void dpa_bp_drain(struct dpa_bp *bp)
 			dma_unmap_single(bp->dev, addr, bp->size,
 					DMA_BIDIRECTIONAL);
 
-			_dpa_bp_free_buf(phys_to_virt(addr));
+			bp->free_buf_cb(phys_to_virt(addr));
 		}
 	} while (ret > 0);
 }
@@ -751,11 +751,14 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 	if (!atomic_dec_and_test(&bp->refs))
 		return;
 
-	if (bp->drain_cb)
-		bp->drain_cb(bp);
+	if (bp->free_buf_cb)
+		dpa_bp_drain(bp);
 
 	dpa_bp_array[bp->bpid] = 0;
 	bman_free_pool(bp->pool);
+
+	if (bp->dev)
+		platform_device_unregister(to_platform_device(bp->dev));
 }
 
 void __cold __attribute__((nonnull))
