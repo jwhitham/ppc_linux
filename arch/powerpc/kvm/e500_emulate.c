@@ -228,7 +228,7 @@ int kvmppc_core_emulate_mtspr(struct kvm_vcpu *vcpu, int sprn, ulong spr_val)
 				spr_val);
 		break;
 
-	case SPR_PWRMGTCR0:
+	case SPRN_PWRMGTCR0:
 		/* Guest relies on host power management configurations */
 		break;
 
@@ -339,7 +339,7 @@ int kvmppc_core_emulate_mfspr(struct kvm_vcpu *vcpu, int sprn, ulong *spr_val)
 		*spr_val = 0;
 		break;
 
-	case SPR_PWRMGTCR0:
+	case SPRN_PWRMGTCR0:
 		*spr_val = 0;
 		break;
 
