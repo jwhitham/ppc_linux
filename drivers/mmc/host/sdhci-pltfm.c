@@ -212,13 +212,16 @@ int sdhci_pltfm_register(struct platform_device *pdev,
 			 struct sdhci_pltfm_data *pdata)
 {
 	struct sdhci_host *host;
+	struct device_node *np;
 	int ret = 0;
 
+	np = pdev->dev.of_node;
 	host = sdhci_pltfm_init(pdev, pdata);
 	if (IS_ERR(host))
 		return PTR_ERR(host);
 
 	sdhci_get_of_property(pdev);
+	mmc_of_parse_voltage(np, &host->ocr_mask);
 
 	ret = sdhci_add_host(host);
 	if (ret)
