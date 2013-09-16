@@ -144,7 +144,8 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6q-sbc6x.dtb \
 	imx6q-wandboard.dtb \
 	imx6sl-evk.dtb \
-	vf610-twr.dtb
+	vf610-twr.dtb \
+	ls1021a-qds.dtb
 dtb-$(CONFIG_ARCH_MXS) += imx23-evk.dtb \
 	imx23-olinuxino.dtb \
 	imx23-stmp378x_devb.dtb \
