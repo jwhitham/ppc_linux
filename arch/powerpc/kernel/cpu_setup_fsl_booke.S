@@ -59,15 +59,15 @@ _GLOBAL(has_pw20_altivec_idle)
 
 	/* PW20 & AltiVec idle feature only exists for E6500 */
 	mfspr	r0, SPRN_PVR
-	rlwinm	r4, r0, 16, 16, 31
+	rlwinm	r11, r0, 16, 16, 31
 	lis	r12, 0
 	ori	r12, r12, PVR_VER_E6500@l
-	cmpw	r4, r12
+	cmpw	r11, r12
 	bne	2f
 
 	/* Fix erratum, e6500 rev1 does not support PW20 & AltiVec idle */
-	rlwinm	r4, r0, 0, 16, 31
-	cmpwi	r4, 0x20
+	rlwinm	r11, r0, 0, 16, 31
+	cmpwi	r11, 0x20
 	blt	2f
 	li	r3, 1
 2:
@@ -89,10 +89,10 @@ _GLOBAL(setup_pw20_idle)
 
 	/* Set PW20_WAIT bit, enable pw20 state*/
 	ori	r3, r3, PWRMGTCR0_PW20_WAIT
-	li	r4, PW20_WAIT_IDLE_BIT
+	li	r11, PW20_WAIT_IDLE_BIT
 
 	/* Set Automatic PW20 Core Idle Count */
-	rlwimi	r3, r4, PWRMGTCR0_PW20_ENT_SHIFT, PWRMGTCR0_PW20_ENT
+	rlwimi	r3, r11, PWRMGTCR0_PW20_ENT_SHIFT, PWRMGTCR0_PW20_ENT
 
 	mtspr	SPRN_PWRMGTCR0, r3
 2:
@@ -114,10 +114,10 @@ _GLOBAL(setup_altivec_idle)
 
 	/* Enable Altivec Idle */
 	oris	r3, r3, PWRMGTCR0_AV_IDLE_PD_EN@h
-	li	r4, AV_WAIT_IDLE_BIT
+	li	r11, AV_WAIT_IDLE_BIT
 
 	/* Set Automatic AltiVec Idle Count */
-	rlwimi	r3, r4, PWRMGTCR0_AV_IDLE_CNT_SHIFT, PWRMGTCR0_AV_IDLE_CNT
+	rlwimi	r3, r11, PWRMGTCR0_AV_IDLE_CNT_SHIFT, PWRMGTCR0_AV_IDLE_CNT
 
 	mtspr	SPRN_PWRMGTCR0, r3
 2:
