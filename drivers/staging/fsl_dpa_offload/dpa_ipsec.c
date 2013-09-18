@@ -87,6 +87,7 @@ int print_sa_sec_param(struct dpa_ipsec_sa *sa)
 		pr_info("%x, ", sa->cipher_data.cipher_key[i]);
 
 	pr_info("\n sa_bpid = %d\n", sa->sa_bpid);
+	pr_info("\n sa_bufsize = %d\n", sa->sa_bufsize);
 	pr_info(" spi = %d\n", sa->spi);
 	pr_info(" sa_wqid = %d\n", sa->sa_wqid);
 	pr_info(" outbound_flowid = %d\n", sa->outbound_flowid);
@@ -2337,6 +2338,7 @@ static int copy_sa_params_to_out_sa(struct dpa_ipsec_sa *sa,
 
 	sa->sa_dir = DPA_IPSEC_OUTBOUND;
 	sa->sa_bpid = sa_params->sa_bpid;
+	sa->sa_bufsize = sa_params->sa_bufsize;
 	sa->sa_wqid = sa_params->sa_wqid;
 	ip_addr_type = sa_params->sa_out_params.ip_ver;
 
@@ -2490,6 +2492,7 @@ static int copy_sa_params_to_in_sa(struct dpa_ipsec_sa *sa,
 
 	sa->sa_dir = DPA_IPSEC_INBOUND;
 	sa->sa_bpid = sa_params->sa_bpid;
+	sa->sa_bufsize = sa_params->sa_bufsize;
 	sa->sa_wqid = sa_params->sa_wqid;
 	sa->spi = sa_params->spi;
 

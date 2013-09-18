@@ -258,6 +258,7 @@ struct dpa_ipsec_sa {
 	uint16_t sa_wqid; /* Work queue id in which the TO SEC FQ will be put */
 	uint8_t sa_bpid;  /* Buffer pool id used by SEC for acquiring buffers,
 			     comes from user. Default buffer pool 63	      */
+	uint16_t sa_bufsize;	/* Buffer pool buffer size		      */
 	uint32_t spi;	/* IPsec Security parameter index		      */
 	struct dpa_offload_ip_address src_addr;  /* Source IP address	      */
 	struct dpa_offload_ip_address dest_addr; /* Destination IP address    */
