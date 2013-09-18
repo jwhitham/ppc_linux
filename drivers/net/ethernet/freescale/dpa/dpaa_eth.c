@@ -64,9 +64,6 @@
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 #include "dpaa_debugfs.h"
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
-#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
-#include "dpaa_eth_unit_test.h"
-#endif /* CONFIG_FSL_DPAA_ETH_UNIT_TESTS */
 
 /* CREATE_TRACE_POINTS only needs to be defined once. Other dpa files
  * using trace events only need to #include <trace/events/sched.h>
@@ -838,11 +835,6 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
 	printk(KERN_INFO "fsl_dpa: Probed interface %s\n", net_dev->name);
-
-#ifdef CONFIG_FSL_DPAA_ETH_UNIT_TESTS
-	/* The unit test is designed to test private interfaces */
-	dpa_unit_tests(net_dev);
-#endif
 
 	return 0;
 

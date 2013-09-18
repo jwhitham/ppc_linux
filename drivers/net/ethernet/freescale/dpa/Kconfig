@@ -121,13 +121,6 @@ config FSL_DPAA_ETH_REFILL_THRESHOLD
 	  falls below this threshold. This must be related to DPAA_ETH_MAX_BUF_COUNT. One needn't normally
 	  modify this value unless one has very specific performance reasons.
 
-config FSL_DPAA_ETH_UNIT_TESTS
-	bool "DPAA Ethernet unit tests"
-	depends on FSL_DPAA_ETH
-	default n
-	---help---
-	  A series of tests that will verify basic functionality of DPAA Ethernet driver at bootup.
-
 config FSL_DPAA_ETH_DEBUGFS
 	tristate "DPAA Ethernet debugfs interface"
 	depends on DEBUG_FS && FSL_DPAA_ETH

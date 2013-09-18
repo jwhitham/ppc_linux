@@ -15,7 +15,6 @@ obj-$(CONFIG_FSL_DPAA_ETH_DEBUGFS) += dpaa_debugfs.o
 obj-$(CONFIG_FSL_DPAA_ETH) += fsl-mac.o fsl-dpa.o fsl-dpa-common.o \
  fsl-dpa-base.o fsl-dpa-shared.o fsl-dpa-macless.o fsl-dpa-proxy.o
 obj-$(CONFIG_FSL_DPAA_OFFLINE_PORTS) += fsl-oh.o
-obj-$(CONFIG_FSL_DPAA_ETH_UNIT_TESTS) += dpaa_eth_unit_test.o
 
 fsl-dpa-objs	:= dpa-ethtool.o dpaa_eth_sysfs.o \
   dpaa_eth.o dpaa_eth_non_sg.o
