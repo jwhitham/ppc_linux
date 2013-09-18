@@ -305,7 +305,6 @@ ssize_t wrp_dpa_stats_read(struct file *file,
 			return -EFAULT;
 		}
 
-		kfree(event->ks_cnt_ids);
 		kfree(event);
 
 		count   -= sizeof(struct compat_dpa_stats_event_params);
@@ -357,7 +356,6 @@ ssize_t wrp_dpa_stats_read(struct file *file,
 			return -EFAULT;
 		}
 
-		kfree(event->ks_cnt_ids);
 		kfree(event);
 
 		count   -= sizeof(struct dpa_stats_event_params);
@@ -1485,10 +1483,10 @@ static int do_ioctl_stats_get_counters(void *args)
 			log_err("Cannot copy to user the counter parameters\n");
 			ret = -EINVAL;
 		}
-
-		/* Request was sent, release the array of counter ids */
-		kfree(prm.req_params.cnts_ids);
 	}
+
+	/* Request was sent, release the array of counter ids */
+	kfree(prm.req_params.cnts_ids);
 
 	return ret;
 }
@@ -1581,10 +1579,9 @@ static int do_ioctl_stats_compat_get_counters(void *args)
 			log_err("Cannot copy to user the counter parameters\n");
 			ret = -EINVAL;
 		}
-
-		/* Request was sent, release the array of counter ids */
-		kfree(kprm.req_params.cnts_ids);
 	}
+	/* Request was sent, release the array of counter ids */
+	kfree(kprm.req_params.cnts_ids);
 
 	return ret;
 }
