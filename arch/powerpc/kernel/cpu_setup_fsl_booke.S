@@ -80,7 +80,7 @@ _GLOBAL(has_pw20_altivec_idle)
 #define PW20_WAIT_IDLE_BIT		50 /* 1ms, TB frequency is 41.66MHZ */
 _GLOBAL(setup_pw20_idle)
 	mflr	r10
-	bl	.has_pw20_altivec_idle
+	bl	has_pw20_altivec_idle
 	mtlr	r10
 	cmpwi	r3, 0
 	beq	2f
@@ -105,7 +105,7 @@ _GLOBAL(setup_pw20_idle)
 #define AV_WAIT_IDLE_BIT		50 /* 1ms, TB frequency is 41.66MHZ */
 _GLOBAL(setup_altivec_idle)
 	mflr	r10
-	bl	.has_pw20_altivec_idle
+	bl	has_pw20_altivec_idle
 	mtlr	r10
 	cmpwi	r3, 0
 	beq	2f
