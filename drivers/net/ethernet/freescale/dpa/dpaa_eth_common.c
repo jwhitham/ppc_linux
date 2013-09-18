@@ -646,7 +646,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 #endif
 	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[TX], &params);
 	layout[TX].manip_extra_space = params.manip_extra_space;
-	layout[RX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
+	layout[TX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 }
 
 int __attribute__((nonnull))
