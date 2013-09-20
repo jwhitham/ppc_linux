@@ -646,7 +646,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 #endif
 	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[TX], &params);
 	layout[TX].manip_extra_space = params.manip_extra_space;
-	layout[RX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
+	layout[TX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 }
 
 int __attribute__((nonnull))
@@ -1434,7 +1434,7 @@ void dpa_release_sgt(struct qm_sg_entry *sgt, struct bm_buffer *bmb)
 
 	do {
 		dpa_bp = dpa_bpid2pool(sgt[i].bpid);
-		BUG_ON(IS_ERR(dpa_bp));
+		BUG_ON(!dpa_bp);
 
 		j = 0;
 		do {
@@ -1464,7 +1464,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 	_bmb.lo	= fd->addr_lo;
 
 	_dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(IS_ERR(_dpa_bp));
+	BUG_ON(!_dpa_bp);
 
 	if (fd->format == qm_fd_sg) {
 		sgt = (phys_to_virt(bm_buf_addr(&_bmb)) + dpa_fd_offset(fd));

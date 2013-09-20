@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2008-2012 Freescale Semiconductor Inc.
  *
@@ -145,17 +144,17 @@ static ssize_t dpaa_eth_show_fqids(struct device *dev,
 	return bytes;
 }
 
-static ssize_t dpaa_eth_show_dflt_bpid(struct device *dev,
+static ssize_t dpaa_eth_show_bpids(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	ssize_t bytes = 0;
 	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
+	int i = 0;
 
-	if (priv->bp_count != 1)
-		bytes += snprintf(buf, PAGE_SIZE, "-1\n");
-	else
-		bytes += snprintf(buf, PAGE_SIZE, "%u\n", dpa_bp->bpid);
+	for (i = 0; i < priv->bp_count; i++)
+		bytes += snprintf(buf + bytes, PAGE_SIZE, "%u\n",
+				dpa_bp[i].bpid);
 
 	return bytes;
 }
@@ -218,7 +217,7 @@ static struct device_attribute dpaa_eth_attrs[] = {
 	__ATTR(device_addr, S_IRUGO, dpaa_eth_show_addr, NULL),
 	__ATTR(device_type, S_IRUGO, dpaa_eth_show_type, NULL),
 	__ATTR(fqids, S_IRUGO, dpaa_eth_show_fqids, NULL),
-	__ATTR(dflt_bpid, S_IRUGO, dpaa_eth_show_dflt_bpid, NULL),
+	__ATTR(bpids, S_IRUGO, dpaa_eth_show_bpids, NULL),
 	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL),
 #ifdef CONFIG_FSL_DPAA_1588
 	__ATTR(ptp_1588, S_IRUGO | S_IWUSR, dpaa_eth_show_ptp_1588,

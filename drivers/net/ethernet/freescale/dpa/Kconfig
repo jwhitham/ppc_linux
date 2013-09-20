@@ -6,6 +6,8 @@ config FSL_DPAA_ETH
 	  Data Path Acceleration Architecture Ethernet driver, supporting the
 	  Freescale QorIQ chips.
 
+if FSL_DPAA_ETH
+
 config FSL_DPAA_OFFLINE_PORTS
 	bool "Offline Ports support"
 	depends on FSL_DPAA_ETH
@@ -121,16 +123,18 @@ config FSL_DPAA_ETH_REFILL_THRESHOLD
 	  falls below this threshold. This must be related to DPAA_ETH_MAX_BUF_COUNT. One needn't normally
 	  modify this value unless one has very specific performance reasons.
 
-config FSL_DPAA_ETH_UNIT_TESTS
-	bool "DPAA Ethernet unit tests"
-	depends on FSL_DPAA_ETH
-	default n
-	---help---
-	  A series of tests that will verify basic functionality of DPAA Ethernet driver at bootup.
-
 config FSL_DPAA_ETH_DEBUGFS
 	tristate "DPAA Ethernet debugfs interface"
 	depends on DEBUG_FS && FSL_DPAA_ETH
 	default y
 	---help---
 	  This option compiles debugfs code for the DPAA Ethernet driver.
+
+config FSL_DPAA_ETH_DEBUG
+	bool "DPAA Ethernet Debug Support"
+	depends on FSL_DPAA_ETH
+	default n
+	---help---
+	  This option compiles debug code for the DPAA Ethernet driver.
+
+endif # FSL_DPAA_ETH

@@ -335,6 +335,7 @@ struct dpa_ipsec_sa_params {
 				 * to outer header and vice versa	      */
 	uint8_t sa_wqid;	/* Work queue Id for all the queues in this SA*/
 	uint8_t sa_bpid;	/* Buffer Pool ID to be used with this SA     */
+	uint16_t sa_bufsize;	/* Buffer Pool buffer size		      */
 	bool	enable_stats;	/* Enable counting packets and bytes processed*/
 	struct dpa_ipsec_sa_crypto_params crypto_params;/* IPSec crypto params*/
 	enum dpa_ipsec_direction sa_dir;  /* SA direction: Outbound/Inbound   */

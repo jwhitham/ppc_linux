@@ -143,6 +143,7 @@ static void compat_copy_sa_params(struct dpa_ipsec_sa_params *sa_prm,
 	sa_prm->hdr_upd_flags = sa_compat_prm->hdr_upd_flags;
 	sa_prm->sa_wqid = sa_compat_prm->sa_wqid;
 	sa_prm->sa_bpid = sa_compat_prm->sa_bpid;
+	sa_prm->sa_bufsize = sa_compat_prm->sa_bufsize;
 	sa_prm->enable_stats = sa_compat_prm->enable_stats;
 	sa_prm->sa_dir = sa_compat_prm->sa_dir;
 

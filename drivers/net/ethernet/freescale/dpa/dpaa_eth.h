@@ -83,6 +83,12 @@ struct dpa_buffer_layout_s {
 	uint16_t	data_align;
 };
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUG
+#define DPA_BUG_ON(cond)	BUG_ON(cond)
+#else
+#define DPA_BUG_ON(cond)
+#endif
+
 #define DPA_TX_PRIV_DATA_SIZE	16
 #define DPA_PARSE_RESULTS_SIZE sizeof(fm_prs_result_t)
 #define DPA_TIME_STAMP_SIZE 8

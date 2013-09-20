@@ -1457,7 +1457,7 @@ done_shared_desc:
 	/* setup preheader */
 	sec_desc->preheader.hi.field.idlen = desc_len((u32 *) sec_desc->desc);
 	sec_desc->preheader.lo.field.pool_id = sa->sa_bpid;
-	sec_desc->preheader.lo.field.pool_buffer_size = 0;
+	sec_desc->preheader.lo.field.pool_buffer_size = sa->sa_bufsize;
 	sec_desc->preheader.lo.field.offset =
 		(sa->sa_dir == DPA_IPSEC_INBOUND) ?
 			sa->dpa_ipsec->config.post_sec_in_params.data_off :
