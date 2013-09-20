@@ -119,6 +119,7 @@ struct ioc_compat_sa_params {
 	uint8_t hdr_upd_flags;
 	uint8_t sa_wqid;
 	uint8_t sa_bpid;
+	uint16_t sa_bufsize;
 	bool enable_stats;
 	struct ioc_compat_sa_crypto_params crypto_params;
 	enum dpa_ipsec_direction sa_dir;
