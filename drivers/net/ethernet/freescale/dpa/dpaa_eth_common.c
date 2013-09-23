@@ -220,7 +220,7 @@ dpa_get_stats64(struct net_device *net_dev,
 	struct dpa_percpu_priv_s	*percpu_priv;
 	int numstats = sizeof(struct rtnl_link_stats64) / sizeof(u64);
 
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 
 		cpustats = (u64 *)&percpu_priv->stats;

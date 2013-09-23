@@ -138,7 +138,7 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	dpa_bp->size = default_buf_size;
 
 	/* Give each cpu an allotment of "count" buffers */
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		int j;
 
 		for (j = 0; j < dpa_bp->target_count; j += 8)

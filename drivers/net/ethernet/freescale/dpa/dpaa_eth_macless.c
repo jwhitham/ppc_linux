@@ -335,7 +335,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		memset(percpu_priv, 0, sizeof(*percpu_priv));
 	}
