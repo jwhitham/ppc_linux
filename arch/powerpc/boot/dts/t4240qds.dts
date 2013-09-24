@@ -320,6 +320,50 @@
 			pca9547@77 {
 				compatible = "philips,pca9547";
 				reg = <0x77>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				i2c@2 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0x2>;
+
+					ina220@40 {
+						compatible = "ti,ina220";
+						reg = <0x40>;
+						shunt-resistor = <1000>;
+					};
+
+					ina220@41 {
+						compatible = "ti,ina220";
+						reg = <0x41>;
+						shunt-resistor = <1000>;
+					};
+
+					ina220@44 {
+						compatible = "ti,ina220";
+						reg = <0x44>;
+						shunt-resistor = <1000>;
+					};
+
+					ina220@45 {
+						compatible = "ti,ina220";
+						reg = <0x45>;
+						shunt-resistor = <1000>;
+					};
+
+					ina220@46 {
+						compatible = "ti,ina220";
+						reg = <0x46>;
+						shunt-resistor = <1000>;
+					};
+
+					ina220@47 {
+						compatible = "ti,ina220";
+						reg = <0x47>;
+						shunt-resistor = <1000>;
+					};
+				};
 			};
 			eeprom@51 {
 				compatible = "at24,24c256";
