@@ -2567,8 +2567,12 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	}
 
 	if (key->mask) {
-		log_err("Key masks are not supported by HASH tables.\n");
-		return -EINVAL;
+		/* Only full 0xFF masks supported: */
+		for (j = 0; j < key->size; j++)
+			if (key->mask[j] ^ 0xff) {
+				log_err("Only key masks 0xff all over are supported by HASH tables.\n");
+				return -EINVAL;
+			}
 	}
 
 	memset(&key_params, 0, sizeof(t_FmPcdCcKeyParams));
