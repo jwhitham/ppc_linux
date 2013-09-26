@@ -68,8 +68,7 @@ struct dpa_stats {
 	  */
 	struct workqueue_struct *async_req_workqueue;
 	struct mutex lock; /* Lock for this dpa_stats instance */
-	 /* Counters that are scheduled for a retrieve operation */
-	bool sched_cnt_ids[DPA_STATS_MAX_NUM_OF_COUNTERS];
+	bool *sched_cnt_ids; /* Counters scheduled for a retrieve operation */
 	struct mutex sched_cnt_lock; /* Lock for array of scheduled counters */
 };
 
@@ -94,12 +93,10 @@ struct stats_info {
 	  * Array of statistics offsets relative to
 	  * corresponding statistics area
 	  */
-	unsigned int stats_off[MAX_NUM_OF_STATS];
+	unsigned int *stats_off;
 	unsigned int stats_num; /* Number of statistics to retrieve */
-	uint64_t stats[MAX_NUM_OF_MEMBERS][MAX_NUM_OF_STATS];
-				/* Array to store statistics values */
-	uint64_t last_stats[MAX_NUM_OF_MEMBERS][MAX_NUM_OF_STATS];
-				/* Array to store previous statistics values */
+	uint64_t **stats; /* Array to store statistics values */
+	uint64_t **last_stats;/* Array to store previous statistics values */
 	bool reset; /* Reset counter's statistics */
 };
 
@@ -122,7 +119,7 @@ struct dpa_stats_lookup_key {
 struct dpa_stats_cnt_classif_tbl_cb {
 	int td; /* Table descriptor */
 	enum dpa_cls_tbl_type type; /* The type of the DPA Classifier table */
-	struct dpa_stats_lookup_key keys[MAX_NUM_OF_MEMBERS]; /* Array of
+	struct dpa_stats_lookup_key *keys; /* Array of
 			 key descriptors for which to provide statistics */
 };
 
@@ -135,8 +132,8 @@ struct dpa_stats_cnt_classif_cb {
 
 /* DPA Stats IPSec Counter control block */
 struct dpa_stats_cnt_ipsec_cb {
-	int sa_id[MAX_NUM_OF_MEMBERS]; /* Array of Security Association ids */
-	bool valid[MAX_NUM_OF_MEMBERS]; /* Security Association id is valid */
+	int *sa_id; /* Array of Security Association ids */
+	bool *valid; /* Security Association id is valid */
 };
 
 typedef int get_cnt_stats(struct dpa_stats_req_cb *req_cb,
