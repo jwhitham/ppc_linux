@@ -73,7 +73,8 @@ struct bman_portal *bman_create_portal(
 				       const struct bm_portal_config *config);
 struct bman_portal *bman_create_affine_portal(
 			const struct bm_portal_config *config);
-struct bman_portal *bman_create_affine_slave(struct bman_portal *redirect);
+struct bman_portal *bman_create_affine_slave(struct bman_portal *redirect,
+								int cpu);
 void bman_destroy_portal(struct bman_portal *bm);
 
 const struct bm_portal_config *bman_destroy_affine_portal(void);
@@ -155,4 +156,8 @@ u32 bm_pool_free_buffers(u32 bpid);
 __init int bman_init(void);
 __init int bman_resource_init(void);
 
+/* Portal migration */
+int bman_portal_is_sharing_redirect(struct bman_portal *portal);
+void bman_migrate_portal(struct bman_portal *portal);
+void bman_migrate_portal_back(struct bman_portal *portal, unsigned int cpu);
 #endif /* CONFIG_FSL_BMAN_CONFIG */

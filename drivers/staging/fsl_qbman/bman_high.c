@@ -301,14 +301,9 @@ fail_rcr:
 struct bman_portal *bman_create_affine_portal(
 			const struct bm_portal_config *config)
 {
-	struct bman_portal *portal = get_raw_affine_portal();
+	struct bman_portal *portal;
 
-	/*This function is called from the context which is already affine to
-	 *CPU or in other words this in non-migratable to other CPUs. Call
-	 *put_affine_portal() on entry which allows subsequent functions to
-	 *sleep.
-	 */
-	put_affine_portal();
+	portal = &per_cpu(bman_affine_portal, config->public_cfg.cpu);
 	portal = bman_create_portal(portal, config);
 	if (portal) {
 		spin_lock(&affine_mask_lock);
@@ -319,10 +314,12 @@ struct bman_portal *bman_create_affine_portal(
 }
 
 
-struct bman_portal *bman_create_affine_slave(struct bman_portal *redirect)
+struct bman_portal *bman_create_affine_slave(struct bman_portal *redirect,
+								int cpu)
 {
 #ifdef CONFIG_FSL_DPA_PORTAL_SHARE
-	struct bman_portal *p = get_raw_affine_portal();
+	struct bman_portal *p;
+	p = &per_cpu(bman_affine_portal, cpu);
 	BUG_ON(p->config);
 	BUG_ON(p->is_shared);
 	BUG_ON(!redirect->config->public_cfg.is_shared);
@@ -480,13 +477,11 @@ u32 bman_irqsource_get(void)
 }
 EXPORT_SYMBOL(bman_irqsource_get);
 
-int bman_irqsource_add(__maybe_unused u32 bits)
+int bman_p_irqsource_add(struct bman_portal *p, __maybe_unused u32 bits)
 {
-	struct bman_portal *p = get_raw_affine_portal();
-	int ret = 0;
 #ifdef CONFIG_FSL_DPA_PORTAL_SHARE
 	if (p->sharing_redirect)
-		ret = -EINVAL;
+		return -EINVAL;
 	else
 #endif
 	{
@@ -496,6 +491,15 @@ int bman_irqsource_add(__maybe_unused u32 bits)
 		bm_isr_enable_write(&p->p, p->irq_sources);
 		PORTAL_IRQ_UNLOCK(p, irqflags);
 	}
+	return 0;
+}
+EXPORT_SYMBOL(bman_p_irqsource_add);
+
+int bman_irqsource_add(__maybe_unused u32 bits)
+{
+	struct bman_portal *p = get_raw_affine_portal();
+	int ret = 0;
+	ret = bman_p_irqsource_add(p, bits);
 	put_affine_portal();
 	return ret;
 }
@@ -1043,3 +1047,26 @@ int bman_shutdown_pool(u32 bpid)
 	return ret;
 }
 EXPORT_SYMBOL(bman_shutdown_pool);
+
+int bman_portal_is_sharing_redirect(struct bman_portal *portal)
+{
+	return portal->sharing_redirect ? 1 : 0;
+}
+
+/* Migrate the portal to the boot cpu(cpu0) for offline cpu */
+void bman_migrate_portal(struct bman_portal *portal)
+{
+	unsigned long irqflags __maybe_unused;
+	PORTAL_IRQ_LOCK(portal, irqflags);
+	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(0));
+	PORTAL_IRQ_UNLOCK(portal, irqflags);
+}
+
+/* Migrate the portal back to the affined cpu once that cpu reappears.*/
+void bman_migrate_portal_back(struct bman_portal *portal, unsigned int cpu)
+{
+	unsigned long irqflags __maybe_unused;
+	PORTAL_IRQ_LOCK(portal, irqflags);
+	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(cpu));
+	PORTAL_IRQ_UNLOCK(portal, irqflags);
+}

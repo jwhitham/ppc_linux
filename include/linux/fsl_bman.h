@@ -514,6 +514,13 @@ u32 bman_query_free_buffers(struct bman_pool *pool);
  */
 int bman_update_pool_thresholds(struct bman_pool *pool, const u32 *thresholds);
 #endif
+
+/**
+ * The below bman_p_***() variant might be called in a situation that the cpu
+ * which the portal affine to is not online yet.
+ * @bman_portal specifies which portal the API will use.
+*/
+int bman_p_irqsource_add(struct bman_portal *p, __maybe_unused u32 bits);
 #ifdef __cplusplus
 }
 #endif
