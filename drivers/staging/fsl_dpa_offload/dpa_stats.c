@@ -411,7 +411,7 @@ static int get_new_req(struct dpa_stats *dpa_stats,
 
 static int put_cnt(struct dpa_stats *dpa_stats, struct dpa_stats_cnt_cb *cnt_cb)
 {
-	int err = 0;
+	int err = 0, i = 0;
 
 	/* Acquire DPA Stats instance lock */
 	mutex_lock(&dpa_stats->lock);
@@ -452,6 +452,16 @@ static int put_cnt(struct dpa_stats *dpa_stats, struct dpa_stats_cnt_cb *cnt_cb)
 		break;
 	}
 
+	/* Reset all statistics information */
+	memset(cnt_cb->info.stats_off, 0,
+			MAX_NUM_OF_STATS * sizeof(*cnt_cb->info.stats_off));
+	for (i = 0; i < MAX_NUM_OF_MEMBERS; i++) {
+		memset(cnt_cb->info.stats[i], 0,
+				MAX_NUM_OF_STATS * sizeof(uint64_t));
+		memset(cnt_cb->info.last_stats[i], 0,
+				MAX_NUM_OF_STATS * sizeof(uint64_t));
+	}
+
 	/* Release DPA Stats instance lock */
 	mutex_unlock(&dpa_stats->lock);
 
@@ -490,10 +500,69 @@ static int put_req(struct dpa_stats *dpa_stats, struct dpa_stats_req_cb *req_cb)
 	return 0;
 }
 
+static int alloc_cnt_cb(struct dpa_stats *dpa_stats,
+			struct dpa_stats_cnt_cb *cnt_cb)
+{
+	int i = 0;
+
+	/* Initialize counter lock */
+	mutex_init(&cnt_cb->lock);
+	/* Store dpa_stats instance */
+	cnt_cb->dpa_stats = dpa_stats;
+	/* Counter is not initialized, set the index to invalid value */
+	cnt_cb->index = DPA_OFFLD_INVALID_OBJECT_ID;
+
+	/* Allocate array of statistics offsets */
+	cnt_cb->info.stats_off = kcalloc(MAX_NUM_OF_STATS,
+				sizeof(*cnt_cb->info.stats_off), GFP_KERNEL);
+	if (!cnt_cb->info.stats_off) {
+		log_err("Cannot allocate memory to store array of "
+			"statistics offsets\n");
+		return -ENOMEM;
+	}
+
+	/* Allocate array of currently read statistics */
+	cnt_cb->info.stats = kcalloc(MAX_NUM_OF_MEMBERS,
+				sizeof(uint64_t *), GFP_KERNEL);
+	if (!cnt_cb->info.stats) {
+		log_err("Cannot allocate memory to store array of "
+			"statistics for all members\n");
+		return -ENOMEM;
+	}
+	for (i = 0; i < MAX_NUM_OF_MEMBERS; i++) {
+		cnt_cb->info.stats[i] = kcalloc(MAX_NUM_OF_STATS,
+					sizeof(uint64_t), GFP_KERNEL);
+		if (!cnt_cb->info.stats[i]) {
+			log_err("Cannot allocate memory to store array of "
+				"statistics for %d member\n", i);
+			return -ENOMEM;
+		}
+	}
+
+	/* Allocate array of previously read statistics */
+	cnt_cb->info.last_stats = kcalloc(MAX_NUM_OF_MEMBERS,
+				sizeof(uint64_t *), GFP_KERNEL);
+	if (!cnt_cb->info.last_stats) {
+		log_err("Cannot allocate memory to store array of "
+			"previous read statistics for all members\n");
+		return -ENOMEM;
+	}
+	for (i = 0; i < MAX_NUM_OF_MEMBERS; i++) {
+		cnt_cb->info.last_stats[i] = kcalloc(MAX_NUM_OF_STATS,
+					sizeof(uint64_t), GFP_KERNEL);
+		if (!cnt_cb->info.last_stats[i]) {
+			log_err("Cannot allocate memory to store array of "
+				"previous read statistics for %d member\n", i);
+			return -ENOMEM;
+		}
+	}
+	return 0;
+}
+
 static int init_cnts_resources(struct dpa_stats *dpa_stats)
 {
 	struct dpa_stats_params config = dpa_stats->config;
-	int i;
+	int i, err;
 
 	/* Create circular queue that holds free counter IDs */
 	dpa_stats->cnt_id_cq = cq_new(config.max_counters, sizeof(int));
@@ -521,7 +590,16 @@ static int init_cnts_resources(struct dpa_stats *dpa_stats)
 	memset(dpa_stats->used_cnt_ids, DPA_OFFLD_INVALID_OBJECT_ID,
 			config.max_counters * sizeof(uint32_t));
 
-	/* Allocate array to store counters control blocks */
+	/* Allocate array to store counter ids scheduled for retrieve */
+	dpa_stats->sched_cnt_ids = kcalloc(
+			config.max_counters, sizeof(bool), GFP_KERNEL);
+	if (!dpa_stats->sched_cnt_ids) {
+		log_err("Cannot allocate memory to store %d scheduled counter "
+			"ids\n", config.max_counters);
+		return -ENOMEM;
+	}
+
+	/* Allocate array of counters control blocks */
 	dpa_stats->cnts_cb = kzalloc(config.max_counters *
 			sizeof(struct dpa_stats_cnt_cb), GFP_KERNEL);
 	if (!dpa_stats->cnts_cb) {
@@ -530,10 +608,11 @@ static int init_cnts_resources(struct dpa_stats *dpa_stats)
 		return -ENOMEM;
 	}
 
+	/* Allocate memory for every counter control block */
 	for (i = 0; i < config.max_counters; i++) {
-		mutex_init(&dpa_stats->cnts_cb[i].lock);
-		dpa_stats->cnts_cb[i].dpa_stats = dpa_stats;
-		dpa_stats->cnts_cb[i].index = DPA_OFFLD_INVALID_OBJECT_ID;
+		err = alloc_cnt_cb(dpa_stats, &dpa_stats->cnts_cb[i]);
+		if (err < 0)
+			return err;
 	}
 
 	return 0;
@@ -541,7 +620,7 @@ static int init_cnts_resources(struct dpa_stats *dpa_stats)
 
 static int free_cnts_resources(struct dpa_stats *dpa_stats)
 {
-	uint32_t id, i;
+	uint32_t id, i, j;
 	int err = 0;
 
 	for (i = 0; i < dpa_stats->config.max_counters; i++) {
@@ -549,13 +628,21 @@ static int free_cnts_resources(struct dpa_stats *dpa_stats)
 		id = dpa_stats->used_cnt_ids[i];
 		mutex_unlock(&dpa_stats->lock);
 
-		if (id != DPA_OFFLD_INVALID_OBJECT_ID)
+		if (id != DPA_OFFLD_INVALID_OBJECT_ID) {
 			/* Release the counter id in the Counter IDs cq */
 			err = put_cnt(dpa_stats, &dpa_stats->cnts_cb[id]);
 			if (err < 0) {
 				log_err("Cannot release counter id %d\n", id);
 				return err;
 			}
+		}
+		for (j = 0; j < MAX_NUM_OF_MEMBERS; j++) {
+			kfree(dpa_stats->cnts_cb[i].info.stats[j]);
+			kfree(dpa_stats->cnts_cb[i].info.last_stats[j]);
+		}
+		kfree(dpa_stats->cnts_cb[i].info.stats_off);
+		kfree(dpa_stats->cnts_cb[i].info.stats);
+		kfree(dpa_stats->cnts_cb[i].info.last_stats);
 	}
 
 	/* Release counters IDs circular queue */
@@ -571,6 +658,10 @@ static int free_cnts_resources(struct dpa_stats *dpa_stats)
 	/* Release counters 'used ids' array */
 	kfree(dpa_stats->used_cnt_ids);
 	dpa_stats->used_cnt_ids = NULL;
+
+	/* Release scheduled counters ids array */
+	kfree(dpa_stats->sched_cnt_ids);
+	dpa_stats->sched_cnt_ids = NULL;
 
 	return 0;
 }
@@ -629,7 +720,7 @@ static int init_reqs_resources(struct dpa_stats *dpa_stats)
 	/* Allocate array to store the counter ids */
 	for (i = 0; i < DPA_STATS_MAX_NUM_OF_REQUESTS; i++) {
 		dpa_stats->reqs_cb[i].cnts_ids =
-				kzalloc(DPA_STATS_MAX_NUM_OF_COUNTERS *
+				kzalloc(dpa_stats->config.max_counters *
 						sizeof(int), GFP_KERNEL);
 		if (!dpa_stats->reqs_cb[i].cnts_ids) {
 			log_err("Cannot allocate memory for array of counter "
@@ -1565,6 +1656,13 @@ static int set_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 			prm.td, cnt_cb->id);
 		return -EINVAL;
 	}
+	/* Allocate memory for one key descriptor */
+	cnt_tbl_cb->keys = kzalloc(sizeof(*cnt_tbl_cb->keys), GFP_KERNEL);
+	if (!cnt_tbl_cb->keys) {
+		log_err("Cannot allocate memory for key descriptor "
+			"for counter id %d\n", cnt_cb->id);
+		return -ENOMEM;
+	}
 
 	/* Store CcNode handle and set number of keys to one */
 	cnt_tbl_cb->keys[0].cc_node = cls_tbl.cc_node;
@@ -1710,6 +1808,23 @@ static int set_cnt_ipsec_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return -EFAULT;
 	}
 
+	/* Allocate memory for one security association id */
+	cnt_cb->ipsec_cb.sa_id = kzalloc(sizeof(*cnt_cb->ipsec_cb.sa_id),
+					GFP_KERNEL);
+	if (!cnt_cb->ipsec_cb.sa_id) {
+		log_err("Cannot allocate memory for security association id "
+			"for counter id %d\n", cnt_cb->id);
+		return -ENOMEM;
+	}
+
+	/* Allocate memory to store if security association is valid */
+	cnt_cb->ipsec_cb.valid = kzalloc(sizeof(*cnt_cb->ipsec_cb.valid),
+					 GFP_KERNEL);
+	if (!cnt_cb->ipsec_cb.valid) {
+		log_err("Cannot allocate memory to store if security "
+			"association is valid for counter id %d\n", cnt_cb->id);
+		return -ENOMEM;
+	}
 
 	cnt_cb->ipsec_cb.sa_id[0] = params->ipsec_params.sa_id;
 	cnt_cb->ipsec_cb.valid[0] = TRUE;
@@ -2173,6 +2288,15 @@ static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	tbl_cb->td = params->classif_tbl_params.td;
 	cnt_cb->members_num = params->class_members;
 
+	/* Allocate memory for key descriptors */
+	tbl_cb->keys = kcalloc(params->class_members,
+			       sizeof(*tbl_cb->keys), GFP_KERNEL);
+	if (!tbl_cb->keys) {
+		log_err("Cannot allocate memory for array of key descriptors "
+			"for counter id %d\n", cnt_cb->id);
+		return -ENOMEM;
+	}
+
 	switch (prm.key_type) {
 	case DPA_STATS_CLASSIF_SINGLE_KEY:
 		if (!prm.keys) {
@@ -2420,6 +2544,25 @@ static int set_cls_cnt_ipsec_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	}
 
 	cnt_cb->members_num = prm->class_members;
+
+	/* Allocate memory for array of security association ids */
+	cnt_cb->ipsec_cb.sa_id = kcalloc(cnt_cb->members_num,
+				  sizeof(*cnt_cb->ipsec_cb.sa_id), GFP_KERNEL);
+	if (!cnt_cb->ipsec_cb.sa_id) {
+		log_err("Cannot allocate memory for array of security "
+			"association ids, for counter id %d\n", cnt_cb->id);
+		return -ENOMEM;
+	}
+
+	/* Allocate memory for array that stores if SA id is valid */
+	cnt_cb->ipsec_cb.valid = kcalloc(cnt_cb->members_num,
+				  sizeof(*cnt_cb->ipsec_cb.valid), GFP_KERNEL);
+	if (!cnt_cb->ipsec_cb.valid) {
+		log_err("Cannot allocate memory for array that stores if "
+			"security association ids are valid for counter id %d\n",
+			cnt_cb->id);
+		return -ENOMEM;
+	}
 
 	for (i = 0; i < prm->class_members; i++) {
 		if (prm->ipsec_params.sa_id[i] != DPA_OFFLD_INVALID_OBJECT_ID) {
@@ -3748,19 +3891,30 @@ int dpa_stats_remove_counter(int dpa_stats_cnt_id)
 		return -EINVAL;
 	}
 
-	/* Remove the allocated memory for keys bytes and masks */
-	if (cnt_cb->type == DPA_STATS_CNT_CLASSIF_NODE)
+	switch (cnt_cb->type) {
+	case DPA_STATS_CNT_CLASSIF_NODE:
+		/* Remove the allocated memory for keys bytes and masks */
 		for (i = 0; i < cnt_cb->members_num; i++) {
 			kfree(cnt_cb->ccnode_cb.keys[i].byte);
 			kfree(cnt_cb->ccnode_cb.keys[i].mask);
 		}
-
-	/* Remove the allocated memory for keys bytes and masks */
-	if (cnt_cb->type == DPA_STATS_CNT_CLASSIF_TBL)
+		break;
+	case DPA_STATS_CNT_CLASSIF_TBL:
+		/* Remove the allocated memory for keys bytes, masks and keys */
 		for (i = 0; i < cnt_cb->members_num; i++) {
 			kfree(cnt_cb->tbl_cb.keys[i].key.byte);
 			kfree(cnt_cb->tbl_cb.keys[i].key.mask);
 		}
+		kfree(cnt_cb->tbl_cb.keys);
+		break;
+	case DPA_STATS_CNT_IPSEC:
+		/* Remove the allocated memory for security associations */
+		kfree(cnt_cb->ipsec_cb.sa_id);
+		kfree(cnt_cb->ipsec_cb.valid);
+		break;
+	default:
+		break;
+	}
 
 	/* Release the counter id in the Counter IDs circular queue */
 	err = put_cnt(dpa_stats, cnt_cb);
@@ -3905,7 +4059,7 @@ int dpa_stats_reset_counters(int *cnts_ids, unsigned int cnts_ids_len)
 {
 	struct dpa_stats *dpa_stats = NULL;
 	struct dpa_stats_cnt_cb *cnt_cb = NULL;
-	uint32_t i = 0;
+	uint32_t i = 0, j = 0;
 	int err = 0;
 
 	if (!gbl_dpa_stats) {
@@ -3963,8 +4117,11 @@ int dpa_stats_reset_counters(int *cnts_ids, unsigned int cnts_ids_len)
 					   cnts_ids, cnts_ids_len);
 			return -EINVAL;
 		}
-		memset(&cnt_cb->info.stats, 0, (MAX_NUM_OF_MEMBERS *
-		       MAX_NUM_OF_STATS * sizeof(uint64_t)));
+		/* Reset stored statistics values */
+		for (j = 0; j < MAX_NUM_OF_MEMBERS; j++)
+			memset(cnt_cb->info.stats[j], 0,
+					MAX_NUM_OF_STATS * sizeof(uint64_t));
+
 		mutex_unlock(&cnt_cb->lock);
 	}
 

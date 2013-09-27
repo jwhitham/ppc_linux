@@ -1673,6 +1673,12 @@ static int flush_table(struct dpa_cls_table *ptable)
 			int_cc_node = &ptable->int_cc_node[cc_node_index];
 
 			dpa_classif_hm_release_chain(index_entry->hmd);
+#ifdef DPA_CLASSIFIER_DEBUG
+			dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Remove "
+				"entry #%d from table cc_node=0x%p.\n",
+				__func__, __LINE__, index_entry->entry_index,
+				cc_node));
+#endif /* DPA_CLASSIFIER_DEBUG */
 			err = FM_PCD_MatchTableRemoveKey(cc_node,
 						index_entry->entry_index);
 			if (err != E_OK) {
@@ -2444,6 +2450,18 @@ static int table_insert_entry_exact_match(struct dpa_cls_table	*cls_table,
 	}
 
 	/* Add the key to the selected Cc node */
+#ifdef DPA_CLASSIFIER_DEBUG
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Insert new entry in table "
+		"cc_node=0x%p.\n", __func__, __LINE__,
+		cls_table->int_cc_node[0].cc_node));
+	dpa_cls_dbg(("	index=%d; action type (id)=%d; hmd=%d; h_Manip=0x%p\n",
+		cls_table->entry[k].entry_index, action->type, hmd,
+		key_params.ccNextEngineParams.h_Manip));
+	dpa_cls_dbg(("	Lookup key (%d bytes): ",
+		cls_table->params.exact_match_params.key_size));
+	dump_lookup_key(key);
+	pr_err("\n");
+#endif /* DPA_CLASSIFIER_DEBUG */
 	err = FM_PCD_MatchTableAddKey((t_Handle)cls_table->
 			int_cc_node[0].cc_node,
 		cls_table->entry[k].entry_index,
@@ -2567,8 +2585,12 @@ static int table_insert_entry_hash(struct dpa_cls_table		*cls_table,
 	}
 
 	if (key->mask) {
-		log_err("Key masks are not supported by HASH tables.\n");
-		return -EINVAL;
+		/* Only full 0xFF masks supported: */
+		for (j = 0; j < key->size; j++)
+			if (key->mask[j] ^ 0xff) {
+				log_err("Only key masks 0xff all over are supported by HASH tables.\n");
+				return -EINVAL;
+			}
 	}
 
 	memset(&key_params, 0, sizeof(t_FmPcdCcKeyParams));
@@ -3563,7 +3585,7 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 	t_Error error;
 	struct dpa_cls_hm_node *pcurrent, *pnext;
 	t_FmPcdManipParams params;
-	static int index;
+	static int index = 0;
 	static int num_int_nodes;
 
 	BUG_ON(!chain_head);
@@ -3776,7 +3798,7 @@ int remove_hm_chain(struct list_head *chain_head, struct list_head *item)
 	int err = 0;
 	struct dpa_cls_hm_node *pcurrent;
 	t_Error error;
-	static int index;
+	static int index = 0;
 
 	BUG_ON(!chain_head);
 	BUG_ON(!item);
@@ -3806,6 +3828,8 @@ int remove_hm_chain(struct list_head *chain_head, struct list_head *item)
 	list_del(item);
 
 	remove_hm_node(pcurrent);
+
+	index--;
 
 	return err;
 }
