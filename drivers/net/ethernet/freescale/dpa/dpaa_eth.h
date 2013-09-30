@@ -383,6 +383,7 @@ struct dpa_ern_cnt {
 struct dpa_percpu_priv_s {
 	struct net_device *net_dev;
 	struct napi_struct napi;
+	struct qman_portal *p;
 	u64 in_interrupt;
 	u64 tx_returned;
 	u64 tx_confirm;
@@ -504,7 +505,7 @@ static inline int dpaa_eth_napi_schedule(struct dpa_percpu_priv_s *percpu_priv)
 	 */
 	if (unlikely(in_irq() || !in_serving_softirq())) {
 		/* Disable QMan IRQ and invoke NAPI */
-		int ret = qman_irqsource_remove(QM_PIRQ_DQRI);
+		int ret = qman_p_irqsource_remove(percpu_priv->p, QM_PIRQ_DQRI);
 		if (likely(!ret)) {
 			napi_schedule(&percpu_priv->napi);
 			percpu_priv->in_interrupt++;

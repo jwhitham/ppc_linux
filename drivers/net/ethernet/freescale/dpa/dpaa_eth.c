@@ -275,12 +275,15 @@ void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 
 static int dpaa_eth_poll(struct napi_struct *napi, int budget)
 {
-	int cleaned = qman_poll_dqrr(budget);
+	struct dpa_percpu_priv_s *percpu_priv =
+			container_of(napi, struct dpa_percpu_priv_s, napi);
+
+	int cleaned = qman_p_poll_dqrr(percpu_priv->p, budget);
 
 	if (cleaned < budget) {
 		int tmp;
 		napi_complete(napi);
-		tmp = qman_irqsource_add(QM_PIRQ_DQRI);
+		tmp = qman_p_irqsource_add(percpu_priv->p, QM_PIRQ_DQRI);
 		BUG_ON(tmp);
 	}
 
@@ -336,6 +339,7 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 	priv = netdev_priv(net_dev);
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv->p = portal;
 
 	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
@@ -370,6 +374,7 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 
 	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv->p = portal;
 
 	if (unlikely(dpaa_eth_napi_schedule(percpu_priv)))
 		return qman_cb_dqrr_stop;
@@ -401,6 +406,7 @@ priv_tx_conf_error_dqrr(struct qman_portal		*portal,
 	priv = netdev_priv(net_dev);
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv->p = portal;
 
 	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
@@ -427,6 +433,7 @@ priv_tx_conf_default_dqrr(struct qman_portal		*portal,
 
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	percpu_priv->p = portal;
 
 	if (dpaa_eth_napi_schedule(percpu_priv))
 		return qman_cb_dqrr_stop;
@@ -545,9 +552,9 @@ static void dpaa_eth_poll_controller(struct net_device *net_dev)
 		__this_cpu_ptr(priv->percpu_priv);
 	struct napi_struct napi = percpu_priv->napi;
 
-	qman_irqsource_remove(QM_PIRQ_DQRI);
+	qman_p_irqsource_remove(percpu_priv->p, QM_PIRQ_DQRI);
 	qman_poll_dqrr(napi.weight);
-	qman_irqsource_add(QM_PIRQ_DQRI);
+	qman_p_irqsource_add(percpu_priv->p, QM_PIRQ_DQRI);
 }
 #endif
 
