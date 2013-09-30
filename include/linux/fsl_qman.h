@@ -873,7 +873,7 @@ struct qm_mcc_ceetm_statistics_query_write {
 	u8 ct;
 	u8 __reserved2[13];
 	u64 frm_cnt:40;
-	u16 __reserved3[2];
+	u8 __reserved3[2];
 	u64 byte_cnt:48;
 	u8 __reserved[32];
 } __packed;
