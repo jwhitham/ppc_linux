@@ -222,6 +222,19 @@ static struct mem_fragment *split_frag(struct mem_fragment *frag)
 	return x[2];
 }
 
+__maybe_unused static void dump_frags(void)
+{
+	struct mem_fragment *frag;
+	int i = 0;
+	list_for_each_entry(frag, &mem_list, list) {
+		pr_info("FRAG %d: base 0x%llx pfn_base 0x%llx len 0x%llx "
+			"root_len 0x%llx refs %d\n",
+			i, frag->base, frag->pfn_base,
+			frag->len, frag->root_len, frag->refs);
+		++i;
+	}
+}
+
 /* Walk the list of fragments and adjoin neighbouring segments if possible */
 static void compress_frags(void)
 {
@@ -235,7 +248,10 @@ static void compress_frags(void)
 		    &next_frag->list != &mem_list) {
 			if (next_frag->refs == 0) {
 				/* Merge with next */
+				next_frag->base = frag->base;
+				next_frag->pfn_base = frag->pfn_base;
 				next_frag->len += frag->len;
+				next_frag->pfn_len += frag->pfn_len;
 				list_del(&frag->list);
 			}
 		}
@@ -441,16 +457,6 @@ static bool check_portal_channel(void *ctx, u32 channel)
 }
 
 
-__maybe_unused static void dump_frags(void)
-{
-	struct mem_fragment *frag;
-	int i = 0;
-	list_for_each_entry(frag, &mem_list, list) {
-		pr_info("FRAG %d: base 0x%llx len 0x%llx root_len 0x%llx refs %d\n",
-			i, frag->base, frag->len, frag->root_len, frag->refs);
-		++i;
-	}
-}
 
 
 static int usdpaa_release(struct inode *inode, struct file *filp)
@@ -510,7 +516,8 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 		if (!qm_cleanup_portal)
 			return -ENOMEM;
 		init_qm_portal(qm_alloced_portal, qm_cleanup_portal);
-
+		portal_array[portal_count] = qm_cleanup_portal;
+		++portal_count;
 	}
 	if (!bm_cleanup_portal) {
 		bm_alloced_portal = bm_get_unused_portal();
