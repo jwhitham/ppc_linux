@@ -7485,8 +7485,6 @@ int dpa_classif_mcast_create_group(
 		pgroup->entries[0].used = true;
 		pgroup->member_ids[0] = 0;
 		pgroup->num_members++;
-
-		kfree(replic_grp_params);
 	} else {
 		pgroup->group = res->group_node;
 		/* mark prefilled members in index array member */
@@ -7498,6 +7496,8 @@ int dpa_classif_mcast_create_group(
 		}
 		pgroup->num_members = group_params->prefilled_members;
 	}
+
+	kfree(replic_grp_params);
 
 	if (!pgroup->group) {
 		log_err("Could not create %s group %d\n",
@@ -7524,7 +7524,6 @@ dpa_classif_mcast_create_group_error:
 	}
 
 	*grpd = DPA_OFFLD_DESC_NONE;
-	kfree(replic_grp_params);
 
 	return err;
 }
