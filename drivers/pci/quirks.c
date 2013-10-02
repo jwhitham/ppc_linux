@@ -2794,16 +2794,6 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, 0x342e, vtd_mask_spec_errors);
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, 0x3c28, vtd_mask_spec_errors);
 #endif
 
-#ifdef CONFIG_FSL_PCI
-static void quirk_freescale_class(struct pci_dev *dev)
-{
-	dev_info(&dev->dev, "Setting PCI class for FSL PCI host bridge\n");
-	dev->class = (PCI_CLASS_BRIDGE_PCI << 8) | (dev->class & 0xff);
-}
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_FREESCALE, PCI_ANY_ID,
-			quirk_freescale_class);
-#endif
-
 static void fixup_ti816x_class(struct pci_dev *dev)
 {
 	/* TI 816x devices do not have class code set when in PCIe boot mode */

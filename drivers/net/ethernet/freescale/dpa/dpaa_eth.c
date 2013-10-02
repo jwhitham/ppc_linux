@@ -481,7 +481,7 @@ static void dpaa_eth_napi_enable(struct dpa_priv_s *priv)
 	struct dpa_percpu_priv_s *percpu_priv;
 	int i;
 
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		napi_enable(&percpu_priv->napi);
 	}
@@ -492,7 +492,7 @@ static void dpaa_eth_napi_disable(struct dpa_priv_s *priv)
 	struct dpa_percpu_priv_s *percpu_priv;
 	int i;
 
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		napi_disable(&percpu_priv->napi);
 	}
@@ -584,7 +584,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	/* Although we access another CPU's private data here
 	 * we do it at initialization so it is safe
 	 */
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		percpu_priv->net_dev = net_dev;
 
@@ -822,7 +822,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		memset(percpu_priv, 0, sizeof(*percpu_priv));
 	}

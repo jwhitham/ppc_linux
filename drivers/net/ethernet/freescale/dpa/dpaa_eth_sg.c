@@ -135,7 +135,7 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	int i;
 
 	/* Give each CPU an allotment of "config_count" buffers */
-	for_each_online_cpu(i) {
+	for_each_possible_cpu(i) {
 		int j;
 
 		/* Although we access another CPU's counters here

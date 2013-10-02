@@ -45,6 +45,7 @@ choice FSL_DPAA_ETH_OPTIMIZE
 
 	config FSL_DPAA_ETH_OPTIMIZE_FOR_TERM
 		bool "Optimize for termination"
+		select FSL_DPAA_TX_RECYCLE if FMAN_T4240
 		select FSL_DPAA_ETH_SG_SUPPORT
 		---help---
 		  Optimize the DPAA-Ethernet driver for termination (TCP, UDP) use-cases.
@@ -54,6 +55,7 @@ endchoice
 
 config FSL_DPAA_TX_RECYCLE
 	bool
+	depends on FSL_DPAA_ETH
 	depends on FMAN_T4240
 
 config FSL_DPAA_1588

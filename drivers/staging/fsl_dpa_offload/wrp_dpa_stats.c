@@ -1045,7 +1045,7 @@ create_cls_counter_cleanup:
 			kfree(cnode->keys[i]);
 		}
 		/* Restore user-space pointers */
-		tbl->keys = us_keys;
+		cnode->keys = us_keys;
 		break;
 	case DPA_STATS_CNT_IPSEC:
 		kfree(sa_ids);
