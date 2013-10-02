@@ -1335,7 +1335,8 @@ free:
 		break;
 	}
 	default:
-		pr_err("Invalid DPA IPsec ioctl\n");
+		pr_err("Invalid DPA IPsec ioctl (0x%x)\n", cmd);
+		ret = -EINVAL;
 		break;
 	}
 
@@ -1503,7 +1504,8 @@ free:
 		break;
 	}
 	default:
-		pr_err("Invalid DPA IPsec ioctl\n");
+		pr_err("Invalid DPA IPsec ioctl (0x%x)\n", cmd);
+		ret = -EINVAL;
 		break;
 	}
 
