@@ -3294,6 +3294,35 @@ int qman_set_wpm(int wpm_enable);
  */
 int qman_get_wpm(int *wpm_enable);
 
+/* The below qman_p_***() variants might be called in a migration situation
+ * (e.g. cpu hotplug). They are used to continue accessing the portal that
+ * execution was affine to prior to migration.
+ * @qman_portal specifies which portal the APIs will use.
+*/
+const struct qman_portal_config *qman_p_get_portal_config(struct qman_portal
+									 *p);
+int qman_p_irqsource_add(struct qman_portal *p, u32 bits);
+int qman_p_irqsource_remove(struct qman_portal *p, u32 bits);
+int qman_p_poll_dqrr(struct qman_portal *p, unsigned int limit);
+u32 qman_p_poll_slow(struct qman_portal *p);
+void qman_p_poll(struct qman_portal *p);
+void qman_p_stop_dequeues(struct qman_portal *p);
+void qman_p_start_dequeues(struct qman_portal *p);
+void qman_p_static_dequeue_add(struct qman_portal *p, u32 pools);
+void qman_p_static_dequeue_del(struct qman_portal *p, u32 pools);
+u32 qman_p_static_dequeue_get(struct qman_portal *p);
+void qman_p_dca(struct qman_portal *p, struct qm_dqrr_entry *dq,
+						int park_request);
+int qman_p_volatile_dequeue(struct qman_portal *p, struct qman_fq *fq,
+				u32 flags __maybe_unused, u32 vdqcr);
+int qman_p_enqueue(struct qman_portal *p, struct qman_fq *fq,
+					const struct qm_fd *fd, u32 flags);
+int qman_p_enqueue_orp(struct qman_portal *p, struct qman_fq *fq,
+				const struct qm_fd *fd, u32 flags,
+				struct qman_fq *orp, u16 orp_seqnum);
+int qman_p_enqueue_precommit(struct qman_portal *p, struct qman_fq *fq,
+				const struct qm_fd *fd, u32 flags,
+				qman_cb_precommit cb, void *cb_arg);
 #ifdef __cplusplus
 }
 #endif
