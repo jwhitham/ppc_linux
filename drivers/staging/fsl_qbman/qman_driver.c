@@ -31,8 +31,10 @@
 
 #include "qman_private.h"
 
-#include <linux/iommu.h>
 #include <asm/smp.h>	/* hard_smp_processor_id() if !CONFIG_SMP */
+#ifdef CONFIG_HOTPLUG_CPU
+#include <linux/cpu.h>
+#endif
 
 /* Global variable containing revision id (even on non-control plane systems
  * where CCSR isn't available) */
@@ -471,7 +473,6 @@ static struct qm_portal_config *get_pcfg_idx(struct list_head *list, u32 idx)
 	return NULL;
 }
 
-
 static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 {
 	int ret;
@@ -585,10 +586,8 @@ void qm_put_unused_portal(struct qm_portal_config *pcfg)
 static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
 {
 	struct qman_portal *p;
-	struct cpumask oldmask = *tsk_cpus_allowed(current);
 
 	portal_set_cpu(pcfg, pcfg->public_cfg.cpu);
-	set_cpus_allowed_ptr(current, get_cpu_mask(pcfg->public_cfg.cpu));
 	p = qman_create_affine_portal(pcfg, NULL);
 	if (p) {
 		u32 irq_sources = 0;
@@ -600,14 +599,13 @@ static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
 #ifdef CONFIG_FSL_DPA_PIRQ_FAST
 		irq_sources |= QM_PIRQ_DQRI;
 #endif
-		qman_irqsource_add(irq_sources);
+		qman_p_irqsource_add(p, irq_sources);
 		pr_info("Qman portal %sinitialised, cpu %d\n",
 			pcfg->public_cfg.is_shared ? "(shared) " : "",
 			pcfg->public_cfg.cpu);
 	} else
 		pr_crit("Qman portal failure on cpu %d\n",
 			pcfg->public_cfg.cpu);
-	set_cpus_allowed_ptr(current, &oldmask);
 	return p;
 }
 
@@ -616,7 +614,7 @@ static void init_slave(int cpu)
 	struct qman_portal *p;
 	struct cpumask oldmask = *tsk_cpus_allowed(current);
 	set_cpus_allowed_ptr(current, get_cpu_mask(cpu));
-	p = qman_create_affine_slave(shared_portals[shared_portals_idx++]);
+	p = qman_create_affine_slave(shared_portals[shared_portals_idx++], cpu);
 	if (!p)
 		pr_err("Qman slave portal failure on cpu %d\n", cpu);
 	else
@@ -636,6 +634,47 @@ static int __init parse_qportals(char *str)
 }
 __setup("qportals=", parse_qportals);
 
+static void qman_offline_cpu(unsigned int cpu)
+{
+	struct qman_portal *p;
+	p = (struct qman_portal *)affine_portals[cpu];
+	if (p && (!qman_portal_is_sharing_redirect(p)))
+		qman_migrate_portal(p);
+}
+
+static void qman_online_cpu(unsigned int cpu)
+{
+	struct qman_portal *p;
+	p = (struct qman_portal *)affine_portals[cpu];
+	if (p && (!qman_portal_is_sharing_redirect(p)))
+		qman_migrate_portal_back(p, cpu);
+}
+
+#ifdef CONFIG_HOTPLUG_CPU
+static int __cpuinit qman_hotplug_cpu_callback(struct notifier_block *nfb,
+				unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+
+	switch (action) {
+	case CPU_ONLINE:
+	case CPU_ONLINE_FROZEN:
+		qman_online_cpu(cpu);
+		break;
+	case CPU_DOWN_PREPARE:
+	case CPU_DOWN_PREPARE_FROZEN:
+		qman_offline_cpu(cpu);
+	default:
+		break;
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block qman_hotplug_cpu_notifier = {
+	.notifier_call = qman_hotplug_cpu_callback,
+};
+#endif /* CONFIG_HOTPLUG_CPU */
+
 __init int qman_init(void)
 {
 	struct cpumask slave_cpus;
@@ -648,6 +687,7 @@ __init int qman_init(void)
 	struct qman_portal *p;
 	int cpu, ret;
 	const u32 *clk;
+	struct cpumask offline_cpus;
 
 	/* Initialise the Qman (CCSR) device */
 	for_each_compatible_node(dn, NULL, "fsl,qman") {
@@ -685,6 +725,7 @@ __init int qman_init(void)
 			return ret;
 	}
 
+	memset(&affine_portals, 0, sizeof(uintptr_t) * num_possible_cpus());
 	/* Initialise portals. See bman_driver.c for comments */
 	for_each_compatible_node(dn, NULL, "fsl,qman-portal") {
 		if (!of_device_is_available(dn))
@@ -695,26 +736,18 @@ __init int qman_init(void)
 			list_add_tail(&pcfg->list, &unused_pcfgs);
 		}
 	}
-	for_each_cpu(cpu, &want_shared) {
-		pcfg = get_pcfg(&unused_pcfgs);
-		if (!pcfg)
-			break;
-		pcfg->public_cfg.cpu = cpu;
-		list_add_tail(&pcfg->list, &shared_pcfgs);
-		cpumask_set_cpu(cpu, &shared_cpus);
-	}
-	for_each_cpu(cpu, &want_unshared) {
-		if (cpumask_test_cpu(cpu, &shared_cpus))
-			continue;
-		pcfg = get_pcfg(&unused_pcfgs);
-		if (!pcfg)
-			break;
-		pcfg->public_cfg.cpu = cpu;
-		list_add_tail(&pcfg->list, &unshared_pcfgs);
-		cpumask_set_cpu(cpu, &unshared_cpus);
-	}
-	if (list_empty(&shared_pcfgs) && list_empty(&unshared_pcfgs)) {
-		for_each_online_cpu(cpu) {
+	for_each_possible_cpu(cpu) {
+		if (cpumask_test_cpu(cpu, &want_shared)) {
+			pcfg = get_pcfg(&unused_pcfgs);
+			if (!pcfg)
+				break;
+			pcfg->public_cfg.cpu = cpu;
+			list_add_tail(&pcfg->list, &shared_pcfgs);
+			cpumask_set_cpu(cpu, &shared_cpus);
+		}
+		if (cpumask_test_cpu(cpu, &want_unshared)) {
+			if (cpumask_test_cpu(cpu, &shared_cpus))
+				continue;
 			pcfg = get_pcfg(&unused_pcfgs);
 			if (!pcfg)
 				break;
@@ -723,7 +756,17 @@ __init int qman_init(void)
 			cpumask_set_cpu(cpu, &unshared_cpus);
 		}
 	}
-	cpumask_andnot(&slave_cpus, cpu_online_mask, &shared_cpus);
+	if (list_empty(&shared_pcfgs) && list_empty(&unshared_pcfgs)) {
+		for_each_possible_cpu(cpu) {
+			pcfg = get_pcfg(&unused_pcfgs);
+			if (!pcfg)
+				break;
+			pcfg->public_cfg.cpu = cpu;
+			list_add_tail(&pcfg->list, &unshared_pcfgs);
+			cpumask_set_cpu(cpu, &unshared_cpus);
+		}
+	}
+	cpumask_andnot(&slave_cpus, cpu_possible_mask, &shared_cpus);
 	cpumask_andnot(&slave_cpus, &slave_cpus, &unshared_cpus);
 	if (cpumask_empty(&slave_cpus)) {
 		if (!list_empty(&shared_pcfgs)) {
@@ -759,6 +802,12 @@ __init int qman_init(void)
 		for_each_cpu(cpu, &slave_cpus)
 			init_slave(cpu);
 	pr_info("Qman portals initialised\n");
+	cpumask_andnot(&offline_cpus, cpu_possible_mask, cpu_online_mask);
+	for_each_cpu(cpu, &offline_cpus)
+		qman_offline_cpu(cpu);
+#ifdef CONFIG_HOTPLUG_CPU
+	register_hotcpu_notifier(&qman_hotplug_cpu_notifier);
+#endif
 	return 0;
 }
 

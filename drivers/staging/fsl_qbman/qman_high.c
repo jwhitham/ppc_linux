@@ -154,6 +154,7 @@ static cpumask_t affine_mask;
 static DEFINE_SPINLOCK(affine_mask_lock);
 static u16 affine_channels[NR_CPUS];
 static DEFINE_PER_CPU(struct qman_portal, qman_affine_portal);
+uintptr_t affine_portals[NR_CPUS];
 
 /* "raw" gets the cpu-local struct whether it's a redirect or not. */
 static inline struct qman_portal *get_raw_affine_portal(void)
@@ -550,19 +551,16 @@ struct qman_portal *qman_create_affine_portal(
 			const struct qman_cgrs *cgrs)
 {
 	struct qman_portal *res;
-	struct qman_portal *portal = get_raw_affine_portal();
-	/* A criteria for calling this function (from qman_driver.c) is that
-	 * we're already affine to the cpu and won't schedule onto another cpu.
-	 * This means we can put_affine_portal() and yet continue to use
-	 * "portal", which in turn means aspects of this routine can sleep. */
-	put_affine_portal();
+	struct qman_portal *portal;
 
+	portal = &per_cpu(qman_affine_portal, config->public_cfg.cpu);
 	res = qman_create_portal(portal, config, cgrs);
 	if (res) {
 		spin_lock(&affine_mask_lock);
 		cpumask_set_cpu(config->public_cfg.cpu, &affine_mask);
 		affine_channels[config->public_cfg.cpu] =
 			config->public_cfg.channel;
+		affine_portals[config->public_cfg.cpu] = (uintptr_t)portal;
 		spin_unlock(&affine_mask_lock);
 	}
 	return res;
@@ -570,10 +568,12 @@ struct qman_portal *qman_create_affine_portal(
 
 /* These checks are BUG_ON()s because the driver is already supposed to avoid
  * these cases. */
-struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect)
+struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect,
+								int cpu)
 {
 #ifdef CONFIG_FSL_DPA_PORTAL_SHARE
-	struct qman_portal *p = get_raw_affine_portal();
+	struct qman_portal *p;
+	p = &per_cpu(qman_affine_portal, cpu);
 	/* Check that we don't already have our own portal */
 	BUG_ON(p->config);
 	/* Check that we aren't already slaving to another portal */
@@ -583,7 +583,7 @@ struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect)
 	/* These are the only elements to initialise when redirecting */
 	p->irq_sources = 0;
 	p->sharing_redirect = redirect;
-	put_affine_portal();
+	affine_portals[cpu] = (uintptr_t)p;
 	return p;
 #else
 	BUG();
@@ -1089,6 +1089,12 @@ u16 qman_affine_channel(int cpu)
 	return affine_channels[cpu];
 }
 EXPORT_SYMBOL(qman_affine_channel);
+
+uintptr_t qman_get_affine_portal(int cpu)
+{
+	return affine_portals[cpu];
+}
+EXPORT_SYMBOL(qman_affine_portal);
 
 int qman_p_poll_dqrr(struct qman_portal *p, unsigned int limit)
 {
@@ -4825,4 +4831,61 @@ int qman_shutdown_fq(u32 fqid)
 	ret = qm_shutdown_fq(&low_p, 1, fqid);
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 	put_affine_portal();
+}
+
+static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
+							unsigned int cpu)
+{
+	struct iommu_stash_attribute stash_attr;
+	int ret;
+
+	if (!pcfg->iommu_domain) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_alloc() failed",
+			__func__);
+		goto _no_iommu;
+	}
+
+	stash_attr.cpu = cpu;
+	stash_attr.cache = IOMMU_ATTR_CACHE_L1;
+	stash_attr.window = ~(u32)0;
+	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_PAMU_STASH,
+					&stash_attr);
+	if (ret < 0) {
+		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
+					__func__, ret);
+		return;
+	}
+
+_no_iommu:
+#ifdef CONFIG_FSL_QMAN_CONFIG
+	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
+#endif
+		pr_warn("Failed to update portal's stash request queue\n");
+
+	return;
+}
+
+int qman_portal_is_sharing_redirect(struct qman_portal *portal)
+{
+	return portal->sharing_redirect ? 1 : 0;
+}
+
+/* Migrate the portal to the boot cpu(cpu0) for offline cpu */
+void qman_migrate_portal(struct qman_portal *portal)
+{
+	unsigned long irqflags __maybe_unused;
+	PORTAL_IRQ_LOCK(portal, irqflags);
+	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(0));
+	qman_portal_update_sdest(portal->config, 0);
+	PORTAL_IRQ_UNLOCK(portal, irqflags);
+}
+
+/* Migrate the portal back to the affined cpu once that cpu appears.*/
+void qman_migrate_portal_back(struct qman_portal *portal, unsigned int cpu)
+{
+	unsigned long irqflags __maybe_unused;
+	PORTAL_IRQ_LOCK(portal, irqflags);
+	qman_portal_update_sdest(portal->config, cpu);
+	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(cpu));
+	PORTAL_IRQ_UNLOCK(portal, irqflags);
 }

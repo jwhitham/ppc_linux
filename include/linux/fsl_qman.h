@@ -1668,6 +1668,13 @@ const cpumask_t *qman_affine_cpus(void);
 u16 qman_affine_channel(int cpu);
 
 /**
+ * qman_get_affine_portal - return the portal pointer affine to cpu
+ * @cpu: the cpu whose affine portal is the subject of the query
+ *
+ */
+uintptr_t qman_get_affine_portal(int cpu);
+
+/**
  * qman_poll_dqrr - process DQRR (fast-path) entries
  * @limit: the maximum number of DQRR entries to process
  *

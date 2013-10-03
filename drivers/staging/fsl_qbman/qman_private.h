@@ -31,6 +31,7 @@
 
 #include "dpa_sys.h"
 #include <linux/fsl_qman.h>
+#include <linux/iommu.h>
 
 #if !defined(CONFIG_FSL_QMAN_FQ_LOOKUP) && defined(CONFIG_PPC64)
 #error "_PPC64 requires _FSL_QMAN_FQ_LOOKUP"
@@ -212,7 +213,8 @@ struct qman_portal *qman_create_portal(
 struct qman_portal *qman_create_affine_portal(
 			const struct qm_portal_config *config,
 			const struct qman_cgrs *cgrs);
-struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect);
+struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect,
+								int cpu);
 const struct qm_portal_config *qman_destroy_affine_portal(void);
 void qman_destroy_portal(struct qman_portal *qm);
 
@@ -387,3 +389,9 @@ int qman_ceetm_query_cq(unsigned int cqid, unsigned int dcpid,
 int qman_ceetm_query_ccgr(struct qm_mcc_ceetm_ccgr_query *ccgr_query,
 				struct qm_mcr_ceetm_ccgr_query *response);
 int qman_ceetm_get_xsfdr(enum qm_dc_portal portal, unsigned int *num);
+
+/* Portal migration */
+extern uintptr_t affine_portals[NR_CPUS];
+int qman_portal_is_sharing_redirect(struct qman_portal *portal);
+void qman_migrate_portal(struct qman_portal *portal);
+void qman_migrate_portal_back(struct qman_portal *portal, unsigned int cpu);
