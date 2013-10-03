@@ -105,7 +105,8 @@ extern struct device_node *GetFmPortAdvArgsDevTreeNode (struct device_node *fm_n
 /* Bootarg used to override FSL_FM_RX_EXTRA_HEADROOM Kconfig value */
 #define FSL_FM_RX_EXTRA_HEADROOM_BOOTARG  "fsl_fm_rx_extra_headroom"
 
-/* Maximum value for the fsl_fm_rx_extra_headroom bootarg */
+/* Minimum and maximum value for the fsl_fm_rx_extra_headroom bootarg */
+#define FSL_FM_RX_EXTRA_HEADROOM_MIN 16
 #define FSL_FM_RX_EXTRA_HEADROOM_MAX 384
 
 #define TX_PAUSE_PRIO_DEFAULT 0xff
@@ -204,12 +205,13 @@ static int __init fm_set_rx_extra_headroom(char *str)
 		return 1;
 	}
 
-	if (fsl_fm_rx_extra_headroom < 0 ||
+	if (fsl_fm_rx_extra_headroom < FSL_FM_RX_EXTRA_HEADROOM_MIN ||
 		fsl_fm_rx_extra_headroom > FSL_FM_RX_EXTRA_HEADROOM_MAX) {
-		printk(KERN_WARNING "Invalid value for %s=<int> prop in "
+		printk(KERN_WARNING "Invalid value for %s=%d prop in "
 			"bootargs; will use the default "
 			"FSL_FM_RX_EXTRA_HEADROOM (%d) from Kconfig.\n",
 			FSL_FM_RX_EXTRA_HEADROOM_BOOTARG,
+			fsl_fm_rx_extra_headroom,
 			CONFIG_FSL_FM_RX_EXTRA_HEADROOM);
 		fsl_fm_rx_extra_headroom = CONFIG_FSL_FM_RX_EXTRA_HEADROOM;
 	}
