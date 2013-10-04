@@ -143,13 +143,13 @@ static int set_cnt_classif_node_retrieve_func(struct dpa_stats_cnt_cb *cnt_cb,
 				enum dpa_stats_classif_node_type ccnode_type)
 {
 	switch (ccnode_type) {
-	case DPA_CLS_TBL_HASH:
+	case DPA_STATS_CLASSIF_NODE_HASH:
 		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_hash_stats;
 		break;
-	case DPA_CLS_TBL_INDEXED:
+	case DPA_STATS_CLASSIF_NODE_INDEXED:
 		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_index_stats;
 		break;
-	case DPA_CLS_TBL_EXACT_MATCH:
+	case DPA_STATS_CLASSIF_NODE_EXACT_MATCH:
 		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_match_stats;
 		break;
 	default:
