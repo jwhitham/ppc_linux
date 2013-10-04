@@ -862,7 +862,8 @@ mac_probe_failed:
 	if (net_dev)
 		free_netdev(net_dev);
 alloc_etherdev_mq_failed:
-	devm_kfree(dev, dpa_bp);
+	if (atomic_read(&dpa_bp->refs) == 0)
+		devm_kfree(dev, dpa_bp);
 
 	return err;
 }
