@@ -380,10 +380,14 @@ struct dpa_ern_cnt {
 	u64 orp_zero;		/* ORP disabled */
 };
 
-struct dpa_percpu_priv_s {
-	struct net_device *net_dev;
+struct dpa_napi_portal {
 	struct napi_struct napi;
 	struct qman_portal *p;
+};
+
+struct dpa_percpu_priv_s {
+	struct net_device *net_dev;
+	struct dpa_napi_portal *np;
 	u64 in_interrupt;
 	u64 tx_returned;
 	u64 tx_confirm;
@@ -467,6 +471,7 @@ struct fm_port_fqs {
 int dpa_bp_priv_seed(struct dpa_bp *dpa_bp);
 int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp);
 void __hot _dpa_rx(struct net_device *net_dev,
+		struct qman_portal *portal,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,
 		const struct qm_fd *fd,
@@ -497,7 +502,8 @@ int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp);
 int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	struct sk_buff *skb, struct qm_fd *fd, char *parse_results);
 
-static inline int dpaa_eth_napi_schedule(struct dpa_percpu_priv_s *percpu_priv)
+static inline int dpaa_eth_napi_schedule(struct dpa_percpu_priv_s *percpu_priv,
+			struct qman_portal *portal)
 {
 	/* In case of threaded ISR for RT enable kernel,
 	 * in_irq() does not return appropriate value, so use
@@ -505,9 +511,15 @@ static inline int dpaa_eth_napi_schedule(struct dpa_percpu_priv_s *percpu_priv)
 	 */
 	if (unlikely(in_irq() || !in_serving_softirq())) {
 		/* Disable QMan IRQ and invoke NAPI */
-		int ret = qman_p_irqsource_remove(percpu_priv->p, QM_PIRQ_DQRI);
+		int ret = qman_p_irqsource_remove(portal, QM_PIRQ_DQRI);
 		if (likely(!ret)) {
-			napi_schedule(&percpu_priv->napi);
+			const struct qman_portal_config *pc =
+					qman_p_get_portal_config(portal);
+			struct dpa_napi_portal *np =
+					&percpu_priv->np[pc->index];
+
+			np->p = portal;
+			napi_schedule(&np->napi);
 			percpu_priv->in_interrupt++;
 			return 1;
 		}
@@ -570,6 +582,8 @@ int fm_mac_dump_regs(struct mac_device *h_dev, char *buf, int n);
 
 void dpaa_eth_sysfs_remove(struct device *dev);
 void dpaa_eth_sysfs_init(struct device *dev);
+
+void dpa_private_napi_del(struct net_device *net_dev);
 
 /* Equivalent to a memset(0), but works faster */
 static inline void clear_fd(struct qm_fd *fd)

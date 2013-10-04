@@ -505,6 +505,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 }
 
 void __hot _dpa_rx(struct net_device *net_dev,
+		struct qman_portal *portal,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,
 		const struct qm_fd *fd,
@@ -573,8 +574,12 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	if (use_gro) {
 		gro_result_t gro_result;
+		const struct qman_portal_config *pc =
+					qman_p_get_portal_config(portal);
+		struct dpa_napi_portal *np = &percpu_priv->np[pc->index];
 
-		gro_result = napi_gro_receive(&percpu_priv->napi, skb);
+		np->p = portal;
+		gro_result = napi_gro_receive(&np->napi, skb);
 		/* If frame is dropped by the stack, rx_dropped counter is
 		 * incremented automatically, so no need for us to update it
 		 */

@@ -471,6 +471,7 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	err = dpa_fq_free(dev, &priv->dpa_fq_list);
 
+	dpa_private_napi_del(net_dev);
 	free_percpu(priv->percpu_priv);
 
 	dpa_bp_free(priv, priv->dpa_bp);
