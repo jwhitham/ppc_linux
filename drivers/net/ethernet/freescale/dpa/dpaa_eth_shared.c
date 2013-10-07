@@ -498,12 +498,43 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 					  dpa_bp_vaddr + dpa_fd_offset(&fd),
 					  dpa_fd_length(&fd));
 
-		/* Enable L3/L4 hardware checksum computation, if applicable */
-		err = dpa_enable_tx_csum(priv, skb, &fd,
+		if (!priv->mac_dev)
+			fd.cmd |= FM_FD_CMD_DTC;
+		else {
+			/* Enable L3/L4 hardware checksum computation,
+			* if applicable
+			*/
+			err = dpa_enable_tx_csum(priv, skb, &fd,
 					 dpa_bp_vaddr + DPA_TX_PRIV_DATA_SIZE);
+
+			if (unlikely(err < 0)) {
+				if (netif_msg_tx_err(priv) && net_ratelimit())
+					netdev_err(net_dev,
+						"Tx HW csum error: %d\n", err);
+				percpu_priv->stats.tx_errors++;
+				goto l3_l4_csum_failed;
+			}
+		}
+
 	} else {
-		err = dpa_enable_tx_csum(priv, skb, &fd,
-					 (char *)&parse_results);
+		if (!priv->mac_dev)
+			fd.cmd |= FM_FD_CMD_DTC;
+		else {
+			/* Enable L3/L4 hardware checksum computation,
+			 * if applicable
+			 */
+			err = dpa_enable_tx_csum(priv, skb, &fd,
+						(char *)&parse_results);
+
+			if (unlikely(err < 0)) {
+				if (netif_msg_tx_err(priv) && net_ratelimit())
+					netdev_err(net_dev,
+						"Tx HW csum error: %d\n", err);
+				percpu_priv->stats.tx_errors++;
+				goto l3_l4_csum_failed;
+			}
+
+		}
 
 		copy_to_unmapped_area(bm_buf_addr(&bmb) + DPA_TX_PRIV_DATA_SIZE,
 				&parse_results,
@@ -512,13 +543,6 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 		copy_to_unmapped_area(bm_buf_addr(&bmb) + dpa_fd_offset(&fd),
 				skb->data,
 				dpa_fd_length(&fd));
-	}
-
-	if (unlikely(err < 0)) {
-		if (netif_msg_tx_err(priv) && net_ratelimit())
-			netdev_err(net_dev, "Tx HW csum error: %d\n", err);
-		percpu_priv->stats.tx_errors++;
-		goto l3_l4_csum_failed;
 	}
 
 	err = dpa_xmit(priv, &percpu_priv->stats, queue_mapping, &fd);

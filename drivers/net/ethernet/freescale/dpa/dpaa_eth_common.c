@@ -1530,7 +1530,7 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	int ethertype = ntohs(skb->protocol);
 	int retval = 0;
 
-	if (!priv->mac_dev || skb->ip_summed != CHECKSUM_PARTIAL)
+	if (skb->ip_summed != CHECKSUM_PARTIAL)
 		return 0;
 
 	/* Note: L3 csum seems to be already computed in sw, but we can't choose
