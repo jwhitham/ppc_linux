@@ -772,13 +772,13 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 		return -ENOMEM;
 	}
 
-	if (resource_size(&rsrc) < (PCI_EP_PF_OFFSET * pf_num))
-		return -EINVAL;
-
 	if (pf_num > 1)
 		regs_size = PCI_EP_PF_OFFSET;
 	else
 		regs_size = resource_size(&rsrc);
+
+	if (resource_size(&rsrc) < (regs_size * pf_num))
+		return -EINVAL;
 
 	for (pf_idx = 0; pf_idx < pf_num; pf_idx++) {
 		pdev = alloc_pci_dev();
