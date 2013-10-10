@@ -934,10 +934,11 @@ int dpaa_eth_add_channel(void *__arg)
 	const cpumask_t *cpus = qman_affine_cpus();
 	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u32)(unsigned long)__arg);
 	int cpu;
+	struct qman_portal *portal;
 
 	for_each_cpu(cpu, cpus) {
-		set_cpus_allowed_ptr(current, get_cpu_mask(cpu));
-		qman_static_dequeue_add(pool);
+		portal = (struct qman_portal *)qman_get_affine_portal(cpu);
+		qman_p_static_dequeue_add(portal, pool);
 	}
 	return 0;
 }
