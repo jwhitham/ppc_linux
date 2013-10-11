@@ -552,11 +552,17 @@ static void dpaa_eth_poll_controller(struct net_device *net_dev)
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 	struct dpa_percpu_priv_s *percpu_priv =
 		__this_cpu_ptr(priv->percpu_priv);
-	struct napi_struct napi = percpu_priv->napi;
+	struct qman_portal *p;
+	const struct qman_portal_config *pc;
+	struct dpa_napi_portal *np;
 
-	qman_p_irqsource_remove(percpu_priv->p, QM_PIRQ_DQRI);
-	qman_poll_dqrr(napi.weight);
-	qman_p_irqsource_add(percpu_priv->p, QM_PIRQ_DQRI);
+	p = (struct qman_portal *)qman_get_affine_portal(smp_processor_id());
+	pc = qman_p_get_portal_config(p);
+	np = &percpu_priv->np[pc->index];
+
+	qman_p_irqsource_remove(np->p, QM_PIRQ_DQRI);
+	qman_p_poll_dqrr(np->p, np->napi.weight);
+	qman_p_irqsource_add(np->p, QM_PIRQ_DQRI);
 }
 #endif
 
