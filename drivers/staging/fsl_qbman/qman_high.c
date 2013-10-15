@@ -4831,6 +4831,7 @@ int qman_shutdown_fq(u32 fqid)
 	ret = qm_shutdown_fq(&low_p, 1, fqid);
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 	put_affine_portal();
+	return ret;
 }
 
 static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
