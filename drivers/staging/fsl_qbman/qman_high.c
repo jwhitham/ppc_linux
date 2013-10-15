@@ -154,7 +154,7 @@ static cpumask_t affine_mask;
 static DEFINE_SPINLOCK(affine_mask_lock);
 static u16 affine_channels[NR_CPUS];
 static DEFINE_PER_CPU(struct qman_portal, qman_affine_portal);
-uintptr_t affine_portals[NR_CPUS];
+void *affine_portals[NR_CPUS];
 
 /* "raw" gets the cpu-local struct whether it's a redirect or not. */
 static inline struct qman_portal *get_raw_affine_portal(void)
@@ -560,7 +560,7 @@ struct qman_portal *qman_create_affine_portal(
 		cpumask_set_cpu(config->public_cfg.cpu, &affine_mask);
 		affine_channels[config->public_cfg.cpu] =
 			config->public_cfg.channel;
-		affine_portals[config->public_cfg.cpu] = (uintptr_t)portal;
+		affine_portals[config->public_cfg.cpu] = portal;
 		spin_unlock(&affine_mask_lock);
 	}
 	return res;
@@ -583,7 +583,7 @@ struct qman_portal *qman_create_affine_slave(struct qman_portal *redirect,
 	/* These are the only elements to initialise when redirecting */
 	p->irq_sources = 0;
 	p->sharing_redirect = redirect;
-	affine_portals[cpu] = (uintptr_t)p;
+	affine_portals[cpu] = p;
 	return p;
 #else
 	BUG();
@@ -1090,7 +1090,7 @@ u16 qman_affine_channel(int cpu)
 }
 EXPORT_SYMBOL(qman_affine_channel);
 
-uintptr_t qman_get_affine_portal(int cpu)
+void *qman_get_affine_portal(int cpu)
 {
 	return affine_portals[cpu];
 }

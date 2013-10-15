@@ -1672,7 +1672,7 @@ u16 qman_affine_channel(int cpu);
  * @cpu: the cpu whose affine portal is the subject of the query
  *
  */
-uintptr_t qman_get_affine_portal(int cpu);
+void *qman_get_affine_portal(int cpu);
 
 /**
  * qman_poll_dqrr - process DQRR (fast-path) entries

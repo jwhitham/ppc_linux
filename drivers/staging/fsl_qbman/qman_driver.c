@@ -725,7 +725,7 @@ __init int qman_init(void)
 			return ret;
 	}
 
-	memset(&affine_portals, 0, sizeof(uintptr_t) * num_possible_cpus());
+	memset(affine_portals, 0, sizeof(void *) * num_possible_cpus());
 	/* Initialise portals. See bman_driver.c for comments */
 	for_each_compatible_node(dn, NULL, "fsl,qman-portal") {
 		if (!of_device_is_available(dn))

@@ -52,7 +52,7 @@ static int num_shared_portals;
 static int shared_portals_idx;
 static LIST_HEAD(unused_pcfgs);
 static DEFINE_SPINLOCK(unused_pcfgs_lock);
-static uintptr_t affine_bportals[NR_CPUS];
+static void *affine_bportals[NR_CPUS];
 
 static int __init fsl_bpool_init(struct device_node *node)
 {
@@ -252,7 +252,7 @@ static struct bman_portal *init_pcfg(struct bm_portal_config *pcfg)
 		pr_info("Bman portal %sinitialised, cpu %d\n",
 			pcfg->public_cfg.is_shared ? "(shared) " : "",
 			pcfg->public_cfg.cpu);
-		affine_bportals[pcfg->public_cfg.cpu] = (uintptr_t)p;
+		affine_bportals[pcfg->public_cfg.cpu] = p;
 	} else
 		pr_crit("Bman portal failure on cpu %d\n",
 			pcfg->public_cfg.cpu);
@@ -269,7 +269,7 @@ static void init_slave(int cpu)
 		pr_info("Bman portal %sinitialised, cpu %d\n", "(slave) ", cpu);
 	if (shared_portals_idx >= num_shared_portals)
 		shared_portals_idx = 0;
-	affine_bportals[cpu] = (uintptr_t)p;
+	affine_bportals[cpu] = p;
 }
 
 /* Bootarg "bportals=[...]" has the same syntax as "qportals=", and so the
