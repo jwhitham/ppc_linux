@@ -717,6 +717,15 @@ __init int qman_init(void)
 		qm_channel_pme = QMAN_CHANNEL_PME_REV3;
 	}
 
+	/*
+	 * Parse the ceetm node to get how many ceetm instances are supported
+	 * on the current silicon. num_ceetms must be confirmed before portals
+	 * are intiailized.
+	 */
+	num_ceetms = 0;
+	for_each_compatible_node(dn, NULL, "fsl,qman-ceetm")
+		num_ceetms++;
+
 	/* Parse pool channels into the SDQCR mask. (Must happen before portals
 	 * are initialised.) */
 	for_each_compatible_node(dn, NULL, "fsl,pool-channel-range") {
@@ -837,10 +846,8 @@ __init int qman_resource_init(void)
 	}
 
 	/* Parse CEETM */
-	num_ceetms = 0;
 	for_each_compatible_node(dn, NULL, "fsl,qman-ceetm") {
 		ret = fsl_ceetm_init(dn);
-		num_ceetms++;
 		if (ret)
 			return ret;
 	}
