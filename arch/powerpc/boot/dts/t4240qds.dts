@@ -541,6 +541,10 @@
 				status = "disabled";
 			};
 		};
+
+		sdhc@114000 {
+			voltage-ranges = <1800 1800 3300 3300>;
+		};
 	};
 
 	pci0: pcie@ffe240000 {

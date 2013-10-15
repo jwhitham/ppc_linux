@@ -89,7 +89,6 @@ void sdhci_get_of_property(struct platform_device *pdev)
 
 		if (of_device_is_compatible(np, "fsl,t4240-esdhc")) {
 			host->quirks2 |= SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ;
-			host->quirks2 |= SDHCI_QUIRK2_CIRCUIT_SUPPORT_VS33;
 			host->quirks2 |= SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD;
 			host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
 		}
