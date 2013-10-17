@@ -44,6 +44,7 @@ struct pci_ep_dev {
 	struct pci_pf_dev	*pf;
 	struct device		dev;
 	int			idx;
+	int			devfn;
 	int			type;
 	spinlock_t		irqlock;
 	int			irq_type;

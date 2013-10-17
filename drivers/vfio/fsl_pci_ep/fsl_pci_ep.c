@@ -33,6 +33,15 @@
 
 #include "fsl_pci_ep.h"
 
+#define CONFIG_ACCESS_PF_SHIFT 8
+#define CONFIG_ACCESS_VF_SHIFT 12
+#define CONFIG_ACCESS_EXTREG_SHIFT 24
+#define CONFIG_ACCESS_TYPE_SHIFT 29
+#define CONFIG_ACCESS_TYPE_NO_SRIOV 0
+#define CONFIG_ACCESS_TYPE_PF_SRIOV 1
+#define CONFIG_ACCESS_TYPE_VF_SRIOV 3
+#define CONFIG_ACCESS_ENABLE (1 << 31)
+
 static DEFINE_SPINLOCK(pci_ep_spinlock);
 LIST_HEAD(pci_ep_controllers);
 
@@ -258,44 +267,57 @@ int fsl_pci_ep_set_win(struct pci_ep_dev *ep, struct pci_ep_win *win)
 
 }
 
-static struct pci_pf_dev *pci_bus_to_pf(struct pci_bus *bus)
+static struct pci_ep_dev *
+fsl_pci_ep_find(struct pci_controller *controller, int devfn)
 {
-	if (!bus->self)
-		return NULL;
+	struct pci_pf_dev *pf;
+	struct pci_ep_dev *tmp, *ep = NULL;
+	struct list_head *pf_list = controller->private_data;
 
-	return ((struct pci_ep_dev *)bus->self->sysdata)->pf;
+	list_for_each_entry(pf, pf_list, node)
+		list_for_each_entry(tmp, &pf->ep_list, node)
+			if (tmp->devfn == devfn) {
+				ep = tmp;
+				break;
+			}
+
+	return ep;
 }
 
 static int fsl_pci_ep_read_config(struct pci_bus *bus, unsigned int devfn,
 				  int offset, int len, u32 *val)
 {
 	struct pci_controller *hose = pci_bus_to_host(bus);
-	struct pci_pf_dev *pf = pci_bus_to_pf(bus);
+	struct pci_ep_dev *ep;
 	volatile void __iomem *cfg_data;
 	u32 type, reg;
 	int real_devfn, pf_idx, vf_idx;
 
-	if (!pf) {
-		pf_idx = 0;
+	real_devfn = bus->number << 8 | devfn;
+
+	if (real_devfn < MULTI_FUNCTION_NUM) {
+		/* physical function */
+		pf_idx = real_devfn;
 		vf_idx = 0;
-		type = 0;
+		type = CONFIG_ACCESS_TYPE_NO_SRIOV;
 	} else {
-		real_devfn = bus->number << 8 | devfn;
-		if (pf->vf_total && real_devfn > pf->vf_offset) {
-			pf_idx = real_devfn & pf->vf_offset;
-			vf_idx = (real_devfn - pf->vf_offset) / pf->vf_stride;
-			type = 1 << 30 | pf->vf_enabled << 29;
-		} else {
-			pf_idx = real_devfn;
-			vf_idx = 0;
-			type = pf->vf_enabled << 29;
-		}
+		/* virtual function */
+		ep = fsl_pci_ep_find(hose, real_devfn);
+		if (!ep || ep->type != PCI_EP_TYPE_VF)
+			return PCIBIOS_DEVICE_NOT_FOUND;
+
+		pf_idx = ep->pf->idx;
+		vf_idx = ep->idx - 1;
+		type = CONFIG_ACCESS_TYPE_VF_SRIOV;
 	}
 
-	reg = ((offset & 0xf00) << 16) | (offset & 0xfc);
+	reg = ((offset & 0xf00) << (CONFIG_ACCESS_EXTREG_SHIFT - 8)) |
+	      (offset & 0xfc);
 
-	out_be32(hose->cfg_addr,
-		(0x80000000 | vf_idx << 12 | pf_idx << 8 | reg | type));
+	out_be32(hose->cfg_addr, CONFIG_ACCESS_ENABLE | reg |
+		 type << CONFIG_ACCESS_TYPE_SHIFT |
+		 vf_idx << CONFIG_ACCESS_VF_SHIFT |
+		 pf_idx << CONFIG_ACCESS_PF_SHIFT);
 
 	/*
 	 * Note: the caller has already checked that offset is
@@ -504,16 +526,22 @@ static inline u8 fsl_pci_ep_devfn(struct pci_ep_dev *ep)
 {
 	struct pci_pf_dev *pf = ep->pf;
 
-	return (pf->idx + pf->vf_offset +
-		pf->vf_stride * (ep->idx - 1)) & 0xff;
+	if (ep->type == PCI_EP_TYPE_PF)
+		return pf->idx;
+	else
+		return (pf->idx + pf->vf_offset +
+			pf->vf_stride * (ep->idx - 1)) & 0xff;
 }
 
 static inline u8 fsl_pci_ep_bus(struct pci_ep_dev *ep)
 {
 	struct pci_pf_dev *pf = ep->pf;
 
-	return (pf->idx + pf->vf_offset +
-		pf->vf_stride * (ep->idx - 1)) >> 8;
+	if (ep->type == PCI_EP_TYPE_PF)
+		return 0;
+	else
+		return (pf->idx + pf->vf_offset +
+			pf->vf_stride * (ep->idx - 1)) >> 8;
 }
 
 static struct pci_bus *fsl_pci_ep_add_bus(struct pci_bus *bus, int busnr)
@@ -566,10 +594,13 @@ static struct pci_ep_dev *fsl_pci_ep_alloc(struct pci_pf_dev *pf, int idx)
 		ep->type = PCI_EP_TYPE_PF;
 		ep->iw_num = pf->iw_num;
 		ep->ow_num = pf->ow_num;
+		ep->devfn = pf->idx;
 	} else {
 		ep->type = PCI_EP_TYPE_VF;
 		ep->iw_num = pf->vf_iw_num;
 		ep->ow_num = pf->vf_ow_num;
+		ep->devfn = pf->idx + pf->vf_offset +
+			    pf->vf_stride * (ep->idx - 1);
 	}
 
 	list_add_tail(&ep->node, &pf->ep_list);
