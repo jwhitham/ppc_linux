@@ -727,6 +727,57 @@ static int fsl_pci_pf_iov_init(struct pci_pf_dev *pf)
 	return pf->vf_num;
 }
 
+static int fsl_pci_pf_atmu_init(struct pci_pf_dev *pf)
+{
+	struct pci_ep_dev *ep = pf->pdev->sysdata;
+	struct pci_ep_win win;
+	int i, bits;
+	int win_idx = 3, start_idx = 1, end_idx = 4;
+	u64 sz;
+
+	if (in_be32(&pf->regs->block_rev1) >= PCIE_IP_REV_2_2) {
+		win_idx = 2;
+		start_idx = 0;
+		end_idx = 3;
+	}
+
+	sz = resource_size(&pf->mem_resources[0]) / (pf->vf_total + 1);
+	bits = ilog2(sz);
+	sz = 1ull << bits;
+
+	if (pf->vf_regs) {
+		/* Disable all VF windows */
+		for (i = 0; i < pf->vf_ow_num; i++)
+			out_be32(&pf->vf_regs->vfow[i].powar, 0);
+		for (i = 0; i < pf->vf_iw_num - 1; i++)
+			out_be32(&pf->vf_regs->vfiw[i].piwar, 0);
+
+		/* Setup VF outbound windows*/
+		win.cpu_addr = pf->mem_resources[0].start;
+		win.pci_addr = win.cpu_addr - pf->pci_mem_offset;
+		win.size = sz;
+		win.attr = 0;
+		win.idx = 0;
+		fsl_pci_ep_set_vfobwin(ep, &win);
+	}
+
+	/* Disable all PF windows (except powar0 since it's ignored) */
+	for (i = 1; i < pf->ow_num; i++)
+		out_be32(&pf->regs->pow[i].powar, 0);
+	for (i = start_idx; i < end_idx; i++)
+		out_be32(&pf->regs->piw[i].piwar, 0);
+
+	/* Setup PF outbound windows */
+	win.cpu_addr = pf->mem_resources[0].start + pf->vf_total * sz;
+	win.pci_addr = win.cpu_addr - pf->pci_mem_offset;
+	win.size = sz;
+	win.attr = 0;
+	win.idx = 1;
+	fsl_pci_ep_set_obwin(ep, &win);
+
+	return 0;
+}
+
 struct pci_pf_dev *fsl_pci_pf_alloc(struct pci_dev *pdev,
 				    struct list_head *pf_list)
 {
@@ -870,6 +921,7 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 
 		fsl_pci_pf_cfg_ready(pf);
 		fsl_pci_pf_iov_init(pf);
+		fsl_pci_pf_atmu_init(pf);
 
 		for (i = 1; i <= pf->vf_num; i++)
 			fsl_pci_ep_alloc(pf, i);
