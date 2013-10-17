@@ -144,6 +144,24 @@ struct ccsr_pci {
 
 };
 
+#define VF_ATMU_OFFSET 0x1000
+#define VF_OW_NUM 4
+#define VF_IW_NUM 4
+
+/* PCIE VF outbound window translation address regs */
+struct vf_owta_regs {
+	__be32 tar;
+	__be32 tear;
+};
+
+/* PCIE VF ATMU regs */
+struct vf_atmu_regs {
+	struct pci_outbound_window_regs vfow[VF_OW_NUM];/* 0x1000 - 0x107c */
+	struct pci_inbound_window_regs vfiw[VF_IW_NUM]; /* 0x1080 - 0x10fc */
+	u8 res_1100[1792];				/* 0x1100 - 0x17fc */
+	struct vf_owta_regs vfowta[VF_OW_NUM][64];	/* 0x1800 - 0x1ffc */
+};
+
 extern int fsl_add_bridge(struct platform_device *pdev, int is_primary);
 extern void fsl_pcibios_fixup_bus(struct pci_bus *bus);
 extern int mpc83xx_add_bridge(struct device_node *dev);

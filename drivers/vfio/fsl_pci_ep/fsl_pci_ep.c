@@ -57,9 +57,9 @@ static inline size_t attr_to_size(u32 attr)
 	return (size_t)2 << bits;
 }
 
-static int fsl_pci_ep_find_bar_pos(struct pci_dev *dev, int idx)
+static int fsl_pci_find_bar_pos(struct pci_dev *dev, int base, int idx)
 {
-	int i, bar32, pos = PCI_BASE_ADDRESS_0;
+	int i, bar32, pos = base;
 
 	if (idx >= FSL_PCI_EP_BAR_NUM)
 		return -EINVAL;
@@ -75,16 +75,10 @@ static int fsl_pci_ep_find_bar_pos(struct pci_dev *dev, int idx)
 	return pos;
 }
 
-static u64 fsl_pci_ep_read_bar(struct pci_dev *dev, int idx)
+static u64 fsl_pci_read_bar(struct pci_dev *dev, int pos)
 {
 	u64 bar64;
 	u32 bar32;
-	int pos;
-
-	if (idx >= FSL_PCI_EP_BAR_NUM)
-		return 0;
-
-	pos = fsl_pci_ep_find_bar_pos(dev, idx);
 
 	pci_read_config_dword(dev, pos, &bar32);
 	bar64 = bar32 & 0xfffffff0;
@@ -97,6 +91,35 @@ static u64 fsl_pci_ep_read_bar(struct pci_dev *dev, int idx)
 	return bar64;
 }
 
+static u64 fsl_pci_pf_read_vfbar(struct pci_pf_dev *pf, int idx)
+{
+	struct pci_dev *pdev = pf->pdev;
+	int pos;
+
+	pos = fsl_pci_find_bar_pos(pdev, pf->vf_pos + PCI_SRIOV_BAR, idx);
+	return fsl_pci_read_bar(pdev, pos);
+}
+
+static u64 fsl_pci_pf_read_bar(struct pci_pf_dev *pf, int idx)
+{
+	struct pci_dev *pdev = pf->pdev;
+	int pos;
+
+	pos = fsl_pci_find_bar_pos(pdev, PCI_BASE_ADDRESS_0, idx);
+	return fsl_pci_read_bar(pdev, pos);
+}
+
+static u64 fsl_pci_ep_read_bar(struct pci_ep_dev *ep, int idx)
+{
+	if (idx >= ep->iw_num)
+		return 0;
+
+	if (ep->type == PCI_EP_TYPE_PF)
+		return fsl_pci_pf_read_bar(ep->pf, idx);
+	else
+		return fsl_pci_pf_read_vfbar(ep->pf, idx);
+}
+
 static int fsl_pci_ep_get_ibwin(struct pci_ep_dev *ep,
 				struct pci_ep_win *win)
 {
@@ -107,19 +130,30 @@ static int fsl_pci_ep_get_ibwin(struct pci_ep_dev *ep,
 		return -EINVAL;
 
 	if (ep->type == PCI_EP_TYPE_PF) {
-		iw_regs = &pf->regs->piw[3 - win->idx];
+		iw_regs = &pf->regs->piw[ep->iw_num - win->idx - 1];
 
 		spin_lock(&pf->lock);
 		win->cpu_addr =
 			((u64)in_be32(&iw_regs->pitar)) << 12;
-			win->attr = in_be32(&iw_regs->piwar);
 		win->attr = in_be32(&iw_regs->piwar);
 		spin_unlock(&pf->lock);
 
 		win->size = attr_to_size(win->attr);
-		win->pci_addr = fsl_pci_ep_read_bar(ep->pdev, win->idx);
+		win->pci_addr = fsl_pci_ep_read_bar(ep, win->idx);
 	} else {
-		/*todo support VF Inbound windows */
+		/* VF inbound windows */
+		iw_regs = &pf->vf_regs->vfiw[ep->iw_num - win->idx - 1];
+
+		spin_lock(&pf->lock);
+		win->cpu_addr =
+			((u64)in_be32(&iw_regs->pitar)) << 12;
+		win->attr = in_be32(&iw_regs->piwar);
+		spin_unlock(&pf->lock);
+
+		win->size = attr_to_size(win->attr);
+		win->pci_addr = fsl_pci_ep_read_bar(ep, win->idx);
+		win->cpu_addr += win->size * (ep->idx - 1);
+		win->pci_addr += win->size * (ep->idx - 1);
 	}
 
 	return 0;
@@ -147,8 +181,79 @@ static int fsl_pci_ep_get_obwin(struct pci_ep_dev *ep,
 
 		win->size = attr_to_size(win->attr);
 	} else {
-		/*todo support VF outbound windows */
+		/* VF outbound windows */
+		struct vf_owta_regs *ta;
+
+		ow_regs = &pf->vf_regs->vfow[win->idx];
+		ta = &pf->vf_regs->vfowta[win->idx][ep->idx - 1];
+
+		spin_lock(&pf->lock);
+		win->cpu_addr = ((u64)in_be32(&ow_regs->powbar)) << 12;
+		win->pci_addr =
+			((u64)in_be32(&ta->tear)) << 44 |
+			((u64)in_be32(&ta->tar)) << 12;
+		win->attr = in_be32(&ow_regs->powar);
+		spin_unlock(&pf->lock);
+
+		win->size = attr_to_size(win->attr);
+		win->cpu_addr += win->size * (ep->idx - 1);
 	}
+
+	return 0;
+}
+
+static int fsl_pci_ep_get_vfibwin(struct pci_ep_dev *ep,
+				struct pci_ep_win *win)
+{
+	struct pci_pf_dev *pf = ep->pf;
+	struct pci_inbound_window_regs *iw_regs;
+
+	if (win->idx >= pf->vf_iw_num)
+		return -EINVAL;
+
+	if (ep->type != PCI_EP_TYPE_PF)
+		return -EINVAL;
+
+	/* VF inbound windows */
+	iw_regs = &pf->vf_regs->vfiw[pf->vf_iw_num - win->idx - 1];
+
+	spin_lock(&pf->lock);
+	win->cpu_addr =
+		((u64)in_be32(&iw_regs->pitar)) << 12;
+	win->attr = in_be32(&iw_regs->piwar);
+	spin_unlock(&pf->lock);
+
+	win->size = attr_to_size(win->attr);
+	win->pci_addr = fsl_pci_pf_read_vfbar(pf, win->idx);
+
+	return 0;
+}
+
+static int fsl_pci_ep_get_vfobwin(struct pci_ep_dev *ep,
+				  struct pci_ep_win *win)
+{
+	struct pci_pf_dev *pf = ep->pf;
+	struct pci_outbound_window_regs *ow_regs;
+	struct vf_owta_regs *ta;
+
+	if (win->idx >= pf->vf_ow_num)
+		return -EINVAL;
+
+	if (ep->type != PCI_EP_TYPE_PF)
+		return -EINVAL;
+
+	ow_regs = &pf->vf_regs->vfow[win->idx];
+	ta = &pf->vf_regs->vfowta[win->idx][0];
+
+	spin_lock(&pf->lock);
+	win->cpu_addr = ((u64)in_be32(&ow_regs->powbar)) << 12;
+	win->pci_addr =
+		((u64)in_be32(&ta->tear)) << 44 |
+		((u64)in_be32(&ta->tar)) << 12;
+	win->attr = in_be32(&ow_regs->powar);
+	spin_unlock(&pf->lock);
+
+	win->size = attr_to_size(win->attr);
 
 	return 0;
 }
@@ -163,6 +268,23 @@ static int fsl_pci_ep_get_reg_win(struct pci_ep_dev *ep,
 	return 0;
 }
 
+static int fsl_pci_ep_get_mem_win(struct pci_ep_dev *ep,
+				  struct pci_ep_win *win)
+{
+	if (ep->type == PCI_EP_TYPE_PF) {
+		if (win->idx != 0)
+			goto _err;
+		win->cpu_addr = ep->pf->mem_resources[win->idx].start;
+		win->size = resource_size(&ep->pf->mem_resources[win->idx]);
+		win->attr = 0x80000000;	/* Enabled */
+	}
+
+	return 0;
+_err:
+	win->attr = 0;
+	return -EINVAL;
+}
+
 int fsl_pci_ep_get_win(struct pci_ep_dev *ep, struct pci_ep_win *win)
 {
 	int ret;
@@ -174,10 +296,18 @@ int fsl_pci_ep_get_win(struct pci_ep_dev *ep, struct pci_ep_win *win)
 	case PCI_EP_REGION_OBWIN:
 		ret = fsl_pci_ep_get_obwin(ep, win);
 		break;
+	case PCI_EP_REGION_VF_IBWIN:
+		ret = fsl_pci_ep_get_vfibwin(ep, win);
+		break;
+	case PCI_EP_REGION_VF_OBWIN:
+		ret = fsl_pci_ep_get_vfobwin(ep, win);
+		break;
 	case PCI_EP_REGION_REGS:
 		ret = fsl_pci_ep_get_reg_win(ep, win);
-	case PCI_EP_REGION_CONFIG:
-		ret = 0;
+		break;
+	case PCI_EP_REGION_MEM:
+		ret = fsl_pci_ep_get_mem_win(ep, win);
+
 	default:
 		ret = -EINVAL;
 	}
@@ -198,7 +328,7 @@ static int fsl_pci_ep_set_ibwin(struct pci_ep_dev *ep,
 		int bits = ilog2(win->size);
 		u32 piwar = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
 			    PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP;
-		iw_regs = &pf->regs->piw[3 - win->idx];
+		iw_regs = &pf->regs->piw[ep->iw_num - win->idx - 1];
 		/* Setup inbound memory window */
 		spin_lock(&pf->lock);
 		out_be32(&iw_regs->pitar, win->cpu_addr >> 12);
@@ -208,7 +338,13 @@ static int fsl_pci_ep_set_ibwin(struct pci_ep_dev *ep,
 			out_be32(&iw_regs->piwar, piwar | (bits - 1));
 		spin_unlock(&pf->lock);
 	} else {
-		/*todo support VF Inbound windows */
+		/*
+		 * All VFs use the common VF inbound windows
+		 * So an EP(VF) device can not change VF Inbound windows
+		 * Only PF device can call fsl_pci_ep_set_vfibwin() to
+		 * change VF's inbound windows
+		 */
+		return -EINVAL;
 	}
 
 	return 0;
@@ -242,8 +378,78 @@ static int fsl_pci_ep_set_obwin(struct pci_ep_dev *ep,
 			out_be32(&ow_regs->powar, flags | (bits - 1));
 		spin_unlock(&pf->lock);
 	} else {
-		/*todo support VF Outbound windows */
+		/*
+		 * For an outbound window, each VF has a translation
+		 * register separately and other registers are shared
+		 * by all VFs. So an EP device can only change owtar
+		 */
+		struct vf_owta_regs *ta;
+
+		ta = &pf->vf_regs->vfowta[win->idx][ep->idx - 1];
+		out_be32(&ta->tar, win->pci_addr >> 12);
+		out_be32(&ta->tear, win->pci_addr >> 44);
 	}
+
+	return 0;
+}
+
+static int fsl_pci_ep_set_vfibwin(struct pci_ep_dev *ep,
+				struct pci_ep_win *win)
+{
+	struct pci_pf_dev *pf = ep->pf;
+	struct pci_inbound_window_regs *iw_regs;
+	int bits;
+	u32 piwar = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
+		    PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP;
+
+	if (win->idx >= ep->iw_num)
+		return -EINVAL;
+
+	/* Only PF can set VF ATMU */
+	if (ep->type != PCI_EP_TYPE_PF)
+		return -EINVAL;
+
+	bits = ilog2(win->size);
+	iw_regs = &pf->vf_regs->vfiw[ep->iw_num - win->idx - 1];
+
+	/* Setup inbound memory window */
+	spin_lock(&pf->lock);
+	out_be32(&iw_regs->pitar, win->cpu_addr >> 12);
+	if (win->attr) /* use the specified attribute */
+		out_be32(&iw_regs->piwar, win->attr);
+	else /* use the default attribute */
+		out_be32(&iw_regs->piwar, piwar | (bits - 1));
+	spin_unlock(&pf->lock);
+
+	return 0;
+}
+
+static int fsl_pci_ep_set_vfobwin(struct pci_ep_dev *ep,
+				  struct pci_ep_win *win)
+{
+	struct pci_pf_dev *pf = ep->pf;
+	struct pci_outbound_window_regs *ow_regs;
+	int bits;
+	u32 flags = 0x80044000; /* enable & mem R/W */
+
+	if (win->idx >= ep->iw_num)
+		return -EINVAL;
+
+	/* Only PF can set VF ATMU */
+	if (ep->type != PCI_EP_TYPE_PF)
+		return -EINVAL;
+
+	ow_regs = &pf->vf_regs->vfow[win->idx];
+
+	bits = min(ilog2(win->size), __ffs(win->pci_addr | win->cpu_addr));
+
+	spin_lock(&pf->lock);
+	out_be32(&ow_regs->powbar, win->cpu_addr >> 12);
+	if (win->attr) /* use the specified attribute */
+		out_be32(&ow_regs->powar, win->attr);
+	else /* use the default attribute */
+		out_be32(&ow_regs->powar, flags | (bits - 1));
+	spin_unlock(&pf->lock);
 
 	return 0;
 }
@@ -259,12 +465,17 @@ int fsl_pci_ep_set_win(struct pci_ep_dev *ep, struct pci_ep_win *win)
 	case PCI_EP_REGION_OBWIN:
 		ret = fsl_pci_ep_set_obwin(ep, win);
 		break;
+	case PCI_EP_REGION_VF_IBWIN:
+		ret = fsl_pci_ep_set_vfibwin(ep, win);
+		break;
+	case PCI_EP_REGION_VF_OBWIN:
+		ret = fsl_pci_ep_set_vfobwin(ep, win);
+		break;
 	default:
 		ret = -EINVAL;
 	}
 
 	return ret;
-
 }
 
 static struct pci_ep_dev *
@@ -399,6 +610,27 @@ inbound_windows_show(struct device *dev,
 				win.attr);
 	}
 
+	if (ep->type == PCI_EP_TYPE_PF) {
+		struct pci_pf_dev *pf = ep->pf;
+
+		if (pf->vf_regs) {
+			for (i = 0; i < pf->vf_iw_num; i++) {
+				win.idx = i;
+				fsl_pci_ep_get_vfibwin(ep, &win);
+				str += sprintf(str, "VF Inbound Window%d:\n"
+					"\tcpu_addr:0x%016llx"
+					" pci_addr:0x%016llx\n"
+					"\twin_size:0x%016llx"
+					" attribute:0x%08x\n",
+					i,
+					win.cpu_addr,
+					win.pci_addr,
+					win.size,
+					win.attr);
+			}
+		}
+	}
+
 	return str - buf;
 }
 
@@ -423,6 +655,27 @@ outbound_windows_show(struct device *dev,
 				win.pci_addr,
 				win.size,
 				win.attr);
+	}
+
+	if (ep->type == PCI_EP_TYPE_PF) {
+		struct pci_pf_dev *pf = ep->pf;
+
+		if (pf->vf_regs) {
+			for (i = 0; i < pf->vf_ow_num; i++) {
+				win.idx = i;
+				fsl_pci_ep_get_vfobwin(ep, &win);
+				str += sprintf(str, "VF Outbound Window%d:\n"
+					"\tcpu_addr:0x%016llx"
+					" pci_addr:0x%016llx\n"
+					"\twin_size:0x%016llx"
+					" attribute:0x%08x\n",
+					i,
+					win.cpu_addr,
+					win.pci_addr,
+					win.size,
+					win.attr);
+			}
+		}
 	}
 
 	return str - buf;
@@ -720,9 +973,10 @@ static int fsl_pci_pf_iov_init(struct pci_pf_dev *pf)
 	pf->vf_offset = offset;
 	pf->vf_stride = stride;
 	pf->vf_num = pf->vf_total;
-	pf->vf_iw_num = FSL_PCI_EP_BAR_NUM;
-	pf->vf_ow_num = FSL_PCI_EP_OW_NUM;
+	pf->vf_iw_num = VF_IW_NUM;
+	pf->vf_ow_num = VF_OW_NUM;
 	pf->vf_pos = pos;
+	pf->vf_regs = (void *)pf->regs + VF_ATMU_OFFSET;
 
 	return pf->vf_num;
 }

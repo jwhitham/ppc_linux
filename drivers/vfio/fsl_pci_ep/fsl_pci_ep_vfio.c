@@ -78,11 +78,17 @@ static long fsl_pci_ep_vfio_ioctl(void *device_data,
 
 		info.iw_num = ep->iw_num;
 		info.ow_num = ep->ow_num;
-		info.vf_iw_num = 0;
-		info.vf_ow_num = 0;
 		info.type = ep->type;
 		info.pf_idx = ep->pf->idx;
 		info.vf_idx = ep->idx;
+		if (ep->type == PCI_EP_TYPE_PF) {
+			info.vf_iw_num = ep->pf->vf_iw_num;
+			info.vf_ow_num = ep->pf->vf_iw_num;
+		} else {
+			info.vf_iw_num = 0;
+			info.vf_ow_num = 0;
+		}
+
 		return copy_to_user((void __user *)arg, &info, sizeof(info));
 	} else if (cmd == VFIO_DEVICE_GET_WIN_INFO) {
 		struct pci_ep_win win;

@@ -79,6 +79,7 @@ struct pci_pf_dev {
 	u16			vf_num; /* number of VFs available */
 	u16			vf_offset; /* first VF Routing ID offset */
 	u16			vf_stride; /* following VF stride */
+	struct vf_atmu_regs __iomem *vf_regs;
 };
 
 int fsl_pci_ep_get_win(struct pci_ep_dev *ep, struct pci_ep_win *win);
