@@ -301,6 +301,7 @@ static void bman_offline_cpu(unsigned int cpu)
 		bman_migrate_portal(p);
 }
 
+#ifdef CONFIG_HOTPLUG_CPU
 static void bman_online_cpu(unsigned int cpu)
 {
 	struct bman_portal *p;
@@ -309,7 +310,6 @@ static void bman_online_cpu(unsigned int cpu)
 		bman_migrate_portal_back(p, cpu);
 }
 
-#ifdef CONFIG_HOTPLUG_CPU
 static int __cpuinit bman_hotplug_cpu_callback(struct notifier_block *nfb,
 					unsigned long action, void *hcpu)
 {

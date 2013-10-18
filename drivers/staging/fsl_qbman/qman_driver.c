@@ -642,6 +642,7 @@ static void qman_offline_cpu(unsigned int cpu)
 		qman_migrate_portal(p);
 }
 
+#ifdef CONFIG_HOTPLUG_CPU
 static void qman_online_cpu(unsigned int cpu)
 {
 	struct qman_portal *p;
@@ -650,7 +651,6 @@ static void qman_online_cpu(unsigned int cpu)
 		qman_migrate_portal_back(p, cpu);
 }
 
-#ifdef CONFIG_HOTPLUG_CPU
 static int __cpuinit qman_hotplug_cpu_callback(struct notifier_block *nfb,
 				unsigned long action, void *hcpu)
 {

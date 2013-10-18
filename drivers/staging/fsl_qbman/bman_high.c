@@ -1062,6 +1062,7 @@ void bman_migrate_portal(struct bman_portal *portal)
 	PORTAL_IRQ_UNLOCK(portal, irqflags);
 }
 
+#ifdef CONFIG_HOTPLUG_CPU
 /* Migrate the portal back to the affined cpu once that cpu reappears.*/
 void bman_migrate_portal_back(struct bman_portal *portal, unsigned int cpu)
 {
@@ -1070,3 +1071,4 @@ void bman_migrate_portal_back(struct bman_portal *portal, unsigned int cpu)
 	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(cpu));
 	PORTAL_IRQ_UNLOCK(portal, irqflags);
 }
+#endif /* CONFIG_HOTPLUG_CPU */

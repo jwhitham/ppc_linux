@@ -394,4 +394,6 @@ int qman_ceetm_get_xsfdr(enum qm_dc_portal portal, unsigned int *num);
 extern void *affine_portals[NR_CPUS];
 int qman_portal_is_sharing_redirect(struct qman_portal *portal);
 void qman_migrate_portal(struct qman_portal *portal);
+#ifdef CONFIG_HOTPLUG_CPU
 void qman_migrate_portal_back(struct qman_portal *portal, unsigned int cpu);
+#endif /* CONFIG_HOTPLUG_CPU */
