@@ -2881,6 +2881,34 @@ int qman_ceetm_channel_get_group(struct qm_ceetm_channel *channel,
 			     unsigned int *prio_a,
 			     unsigned int *prio_b);
 
+/**
+ * qman_ceetm_channel_set_group_cr_eligibility
+ * qman_ceetm_channel_set_group_er_eligibility - Set channel group eligibitity
+ * @channel: the given channel object
+ * @group_b: indicates whether there is group B in this channel.
+ * @cre: the commit rate eligibility, 1 for enable, 0 for disable.
+ *
+ * Return zero for success, or -EINVAL if eligiblity setting fails.
+*/
+int qman_ceetm_channel_set_group_cr_eligiblility(struct qm_ceetm_channel
+				*channel, int group_b, int cre);
+int qman_ceetm_channel_set_group_er_eligiblility(struct qm_ceetm_channel
+				*channel, int group_b, int ere);
+
+/**
+ * qman_ceetm_channel_set_cq_cr_eligibility
+ * qman_ceetm_channel_set_cq_er_eligibility - Set channel cq eligibitity
+ * @channel: the given channel object
+ * @idx: is from 0 to 7 (representing CQ0 to CQ7).
+ * @cre: the commit rate eligibility, 1 for enable, 0 for disable.
+ *
+ * Return zero for success, or -EINVAL if eligiblity setting fails.
+*/
+int qman_ceetm_channel_set_cq_cr_eligiblility(struct qm_ceetm_channel *channel,
+					unsigned int idx, int cre);
+int qman_ceetm_channel_set_cq_er_eligiblility(struct qm_ceetm_channel *channel,
+					unsigned int idx, int ere);
+
 	/* --------------------- */
 	/* CEETM :: class queues */
 	/* --------------------- */
