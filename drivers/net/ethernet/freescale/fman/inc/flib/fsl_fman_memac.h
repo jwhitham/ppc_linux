@@ -84,7 +84,7 @@
 #define HASH_TABLE_SIZE		64 /* Hash tbl size */
 
 /* Transmit Inter-Packet Gap Length Register (TX_IPG_LENGTH) */
-#define TX_IPG_LENGTH_MASK	0x0000003F
+#define MEMAC_TX_IPG_LENGTH_MASK	0x0000003F
 
 /* Statistics Configuration Register (STATN_CONFIG) */
 #define STATS_CFG_CLR		0x00000004 /* 29 Reset all counters */

@@ -46,6 +46,11 @@
 
 #include "error_ext.h"	/* GET_ERROR_TYPE, E_OK */
 
+#include "../fman/inc/flib/fsl_fman_dtsec.h"
+#include "../fman/inc/flib/fsl_fman_tgec.h"
+#include "../fman/inc/flib/fsl_fman_memac.h"
+#include "../fman/src/wrapper/lnxwrp_sysfs_fm.h"
+
 #define MAC_DESCRIPTION "FSL FMan MAC API based driver"
 
 MODULE_LICENSE("Dual BSD/GPL");
@@ -457,6 +462,139 @@ static struct fm_mac_dev *get_mac_handle(struct mac_device *mac_dev)
 	return priv->fm_mac;
 }
 
+static int dtsec_dump_regs(struct mac_device *h_mac, char *buf, int nn)
+{
+	struct dtsec_regs	*p_mm = (struct dtsec_regs *) h_mac->vaddr;
+	int			i = 0, n = nn;
+
+	FM_DMP_SUBTITLE(buf, n, "\n");
+
+	FM_DMP_TITLE(buf, n, p_mm, "FM MAC - DTSEC-%d", h_mac->cell_index);
+
+	FM_DMP_V32(buf, n, p_mm, tsec_id);
+	FM_DMP_V32(buf, n, p_mm, tsec_id2);
+	FM_DMP_V32(buf, n, p_mm, ievent);
+	FM_DMP_V32(buf, n, p_mm, imask);
+	FM_DMP_V32(buf, n, p_mm, ecntrl);
+	FM_DMP_V32(buf, n, p_mm, ptv);
+	FM_DMP_V32(buf, n, p_mm, tmr_ctrl);
+	FM_DMP_V32(buf, n, p_mm, tmr_pevent);
+	FM_DMP_V32(buf, n, p_mm, tmr_pemask);
+	FM_DMP_V32(buf, n, p_mm, tctrl);
+	FM_DMP_V32(buf, n, p_mm, rctrl);
+	FM_DMP_V32(buf, n, p_mm, maccfg1);
+	FM_DMP_V32(buf, n, p_mm, maccfg2);
+	FM_DMP_V32(buf, n, p_mm, ipgifg);
+	FM_DMP_V32(buf, n, p_mm, hafdup);
+	FM_DMP_V32(buf, n, p_mm, maxfrm);
+
+	FM_DMP_V32(buf, n, p_mm, macstnaddr1);
+	FM_DMP_V32(buf, n, p_mm, macstnaddr2);
+
+	for (i = 0; i < 7; ++i) {
+		FM_DMP_V32(buf, n, p_mm, macaddr[i].exact_match1);
+		FM_DMP_V32(buf, n, p_mm, macaddr[i].exact_match2);
+	}
+
+	FM_DMP_V32(buf, n, p_mm, car1);
+	FM_DMP_V32(buf, n, p_mm, car2);
+
+	return n;
+}
+
+static int xgmac_dump_regs(struct mac_device *h_mac, char *buf, int nn)
+{
+	struct tgec_regs	*p_mm = (struct tgec_regs *) h_mac->vaddr;
+	int			n = nn;
+
+	FM_DMP_SUBTITLE(buf, n, "\n");
+	FM_DMP_TITLE(buf, n, p_mm, "FM MAC - TGEC -%d", h_mac->cell_index);
+
+	FM_DMP_V32(buf, n, p_mm, tgec_id);
+	FM_DMP_V32(buf, n, p_mm, command_config);
+	FM_DMP_V32(buf, n, p_mm, mac_addr_0);
+	FM_DMP_V32(buf, n, p_mm, mac_addr_1);
+	FM_DMP_V32(buf, n, p_mm, maxfrm);
+	FM_DMP_V32(buf, n, p_mm, pause_quant);
+	FM_DMP_V32(buf, n, p_mm, rx_fifo_sections);
+	FM_DMP_V32(buf, n, p_mm, tx_fifo_sections);
+	FM_DMP_V32(buf, n, p_mm, rx_fifo_almost_f_e);
+	FM_DMP_V32(buf, n, p_mm, tx_fifo_almost_f_e);
+	FM_DMP_V32(buf, n, p_mm, hashtable_ctrl);
+	FM_DMP_V32(buf, n, p_mm, mdio_cfg_status);
+	FM_DMP_V32(buf, n, p_mm, mdio_command);
+	FM_DMP_V32(buf, n, p_mm, mdio_data);
+	FM_DMP_V32(buf, n, p_mm, mdio_regaddr);
+	FM_DMP_V32(buf, n, p_mm, status);
+	FM_DMP_V32(buf, n, p_mm, tx_ipg_len);
+	FM_DMP_V32(buf, n, p_mm, mac_addr_2);
+	FM_DMP_V32(buf, n, p_mm, mac_addr_3);
+	FM_DMP_V32(buf, n, p_mm, rx_fifo_ptr_rd);
+	FM_DMP_V32(buf, n, p_mm, rx_fifo_ptr_wr);
+	FM_DMP_V32(buf, n, p_mm, tx_fifo_ptr_rd);
+	FM_DMP_V32(buf, n, p_mm, tx_fifo_ptr_wr);
+	FM_DMP_V32(buf, n, p_mm, imask);
+	FM_DMP_V32(buf, n, p_mm, ievent);
+
+	return n;
+}
+
+static int memac_dump_regs(struct mac_device *h_mac, char *buf, int nn)
+{
+	struct memac_regs	*p_mm = (struct memac_regs *) h_mac->vaddr;
+	int			i = 0, n = nn;
+
+	FM_DMP_SUBTITLE(buf, n, "\n");
+	FM_DMP_TITLE(buf, n, p_mm, "FM MAC - MEMAC -%d", h_mac->cell_index);
+
+	FM_DMP_V32(buf, n, p_mm, command_config);
+	FM_DMP_V32(buf, n, p_mm, mac_addr0.mac_addr_l);
+	FM_DMP_V32(buf, n, p_mm, mac_addr0.mac_addr_u);
+	FM_DMP_V32(buf, n, p_mm, maxfrm);
+	FM_DMP_V32(buf, n, p_mm, hashtable_ctrl);
+	FM_DMP_V32(buf, n, p_mm, ievent);
+	FM_DMP_V32(buf, n, p_mm, tx_ipg_length);
+	FM_DMP_V32(buf, n, p_mm, imask);
+
+	for (i = 0; i < 4; ++i)
+		FM_DMP_V32(buf, n, p_mm, pause_quanta[i]);
+
+	for (i = 0; i < 4; ++i)
+		FM_DMP_V32(buf, n, p_mm, pause_thresh[i]);
+
+	FM_DMP_V32(buf, n, p_mm, rx_pause_status);
+
+	for (i = 0; i < MEMAC_NUM_OF_PADDRS; ++i) {
+		FM_DMP_V32(buf, n, p_mm, mac_addr[i].mac_addr_l);
+		FM_DMP_V32(buf, n, p_mm, mac_addr[i].mac_addr_u);
+	}
+
+	FM_DMP_V32(buf, n, p_mm, lpwake_timer);
+	FM_DMP_V32(buf, n, p_mm, sleep_timer);
+	FM_DMP_V32(buf, n, p_mm, statn_config);
+	FM_DMP_V32(buf, n, p_mm, if_mode);
+	FM_DMP_V32(buf, n, p_mm, if_status);
+	FM_DMP_V32(buf, n, p_mm, hg_config);
+	FM_DMP_V32(buf, n, p_mm, hg_pause_quanta);
+	FM_DMP_V32(buf, n, p_mm, hg_pause_thresh);
+	FM_DMP_V32(buf, n, p_mm, hgrx_pause_status);
+	FM_DMP_V32(buf, n, p_mm, hg_fifos_status);
+	FM_DMP_V32(buf, n, p_mm, rhm);
+	FM_DMP_V32(buf, n, p_mm, thm);
+
+	return n;
+}
+
+int fm_mac_dump_regs(struct mac_device *h_mac, char *buf, int nn)
+{
+	int	n = nn;
+
+	n = h_mac->dump_mac_regs(h_mac, buf, n);
+
+	return n;
+}
+
+
 static void __cold setup_dtsec(struct mac_device *mac_dev)
 {
 	mac_dev->init_phy	= dtsec_init_phy;
@@ -480,6 +618,7 @@ static void __cold setup_dtsec(struct mac_device *mac_dev)
 	mac_dev->fm_rtc_set_drift	= fm_rtc_set_drift;
 	mac_dev->fm_rtc_set_alarm	= fm_rtc_set_alarm;
 	mac_dev->fm_rtc_set_fiper	= fm_rtc_set_fiper;
+	mac_dev->dump_mac_regs		= dtsec_dump_regs;
 }
 
 static void __cold setup_xgmac(struct mac_device *mac_dev)
@@ -495,6 +634,7 @@ static void __cold setup_xgmac(struct mac_device *mac_dev)
 	mac_dev->get_mac_handle	= get_mac_handle;
 	mac_dev->set_tx_pause	= fm_mac_set_tx_pause_frames;
 	mac_dev->set_rx_pause	= fm_mac_set_rx_ignore_pause_frames;
+	mac_dev->dump_mac_regs	= xgmac_dump_regs;
 }
 
 static void __cold setup_memac(struct mac_device *mac_dev)
@@ -518,6 +658,7 @@ static void __cold setup_memac(struct mac_device *mac_dev)
 	mac_dev->fm_rtc_set_drift	= fm_rtc_set_drift;
 	mac_dev->fm_rtc_set_alarm	= fm_rtc_set_alarm;
 	mac_dev->fm_rtc_set_fiper	= fm_rtc_set_fiper;
+	mac_dev->dump_mac_regs		= memac_dump_regs;
 }
 
 void (*const mac_setup[])(struct mac_device *mac_dev) = {

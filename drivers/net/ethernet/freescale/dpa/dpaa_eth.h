@@ -565,7 +565,7 @@ static inline uint16_t dpa_get_buffer_size(struct dpa_buffer_layout_s *bl,
 	return dpa_get_headroom(bl) + data_size;
 }
 
-void fm_mac_dump_regs(struct fm_mac_dev *fm_mac_dev);
+int fm_mac_dump_regs(struct mac_device *h_dev, char *buf, int n);
 
 void dpaa_eth_sysfs_remove(struct device *dev);
 void dpaa_eth_sysfs_init(struct device *dev);

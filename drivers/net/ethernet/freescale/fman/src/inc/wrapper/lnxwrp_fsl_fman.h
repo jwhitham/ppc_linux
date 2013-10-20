@@ -427,8 +427,6 @@ int fm_rtc_set_alarm(struct fm *fm_dev, uint32_t id,
 int fm_rtc_set_fiper(struct fm *fm_dev, uint32_t id,
 		uint64_t fiper);
 
-void fm_mac_dump_regs(struct fm_mac_dev *fm_mac_dev);
-
 /** @} */ /* end of FM_LnxKern_ctrl_grp group */
 /** @} */ /* end of FM_LnxKern_grp group */
 

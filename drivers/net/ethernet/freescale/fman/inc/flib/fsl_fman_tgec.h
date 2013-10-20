@@ -105,7 +105,7 @@ enum tgec_counters {
 #define TGEC_IMASK_RX_CRC_ER		0x00000002
 #define TGEC_IMASK_RX_ALIGN_ER		0x00000001
 
-#define EVENTS_MASK							\
+#define TGEC_EVENTS_MASK					\
 	((uint32_t)(TGEC_IMASK_MDIO_SCAN_EVENT	| \
 				TGEC_IMASK_MDIO_CMD_CMPL	| \
 				TGEC_IMASK_REM_FAULT		| \

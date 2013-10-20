@@ -1764,12 +1764,6 @@ int fm_rtc_set_fiper(struct fm *fm_dev, uint32_t id,
 }
 EXPORT_SYMBOL(fm_rtc_set_fiper);
 
-void fm_mac_dump_regs(struct fm_mac_dev *fm_mac_dev)
-{
-	FM_MAC_DumpRegs(fm_mac_dev);
-}
-EXPORT_SYMBOL(fm_mac_dump_regs);
-
 void fm_mutex_lock(void)
 {
     mutex_lock(&lnxwrp_mutex);

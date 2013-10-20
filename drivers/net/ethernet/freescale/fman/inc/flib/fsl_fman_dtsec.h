@@ -185,7 +185,7 @@
 #define DTSEC_IMASK_TDPEEN	0x00000002
 #define DTSEC_IMASK_RDPEEN	0x00000001
 
-#define EVENTS_MASK					\
+#define DTSEC_EVENTS_MASK                              \
 	((uint32_t)(DTSEC_IMASK_BREN    | \
 				DTSEC_IMASK_RXCEN   | \
 				DTSEC_IMASK_BTEN    | \
