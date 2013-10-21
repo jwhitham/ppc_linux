@@ -51,7 +51,6 @@
 #define sgt_buffer_size(priv) \
 	dpa_get_buffer_size(&priv->buf_layout[TX], 256)
 
-extern struct dpaa_eth_hooks_s dpaa_eth_hooks;
 uint32_t default_buf_size;
 
 /* Allocate 8 socket buffers.

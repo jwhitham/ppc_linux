@@ -118,21 +118,6 @@ uint8_t dpa_priv_common_bpid;
 
 extern u16 qman_portal_max;
 
-/* A set of callbacks for hooking into the fastpath at different points. */
-struct dpaa_eth_hooks_s dpaa_eth_hooks;
-/*
- * This function should only be called on the probe paths, since it makes no
- * effort to guarantee consistency of the destination hooks structure.
- */
-void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks)
-{
-	if (hooks)
-		dpaa_eth_hooks = *hooks;
-	else
-		pr_err("NULL pointer to hooks!\n");
-}
-EXPORT_SYMBOL(fsl_dpaa_eth_set_hooks);
-
 /* Checks whether the checksum field in Parse Results array is valid
  * (equals 0xFFFF) and increments the .cse counter otherwise
  */

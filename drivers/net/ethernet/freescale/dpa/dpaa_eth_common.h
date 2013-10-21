@@ -63,6 +63,69 @@
 	fm_set_##type##_port_params(port, &param); \
 }
 
+/* return codes for the dpaa-eth hooks */
+enum dpaa_eth_hook_result {
+	/* fd/skb was retained by the hook.
+	 *
+	 * On the Rx path, this means the Ethernet driver will _not_
+	 * deliver the skb to the stack. Instead, the hook implementation
+	 * is expected to properly dispose of the skb.
+	 *
+	 * On the Tx path, the Ethernet driver's dpa_tx() function will
+	 * immediately return NETDEV_TX_OK. The hook implementation is expected
+	 * to free the skb. *DO*NOT* release it to BMan, or enqueue it to FMan,
+	 * unless you know exactly what you're doing!
+	 *
+	 * On the confirmation/error paths, the Ethernet driver will _not_
+	 * perform any fd cleanup, nor update the interface statistics.
+	 */
+	DPAA_ETH_STOLEN,
+	/* fd/skb was returned to the Ethernet driver for regular processing.
+	 * The hook is not allowed to, for instance, reallocate the skb (as if
+	 * by linearizing, copying, cloning or reallocating the headroom).
+	 */
+	DPAA_ETH_CONTINUE
+};
+
+typedef enum dpaa_eth_hook_result (*dpaa_eth_ingress_hook_t)(
+		struct sk_buff *skb, struct net_device *net_dev, u32 fqid);
+typedef enum dpaa_eth_hook_result (*dpaa_eth_egress_hook_t)(
+		struct sk_buff *skb, struct net_device *net_dev);
+typedef enum dpaa_eth_hook_result (*dpaa_eth_confirm_hook_t)(
+		struct net_device *net_dev, const struct qm_fd *fd, u32 fqid);
+
+/* Various hooks used for unit-testing and/or fastpath optimizations.
+ * Currently only one set of such hooks is supported.
+ */
+struct dpaa_eth_hooks_s {
+	/* Invoked on the Tx private path, immediately after receiving the skb
+	 * from the stack.
+	 */
+	dpaa_eth_egress_hook_t	tx;
+
+	/* Invoked on the Rx private path, right before passing the skb
+	 * up the stack. At that point, the packet's protocol id has already
+	 * been set. The skb's data pointer is now at the L3 header, and
+	 * skb->mac_header points to the L2 header. skb->len has been adjusted
+	 * to be the length of L3+payload (i.e., the length of the
+	 * original frame minus the L2 header len).
+	 * For more details on what the skb looks like, see eth_type_trans().
+	 */
+	dpaa_eth_ingress_hook_t	rx_default;
+
+	/* Driver hook for the Rx error private path. */
+	dpaa_eth_confirm_hook_t rx_error;
+	/* Driver hook for the Tx confirmation private path. */
+	dpaa_eth_confirm_hook_t tx_confirm;
+	/* Driver hook for the Tx error private path. */
+	dpaa_eth_confirm_hook_t tx_error;
+};
+
+void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
+
+extern struct dpaa_eth_hooks_s dpaa_eth_hooks;
+
+
 int dpa_netdev_init(struct device_node *dpa_node,
 		struct net_device *net_dev,
 		const uint8_t *mac_addr,

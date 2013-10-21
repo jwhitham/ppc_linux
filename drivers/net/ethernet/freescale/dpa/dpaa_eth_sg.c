@@ -544,9 +544,17 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	/* The only FD types that we may receive are contig and S/G */
 	DPA_BUG_ON((fd->format != qm_fd_contig) && (fd->format != qm_fd_sg));
-	if (likely(fd->format == qm_fd_contig))
+
+	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
+	if (likely(fd->format == qm_fd_contig)) {
+		/* Execute the Rx processing hook, if it exists. */
+		if (dpaa_eth_hooks.rx_default &&
+			dpaa_eth_hooks.rx_default((void *)fd, net_dev, fqid)
+						== DPAA_ETH_STOLEN)
+			/* won't count the rx bytes in */
+			return;
 		skb = contig_fd_to_skb(priv, fd, &use_gro);
-	else
+	} else
 		skb = sg_fd_to_skb(priv, fd, &use_gro);
 	if (unlikely(!skb))
 		/* We haven't yet touched the DMA mapping or the pool count;
@@ -559,7 +567,6 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	 * Also, permanently unmap the buffer.
 	 */
 	(*count_ptr)--;
-	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
 
 	skb->protocol = eth_type_trans(skb, net_dev);
 
@@ -806,6 +813,12 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	const int queue_mapping = dpa_get_queue_mapping(skb);
 	const bool nonlinear = skb_is_nonlinear(skb);
 	int *countptr;
+
+	/* If there is a Tx hook, run it. */
+	if (dpaa_eth_hooks.tx &&
+		dpaa_eth_hooks.tx(skb, net_dev) == DPAA_ETH_STOLEN)
+		/* won't update any Tx stats */
+		return NETDEV_TX_OK;
 
 	priv = netdev_priv(net_dev);
 	/* Non-migratable context, safe to use __this_cpu_ptr */
