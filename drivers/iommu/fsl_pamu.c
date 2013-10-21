@@ -250,6 +250,40 @@ static unsigned long pamu_get_fspi_and_allocate(u32 subwin_cnt)
 	return (spaace_addr - (unsigned long)spaact) / (sizeof(struct paace));
 }
 
+/*
+ * Defaul PPAACE settings for an LIODN.
+ */
+static void setup_default_ppaace(struct paace *ppaace)
+{
+	pamu_init_ppaace(ppaace);
+	/* window size is 2^(WSE+1) bytes */
+	set_bf(ppaace->addr_bitfields, PPAACE_AF_WSE, 35);
+	ppaace->wbah = 0;
+	set_bf(ppaace->addr_bitfields, PPAACE_AF_WBAL, 0);
+	set_bf(ppaace->impl_attr, PAACE_IA_ATM,
+		PAACE_ATM_NO_XLATE);
+	set_bf(ppaace->addr_bitfields, PAACE_AF_AP,
+		PAACE_AP_PERMS_ALL);
+}
+
+/* Reset the PAACE entry to the default state */
+void enable_default_dma_window(int liodn)
+{
+	struct paace *ppaace;
+
+	ppaace = pamu_get_ppaace(liodn);
+	if (!ppaace) {
+		pr_debug("Invalid liodn entry\n");
+		return;
+	}
+
+	memset(ppaace, 0, sizeof(struct paace));
+
+	setup_default_ppaace(ppaace);
+	mb();
+	pamu_enable_liodn(liodn);
+}
+
 /* Release the subwindows reserved for a particular LIODN */
 void pamu_free_subwins(int liodn)
 {
@@ -854,15 +888,7 @@ static void __init enable_remaining_liodns(void)
 	for (liodn = 0; liodn < PAACE_NUMBER_ENTRIES; liodn++) {
 		ppaace = pamu_get_ppaace(liodn);
 		if (!get_bf(ppaace->addr_bitfields, PAACE_AF_V)) {
-			pamu_init_ppaace(ppaace);
-			/* window size is 2^(WSE+1) bytes */
-			set_bf(ppaace->addr_bitfields, PPAACE_AF_WSE, 35);
-			ppaace->wbah = 0;
-			set_bf(ppaace->addr_bitfields, PPAACE_AF_WBAL, 0);
-			set_bf(ppaace->impl_attr, PAACE_IA_ATM,
-				PAACE_ATM_NO_XLATE);
-			set_bf(ppaace->addr_bitfields, PAACE_AF_AP,
-				PAACE_AP_PERMS_ALL);
+			setup_default_ppaace(ppaace);
 			mb();
 			pamu_enable_liodn(liodn);
 		}
@@ -888,15 +914,7 @@ static void __init setup_liodns(void)
 				continue;
 			}
 			ppaace = pamu_get_ppaace(liodn);
-			pamu_init_ppaace(ppaace);
-			/* window size is 2^(WSE+1) bytes */
-			set_bf(ppaace->addr_bitfields, PPAACE_AF_WSE, 35);
-			ppaace->wbah = 0;
-			set_bf(ppaace->addr_bitfields, PPAACE_AF_WBAL, 0);
-			set_bf(ppaace->impl_attr, PAACE_IA_ATM,
-				PAACE_ATM_NO_XLATE);
-			set_bf(ppaace->addr_bitfields, PAACE_AF_AP,
-				PAACE_AP_PERMS_ALL);
+			setup_default_ppaace(ppaace);
 			if (of_device_is_compatible(node, "fsl,qman-portal"))
 				setup_dpaa_paace(ppaace, QMAN_PORTAL_PAACE);
 			if (of_device_is_compatible(node, "fsl,qman"))
