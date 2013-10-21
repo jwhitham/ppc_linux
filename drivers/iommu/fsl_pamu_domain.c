@@ -695,6 +695,7 @@ static int fsl_pamu_attach_device(struct iommu_domain *domain,
 {
 	struct fsl_dma_domain *dma_domain = domain->priv;
 	const u32 *liodn;
+	struct device *dma_dev = dev;
 	u32 liodn_cnt;
 	int len, ret = 0;
 #ifdef CONFIG_PCI
@@ -713,18 +714,18 @@ static int fsl_pamu_attach_device(struct iommu_domain *domain,
 		 * so we can get the LIODN programmed by
 		 * u-boot.
 		 */
-		dev = pci_ctl->parent;
+		dma_dev = pci_ctl->parent;
 	}
 #endif
 
-	liodn = of_get_property(dev->of_node, "fsl,liodn", &len);
+	liodn = of_get_property(dma_dev->of_node, "fsl,liodn", &len);
 	if (liodn) {
 		liodn_cnt = len / sizeof(u32);
 		ret = handle_attach_device(dma_domain, dev,
 					 liodn, liodn_cnt);
 	} else {
 		pr_err("missing fsl,liodn property at %s\n",
-		          dev->of_node->full_name);
+		          dma_dev->of_node->full_name);
 			ret = -EINVAL;
 	}
 
@@ -735,6 +736,7 @@ static void fsl_pamu_detach_device(struct iommu_domain *domain,
 				      struct device *dev)
 {
 	struct fsl_dma_domain *dma_domain = domain->priv;
+	struct device *dma_dev = dev;
 	const u32 *prop;
 	int len;
 #ifdef CONFIG_PCI
@@ -753,16 +755,16 @@ static void fsl_pamu_detach_device(struct iommu_domain *domain,
 		 * so we can get the LIODN programmed by
 		 * u-boot.
 		 */
-		dev = pci_ctl->parent;
+		dma_dev = pci_ctl->parent;
 	}
 #endif
 
-	prop = of_get_property(dev->of_node, "fsl,liodn", &len);
+	prop = of_get_property(dma_dev->of_node, "fsl,liodn", &len);
 	if (prop)
 		detach_device(dev, dma_domain);
 	else
 		pr_err("missing fsl,liodn property at %s\n",
-		          dev->of_node->full_name);
+		          dma_dev->of_node->full_name);
 }
 
 static  int configure_domain_geometry(struct iommu_domain *domain, void *data)
@@ -1229,26 +1231,6 @@ static u32 fsl_pamu_get_windows(struct iommu_domain *domain)
 static struct iommu_domain *fsl_get_dev_domain(struct device *dev)
 {
 	struct device_domain_info *info;
-#ifdef CONFIG_PCI
-	struct pci_controller *pci_ctl;
-	struct pci_dev *pdev;
-
-	/*
-	 * Use PCI controller dev struct for pci devices as current
-	 * LIODN schema assign LIODN to PCI controller not PCI device
-	 * This should get corrected with proper LIODN schema.
-	 */
-	if (dev->bus == &pci_bus_type) {
-		pdev = to_pci_dev(dev);
-		pci_ctl = pci_bus_to_host(pdev->bus);
-		/*
-		 * make dev point to pci controller device
-		 * so we can get the LIODN programmed by
-		 * u-boot.
-		 */
-		dev = pci_ctl->parent;
-	}
-#endif
 
 	info = dev->archdata.iommu_domain;
 	if (info && info->domain)
