@@ -252,6 +252,9 @@ static void sdhci_init(struct sdhci_host *host, int soft)
 	if (pltm_irq)
 		irq |= pltm_irq;
 
+	if (host->flags & SDHCI_AUTO_CMD12)
+		irq |= SDHCI_INT_ACMD12ERR;
+
 	sdhci_clear_set_irqs(host, SDHCI_INT_ALL_MASK, irq);
 
 	if (soft) {
@@ -2261,7 +2264,7 @@ static void sdhci_cmd_irq(struct sdhci_host *host, u32 intmask)
 	if (intmask & SDHCI_INT_TIMEOUT)
 		host->cmd->error = -ETIMEDOUT;
 	else if (intmask & (SDHCI_INT_CRC | SDHCI_INT_END_BIT |
-			SDHCI_INT_INDEX))
+			SDHCI_INT_INDEX | SDHCI_INT_ACMD12ERR))
 		host->cmd->error = -EILSEQ;
 
 	if (host->ops->handle_platform_irq)
@@ -2435,6 +2438,7 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 	struct sdhci_host *host = dev_id;
 	u32 intmask, unexpected = 0;
 	int cardint = 0, max_loops = 16;
+	u32 cmd_mask = SDHCI_INT_CMD_MASK;
 
 	spin_lock(&host->lock);
 
@@ -2481,10 +2485,9 @@ again:
 		tasklet_schedule(&host->card_tasklet);
 	}
 
-	if (intmask & SDHCI_INT_CMD_MASK) {
-		sdhci_writel(host, intmask & SDHCI_INT_CMD_MASK,
-			SDHCI_INT_STATUS);
-		sdhci_cmd_irq(host, intmask & SDHCI_INT_CMD_MASK);
+	if (intmask & cmd_mask) {
+		sdhci_writel(host, intmask & cmd_mask, SDHCI_INT_STATUS);
+		sdhci_cmd_irq(host, intmask & cmd_mask);
 	}
 
 	if (intmask & SDHCI_INT_DATA_MASK) {
@@ -2493,7 +2496,7 @@ again:
 		sdhci_data_irq(host, intmask & SDHCI_INT_DATA_MASK);
 	}
 
-	intmask &= ~(SDHCI_INT_CMD_MASK | SDHCI_INT_DATA_MASK);
+	intmask &= ~(cmd_mask | SDHCI_INT_DATA_MASK);
 
 	intmask &= ~SDHCI_INT_ERROR;
 
