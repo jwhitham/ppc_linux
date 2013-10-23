@@ -63,6 +63,13 @@ static u16 esdhc_readw(struct sdhci_host *host, int reg)
 		ret = in_be32(host->ioaddr + base) & 0xffff;
 	else
 		ret = (in_be32(host->ioaddr + base) >> shift) & 0xffff;
+
+	/* T4240-R1.0-R2.0 had a incorrect vendor version and spec version */
+	if ((reg == SDHCI_HOST_VERSION) &&
+			((SVR_SOC_VER(svr) == SVR_T4240) &&
+			 (SVR_REV(svr) <= 0x20)))
+		ret = (VENDOR_V_23 << SDHCI_VENDOR_VER_SHIFT) | SDHCI_SPEC_200;
+
 	return ret;
 }
 
