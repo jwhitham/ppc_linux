@@ -4903,30 +4903,21 @@ static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
 	struct iommu_stash_attribute stash_attr;
 	int ret;
 
-	if (!pcfg->iommu_domain) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_alloc() failed",
-			__func__);
-		goto _no_iommu;
+	if (pcfg->iommu_domain) {
+		stash_attr.cpu = cpu;
+		stash_attr.cache = IOMMU_ATTR_CACHE_L1;
+		stash_attr.window = ~(u32)0;
+		ret = iommu_domain_set_attr(pcfg->iommu_domain,
+				DOMAIN_ATTR_PAMU_STASH,	&stash_attr);
+		if (ret < 0) {
+			pr_err("Failed to update pamu stash setting\n");
+			return;
+		}
 	}
-
-	stash_attr.cpu = cpu;
-	stash_attr.cache = IOMMU_ATTR_CACHE_L1;
-	stash_attr.window = ~(u32)0;
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_PAMU_STASH,
-					&stash_attr);
-	if (ret < 0) {
-		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
-					__func__, ret);
-		return;
-	}
-
-_no_iommu:
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
-		pr_warn("Failed to update portal's stash request queue\n");
-
-	return;
+		pr_warning("Failed to update portal's stash request queue\n");
 }
 
 int qman_portal_is_sharing_redirect(struct qman_portal *portal)

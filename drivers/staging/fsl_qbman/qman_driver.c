@@ -475,6 +475,7 @@ static struct qm_portal_config *get_pcfg_idx(struct list_head *list, u32 idx)
 
 static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 {
+#ifdef CONFIG_FSL_PAMU
 	int ret;
 	int window_count = 1;
 	struct iommu_domain_geometry geom_attr;
@@ -536,6 +537,7 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 	}
 
 _no_iommu:
+#endif
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
@@ -543,10 +545,12 @@ _no_iommu:
 
 	return;
 
+#ifdef CONFIG_FSL_PAMU
 _iommu_detach_device:
 	iommu_detach_device(pcfg->iommu_domain, NULL);
 _iommu_domain_free:
 	iommu_domain_free(pcfg->iommu_domain);
+#endif
 }
 
 struct qm_portal_config *qm_get_unused_portal_idx(u32 idx)
@@ -587,6 +591,7 @@ static struct qman_portal *init_pcfg(struct qm_portal_config *pcfg)
 {
 	struct qman_portal *p;
 
+	pcfg->iommu_domain = NULL;
 	portal_set_cpu(pcfg, pcfg->public_cfg.cpu);
 	p = qman_create_affine_portal(pcfg, NULL);
 	if (p) {
