@@ -350,6 +350,204 @@ int fm_port_set_rate_limit(struct fm_port *port,
 *//***************************************************************************/
 int fm_port_del_rate_limit(struct fm_port *port);
 
+struct   auto_res_tables_sizes
+{
+	uint16_t   max_num_of_arp_entries;
+	uint16_t   max_num_of_echo_ipv4_entries;
+	uint16_t   max_num_of_ndp_entries;
+	uint16_t   max_num_of_echo_ipv6_entries;
+	uint16_t   max_num_of_snmp_ipv4_entries;
+	uint16_t   max_num_of_snmp_ipv6_entries;
+	uint16_t   max_num_of_snmp_oid_entries;
+	uint16_t   max_num_of_snmp_char; /* total amount of character needed
+		for the snmp table */
+	uint16_t   max_num_of_ip_prot_filtering;
+	uint16_t   max_num_of_tcp_port_filtering;
+	uint16_t   max_num_of_udp_port_filtering;
+};
+/* ARP */
+struct   auto_res_arp_entry
+{
+	uint32_t  ip_address;
+	uint8_t   mac[6];
+	bool      is_vlan;
+	uint16_t  vid;
+};
+struct   auto_res_arp_info
+{
+	uint8_t                     table_size;
+	struct auto_res_arp_entry   *auto_res_table;
+	bool                        enable_conflict_detection; /* when TRUE
+		Conflict Detection will be checked and wake the host if
+		needed */
+};
+
+/* NDP */
+struct   auto_res_ndp_entry
+{
+	uint32_t  ip_address[4];
+	uint8_t   mac[6];
+	bool      is_vlan;
+	uint16_t  vid;
+};
+struct   auto_res_ndp_info
+{
+	uint32_t                    multicast_group;
+	uint8_t                     table_size_assigned;
+	struct auto_res_ndp_entry   *auto_res_table_assigned; /* This list
+		refer to solicitation IP addresses. Note that all IP adresses
+		must be from the same multicast group. This will be checked and
+		if not operation will fail. */
+	uint8_t                     table_size_tmp;
+	struct auto_res_ndp_entry   *auto_res_table_tmp;      /* This list
+		refer to temp IP addresses. Note that all temp IP adresses must
+		be from the same multicast group. This will be checked and if
+		not operation will fail. */
+    
+	bool                        enable_conflict_detection; /* when TRUE
+		Conflict Detection will be checked and wake the host if
+		needed */
+};
+
+/* ICMP ECHO */
+struct   auto_res_echo_ipv4_info
+{
+	uint8_t                     table_size;
+	struct auto_res_arp_entry  *auto_res_table;
+};
+
+struct   auto_res_echo_ipv6_info
+{
+	uint8_t                     table_size;
+	struct auto_res_ndp_entry  *auto_res_table;
+};
+
+/* SNMP */
+struct   auto_res_snmp_entry
+{
+	uint16_t     oidSize;
+	uint8_t      *oidVal; /* only the oid string */
+	uint16_t     resSize;
+	uint8_t      *resVal; /* resVal will be the entire reply,
+				i.e. "Type|Length|Value" */
+};
+
+/**************************************************************************//**
+ @Description   Deep Sleep Auto Response SNMP IPv4 Addresses Table Entry
+                Refer to the FMan Controller spec for more details.
+*//***************************************************************************/
+struct auto_res_snmp_ipv4addr_tbl_entry
+{
+	uint32_t ipv4addr; /*!< 32 bit IPv4 Address. */
+	bool      is_vlan;
+	uint16_t vid;   /*!< 12 bits VLAN ID. The 4 left-most bits should be cleared                      */
+			/*!< This field should be 0x0000 for an entry with no VLAN tag or a null VLAN ID. */
+};
+
+/**************************************************************************//**
+ @Description   Deep Sleep Auto Response SNMP IPv6 Addresses Table Entry
+                Refer to the FMan Controller spec for more details.
+*//***************************************************************************/
+struct auto_res_snmp_ipv6addr_tbl_entry
+{
+	uint32_t ipv6Addr[4];  /*!< 4 * 32 bit IPv6 Address.                                                     */
+	bool      isVlan;
+	uint16_t vid;       /*!< 12 bits VLAN ID. The 4 left-most bits should be cleared                      */
+			/*!< This field should be 0x0000 for an entry with no VLAN tag or a null VLAN ID. */
+};
+
+struct   auto_res_snmp_info
+{
+	uint16_t control;                          /**< Control bits [0-15]. */
+	uint16_t max_snmp_msg_length;              /**< Maximal allowed SNMP message length. */
+	uint16_t num_ipv4_addresses;               /**< Number of entries in IPv4 addresses table. */
+	uint16_t num_ipv6_addresses;               /**< Number of entries in IPv6 addresses table. */
+	struct auto_res_snmp_ipv4addr_tbl_entry *ipv4addr_tbl; /**< Pointer to IPv4 addresses table. */
+	struct auto_res_snmp_ipv6addr_tbl_entry *ipv6addr_tbl; /**< Pointer to IPv6 addresses table. */
+	char                        *community_read_write_string;
+	char                        *community_read_only_string;
+	struct auto_res_snmp_entry  *oid_table;
+	uint32_t                     oid_table_size;
+};
+
+/* Filtering */
+struct   auto_res_port_filtering_entry
+{
+	uint16_t    src_port;
+	uint16_t    dst_port;
+	uint16_t    src_port_mask;
+	uint16_t    dst_port_mask;
+};
+struct   auto_res_filtering_info
+{
+	/* IP protocol filtering parameters */
+	uint8_t     ip_prot_table_size;
+	uint8_t     *ip_prot_table_ptr;
+	bool        ip_prot_drop_on_hit;  /* when TRUE, hit in the table will
+		cause the packet to be droped, miss will pass the packet to
+		UDP/TCP filters if needed and if not to the classification
+		tree. If the classification tree will pass the packet to a
+		queue it will cause a wake interupt. When FALSE it the other
+		way around. */
+	/* UDP port filtering parameters */
+	uint8_t     udp_ports_table_size;
+	struct auto_res_port_filtering_entry *udp_ports_table_ptr;
+	bool        udp_port_drop_on_hit; /* when TRUE, hit in the table will
+		cause the packet to be droped, miss will pass the packet to
+		classification tree. If the classification tree will pass the
+		packet to a queue it will cause a wake interupt. When FALSE it
+		the other way around. */
+    /* TCP port filtering parameters */
+	uint16_t    tcp_flags_mask;
+	uint8_t     tcp_ports_table_size;
+	struct auto_res_port_filtering_entry *tcp_ports_table_ptr;
+	bool        tcp_port_drop_on_hit; /* when TRUE, hit in the table will
+		cause the packet to be droped, miss will pass the packet to
+		classification tree. If the classification tree will pass the
+		packet to a queue it will cause a wake interupt. When FALSE it
+		the other way around. */
+};
+
+struct auto_res_port_params
+{
+	t_Handle                            h_FmPortTx;
+	struct   auto_res_arp_info          *p_auto_res_arp_info;
+	struct   auto_res_echo_ipv4_info    *p_auto_res_echo_ipv4_info;
+	struct   auto_res_ndp_info          *p_auto_res_ndp_info;
+	struct   auto_res_echo_ipv6_info    *p_auto_res_echo_ipv6_info;
+	struct   auto_res_snmp_info         *p_auto_res_snmp_info;
+	struct   auto_res_filtering_info    *p_auto_res_filtering_info;
+};
+
+struct auto_res_port_stats
+{
+    uint32_t arp_ar_cnt;
+    uint32_t echo_icmpv4_ar_cnt;
+    uint32_t ndp_ar_cnt;
+    uint32_t echo_icmpv6_ar_cnt;
+};
+
+int fm_port_config_autores_for_deepsleep_support(struct fm_port *port,
+	struct auto_res_tables_sizes *params);
+	
+int fm_port_enter_autores_for_deepsleep(struct fm_port *port,
+	struct auto_res_port_params *params);
+	
+void fm_port_exit_auto_res_for_deep_sleep(struct fm_port *port_rx,
+	struct fm_port *port_tx);
+	
+bool fm_port_is_in_auto_res_mode(struct fm_port *port);
+
+struct auto_res_tables_sizes *fm_port_get_autores_maxsize(
+	struct fm_port *port);
+
+int fm_port_get_autores_stats(struct fm_port *port, struct auto_res_port_stats
+	*stats);
+
+int fm_port_resume(struct fm_port *port);
+
+int fm_port_suspend(struct fm_port *port);
+
 /**************************************************************************//**
 @Function     fm_mac_set_exception
 

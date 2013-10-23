@@ -5201,3 +5201,8 @@ t_Error FM_ForceIntr (t_Handle h_Fm, e_FmExceptions exception)
 
     return E_OK;
 }
+
+t_Handle FmGetPcd(t_Handle h_Fm)
+{
+	return ((t_Fm*)h_Fm)->h_Pcd;
+}

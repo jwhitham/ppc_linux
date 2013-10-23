@@ -191,6 +191,14 @@ void PrsDisable(t_FmPcd *p_FmPcd)
     fman_prs_disable(PrsRegs);
 }
 
+int PrsIsEnabled(t_FmPcd *p_FmPcd)
+{
+    struct fman_prs_regs *PrsRegs = (struct fman_prs_regs *)p_FmPcd->p_FmPcdPrs->p_FmPcdPrsRegs;
+
+    ASSERT_COND(p_FmPcd->guestId == NCSW_MASTER_ID);
+    return fman_prs_is_enabled(PrsRegs);
+}
+
 t_Error PrsIncludePortInStatistics(t_FmPcd *p_FmPcd, uint8_t hardwarePortId, bool include)
 {
     struct fman_prs_regs *PrsRegs;
