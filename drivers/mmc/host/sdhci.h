@@ -295,6 +295,8 @@ struct sdhci_ops {
 	void	(*hw_reset)(struct sdhci_host *host);
 	void	(*platform_suspend)(struct sdhci_host *host);
 	void	(*platform_resume)(struct sdhci_host *host);
+	void	(*get_platform_irq)(struct sdhci_host *host, u32 *irq);
+	void	(*handle_platform_irq)(struct sdhci_host *host, u32 intmask);
 	void    (*adma_workaround)(struct sdhci_host *host, u32 intmask);
 	void	(*platform_init)(struct sdhci_host *host);
 	void    (*card_event)(struct sdhci_host *host);
@@ -411,4 +413,5 @@ extern int sdhci_runtime_suspend_host(struct sdhci_host *host);
 extern int sdhci_runtime_resume_host(struct sdhci_host *host);
 #endif
 
+extern void sdhci_show_adma_error(struct sdhci_host *host);
 #endif /* __SDHCI_HW_H */
