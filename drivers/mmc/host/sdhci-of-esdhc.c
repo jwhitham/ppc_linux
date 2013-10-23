@@ -50,6 +50,14 @@ static u32 esdhc_readl(struct sdhci_host *host, int reg)
 			ret |= SDHCI_CAN_DO_ADMA2;
 	}
 
+	/*
+	 * Clock of eSDHC host don't support to be disabled and enabled.
+	 * So clock stable bit doesn't behave as it mean, So fix it to
+	 * '1' to avoid misreading.
+	 */
+	if (reg == SDHCI_PRESENT_STATE)
+		ret |= ESDHC_CLK_STABLE;
+
 	return ret;
 }
 
