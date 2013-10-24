@@ -575,6 +575,71 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
 }
 
+#ifdef CONFIG_PM
+
+static int dpa_shared_suspend_noirq(struct device *dev)
+{
+	struct net_device	*net_dev;
+	struct dpa_priv_s	*priv;
+	struct mac_device	*mac_dev;
+	int			err = 0;
+
+	net_dev = dev_get_drvdata(dev);
+	if (net_dev->flags & IFF_UP) {
+		priv = netdev_priv(net_dev);
+		mac_dev = priv->mac_dev;
+
+		err = fm_port_suspend(mac_dev->port_dev[RX]);
+		if (err)
+			goto port_suspend_failed;
+
+		err = fm_port_suspend(mac_dev->port_dev[TX]);
+		if (err)
+			err = fm_port_resume(mac_dev->port_dev[RX]);
+	}
+
+port_suspend_failed:
+	return err;
+}
+
+static int dpa_shared_resume_noirq(struct device *dev)
+{
+	struct net_device	*net_dev;
+	struct dpa_priv_s	*priv;
+	struct mac_device	*mac_dev;
+	int			err = 0;
+
+	net_dev = dev_get_drvdata(dev);
+	if (net_dev->flags & IFF_UP) {
+		priv = netdev_priv(net_dev);
+		mac_dev = priv->mac_dev;
+
+		err = fm_port_resume(mac_dev->port_dev[TX]);
+		if (err)
+			goto port_resume_failed;
+
+		err = fm_port_resume(mac_dev->port_dev[RX]);
+		if (err)
+			err = fm_port_suspend(mac_dev->port_dev[TX]);
+	}
+
+port_resume_failed:
+	return err;
+}
+
+static const struct dev_pm_ops shared_pm_ops = {
+	.suspend_noirq = dpa_shared_suspend_noirq,
+	.resume_noirq = dpa_shared_resume_noirq,
+};
+
+#define SHARED_PM_OPS (&shared_pm_ops)
+
+#else /* CONFIG_PM */
+
+#define SHARED_PM_OPS NULL
+
+#endif /* CONFIG_PM */
+
 static int
 dpaa_eth_shared_probe(struct platform_device *_of_dev)
 {
@@ -774,6 +839,7 @@ static struct platform_driver dpa_shared_driver = {
 		.name		= KBUILD_MODNAME,
 		.of_match_table	= dpa_shared_match,
 		.owner		= THIS_MODULE,
+		.pm		= SHARED_PM_OPS,
 	},
 	.probe		= dpaa_eth_shared_probe,
 	.remove		= dpa_remove
