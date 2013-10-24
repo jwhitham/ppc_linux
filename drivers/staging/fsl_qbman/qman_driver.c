@@ -639,21 +639,56 @@ static int __init parse_qportals(char *str)
 }
 __setup("qportals=", parse_qportals);
 
+static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
+							unsigned int cpu)
+{
+	struct iommu_stash_attribute stash_attr;
+	int ret;
+
+	if (pcfg->iommu_domain) {
+		stash_attr.cpu = cpu;
+		stash_attr.cache = IOMMU_ATTR_CACHE_L1;
+		stash_attr.window = ~(u32)0;
+		ret = iommu_domain_set_attr(pcfg->iommu_domain,
+				DOMAIN_ATTR_PAMU_STASH, &stash_attr);
+		if (ret < 0) {
+			pr_err("Failed to update pamu stash setting\n");
+			return;
+		}
+	}
+#ifdef CONFIG_FSL_QMAN_CONFIG
+	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
+#endif
+		pr_warning("Failed to update portal's stash request queue\n");
+}
+
 static void qman_offline_cpu(unsigned int cpu)
 {
 	struct qman_portal *p;
+	const struct qm_portal_config *pcfg;
 	p = (struct qman_portal *)affine_portals[cpu];
-	if (p && (!qman_portal_is_sharing_redirect(p)))
-		qman_migrate_portal(p);
+	if (p) {
+		pcfg = qman_get_qm_portal_config(p);
+		if (pcfg) {
+			irq_set_affinity(pcfg->public_cfg.irq, cpumask_of(0));
+			qman_portal_update_sdest(pcfg, 0);
+		}
+	}
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
 static void qman_online_cpu(unsigned int cpu)
 {
 	struct qman_portal *p;
+	const struct qm_portal_config *pcfg;
 	p = (struct qman_portal *)affine_portals[cpu];
-	if (p && (!qman_portal_is_sharing_redirect(p)))
-		qman_migrate_portal_back(p, cpu);
+	if (p) {
+		pcfg = qman_get_qm_portal_config(p);
+		if (pcfg) {
+			irq_set_affinity(pcfg->public_cfg.irq, cpumask_of(cpu));
+			qman_portal_update_sdest(pcfg, cpu);
+		}
+	}
 }
 
 static int __cpuinit qman_hotplug_cpu_callback(struct notifier_block *nfb,

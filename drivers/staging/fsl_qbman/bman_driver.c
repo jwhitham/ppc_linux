@@ -296,18 +296,26 @@ __setup("bportals=", parse_bportals);
 static void bman_offline_cpu(unsigned int cpu)
 {
 	struct bman_portal *p;
+	const struct bm_portal_config *pcfg;
 	p = (struct bman_portal *)affine_bportals[cpu];
-	if (p && (!bman_portal_is_sharing_redirect(p)))
-		bman_migrate_portal(p);
+	if (p) {
+		pcfg = bman_get_bm_portal_config(p);
+		if (pcfg)
+			irq_set_affinity(pcfg->public_cfg.irq, cpumask_of(0));
+	}
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
 static void bman_online_cpu(unsigned int cpu)
 {
 	struct bman_portal *p;
+	const struct bm_portal_config *pcfg;
 	p = (struct bman_portal *)affine_bportals[cpu];
-	if (p && (!bman_portal_is_sharing_redirect(p)))
-		bman_migrate_portal_back(p, cpu);
+	if (p) {
+		pcfg = bman_get_bm_portal_config(p);
+		if (pcfg)
+			irq_set_affinity(pcfg->public_cfg.irq, cpumask_of(cpu));
+	}
 }
 
 static int __cpuinit bman_hotplug_cpu_callback(struct notifier_block *nfb,
