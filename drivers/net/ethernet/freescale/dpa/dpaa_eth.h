@@ -107,11 +107,22 @@ struct dpa_buffer_layout_s {
 	 FM_PORT_FRM_ERR_PRS_ILL_INSTRUCT | FM_PORT_FRM_ERR_PRS_HDR_ERR)
 
 #ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-/* Can't be paranoid enough: we want this cacheline-aligned.
- * netdev_alloc_frag() will use it as is, so we have to do the
- * alignment job here.
+#ifndef CONFIG_FSL_DPAA_ETH_JUMBO_FRAME
+/* The raw buffer size must be cacheline aligned.
+ * Normally we use 2K buffers.
  */
-#define DPA_BP_RAW_SIZE		((PAGE_SIZE >> 1) & ~(SMP_CACHE_BYTES - 1))
+#define DPA_BP_RAW_SIZE		2048
+#else
+/* For jumbo frame optimizations, use buffers large enough to accomodate
+ * 9.6K frames, FD maximum offset, skb sh_info overhead and some extra
+ * space to account for further alignments.
+ */
+#define DPA_MAX_FRM_SIZE	9600
+#define DPA_BP_RAW_SIZE \
+	((DPA_MAX_FRM_SIZE + DPA_MAX_FD_OFFSET + \
+	  sizeof(struct skb_shared_info) + 128) & ~(SMP_CACHE_BYTES - 1))
+#endif
+
 /* This is what FMan is ever allowed to use.
  * FMan-DMA requires 16-byte alignment for Rx buffers, but SKB_DATA_ALIGN is
  * even stronger (SMP_CACHE_BYTES-aligned), so we just get away with that,

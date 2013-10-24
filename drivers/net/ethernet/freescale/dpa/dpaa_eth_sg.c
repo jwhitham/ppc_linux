@@ -350,6 +350,16 @@ static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	if (unlikely(!skb))
 		return NULL;
 
+#ifdef CONFIG_FSL_DPAA_ETH_JUMBO_FRAME
+	/* When using jumbo Rx buffers, we risk having frames dropped due to
+	 * the socket backlog reaching its maximum allowed size.
+	 * Use the frame length for the skb truesize instead of the buffer
+	 * size, as this is the size of the data that actually gets copied to
+	 * userspace.
+	 */
+	skb->truesize = SKB_TRUESIZE(dpa_fd_length(fd));
+#endif
+
 	/* do we need the timestamp for bad frames? */
 #ifdef CONFIG_FSL_DPAA_1588
 	if (priv->tsu && priv->tsu->valid && priv->tsu->hwts_rx_en_ioctl)
