@@ -347,10 +347,10 @@ static int dtsec_init_phy(struct net_device *net_dev,
 
 	if (!mac_dev->phy_node)
 		phy_dev = phy_connect(net_dev, mac_dev->fixed_bus_id,
-				&adjust_link, 0, mac_dev->phy_if);
+				      &adjust_link, mac_dev->phy_if);
 	else
 		phy_dev = of_phy_connect(net_dev, mac_dev->phy_node,
-				&adjust_link, 0, mac_dev->phy_if);
+					 &adjust_link, 0, mac_dev->phy_if);
 	if (unlikely(phy_dev == NULL) || IS_ERR(phy_dev)) {
 		netdev_err(net_dev, "Could not connect to PHY %s\n",
 				mac_dev->phy_node ?
@@ -374,11 +374,11 @@ static int xgmac_init_phy(struct net_device *net_dev,
 	struct phy_device *phy_dev;
 
 	if (!mac_dev->phy_node)
-		phy_dev = phy_attach(net_dev, mac_dev->fixed_bus_id, 0,
-				mac_dev->phy_if);
+		phy_dev = phy_attach(net_dev, mac_dev->fixed_bus_id,
+				     mac_dev->phy_if);
 	else
 		phy_dev = of_phy_attach(net_dev, mac_dev->phy_node, 0,
-				mac_dev->phy_if);
+					mac_dev->phy_if);
 	if (unlikely(phy_dev == NULL) || IS_ERR(phy_dev)) {
 		netdev_err(net_dev, "Could not attach to PHY %s\n",
 				mac_dev->phy_node ?
@@ -406,14 +406,15 @@ static int memac_init_phy(struct net_device *net_dev,
 			return 0;
 		} else
 			phy_dev = of_phy_attach(net_dev, mac_dev->phy_node, 0,
-				mac_dev->phy_if);
+						mac_dev->phy_if);
 	} else {
 		if (!mac_dev->phy_node)
 			phy_dev = phy_connect(net_dev, mac_dev->fixed_bus_id,
-				&adjust_link, 0, mac_dev->phy_if);
+					      &adjust_link, mac_dev->phy_if);
 		else
 			phy_dev = of_phy_connect(net_dev, mac_dev->phy_node,
-				&adjust_link, 0, mac_dev->phy_if);
+						 &adjust_link, 0,
+						 mac_dev->phy_if);
 	}
 
 	if (unlikely(phy_dev == NULL) || IS_ERR(phy_dev)) {
