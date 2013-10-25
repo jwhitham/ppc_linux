@@ -118,6 +118,73 @@ uint8_t dpa_priv_common_bpid;
 
 extern u16 qman_portal_max;
 
+#ifdef CONFIG_PM
+
+static int dpaa_suspend_noirq(struct device *dev)
+{
+	struct net_device	*net_dev;
+	struct dpa_priv_s	*priv;
+	struct mac_device	*mac_dev;
+	int			err = 0;
+
+	net_dev = dev_get_drvdata(dev);
+
+	if (net_dev->flags & IFF_UP) {
+		priv = netdev_priv(net_dev);
+		mac_dev = priv->mac_dev;
+
+		err = fm_port_suspend(mac_dev->port_dev[RX]);
+		if (err)
+			goto port_suspend_failed;
+
+		err = fm_port_suspend(mac_dev->port_dev[TX]);
+		if (err)
+			err = fm_port_resume(mac_dev->port_dev[RX]);
+	}
+
+port_suspend_failed:
+	return err;
+}
+
+static int dpaa_resume_noirq(struct device *dev)
+{
+	struct net_device	*net_dev;
+	struct dpa_priv_s	*priv;
+	struct mac_device	*mac_dev;
+	int			err = 0;
+
+	net_dev = dev_get_drvdata(dev);
+
+	if (net_dev->flags & IFF_UP) {
+		priv = netdev_priv(net_dev);
+		mac_dev = priv->mac_dev;
+
+		err = fm_port_resume(mac_dev->port_dev[TX]);
+		if (err)
+			goto port_resume_failed;
+
+		err = fm_port_resume(mac_dev->port_dev[RX]);
+		if (err)
+			err = fm_port_suspend(mac_dev->port_dev[TX]);
+	}
+
+port_resume_failed:
+	return err;
+}
+
+static const struct dev_pm_ops dpaa_pm_ops = {
+	.suspend_noirq = dpaa_suspend_noirq,
+	.resume_noirq = dpaa_resume_noirq,
+};
+
+#define DPAA_PM_OPS (&dpaa_pm_ops)
+
+#else /* CONFIG_PM */
+
+#define DPAA_PM_OPS NULL
+
+#endif /* CONFIG_PM */
+
 /* Checks whether the checksum field in Parse Results array is valid
  * (equals 0xFFFF) and increments the .cse counter otherwise
  */
@@ -989,6 +1056,7 @@ static struct platform_driver dpa_driver = {
 		.name		= KBUILD_MODNAME,
 		.of_match_table	= dpa_match,
 		.owner		= THIS_MODULE,
+		.pm		= DPAA_PM_OPS,
 	},
 	.probe		= dpaa_eth_priv_probe,
 	.remove		= dpa_remove
