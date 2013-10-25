@@ -72,18 +72,36 @@ static const struct of_device_id oh_port_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, oh_port_match_table);
 
-static int oh_port_remove(struct platform_device *_of_dev);
-static int oh_port_probe(struct platform_device *_of_dev);
+#ifdef CONFIG_PM
 
-static struct platform_driver oh_port_driver = {
-	.driver = {
-		.name		= KBUILD_MODNAME,
-		.of_match_table	= oh_port_match_table,
-		.owner		= THIS_MODULE,
-	},
-	.probe		= oh_port_probe,
-	.remove		= oh_port_remove
+static int oh_suspend_noirq(struct device *dev)
+{
+	struct dpa_oh_config_s	*oh_config;
+
+	oh_config = dev_get_drvdata(dev);
+	return fm_port_suspend(oh_config->oh_port);
+}
+
+static int oh_resume_noirq(struct device *dev)
+{
+	struct dpa_oh_config_s	*oh_config;
+
+	oh_config = dev_get_drvdata(dev);
+	return fm_port_resume(oh_config->oh_port);
+}
+
+static struct dev_pm_ops oh_pm_ops = {
+	.suspend_noirq = oh_suspend_noirq,
+	.resume_noirq = oh_resume_noirq,
 };
+
+#define OH_PM_OPS (&oh_pm_ops)
+
+#else /* CONFIG_PM */
+
+#define OH_PM_OPS NULL
+
+#endif /* CONFIG_PM */
 
 /* Creates Frame Queues */
 static uint32_t oh_fq_create(struct qman_fq *fq,
@@ -571,6 +589,17 @@ free_egress_fqs:
 return_error:
 	return _errno;
 }
+
+static struct platform_driver oh_port_driver = {
+	.driver = {
+		.name		= KBUILD_MODNAME,
+		.of_match_table	= oh_port_match_table,
+		.owner		= THIS_MODULE,
+		.pm		= OH_PM_OPS,
+	},
+	.probe		= oh_port_probe,
+	.remove		= oh_port_remove
+};
 
 static int __init __cold oh_port_load(void)
 {
