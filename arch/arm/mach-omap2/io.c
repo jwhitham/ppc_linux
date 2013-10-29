@@ -55,12 +55,6 @@
 #include "prm44xx.h"
 
 /*
- * omap_clk_init: points to a function that does the SoC-specific
- * clock initializations
- */
-int (*omap_clk_init)(void);
-
-/*
  * The machine specific code may provide the extra mapping besides the
  * default mapping provided here.
  */
@@ -403,7 +397,7 @@ void __init omap2420_init_early(void)
 	omap242x_clockdomains_init();
 	omap2420_hwmod_init();
 	omap_hwmod_init_postsetup();
-	omap_clk_init = omap2420_clk_init;
+	omap2420_clk_init();
 }
 
 void __init omap2420_init_late(void)
@@ -433,7 +427,7 @@ void __init omap2430_init_early(void)
 	omap243x_clockdomains_init();
 	omap2430_hwmod_init();
 	omap_hwmod_init_postsetup();
-	omap_clk_init = omap2430_clk_init;
+	omap2430_clk_init();
 }
 
 void __init omap2430_init_late(void)
@@ -468,7 +462,7 @@ void __init omap3_init_early(void)
 	omap3xxx_clockdomains_init();
 	omap3xxx_hwmod_init();
 	omap_hwmod_init_postsetup();
-	omap_clk_init = omap3xxx_clk_init;
+	omap3xxx_clk_init();
 }
 
 void __init omap3430_init_early(void)
@@ -506,7 +500,7 @@ void __init ti81xx_init_early(void)
 	omap3xxx_clockdomains_init();
 	omap3xxx_hwmod_init();
 	omap_hwmod_init_postsetup();
-	omap_clk_init = omap3xxx_clk_init;
+	omap3xxx_clk_init();
 }
 
 void __init omap3_init_late(void)
@@ -574,7 +568,7 @@ void __init am33xx_init_early(void)
 	am33xx_clockdomains_init();
 	am33xx_hwmod_init();
 	omap_hwmod_init_postsetup();
-	omap_clk_init = am33xx_clk_init;
+	am33xx_clk_init();
 }
 #endif
 
@@ -599,7 +593,7 @@ void __init omap4430_init_early(void)
 	omap44xx_clockdomains_init();
 	omap44xx_hwmod_init();
 	omap_hwmod_init_postsetup();
-	omap_clk_init = omap4xxx_clk_init;
+	omap4xxx_clk_init();
 }
 
 void __init omap4430_init_late(void)

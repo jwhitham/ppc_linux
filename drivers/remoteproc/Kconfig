@@ -5,7 +5,7 @@ config REMOTEPROC
 	tristate
 	depends on EXPERIMENTAL
 	depends on HAS_DMA
-	select FW_LOADER
+	select FW_CONFIG
 	select VIRTIO
 
 config OMAP_REMOTEPROC

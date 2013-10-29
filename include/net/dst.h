@@ -36,9 +36,13 @@ struct dst_entry {
 	struct net_device       *dev;
 	struct  dst_ops	        *ops;
 	unsigned long		_metrics;
-	unsigned long           expires;
+	union {
+		unsigned long           expires;
+		/* point to where the dst_entry copied from */
+		struct dst_entry        *from;
+	};
 	struct dst_entry	*path;
-	struct dst_entry	*from;
+	void			*__pad0;
 #ifdef CONFIG_XFRM
 	struct xfrm_state	*xfrm;
 #else
@@ -392,7 +396,7 @@ static inline void dst_confirm(struct dst_entry *dst)
 static inline int dst_neigh_output(struct dst_entry *dst, struct neighbour *n,
 				   struct sk_buff *skb)
 {
-	struct hh_cache *hh;
+	const struct hh_cache *hh;
 
 	if (dst->pending_confirm) {
 		unsigned long now = jiffies;

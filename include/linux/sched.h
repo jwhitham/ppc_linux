@@ -23,7 +23,6 @@ struct sched_param {
 #include <linux/nodemask.h>
 #include <linux/mm_types.h>
 
-#include <asm/kmap_types.h>
 #include <asm/page.h>
 #include <asm/ptrace.h>
 #include <asm/cputime.h>
@@ -52,7 +51,6 @@ struct sched_param {
 #include <linux/cred.h>
 #include <linux/llist.h>
 #include <linux/uidgid.h>
-#include <linux/hardirq.h>
 
 #include <asm/processor.h>
 
@@ -165,10 +163,9 @@ print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 #define TASK_DEAD		64
 #define TASK_WAKEKILL		128
 #define TASK_WAKING		256
-#define TASK_PARKED		512
-#define TASK_STATE_MAX		1024
+#define TASK_STATE_MAX		512
 
-#define TASK_STATE_TO_CHAR_STR "RSDTtZXxKWP"
+#define TASK_STATE_TO_CHAR_STR "RSDTtZXxKW"
 
 extern char ___assert_task_state[1 - 2*!!(
 		sizeof(TASK_STATE_TO_CHAR_STR)-1 != ilog2(TASK_STATE_MAX)+1)];
@@ -1064,7 +1061,6 @@ struct sched_domain;
 #define WF_SYNC		0x01		/* waker goes to sleep after wakup */
 #define WF_FORK		0x02		/* child wakeup after fork */
 #define WF_MIGRATED	0x04		/* internal use, task got migrated */
-#define WF_LOCK_SLEEPER	0x08		/* wakeup spinlock "sleeper" */
 
 #define ENQUEUE_WAKEUP		1
 #define ENQUEUE_HEAD		2
@@ -1241,7 +1237,6 @@ enum perf_event_task_context {
 
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
-	volatile long saved_state;	/* saved state for "spinlock sleepers" */
 	void *stack;
 	atomic_t usage;
 	unsigned int flags;	/* per process flags, defined below */
@@ -1281,12 +1276,6 @@ struct task_struct {
 #endif
 
 	unsigned int policy;
-#ifdef CONFIG_PREEMPT_RT_FULL
-	int migrate_disable;
-# ifdef CONFIG_SCHED_DEBUG
-	int migrate_disable_atomic;
-# endif
-#endif
 	int nr_cpus_allowed;
 	cpumask_t cpus_allowed;
 
@@ -1387,9 +1376,6 @@ struct task_struct {
 
 	struct task_cputime cputime_expires;
 	struct list_head cpu_timers[3];
-#ifdef CONFIG_PREEMPT_RT_BASE
-	struct task_struct *posix_timer_list;
-#endif
 
 /* process credentials */
 	const struct cred __rcu *real_cred; /* objective and real subjective task
@@ -1421,15 +1407,10 @@ struct task_struct {
 /* signal handlers */
 	struct signal_struct *signal;
 	struct sighand_struct *sighand;
-	struct sigqueue *sigqueue_cache;
 
 	sigset_t blocked, real_blocked;
 	sigset_t saved_sigmask;	/* restored if set_restore_sigmask() was used */
 	struct sigpending pending;
-#ifdef CONFIG_PREEMPT_RT_FULL
-	/* TODO: move me into ->restart_block ? */
-	struct siginfo forced_info;
-#endif
 
 	unsigned long sas_ss_sp;
 	size_t sas_ss_size;
@@ -1465,9 +1446,6 @@ struct task_struct {
 #ifdef CONFIG_DEBUG_MUTEXES
 	/* mutex deadlock detection */
 	struct mutex_waiter *blocked_on;
-#endif
-#ifdef CONFIG_PREEMPT_RT_FULL
-	int pagefault_disabled;
 #endif
 #ifdef CONFIG_TRACE_IRQFLAGS
 	unsigned int irq_events;
@@ -1611,12 +1589,6 @@ struct task_struct {
 	unsigned long trace;
 	/* bitmask and counter of trace recursion */
 	unsigned long trace_recursion;
-#ifdef CONFIG_WAKEUP_LATENCY_HIST
-	u64 preempt_timestamp_hist;
-#ifdef CONFIG_MISSED_TIMER_OFFSETS_HIST
-	long timer_offset;
-#endif
-#endif
 #endif /* CONFIG_TRACING */
 #ifdef CONFIG_MEMCG /* memcg uses this to do batch job */
 	struct memcg_batch_info {
@@ -1633,21 +1605,10 @@ struct task_struct {
 #ifdef CONFIG_UPROBES
 	struct uprobe_task *utask;
 #endif
-#ifdef CONFIG_PREEMPT_RT_BASE
-	struct rcu_head put_rcu;
-	int softirq_nestcnt;
-	unsigned int softirqs_raised;
-#endif
-#ifdef CONFIG_PREEMPT_RT_FULL
-# if defined CONFIG_HIGHMEM || defined CONFIG_X86_32
-	int kmap_idx;
-	pte_t kmap_pte[KM_TYPE_NR];
-# endif
-#endif
-#ifdef CONFIG_DEBUG_PREEMPT
-	unsigned long preempt_disable_ip;
-#endif
 };
+
+/* Future-safe accessor for struct task_struct's cpus_allowed. */
+#define tsk_cpus_allowed(tsk) (&(tsk)->cpus_allowed)
 
 #ifdef CONFIG_NUMA_BALANCING
 extern void task_numa_fault(int node, int pages, bool migrated);
@@ -1660,17 +1621,6 @@ static inline void set_numabalancing_state(bool enabled)
 {
 }
 #endif
-
-#ifdef CONFIG_PREEMPT_RT_FULL
-static inline bool cur_pf_disabled(void) { return current->pagefault_disabled; }
-#else
-static inline bool cur_pf_disabled(void) { return false; }
-#endif
-
-static inline bool pagefault_disabled(void)
-{
-	return in_atomic() || cur_pf_disabled();
-}
 
 /*
  * Priority of a process goes from 0..MAX_PRIO-1, valid RT
@@ -1834,15 +1784,6 @@ extern struct pid *cad_pid;
 extern void free_task(struct task_struct *tsk);
 #define get_task_struct(tsk) do { atomic_inc(&(tsk)->usage); } while(0)
 
-#ifdef CONFIG_PREEMPT_RT_BASE
-extern void __put_task_struct_cb(struct rcu_head *rhp);
-
-static inline void put_task_struct(struct task_struct *t)
-{
-	if (atomic_dec_and_test(&t->usage))
-		call_rcu(&t->put_rcu, __put_task_struct_cb);
-}
-#else
 extern void __put_task_struct(struct task_struct *t);
 
 static inline void put_task_struct(struct task_struct *t)
@@ -1850,7 +1791,6 @@ static inline void put_task_struct(struct task_struct *t)
 	if (atomic_dec_and_test(&t->usage))
 		__put_task_struct(t);
 }
-#endif
 
 extern void task_cputime_adjusted(struct task_struct *p, cputime_t *ut, cputime_t *st);
 extern void thread_group_cputime_adjusted(struct task_struct *p, cputime_t *ut, cputime_t *st);
@@ -1858,7 +1798,6 @@ extern void thread_group_cputime_adjusted(struct task_struct *p, cputime_t *ut, 
 /*
  * Per process flags
  */
-#define PF_IN_SOFTIRQ	0x00000001	/* Task is serving softirq */
 #define PF_EXITING	0x00000004	/* getting shut down */
 #define PF_EXITPIDONE	0x00000008	/* pi exit done on shut down */
 #define PF_VCPU		0x00000010	/* I'm a virtual CPU */
@@ -1876,7 +1815,6 @@ extern void thread_group_cputime_adjusted(struct task_struct *p, cputime_t *ut, 
 #define PF_FROZEN	0x00010000	/* frozen for system suspend */
 #define PF_FSTRANS	0x00020000	/* inside a filesystem transaction */
 #define PF_KSWAPD	0x00040000	/* I am kswapd */
-#define PF_STOMPER	0x00080000	/* I am a stomp machine thread */
 #define PF_LESS_THROTTLE 0x00100000	/* Throttle me less: I clean memory */
 #define PF_KTHREAD	0x00200000	/* I am a kernel thread */
 #define PF_RANDOMIZE	0x00400000	/* randomize virtual address space */
@@ -1983,10 +1921,6 @@ extern void do_set_cpus_allowed(struct task_struct *p,
 
 extern int set_cpus_allowed_ptr(struct task_struct *p,
 				const struct cpumask *new_mask);
-int migrate_me(void);
-void tell_sched_cpu_down_begin(int cpu);
-void tell_sched_cpu_down_done(int cpu);
-
 #else
 static inline void do_set_cpus_allowed(struct task_struct *p,
 				      const struct cpumask *new_mask)
@@ -1999,9 +1933,6 @@ static inline int set_cpus_allowed_ptr(struct task_struct *p,
 		return -EINVAL;
 	return 0;
 }
-static inline int migrate_me(void) { return 0; }
-static inline void tell_sched_cpu_down_begin(int cpu) { }
-static inline void tell_sched_cpu_down_done(int cpu) { }
 #endif
 
 #ifdef CONFIG_NO_HZ
@@ -2176,7 +2107,6 @@ extern unsigned int sysctl_sched_cfs_bandwidth_slice;
 #ifdef CONFIG_RT_MUTEXES
 extern int rt_mutex_getprio(struct task_struct *p);
 extern void rt_mutex_setprio(struct task_struct *p, int prio);
-extern int rt_mutex_check_prio(struct task_struct *task, int newprio);
 extern void rt_mutex_adjust_pi(struct task_struct *p);
 static inline bool tsk_is_pi_blocked(struct task_struct *tsk)
 {
@@ -2186,10 +2116,6 @@ static inline bool tsk_is_pi_blocked(struct task_struct *tsk)
 static inline int rt_mutex_getprio(struct task_struct *p)
 {
 	return p->normal_prio;
-}
-static inline int rt_mutex_check_prio(struct task_struct *task, int newprio)
-{
-	return 0;
 }
 # define rt_mutex_adjust_pi(p)		do { } while (0)
 static inline bool tsk_is_pi_blocked(struct task_struct *tsk)
@@ -2282,7 +2208,6 @@ extern void xtime_update(unsigned long ticks);
 
 extern int wake_up_state(struct task_struct *tsk, unsigned int state);
 extern int wake_up_process(struct task_struct *tsk);
-extern int wake_up_lock_sleeper(struct task_struct * tsk);
 extern void wake_up_new_task(struct task_struct *tsk);
 #ifdef CONFIG_SMP
  extern void kick_process(struct task_struct *tsk);
@@ -2387,23 +2312,11 @@ extern struct mm_struct * mm_alloc(void);
 
 /* mmdrop drops the mm and the page tables */
 extern void __mmdrop(struct mm_struct *);
-
 static inline void mmdrop(struct mm_struct * mm)
 {
 	if (unlikely(atomic_dec_and_test(&mm->mm_count)))
 		__mmdrop(mm);
 }
-
-#ifdef CONFIG_PREEMPT_RT_BASE
-extern void __mmdrop_delayed(struct rcu_head *rhp);
-static inline void mmdrop_delayed(struct mm_struct *mm)
-{
-	if (atomic_dec_and_test(&mm->mm_count))
-		call_rcu(&mm->delayed_drop, __mmdrop_delayed);
-}
-#else
-# define mmdrop_delayed(mm)	mmdrop(mm)
-#endif
 
 /* mmput gets rid of the mappings and all user-space */
 extern void mmput(struct mm_struct *);
@@ -2572,18 +2485,27 @@ static inline void threadgroup_change_end(struct task_struct *tsk)
  *
  * Lock the threadgroup @tsk belongs to.  No new task is allowed to enter
  * and member tasks aren't allowed to exit (as indicated by PF_EXITING) or
- * change ->group_leader/pid.  This is useful for cases where the threadgroup
- * needs to stay stable across blockable operations.
+ * perform exec.  This is useful for cases where the threadgroup needs to
+ * stay stable across blockable operations.
  *
  * fork and exit paths explicitly call threadgroup_change_{begin|end}() for
  * synchronization.  While held, no new task will be added to threadgroup
  * and no existing live task will have its PF_EXITING set.
  *
- * de_thread() does threadgroup_change_{begin|end}() when a non-leader
- * sub-thread becomes a new leader.
+ * During exec, a task goes and puts its thread group through unusual
+ * changes.  After de-threading, exclusive access is assumed to resources
+ * which are usually shared by tasks in the same group - e.g. sighand may
+ * be replaced with a new one.  Also, the exec'ing task takes over group
+ * leader role including its pid.  Exclude these changes while locked by
+ * grabbing cred_guard_mutex which is used to synchronize exec path.
  */
 static inline void threadgroup_lock(struct task_struct *tsk)
 {
+	/*
+	 * exec uses exit for de-threading nesting group_rwsem inside
+	 * cred_guard_mutex. Grab cred_guard_mutex first.
+	 */
+	mutex_lock(&tsk->signal->cred_guard_mutex);
 	down_write(&tsk->signal->group_rwsem);
 }
 
@@ -2596,6 +2518,7 @@ static inline void threadgroup_lock(struct task_struct *tsk)
 static inline void threadgroup_unlock(struct task_struct *tsk)
 {
 	up_write(&tsk->signal->group_rwsem);
+	mutex_unlock(&tsk->signal->cred_guard_mutex);
 }
 #else
 static inline void threadgroup_change_begin(struct task_struct *tsk) {}
@@ -2687,52 +2610,6 @@ static inline int test_tsk_need_resched(struct task_struct *tsk)
 	return unlikely(test_tsk_thread_flag(tsk,TIF_NEED_RESCHED));
 }
 
-#ifdef CONFIG_PREEMPT_LAZY
-static inline void set_tsk_need_resched_lazy(struct task_struct *tsk)
-{
-	set_tsk_thread_flag(tsk,TIF_NEED_RESCHED_LAZY);
-}
-
-static inline void clear_tsk_need_resched_lazy(struct task_struct *tsk)
-{
-	clear_tsk_thread_flag(tsk,TIF_NEED_RESCHED_LAZY);
-}
-
-static inline int test_tsk_need_resched_lazy(struct task_struct *tsk)
-{
-	return unlikely(test_tsk_thread_flag(tsk,TIF_NEED_RESCHED_LAZY));
-}
-
-static inline int need_resched_lazy(void)
-{
-	return test_thread_flag(TIF_NEED_RESCHED_LAZY);
-}
-
-static inline int need_resched_now(void)
-{
-	return test_thread_flag(TIF_NEED_RESCHED);
-}
-
-static inline int need_resched(void)
-{
-	return test_thread_flag(TIF_NEED_RESCHED) ||
-		test_thread_flag(TIF_NEED_RESCHED_LAZY);
-}
-#else
-static inline void clear_tsk_need_resched_lazy(struct task_struct *tsk) { }
-static inline int need_resched_lazy(void) { return 0; }
-
-static inline int need_resched_now(void)
-{
-	return test_thread_flag(TIF_NEED_RESCHED);
-}
-
-static inline int need_resched(void)
-{
-	return test_thread_flag(TIF_NEED_RESCHED);
-}
-#endif
-
 static inline int restart_syscall(void)
 {
 	set_tsk_thread_flag(current, TIF_SIGPENDING);
@@ -2764,6 +2641,11 @@ static inline int signal_pending_state(long state, struct task_struct *p)
 	return (state & TASK_INTERRUPTIBLE) || __fatal_signal_pending(p);
 }
 
+static inline int need_resched(void)
+{
+	return unlikely(test_thread_flag(TIF_NEED_RESCHED));
+}
+
 /*
  * cond_resched() and cond_resched_lock(): latency reduction via
  * explicit rescheduling in places that are safe. The return
@@ -2780,7 +2662,7 @@ extern int _cond_resched(void);
 
 extern int __cond_resched_lock(spinlock_t *lock);
 
-#if defined(CONFIG_PREEMPT_COUNT) && !defined(CONFIG_PREEMPT_RT_FULL)
+#ifdef CONFIG_PREEMPT_COUNT
 #define PREEMPT_LOCK_OFFSET	PREEMPT_OFFSET
 #else
 #define PREEMPT_LOCK_OFFSET	0
@@ -2791,16 +2673,12 @@ extern int __cond_resched_lock(spinlock_t *lock);
 	__cond_resched_lock(lock);				\
 })
 
-#ifndef CONFIG_PREEMPT_RT_FULL
 extern int __cond_resched_softirq(void);
 
 #define cond_resched_softirq() ({					\
 	__might_sleep(__FILE__, __LINE__, SOFTIRQ_DISABLE_OFFSET);	\
 	__cond_resched_softirq();					\
 })
-#else
-# define cond_resched_softirq()		cond_resched()
-#endif
 
 /*
  * Does a critical section need to be broken due to another
@@ -2871,26 +2749,6 @@ static inline void set_task_cpu(struct task_struct *p, unsigned int cpu)
 }
 
 #endif /* CONFIG_SMP */
-
-static inline int __migrate_disabled(struct task_struct *p)
-{
-#ifdef CONFIG_PREEMPT_RT_FULL
-	return p->migrate_disable;
-#else
-	return 0;
-#endif
-}
-
-/* Future-safe accessor for struct task_struct's cpus_allowed. */
-static inline const struct cpumask *tsk_cpus_allowed(struct task_struct *p)
-{
-#ifdef CONFIG_PREEMPT_RT_FULL
-	if (p->migrate_disable)
-		return cpumask_of(task_cpu(p));
-#endif
-
-	return &p->cpus_allowed;
-}
 
 extern long sched_setaffinity(pid_t pid, const struct cpumask *new_mask);
 extern long sched_getaffinity(pid_t pid, struct cpumask *mask);

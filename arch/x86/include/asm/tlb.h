@@ -7,7 +7,7 @@
 
 #define tlb_flush(tlb)							\
 {									\
-	if (!tlb->fullmm && !tlb->need_flush_all) 			\
+	if (tlb->fullmm == 0)						\
 		flush_tlb_mm_range(tlb->mm, tlb->start, tlb->end, 0UL);	\
 	else								\
 		flush_tlb_mm_range(tlb->mm, 0UL, TLB_FLUSH_ALL, 0UL);	\

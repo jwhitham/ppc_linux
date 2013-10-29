@@ -3952,7 +3952,6 @@ static int e1000_open(struct net_device *netdev)
 	netif_start_queue(netdev);
 
 	adapter->idle_check = true;
-	hw->mac.get_link_status = true;
 	pm_runtime_put(&pdev->dev);
 
 	/* fire a link status change interrupt to start the watchdog */
@@ -4313,7 +4312,6 @@ static void e1000_phy_read_status(struct e1000_adapter *adapter)
 	    (adapter->hw.phy.media_type == e1000_media_type_copper)) {
 		int ret_val;
 
-		pm_runtime_get_sync(&adapter->pdev->dev);
 		ret_val  = e1e_rphy(hw, PHY_CONTROL, &phy->bmcr);
 		ret_val |= e1e_rphy(hw, PHY_STATUS, &phy->bmsr);
 		ret_val |= e1e_rphy(hw, PHY_AUTONEG_ADV, &phy->advertise);
@@ -4324,7 +4322,6 @@ static void e1000_phy_read_status(struct e1000_adapter *adapter)
 		ret_val |= e1e_rphy(hw, PHY_EXT_STATUS, &phy->estatus);
 		if (ret_val)
 			e_warn("Error reading PHY register\n");
-		pm_runtime_put_sync(&adapter->pdev->dev);
 	} else {
 		/* Do not read PHY registers if link is not up
 		 * Set values to typical power-on defaults
@@ -5453,7 +5450,8 @@ release:
 	return retval;
 }
 
-static int __e1000_shutdown(struct pci_dev *pdev, bool runtime)
+static int __e1000_shutdown(struct pci_dev *pdev, bool *enable_wake,
+			    bool runtime)
 {
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -5476,6 +5474,10 @@ static int __e1000_shutdown(struct pci_dev *pdev, bool runtime)
 		e1000_free_irq(adapter);
 	}
 	e1000e_reset_interrupt_capability(adapter);
+
+	retval = pci_save_state(pdev);
+	if (retval)
+		return retval;
 
 	status = er32(STATUS);
 	if (status & E1000_STATUS_LU)
@@ -5532,6 +5534,13 @@ static int __e1000_shutdown(struct pci_dev *pdev, bool runtime)
 		ew32(WUFC, 0);
 	}
 
+	*enable_wake = !!wufc;
+
+	/* make sure adapter isn't asleep if manageability is enabled */
+	if ((adapter->flags & FLAG_MNG_PT_ENABLED) ||
+	    (hw->mac.ops.check_mng_mode(hw)))
+		*enable_wake = true;
+
 	if (adapter->hw.phy.type == e1000_phy_igp_3)
 		e1000e_igp3_phy_powerdown_workaround_ich8lan(&adapter->hw);
 
@@ -5540,7 +5549,27 @@ static int __e1000_shutdown(struct pci_dev *pdev, bool runtime)
 	 */
 	e1000e_release_hw_control(adapter);
 
-	pci_clear_master(pdev);
+	pci_disable_device(pdev);
+
+	return 0;
+}
+
+static void e1000_power_off(struct pci_dev *pdev, bool sleep, bool wake)
+{
+	if (sleep && wake) {
+		pci_prepare_to_sleep(pdev);
+		return;
+	}
+
+	pci_wake_from_d3(pdev, wake);
+	pci_set_power_state(pdev, PCI_D3hot);
+}
+
+static void e1000_complete_shutdown(struct pci_dev *pdev, bool sleep,
+                                    bool wake)
+{
+	struct net_device *netdev = pci_get_drvdata(pdev);
+	struct e1000_adapter *adapter = netdev_priv(netdev);
 
 	/* The pci-e switch on some quad port adapters will report a
 	 * correctable error when the MAC transitions from D0 to D3.  To
@@ -5555,13 +5584,12 @@ static int __e1000_shutdown(struct pci_dev *pdev, bool runtime)
 		pcie_capability_write_word(us_dev, PCI_EXP_DEVCTL,
 					   (devctl & ~PCI_EXP_DEVCTL_CERE));
 
-		pci_save_state(pdev);
-		pci_prepare_to_sleep(pdev);
+		e1000_power_off(pdev, sleep, wake);
 
 		pcie_capability_write_word(us_dev, PCI_EXP_DEVCTL, devctl);
+	} else {
+		e1000_power_off(pdev, sleep, wake);
 	}
-
-	return 0;
 }
 
 #ifdef CONFIG_PCIEASPM
@@ -5612,7 +5640,9 @@ static int __e1000_resume(struct pci_dev *pdev)
 	if (aspm_disable_flag)
 		e1000e_disable_aspm(pdev, aspm_disable_flag);
 
-	pci_set_master(pdev);
+	pci_set_power_state(pdev, PCI_D0);
+	pci_restore_state(pdev);
+	pci_save_state(pdev);
 
 	e1000e_set_interrupt_capability(adapter);
 	if (netif_running(netdev)) {
@@ -5678,8 +5708,14 @@ static int __e1000_resume(struct pci_dev *pdev)
 static int e1000_suspend(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
+	int retval;
+	bool wake;
 
-	return __e1000_shutdown(pdev, false);
+	retval = __e1000_shutdown(pdev, &wake, false);
+	if (!retval)
+		e1000_complete_shutdown(pdev, true, wake);
+
+	return retval;
 }
 
 static int e1000_resume(struct device *dev)
@@ -5702,10 +5738,13 @@ static int e1000_runtime_suspend(struct device *dev)
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 
-	if (!e1000e_pm_ready(adapter))
-		return 0;
+	if (e1000e_pm_ready(adapter)) {
+		bool wake;
 
-	return __e1000_shutdown(pdev, true);
+		__e1000_shutdown(pdev, &wake, true);
+	}
+
+	return 0;
 }
 
 static int e1000_idle(struct device *dev)
@@ -5743,7 +5782,12 @@ static int e1000_runtime_resume(struct device *dev)
 
 static void e1000_shutdown(struct pci_dev *pdev)
 {
-	__e1000_shutdown(pdev, false);
+	bool wake = false;
+
+	__e1000_shutdown(pdev, &wake, false);
+
+	if (system_state == SYSTEM_POWER_OFF)
+		e1000_complete_shutdown(pdev, false, wake);
 }
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
@@ -5864,9 +5908,9 @@ static pci_ers_result_t e1000_io_slot_reset(struct pci_dev *pdev)
 			"Cannot re-enable PCI device after reset.\n");
 		result = PCI_ERS_RESULT_DISCONNECT;
 	} else {
+		pci_set_master(pdev);
 		pdev->state_saved = true;
 		pci_restore_state(pdev);
-		pci_set_master(pdev);
 
 		pci_enable_wake(pdev, PCI_D3hot, 0);
 		pci_enable_wake(pdev, PCI_D3cold, 0);
@@ -6297,11 +6341,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	/* initialize the wol settings based on the eeprom settings */
 	adapter->wol = adapter->eeprom_wol;
-
-	/* make sure adapter isn't asleep if manageability is enabled */
-	if (adapter->wol || (adapter->flags & FLAG_MNG_PT_ENABLED) ||
-	    (hw->mac.ops.check_mng_mode(hw)))
-		device_wakeup_enable(&pdev->dev);
+	device_set_wakeup_enable(&adapter->pdev->dev, adapter->wol);
 
 	/* save off EEPROM version number */
 	e1000_read_nvm(&adapter->hw, 5, 1, &adapter->eeprom_vers);

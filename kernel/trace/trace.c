@@ -703,7 +703,7 @@ __update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
 void
 update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
 {
-	struct ring_buffer *buf;
+	struct ring_buffer *buf = tr->buffer;
 
 	if (trace_stop_count)
 		return;
@@ -715,7 +715,6 @@ update_max_tr(struct trace_array *tr, struct task_struct *tsk, int cpu)
 	}
 	arch_spin_lock(&ftrace_max_lock);
 
-	buf = tr->buffer;
 	tr->buffer = max_tr.buffer;
 	max_tr.buffer = buf;
 
@@ -1167,7 +1166,6 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned long flags,
 	struct task_struct *tsk = current;
 
 	entry->preempt_count		= pc & 0xff;
-	entry->preempt_lazy_count	= preempt_lazy_count();
 	entry->pid			= (tsk) ? tsk->pid : 0;
 	entry->padding			= 0;
 	entry->flags =
@@ -1178,10 +1176,7 @@ tracing_generic_entry_update(struct trace_entry *entry, unsigned long flags,
 #endif
 		((pc & HARDIRQ_MASK) ? TRACE_FLAG_HARDIRQ : 0) |
 		((pc & SOFTIRQ_MASK) ? TRACE_FLAG_SOFTIRQ : 0) |
-		(need_resched_now() ? TRACE_FLAG_NEED_RESCHED : 0) |
-		(need_resched_lazy() ? TRACE_FLAG_NEED_RESCHED_LAZY : 0);
-
-	entry->migrate_disable	= (tsk) ? __migrate_disabled(tsk) & 0xFF : 0;
+		(need_resched() ? TRACE_FLAG_NEED_RESCHED : 0);
 }
 EXPORT_SYMBOL_GPL(tracing_generic_entry_update);
 
@@ -2034,17 +2029,14 @@ get_total_entries(struct trace_array *tr, unsigned long *total, unsigned long *e
 
 static void print_lat_help_header(struct seq_file *m)
 {
-	seq_puts(m, "#                   _--------=> CPU#              \n");
-	seq_puts(m, "#                  / _-------=> irqs-off          \n");
-	seq_puts(m, "#                 | / _------=> need-resched      \n");
-	seq_puts(m, "#                 || / _-----=> need-resched_lazy \n");
-	seq_puts(m, "#                 ||| / _----=> hardirq/softirq   \n");
-	seq_puts(m, "#                 |||| / _---=> preempt-depth     \n");
-	seq_puts(m, "#                 ||||| / _--=> preempt-lazy-depth\n");
-	seq_puts(m, "#                 |||||| / _-=> migrate-disable   \n");
-	seq_puts(m, "#                 ||||||| /     delay             \n");
-	seq_puts(m, "#  cmd     pid    |||||||| time  |   caller       \n");
-	seq_puts(m, "#     \\   /      ||||||||  \\   |   /            \n");
+	seq_puts(m, "#                  _------=> CPU#            \n");
+	seq_puts(m, "#                 / _-----=> irqs-off        \n");
+	seq_puts(m, "#                | / _----=> need-resched    \n");
+	seq_puts(m, "#                || / _---=> hardirq/softirq \n");
+	seq_puts(m, "#                ||| / _--=> preempt-depth   \n");
+	seq_puts(m, "#                |||| /     delay             \n");
+	seq_puts(m, "#  cmd     pid   ||||| time  |   caller      \n");
+	seq_puts(m, "#     \\   /      |||||  \\    |   /           \n");
 }
 
 static void print_event_info(struct trace_array *tr, struct seq_file *m)
@@ -2068,16 +2060,13 @@ static void print_func_help_header(struct trace_array *tr, struct seq_file *m)
 static void print_func_help_header_irq(struct trace_array *tr, struct seq_file *m)
 {
 	print_event_info(tr, m);
-	seq_puts(m, "#                              _-------=> irqs-off          \n");
-	seq_puts(m, "#                            /  _------=> need-resched      \n");
-	seq_puts(m, "#                            |/  _-----=> need-resched_lazy \n");
-	seq_puts(m, "#                            ||/  _----=> hardirq/softirq   \n");
-	seq_puts(m, "#                            |||/  _---=> preempt-depth     \n");
-	seq_puts(m, "#                            ||||/  _--=> preempt-lazy-depth\n");
-	seq_puts(m, "#                            ||||| / _-=> migrate-disable   \n");
-	seq_puts(m, "#                            |||||| /     delay\n");
-	seq_puts(m, "#           TASK-PID   CPU#  |||||||    TIMESTAMP  FUNCTION\n");
-	seq_puts(m, "#              | |       |   |||||||       |         |\n");
+	seq_puts(m, "#                              _-----=> irqs-off\n");
+	seq_puts(m, "#                             / _----=> need-resched\n");
+	seq_puts(m, "#                            | / _---=> hardirq/softirq\n");
+	seq_puts(m, "#                            || / _--=> preempt-depth\n");
+	seq_puts(m, "#                            ||| /     delay\n");
+	seq_puts(m, "#           TASK-PID   CPU#  ||||    TIMESTAMP  FUNCTION\n");
+	seq_puts(m, "#              | |       |   ||||       |         |\n");
 }
 
 void
@@ -2846,25 +2835,11 @@ static int set_tracer_option(struct tracer *trace, char *cmp, int neg)
 	return -EINVAL;
 }
 
-/* Some tracers require overwrite to stay enabled */
-int trace_keep_overwrite(struct tracer *tracer, u32 mask, int set)
-{
-	if (tracer->enabled && (mask & TRACE_ITER_OVERWRITE) && !set)
-		return -1;
-
-	return 0;
-}
-
-int set_tracer_flag(unsigned int mask, int enabled)
+static void set_tracer_flags(unsigned int mask, int enabled)
 {
 	/* do nothing if flag is already set */
 	if (!!(trace_flags & mask) == !!enabled)
-		return 0;
-
-	/* Give the tracer a chance to approve the change */
-	if (current_trace->flag_changed)
-		if (current_trace->flag_changed(current_trace, mask, !!enabled))
-			return -EINVAL;
+		return;
 
 	if (enabled)
 		trace_flags |= mask;
@@ -2874,24 +2849,18 @@ int set_tracer_flag(unsigned int mask, int enabled)
 	if (mask == TRACE_ITER_RECORD_CMD)
 		trace_event_enable_cmd_record(enabled);
 
-	if (mask == TRACE_ITER_OVERWRITE) {
+	if (mask == TRACE_ITER_OVERWRITE)
 		ring_buffer_change_overwrite(global_trace.buffer, enabled);
-#ifdef CONFIG_TRACER_MAX_TRACE
-		ring_buffer_change_overwrite(max_tr.buffer, enabled);
-#endif
-	}
 
 	if (mask == TRACE_ITER_PRINTK)
 		trace_printk_start_stop_comm(enabled);
-
-	return 0;
 }
 
 static int trace_set_options(char *option)
 {
 	char *cmp;
 	int neg = 0;
-	int ret = -ENODEV;
+	int ret = 0;
 	int i;
 
 	cmp = strstrip(option);
@@ -2901,20 +2870,19 @@ static int trace_set_options(char *option)
 		cmp += 2;
 	}
 
-	mutex_lock(&trace_types_lock);
-
 	for (i = 0; trace_options[i]; i++) {
 		if (strcmp(cmp, trace_options[i]) == 0) {
-			ret = set_tracer_flag(1 << i, !neg);
+			set_tracer_flags(1 << i, !neg);
 			break;
 		}
 	}
 
 	/* If no option could be set, test the specific tracer options */
-	if (!trace_options[i])
+	if (!trace_options[i]) {
+		mutex_lock(&trace_types_lock);
 		ret = set_tracer_option(current_trace, cmp, neg);
-
-	mutex_unlock(&trace_types_lock);
+		mutex_unlock(&trace_types_lock);
+	}
 
 	return ret;
 }
@@ -2924,7 +2892,6 @@ tracing_trace_options_write(struct file *filp, const char __user *ubuf,
 			size_t cnt, loff_t *ppos)
 {
 	char buf[64];
-	int ret;
 
 	if (cnt >= sizeof(buf))
 		return -EINVAL;
@@ -2934,9 +2901,7 @@ tracing_trace_options_write(struct file *filp, const char __user *ubuf,
 
 	buf[cnt] = 0;
 
-	ret = trace_set_options(buf);
-	if (ret < 0)
-		return ret;
+	trace_set_options(buf);
 
 	*ppos += cnt;
 
@@ -3242,9 +3207,6 @@ static int tracing_set_tracer(const char *buf)
 		goto out;
 
 	trace_branch_disable();
-
-	current_trace->enabled = false;
-
 	if (current_trace && current_trace->reset)
 		current_trace->reset(tr);
 	if (current_trace && current_trace->use_max_tr) {
@@ -3276,7 +3238,6 @@ static int tracing_set_tracer(const char *buf)
 	}
 
 	current_trace = t;
-	current_trace->enabled = true;
 	trace_branch_enable(tr);
  out:
 	mutex_unlock(&trace_types_lock);
@@ -4679,13 +4640,7 @@ trace_options_core_write(struct file *filp, const char __user *ubuf, size_t cnt,
 
 	if (val != 0 && val != 1)
 		return -EINVAL;
-
-	mutex_lock(&trace_types_lock);
-	ret = set_tracer_flag(1 << index, val);
-	mutex_unlock(&trace_types_lock);
-
-	if (ret < 0)
-		return ret;
+	set_tracer_flags(1 << index, val);
 
 	*ppos += cnt;
 
@@ -4895,8 +4850,6 @@ static __init int tracer_init_debugfs(void)
 	trace_access_lock_init();
 
 	d_tracer = tracing_init_dentry();
-	if (!d_tracer)
-		return 0;
 
 	trace_create_file("trace_options", 0644, d_tracer,
 			NULL, &tracing_iter_fops);
@@ -5030,32 +4983,36 @@ void trace_init_global_iter(struct trace_iterator *iter)
 	iter->cpu_file = TRACE_PIPE_ALL_CPU;
 }
 
-void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
+static void
+__ftrace_dump(bool disable_tracing, enum ftrace_dump_mode oops_dump_mode)
 {
+	static arch_spinlock_t ftrace_dump_lock =
+		(arch_spinlock_t)__ARCH_SPIN_LOCK_UNLOCKED;
 	/* use static because iter can be a bit big for the stack */
 	static struct trace_iterator iter;
-	static atomic_t dump_running;
 	unsigned int old_userobj;
+	static int dump_ran;
 	unsigned long flags;
 	int cnt = 0, cpu;
 
-	/* Only allow one dump user at a time. */
-	if (atomic_inc_return(&dump_running) != 1) {
-		atomic_dec(&dump_running);
-		return;
-	}
+	/* only one dump */
+	local_irq_save(flags);
+	arch_spin_lock(&ftrace_dump_lock);
+	if (dump_ran)
+		goto out;
 
-	/*
-	 * Always turn off tracing when we dump.
-	 * We don't need to show trace output of what happens
-	 * between multiple crashes.
-	 *
-	 * If the user does a sysrq-z, then they can re-enable
-	 * tracing with echo 1 > tracing_on.
-	 */
+	dump_ran = 1;
+
 	tracing_off();
 
-	local_irq_save(flags);
+	/* Did function tracer already get disabled? */
+	if (ftrace_is_dead()) {
+		printk("# WARNING: FUNCTION TRACING IS CORRUPTED\n");
+		printk("#          MAY BE MISSING FUNCTION EVENTS\n");
+	}
+
+	if (disable_tracing)
+		ftrace_kill();
 
 	trace_init_global_iter(&iter);
 
@@ -5087,12 +5044,6 @@ void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
 	}
 
 	printk(KERN_TRACE "Dumping ftrace buffer:\n");
-
-	/* Did function tracer already get disabled? */
-	if (ftrace_is_dead()) {
-		printk("# WARNING: FUNCTION TRACING IS CORRUPTED\n");
-		printk("#          MAY BE MISSING FUNCTION EVENTS\n");
-	}
 
 	/*
 	 * We need to stop all tracing on all CPUS to read the
@@ -5133,13 +5084,25 @@ void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
 		printk(KERN_TRACE "---------------------------------\n");
 
  out_enable:
-	trace_flags |= old_userobj;
+	/* Re-enable tracing if requested */
+	if (!disable_tracing) {
+		trace_flags |= old_userobj;
 
-	for_each_tracing_cpu(cpu) {
-		atomic_dec(&iter.tr->data[cpu]->disabled);
+		for_each_tracing_cpu(cpu) {
+			atomic_dec(&iter.tr->data[cpu]->disabled);
+		}
+		tracing_on();
 	}
- 	atomic_dec(&dump_running);
+
+ out:
+	arch_spin_unlock(&ftrace_dump_lock);
 	local_irq_restore(flags);
+}
+
+/* By default: disable tracing after the dump */
+void ftrace_dump(enum ftrace_dump_mode oops_dump_mode)
+{
+	__ftrace_dump(true, oops_dump_mode);
 }
 EXPORT_SYMBOL_GPL(ftrace_dump);
 

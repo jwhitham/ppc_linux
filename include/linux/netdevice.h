@@ -208,9 +208,9 @@ struct netdev_hw_addr {
 #define NETDEV_HW_ADDR_T_SLAVE		3
 #define NETDEV_HW_ADDR_T_UNICAST	4
 #define NETDEV_HW_ADDR_T_MULTICAST	5
+	bool			synced;
 	bool			global_use;
 	int			refcount;
-	int			synced;
 	struct rcu_head		rcu_head;
 };
 
@@ -1581,7 +1581,7 @@ extern int call_netdevice_notifiers(unsigned long val, struct net_device *dev);
 
 extern rwlock_t				dev_base_lock;		/* Device list lock */
 
-extern struct mutex devnet_rename_mutex;
+extern seqcount_t	devnet_rename_seq;	/* Device rename seq */
 
 
 #define for_each_netdev(net, d)		\
@@ -1785,7 +1785,6 @@ struct softnet_data {
 	unsigned int		dropped;
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
-	struct sk_buff_head	tofree_queue;
 };
 
 static inline void input_queue_head_incr(struct softnet_data *sd)

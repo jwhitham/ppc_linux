@@ -1136,10 +1136,8 @@ target_setup_cmd_from_cdb(struct se_cmd *cmd, unsigned char *cdb)
 		return ret;
 
 	ret = target_check_reservation(cmd);
-	if (ret) {
-		cmd->scsi_status = SAM_STAT_RESERVATION_CONFLICT;
+	if (ret)
 		return ret;
-	}
 
 	ret = dev->transport->parse_cdb(cmd);
 	if (ret)

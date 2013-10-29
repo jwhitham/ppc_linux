@@ -779,7 +779,6 @@ efx_realloc_channels(struct efx_nic *efx, u32 rxq_entries, u32 txq_entries)
 						tx_queue->txd.entries);
 	}
 
-	efx_device_detach_sync(efx);
 	efx_stop_all(efx);
 	efx_stop_interrupts(efx, true);
 
@@ -833,7 +832,6 @@ out:
 
 	efx_start_interrupts(efx, true);
 	efx_start_all(efx);
-	netif_device_attach(efx->net_dev);
 	return rc;
 
 rollback:
@@ -1643,12 +1641,8 @@ static void efx_stop_all(struct efx_nic *efx)
 	/* Flush efx_mac_work(), refill_workqueue, monitor_work */
 	efx_flush_all(efx);
 
-	/* Stop the kernel transmit interface.  This is only valid if
-	 * the device is stopped or detached; otherwise the watchdog
-	 * may fire immediately.
-	 */
-	WARN_ON(netif_running(efx->net_dev) &&
-		netif_device_present(efx->net_dev));
+	/* Stop the kernel transmit interface late, so the watchdog
+	 * timer isn't ticking over the flush */
 	netif_tx_disable(efx->net_dev);
 
 	efx_stop_datapath(efx);
@@ -1969,10 +1963,9 @@ static int efx_change_mtu(struct net_device *net_dev, int new_mtu)
 	if (new_mtu > EFX_MAX_MTU)
 		return -EINVAL;
 
-	netif_dbg(efx, drv, efx->net_dev, "changing MTU to %d\n", new_mtu);
-
-	efx_device_detach_sync(efx);
 	efx_stop_all(efx);
+
+	netif_dbg(efx, drv, efx->net_dev, "changing MTU to %d\n", new_mtu);
 
 	mutex_lock(&efx->mac_lock);
 	net_dev->mtu = new_mtu;
@@ -1980,7 +1973,6 @@ static int efx_change_mtu(struct net_device *net_dev, int new_mtu)
 	mutex_unlock(&efx->mac_lock);
 
 	efx_start_all(efx);
-	netif_device_attach(efx->net_dev);
 	return 0;
 }
 

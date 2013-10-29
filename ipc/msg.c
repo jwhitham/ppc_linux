@@ -259,20 +259,12 @@ static void expunge_all(struct msg_queue *msq, int res)
 	while (tmp != &msq->q_receivers) {
 		struct msg_receiver *msr;
 
-		/*
-		 * Make sure that the wakeup doesnt preempt
-		 * this CPU prematurely. (on PREEMPT_RT)
-		 */
-		preempt_disable_rt();
-
 		msr = list_entry(tmp, struct msg_receiver, r_list);
 		tmp = tmp->next;
 		msr->r_msg = NULL;
 		wake_up_process(msr->r_tsk);
 		smp_mb();
 		msr->r_msg = ERR_PTR(res);
-
-		preempt_enable_rt();
 	}
 }
 
@@ -622,12 +614,6 @@ static inline int pipelined_send(struct msg_queue *msq, struct msg_msg *msg)
 		    !security_msg_queue_msgrcv(msq, msg, msr->r_tsk,
 					       msr->r_msgtype, msr->r_mode)) {
 
-			/*
-			 * Make sure that the wakeup doesnt preempt
-			 * this CPU prematurely. (on PREEMPT_RT)
-			 */
-			preempt_disable_rt();
-
 			list_del(&msr->r_list);
 			if (msr->r_maxsize < msg->m_ts) {
 				msr->r_msg = NULL;
@@ -641,11 +627,9 @@ static inline int pipelined_send(struct msg_queue *msq, struct msg_msg *msg)
 				wake_up_process(msr->r_tsk);
 				smp_mb();
 				msr->r_msg = msg;
-				preempt_enable_rt();
 
 				return 1;
 			}
-			preempt_enable_rt();
 		}
 	}
 	return 0;
@@ -836,17 +820,15 @@ long do_msgrcv(int msqid, void __user *buf, size_t bufsz, long msgtyp,
 	struct msg_msg *copy = NULL;
 	unsigned long copy_number = 0;
 
-	ns = current->nsproxy->ipc_ns;
-
 	if (msqid < 0 || (long) bufsz < 0)
 		return -EINVAL;
 	if (msgflg & MSG_COPY) {
-		copy = prepare_copy(buf, min_t(size_t, bufsz, ns->msg_ctlmax),
-				    msgflg, &msgtyp, &copy_number);
+		copy = prepare_copy(buf, bufsz, msgflg, &msgtyp, &copy_number);
 		if (IS_ERR(copy))
 			return PTR_ERR(copy);
 	}
 	mode = convert_mode(&msgtyp, msgflg);
+	ns = current->nsproxy->ipc_ns;
 
 	msq = msg_lock_check(ns, msqid);
 	if (IS_ERR(msq)) {
@@ -888,7 +870,6 @@ long do_msgrcv(int msqid, void __user *buf, size_t bufsz, long msgtyp,
 							goto out_unlock;
 						break;
 					}
-					msg = ERR_PTR(-EAGAIN);
 				} else
 					break;
 				msg_counter++;

@@ -2075,7 +2075,7 @@ static int atl1c_tx_map(struct atl1c_adapter *adapter,
 		if (unlikely(pci_dma_mapping_error(adapter->pdev,
 						   buffer_info->dma)))
 			goto err_dma;
-		ATL1C_SET_BUFFER_STATE(buffer_info, ATL1C_BUFFER_BUSY);
+
 		ATL1C_SET_PCIMAP_TYPE(buffer_info, ATL1C_PCIMAP_SINGLE,
 			ATL1C_PCIMAP_TODEVICE);
 		mapped_len += map_len;
@@ -2171,7 +2171,11 @@ static netdev_tx_t atl1c_xmit_frame(struct sk_buff *skb,
 	}
 
 	tpd_req = atl1c_cal_tpd_req(skb);
-	spin_lock_irqsave(&adapter->tx_lock, flags);
+	if (!spin_trylock_irqsave(&adapter->tx_lock, flags)) {
+		if (netif_msg_pktdata(adapter))
+			dev_info(&adapter->pdev->dev, "tx locked\n");
+		return NETDEV_TX_LOCKED;
+	}
 
 	if (atl1c_tpd_avail(adapter, type) < tpd_req) {
 		/* no enough descriptor, just stop queue */

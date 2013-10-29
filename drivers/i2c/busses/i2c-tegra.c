@@ -392,11 +392,7 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 	u32 val;
 	int err = 0;
 
-	err = tegra_i2c_clock_enable(i2c_dev);
-	if (err < 0) {
-		dev_err(i2c_dev->dev, "Clock enable failed %d\n", err);
-		return err;
-	}
+	tegra_i2c_clock_enable(i2c_dev);
 
 	tegra_periph_reset_assert(i2c_dev->div_clk);
 	udelay(2);
@@ -603,12 +599,7 @@ static int tegra_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 	if (i2c_dev->is_suspended)
 		return -EBUSY;
 
-	ret = tegra_i2c_clock_enable(i2c_dev);
-	if (ret < 0) {
-		dev_err(i2c_dev->dev, "Clock enable failed %d\n", ret);
-		return ret;
-	}
-
+	tegra_i2c_clock_enable(i2c_dev);
 	for (i = 0; i < num; i++) {
 		enum msg_end_type end_type = MSG_END_STOP;
 		if (i < (num - 1)) {

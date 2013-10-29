@@ -1787,7 +1787,6 @@ struct snd_emu10k1 {
 	unsigned int next_free_voice;
 
 	const struct firmware *firmware;
-	const struct firmware *dock_fw;
 
 #ifdef CONFIG_PM_SLEEP
 	unsigned int *saved_ptr;

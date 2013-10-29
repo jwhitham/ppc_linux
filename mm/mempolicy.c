@@ -2386,8 +2386,8 @@ restart:
 				*mpol_new = *n->policy;
 				atomic_set(&mpol_new->refcnt, 1);
 				sp_node_init(n_new, n->end, end, mpol_new);
-				n->end = start;
 				sp_insert(sp, n_new);
+				n->end = start;
 				n_new = NULL;
 				mpol_new = NULL;
 				break;

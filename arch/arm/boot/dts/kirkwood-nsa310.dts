@@ -18,6 +18,7 @@
 	ocp@f1000000 {
 
 		serial@12000 {
+			clock-frequency = <200000000>;
 			status = "ok";
 		};
 

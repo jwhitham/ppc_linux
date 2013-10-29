@@ -111,10 +111,16 @@ struct se_node_acl *core_tpg_get_initiator_node_acl(
 	struct se_node_acl *acl;
 
 	spin_lock_irq(&tpg->acl_node_lock);
-	acl = __core_tpg_get_initiator_node_acl(tpg, initiatorname);
+	list_for_each_entry(acl, &tpg->acl_node_list, acl_list) {
+		if (!strcmp(acl->initiatorname, initiatorname) &&
+		    !acl->dynamic_node_acl) {
+			spin_unlock_irq(&tpg->acl_node_lock);
+			return acl;
+		}
+	}
 	spin_unlock_irq(&tpg->acl_node_lock);
 
-	return acl;
+	return NULL;
 }
 
 /*	core_tpg_add_node_to_devs():

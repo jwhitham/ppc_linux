@@ -940,6 +940,7 @@ pscsi_map_sg(struct se_cmd *cmd, struct scatterlist *sgl, u32 sgl_nents,
 				bio = NULL;
 			}
 
+			page++;
 			len -= bytes;
 			data_len -= bytes;
 			off = 0;
