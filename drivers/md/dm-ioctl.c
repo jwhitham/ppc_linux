@@ -1067,7 +1067,6 @@ static void retrieve_status(struct dm_table *table,
 	num_targets = dm_table_get_num_targets(table);
 	for (i = 0; i < num_targets; i++) {
 		struct dm_target *ti = dm_table_get_target(table, i);
-		size_t l;
 
 		remaining = len - (outptr - outbuf);
 		if (remaining <= sizeof(struct dm_target_spec)) {
@@ -1094,17 +1093,14 @@ static void retrieve_status(struct dm_table *table,
 		if (ti->type->status) {
 			if (param->flags & DM_NOFLUSH_FLAG)
 				status_flags |= DM_STATUS_NOFLUSH_FLAG;
-			ti->type->status(ti, type, status_flags, outptr, remaining);
+			if (ti->type->status(ti, type, status_flags, outptr, remaining)) {
+				param->flags |= DM_BUFFER_FULL_FLAG;
+				break;
+			}
 		} else
 			outptr[0] = '\0';
 
-		l = strlen(outptr) + 1;
-		if (l == remaining) {
-			param->flags |= DM_BUFFER_FULL_FLAG;
-			break;
-		}
-
-		outptr += l;
+		outptr += strlen(outptr) + 1;
 		used = param->data_start + (outptr - outbuf);
 
 		outptr = align_ptr(outptr);

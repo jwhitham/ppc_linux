@@ -212,7 +212,6 @@ void tlb_gather_mmu(struct mmu_gather *tlb, struct mm_struct *mm, bool fullmm)
 	tlb->mm = mm;
 
 	tlb->fullmm     = fullmm;
-	tlb->need_flush_all = 0;
 	tlb->start	= -1UL;
 	tlb->end	= 0;
 	tlb->need_flush = 0;
@@ -2358,53 +2357,6 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 }
 EXPORT_SYMBOL(remap_pfn_range);
 
-/**
- * vm_iomap_memory - remap memory to userspace
- * @vma: user vma to map to
- * @start: start of area
- * @len: size of area
- *
- * This is a simplified io_remap_pfn_range() for common driver use. The
- * driver just needs to give us the physical memory range to be mapped,
- * we'll figure out the rest from the vma information.
- *
- * NOTE! Some drivers might want to tweak vma->vm_page_prot first to get
- * whatever write-combining details or similar.
- */
-int vm_iomap_memory(struct vm_area_struct *vma, phys_addr_t start, unsigned long len)
-{
-	unsigned long vm_len, pfn, pages;
-
-	/* Check that the physical memory area passed in looks valid */
-	if (start + len < start)
-		return -EINVAL;
-	/*
-	 * You *really* shouldn't map things that aren't page-aligned,
-	 * but we've historically allowed it because IO memory might
-	 * just have smaller alignment.
-	 */
-	len += start & ~PAGE_MASK;
-	pfn = start >> PAGE_SHIFT;
-	pages = (len + ~PAGE_MASK) >> PAGE_SHIFT;
-	if (pfn + pages < pfn)
-		return -EINVAL;
-
-	/* We start the mapping 'vm_pgoff' pages into the area */
-	if (vma->vm_pgoff > pages)
-		return -EINVAL;
-	pfn += vma->vm_pgoff;
-	pages -= vma->vm_pgoff;
-
-	/* Can we fit all of the mapping? */
-	vm_len = vma->vm_end - vma->vm_start;
-	if (vm_len >> PAGE_SHIFT > pages)
-		return -EINVAL;
-
-	/* Ok, let it rip */
-	return io_remap_pfn_range(vma, vma->vm_start, pfn, vm_len, vma->vm_page_prot);
-}
-EXPORT_SYMBOL(vm_iomap_memory);
-
 static int apply_to_pte_range(struct mm_struct *mm, pmd_t *pmd,
 				     unsigned long addr, unsigned long end,
 				     pte_fn_t fn, void *data)
@@ -3717,32 +3669,6 @@ unlock:
 	return 0;
 }
 
-#ifdef CONFIG_PREEMPT_RT_FULL
-void pagefault_disable(void)
-{
-	migrate_disable();
-	current->pagefault_disabled++;
-	/*
-	 * make sure to have issued the store before a pagefault
-	 * can hit.
-	 */
-	barrier();
-}
-EXPORT_SYMBOL(pagefault_disable);
-
-void pagefault_enable(void)
-{
-	/*
-	 * make sure to issue those last loads/stores before enabling
-	 * the pagefault handler again.
-	 */
-	barrier();
-	current->pagefault_disabled--;
-	migrate_enable();
-}
-EXPORT_SYMBOL(pagefault_enable);
-#endif
-
 /*
  * By the time we get here, we already hold the mm semaphore
  */
@@ -4314,35 +4240,3 @@ void copy_user_huge_page(struct page *dst, struct page *src,
 	}
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE || CONFIG_HUGETLBFS */
-
-#if defined(CONFIG_PREEMPT_RT_FULL) && (USE_SPLIT_PTLOCKS > 0)
-/*
- * Heinous hack, relies on the caller doing something like:
- *
- *   pte = alloc_pages(PGALLOC_GFP, 0);
- *   if (pte)
- *     pgtable_page_ctor(pte);
- *   return pte;
- *
- * This ensures we release the page and return NULL when the
- * lock allocation fails.
- */
-struct page *pte_lock_init(struct page *page)
-{
-	page->ptl = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
-	if (page->ptl) {
-		spin_lock_init(__pte_lockptr(page));
-	} else {
-		__free_page(page);
-		page = NULL;
-	}
-	return page;
-}
-
-void pte_lock_deinit(struct page *page)
-{
-	kfree(page->ptl);
-	page->mapping = NULL;
-}
-
-#endif

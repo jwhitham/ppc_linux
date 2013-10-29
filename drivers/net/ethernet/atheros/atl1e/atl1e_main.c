@@ -1803,7 +1803,8 @@ static netdev_tx_t atl1e_xmit_frame(struct sk_buff *skb,
 		return NETDEV_TX_OK;
 	}
 	tpd_req = atl1e_cal_tdp_req(skb);
-	spin_lock_irqsave(&adapter->tx_lock, flags);
+	if (!spin_trylock_irqsave(&adapter->tx_lock, flags))
+		return NETDEV_TX_LOCKED;
 
 	if (atl1e_tpd_avail(adapter) < tpd_req) {
 		/* no enough descriptor, just stop queue */
@@ -1850,19 +1851,34 @@ static void atl1e_free_irq(struct atl1e_adapter *adapter)
 	struct net_device *netdev = adapter->netdev;
 
 	free_irq(adapter->pdev->irq, netdev);
+
+	if (adapter->have_msi)
+		pci_disable_msi(adapter->pdev);
 }
 
 static int atl1e_request_irq(struct atl1e_adapter *adapter)
 {
 	struct pci_dev    *pdev   = adapter->pdev;
 	struct net_device *netdev = adapter->netdev;
+	int flags = 0;
 	int err = 0;
 
-	err = request_irq(pdev->irq, atl1e_intr, IRQF_SHARED, netdev->name,
-			  netdev);
+	adapter->have_msi = true;
+	err = pci_enable_msi(pdev);
+	if (err) {
+		netdev_dbg(netdev,
+			   "Unable to allocate MSI interrupt Error: %d\n", err);
+		adapter->have_msi = false;
+	}
+
+	if (!adapter->have_msi)
+		flags |= IRQF_SHARED;
+	err = request_irq(pdev->irq, atl1e_intr, flags, netdev->name, netdev);
 	if (err) {
 		netdev_dbg(adapter->netdev,
 			   "Unable to allocate interrupt Error: %d\n", err);
+		if (adapter->have_msi)
+			pci_disable_msi(pdev);
 		return err;
 	}
 	netdev_dbg(netdev, "atl1e_request_irq OK\n");
@@ -2331,7 +2347,6 @@ static int atl1e_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	INIT_WORK(&adapter->reset_task, atl1e_reset_task);
 	INIT_WORK(&adapter->link_chg_task, atl1e_link_chg_task);
-	netif_set_gso_max_size(netdev, MAX_TSO_SEG_SIZE);
 	err = register_netdev(netdev);
 	if (err) {
 		netdev_err(netdev, "register netdevice failed\n");

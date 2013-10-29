@@ -149,9 +149,9 @@ static void spear_pcm_free(struct snd_pcm *pcm)
 
 static u64 spear_pcm_dmamask = DMA_BIT_MASK(32);
 
-static int spear_pcm_new(struct snd_soc_pcm_runtime *rtd)
+static int spear_pcm_new(struct snd_card *card,
+		struct snd_soc_dai *dai, struct snd_pcm *pcm)
 {
-	struct snd_card *card = rtd->card->snd_card;
 	int ret;
 
 	if (!card->dev->dma_mask)
@@ -159,16 +159,16 @@ static int spear_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	if (!card->dev->coherent_dma_mask)
 		card->dev->coherent_dma_mask = DMA_BIT_MASK(32);
 
-	if (rtd->cpu_dai->driver->playback.channels_min) {
-		ret = spear_pcm_preallocate_dma_buffer(rtd->pcm,
+	if (dai->driver->playback.channels_min) {
+		ret = spear_pcm_preallocate_dma_buffer(pcm,
 				SNDRV_PCM_STREAM_PLAYBACK,
 				spear_pcm_hardware.buffer_bytes_max);
 		if (ret)
 			return ret;
 	}
 
-	if (rtd->cpu_dai->driver->capture.channels_min) {
-		ret = spear_pcm_preallocate_dma_buffer(rtd->pcm,
+	if (dai->driver->capture.channels_min) {
+		ret = spear_pcm_preallocate_dma_buffer(pcm,
 				SNDRV_PCM_STREAM_CAPTURE,
 				spear_pcm_hardware.buffer_bytes_max);
 		if (ret)

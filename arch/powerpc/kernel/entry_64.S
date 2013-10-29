@@ -592,7 +592,7 @@ _GLOBAL(ret_from_except_lite)
 	andi.	r0,r4,_TIF_USER_WORK_MASK
 	beq	restore
 
-	andi.	r0,r4,_TIF_NEED_RESCHED_MASK
+	andi.	r0,r4,_TIF_NEED_RESCHED
 	beq	1f
 	bl	.restore_interrupts
 	bl	.schedule
@@ -634,7 +634,7 @@ resume_kernel:
 	/* Clear _TIF_EMULATE_STACK_STORE flag */
 	lis	r11,_TIF_EMULATE_STACK_STORE@h
 	addi	r5,r9,TI_FLAGS
-0:	ldarx	r4,0,r5
+	ldarx	r4,0,r5
 	andc	r4,r4,r11
 	stdcx.	r4,0,r5
 	bne-	0b
@@ -642,18 +642,10 @@ resume_kernel:
 
 #ifdef CONFIG_PREEMPT
 	/* Check if we need to preempt */
-	lwz	r8,TI_PREEMPT(r9)
-	cmpwi	0,r8,0		/* if non-zero, just restore regs and return */
-	bne	restore
 	andi.	r0,r4,_TIF_NEED_RESCHED
-	bne+	check_count
-
-	andi.	r0,r4,_TIF_NEED_RESCHED_LAZY
 	beq+	restore
-	lwz	r8,TI_PREEMPT_LAZY(r9)
-
 	/* Check that preempt_count() == 0 and interrupts are enabled */
-check_count:
+	lwz	r8,TI_PREEMPT(r9)
 	cmpwi	cr1,r8,0
 	ld	r0,SOFTE(r1)
 	cmpdi	r0,0
@@ -670,7 +662,7 @@ check_count:
 	/* Re-test flags and eventually loop */
 	CURRENT_THREAD_INFO(r9, r1)
 	ld	r4,TI_FLAGS(r9)
-	andi.	r0,r4,_TIF_NEED_RESCHED_MASK
+	andi.	r0,r4,_TIF_NEED_RESCHED
 	bne	1b
 
 	/*

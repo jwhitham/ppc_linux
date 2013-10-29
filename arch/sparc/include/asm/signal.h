@@ -26,7 +26,5 @@ struct k_sigaction {
 	void			__user *ka_restorer;
 };
 
-#define __ARCH_HAS_SA_RESTORER
-
 #endif /* !(__ASSEMBLY__) */
 #endif /* !(__SPARC_SIGNAL_H) */

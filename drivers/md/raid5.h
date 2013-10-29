@@ -323,7 +323,6 @@ enum {
 	STRIPE_COMPUTE_RUN,
 	STRIPE_OPS_REQ_PENDING,
 	STRIPE_ON_UNPLUG_LIST,
-	STRIPE_DISCARD,
 };
 
 /*
@@ -429,7 +428,6 @@ struct r5conf {
 	int			recovery_disabled;
 	/* per cpu variables */
 	struct raid5_percpu {
-		spinlock_t	lock;	     /* Protection for -RT */
 		struct page	*spare_page; /* Used when checking P/Q in raid6 */
 		void		*scribble;   /* space for constructing buffer
 					      * lists and performing address

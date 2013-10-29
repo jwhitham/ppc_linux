@@ -156,15 +156,6 @@ early_param("smt-enabled", early_smt_enabled);
 #define check_smt_enabled()
 #endif /* CONFIG_SMP */
 
-/** Fix up paca fields required for the boot cpu */
-static void fixup_boot_paca(void)
-{
-	/* The boot cpu is started */
-	get_paca()->cpu_start = 1;
-	/* Allow percpu accesses to work until we setup percpu data */
-	get_paca()->data_offset = 0;
-}
-
 /*
  * Early initialization entry point. This is called by head.S
  * with MMU translation disabled. We rely on the "feature" of
@@ -194,7 +185,6 @@ void __init early_setup(unsigned long dt_ptr)
 	/* Assume we're on cpu 0 for now. Don't write to the paca yet! */
 	initialise_paca(&boot_paca, 0);
 	setup_paca(&boot_paca);
-	fixup_boot_paca();
 
 	/* Initialize lockdep early or else spinlocks will blow */
 	lockdep_init();
@@ -215,7 +205,11 @@ void __init early_setup(unsigned long dt_ptr)
 
 	/* Now we know the logical id of our boot cpu, setup the paca. */
 	setup_paca(&paca[boot_cpuid]);
-	fixup_boot_paca();
+
+	/* Fix up paca fields required for the boot cpu */
+	get_paca()->cpu_start = 1;
+	/* Allow percpu accesses to "work" until we setup percpu data */
+	get_paca()->data_offset = 0;
 
 	/* Probe the machine type */
 	probe_machine();

@@ -327,7 +327,7 @@ static irqreturn_t da8xx_musb_interrupt(int irq, void *hci)
 		u8 devctl = musb_readb(mregs, MUSB_DEVCTL);
 		int err;
 
-		err = musb->int_usb & MUSB_INTR_VBUSERROR;
+		err = musb->int_usb & USB_INTR_VBUSERROR;
 		if (err) {
 			/*
 			 * The Mentor core doesn't debounce VBUS as needed
@@ -410,7 +410,6 @@ static int da8xx_musb_init(struct musb *musb)
 {
 	void __iomem *reg_base = musb->ctrl_base;
 	u32 rev;
-	int ret = -ENODEV;
 
 	musb->mregs += DA8XX_MENTOR_CORE_OFFSET;
 
@@ -421,10 +420,8 @@ static int da8xx_musb_init(struct musb *musb)
 
 	usb_nop_xceiv_register();
 	musb->xceiv = usb_get_phy(USB_PHY_TYPE_USB2);
-	if (IS_ERR_OR_NULL(musb->xceiv)) {
-		ret = -EPROBE_DEFER;
+	if (IS_ERR_OR_NULL(musb->xceiv))
 		goto fail;
-	}
 
 	setup_timer(&otg_workaround, otg_timer, (unsigned long)musb);
 
@@ -444,7 +441,7 @@ static int da8xx_musb_init(struct musb *musb)
 	musb->isr = da8xx_musb_interrupt;
 	return 0;
 fail:
-	return ret;
+	return -ENODEV;
 }
 
 static int da8xx_musb_exit(struct musb *musb)

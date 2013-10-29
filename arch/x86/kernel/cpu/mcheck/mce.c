@@ -18,7 +18,6 @@
 #include <linux/rcupdate.h>
 #include <linux/kobject.h>
 #include <linux/uaccess.h>
-#include <linux/kthread.h>
 #include <linux/kdebug.h>
 #include <linux/kernel.h>
 #include <linux/percpu.h>
@@ -42,7 +41,6 @@
 #include <linux/debugfs.h>
 #include <linux/irq_work.h>
 #include <linux/export.h>
-#include <linux/jiffies.h>
 
 #include <asm/processor.h>
 #include <asm/mce.h>
@@ -1261,7 +1259,7 @@ void mce_log_therm_throt_event(__u64 status)
 static unsigned long check_interval = 5 * 60; /* 5 minutes */
 
 static DEFINE_PER_CPU(unsigned long, mce_next_interval); /* in jiffies */
-static DEFINE_PER_CPU(struct hrtimer, mce_timer);
+static DEFINE_PER_CPU(struct timer_list, mce_timer);
 
 static unsigned long mce_adjust_timer_default(unsigned long interval)
 {
@@ -1271,9 +1269,12 @@ static unsigned long mce_adjust_timer_default(unsigned long interval)
 static unsigned long (*mce_adjust_timer)(unsigned long interval) =
 	mce_adjust_timer_default;
 
-static enum hrtimer_restart mce_timer_fn(struct hrtimer *timer)
+static void mce_timer_fn(unsigned long data)
 {
+	struct timer_list *t = &__get_cpu_var(mce_timer);
 	unsigned long iv;
+
+	WARN_ON(smp_processor_id() != data);
 
 	if (mce_available(__this_cpu_ptr(&cpu_info))) {
 		machine_check_poll(MCP_TIMESTAMP,
@@ -1295,10 +1296,9 @@ static enum hrtimer_restart mce_timer_fn(struct hrtimer *timer)
 	__this_cpu_write(mce_next_interval, iv);
 	/* Might have become 0 after CMCI storm subsided */
 	if (iv) {
-		hrtimer_forward_now(timer, ns_to_ktime(jiffies_to_usecs(iv)));
-		return HRTIMER_RESTART;
+		t->expires = jiffies + iv;
+		add_timer_on(t, smp_processor_id());
 	}
-	return HRTIMER_NORESTART;
 }
 
 /*
@@ -1306,37 +1306,28 @@ static enum hrtimer_restart mce_timer_fn(struct hrtimer *timer)
  */
 void mce_timer_kick(unsigned long interval)
 {
-	struct hrtimer *t = &__get_cpu_var(mce_timer);
+	struct timer_list *t = &__get_cpu_var(mce_timer);
+	unsigned long when = jiffies + interval;
 	unsigned long iv = __this_cpu_read(mce_next_interval);
 
-	if (hrtimer_active(t)) {
-		s64 exp;
-		s64 intv_us;
-
-		intv_us = jiffies_to_usecs(interval);
-		exp = ktime_to_us(hrtimer_expires_remaining(t));
-		if (intv_us < exp) {
-			hrtimer_cancel(t);
-			hrtimer_start_range_ns(t,
-					ns_to_ktime(intv_us * 1000),
-					0, HRTIMER_MODE_REL_PINNED);
-		}
+	if (timer_pending(t)) {
+		if (time_before(when, t->expires))
+			mod_timer_pinned(t, when);
 	} else {
-		hrtimer_start_range_ns(t,
-				ns_to_ktime(jiffies_to_usecs(interval) * 1000),
-				0, HRTIMER_MODE_REL_PINNED);
+		t->expires = round_jiffies(when);
+		add_timer_on(t, smp_processor_id());
 	}
 	if (interval < iv)
 		__this_cpu_write(mce_next_interval, interval);
 }
 
-/* Must not be called in IRQ context where hrtimer_cancel() can deadlock */
+/* Must not be called in IRQ context where del_timer_sync() can deadlock */
 static void mce_timer_delete_all(void)
 {
 	int cpu;
 
 	for_each_online_cpu(cpu)
-		hrtimer_cancel(&per_cpu(mce_timer, cpu));
+		del_timer_sync(&per_cpu(mce_timer, cpu));
 }
 
 static void mce_do_trigger(struct work_struct *work)
@@ -1346,63 +1337,6 @@ static void mce_do_trigger(struct work_struct *work)
 
 static DECLARE_WORK(mce_trigger_work, mce_do_trigger);
 
-static void __mce_notify_work(void)
-{
-	/* Not more than two messages every minute */
-	static DEFINE_RATELIMIT_STATE(ratelimit, 60*HZ, 2);
-
-	/* wake processes polling /dev/mcelog */
-	wake_up_interruptible(&mce_chrdev_wait);
-
-	/*
-	 * There is no risk of missing notifications because
-	 * work_pending is always cleared before the function is
-	 * executed.
-	 */
-	if (mce_helper[0] && !work_pending(&mce_trigger_work))
-		schedule_work(&mce_trigger_work);
-
-	if (__ratelimit(&ratelimit))
-		pr_info(HW_ERR "Machine check events logged\n");
-}
-
-#ifdef CONFIG_PREEMPT_RT_FULL
-struct task_struct *mce_notify_helper;
-
-static int mce_notify_helper_thread(void *unused)
-{
-	while (1) {
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule();
-		if (kthread_should_stop())
-			break;
-		__mce_notify_work();
-	}
-	return 0;
-}
-
-static int mce_notify_work_init(void)
-{
-	mce_notify_helper = kthread_run(mce_notify_helper_thread, NULL,
-					   "mce-notify");
-	if (!mce_notify_helper)
-		return -ENOMEM;
-
-	return 0;
-}
-
-static void mce_notify_work(void)
-{
-	wake_up_process(mce_notify_helper);
-}
-#else
-static void mce_notify_work(void)
-{
-	__mce_notify_work();
-}
-static inline int mce_notify_work_init(void) { return 0; }
-#endif
-
 /*
  * Notify the user(s) about new machine check events.
  * Can be called from interrupt context, but not from machine check/NMI
@@ -1410,8 +1344,24 @@ static inline int mce_notify_work_init(void) { return 0; }
  */
 int mce_notify_irq(void)
 {
+	/* Not more than two messages every minute */
+	static DEFINE_RATELIMIT_STATE(ratelimit, 60*HZ, 2);
+
 	if (test_and_clear_bit(0, &mce_need_notify)) {
-		mce_notify_work();
+		/* wake processes polling /dev/mcelog */
+		wake_up_interruptible(&mce_chrdev_wait);
+
+		/*
+		 * There is no risk of missing notifications because
+		 * work_pending is always cleared before the function is
+		 * executed.
+		 */
+		if (mce_helper[0] && !work_pending(&mce_trigger_work))
+			schedule_work(&mce_trigger_work);
+
+		if (__ratelimit(&ratelimit))
+			pr_info(HW_ERR "Machine check events logged\n");
+
 		return 1;
 	}
 	return 0;
@@ -1682,7 +1632,7 @@ static void __mcheck_cpu_init_vendor(struct cpuinfo_x86 *c)
 	}
 }
 
-static void mce_start_timer(unsigned int cpu, struct hrtimer *t)
+static void mce_start_timer(unsigned int cpu, struct timer_list *t)
 {
 	unsigned long iv = mce_adjust_timer(check_interval * HZ);
 
@@ -1691,17 +1641,16 @@ static void mce_start_timer(unsigned int cpu, struct hrtimer *t)
 	if (mca_cfg.ignore_ce || !iv)
 		return;
 
-	hrtimer_start_range_ns(t, ns_to_ktime(jiffies_to_usecs(iv) * 1000),
-			0, HRTIMER_MODE_REL_PINNED);
+	t->expires = round_jiffies(jiffies + iv);
+	add_timer_on(t, smp_processor_id());
 }
 
 static void __mcheck_cpu_init_timer(void)
 {
-	struct hrtimer *t = &__get_cpu_var(mce_timer);
+	struct timer_list *t = &__get_cpu_var(mce_timer);
 	unsigned int cpu = smp_processor_id();
 
-	hrtimer_init(t, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	t->function = mce_timer_fn;
+	setup_timer(t, mce_timer_fn, cpu);
 	mce_start_timer(cpu, t);
 }
 
@@ -2358,8 +2307,6 @@ static void __cpuinit mce_disable_cpu(void *h)
 	if (!mce_available(__this_cpu_ptr(&cpu_info)))
 		return;
 
-	hrtimer_cancel(&__get_cpu_var(mce_timer));
-
 	if (!(action & CPU_TASKS_FROZEN))
 		cmci_clear();
 	for (i = 0; i < mca_cfg.banks; i++) {
@@ -2386,7 +2333,6 @@ static void __cpuinit mce_reenable_cpu(void *h)
 		if (b->init)
 			wrmsrl(MSR_IA32_MCx_CTL(i), b->ctl);
 	}
-	__mcheck_cpu_init_timer();
 }
 
 /* Get notified when a cpu comes on/off. Be hotplug friendly. */
@@ -2394,6 +2340,7 @@ static int __cpuinit
 mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 {
 	unsigned int cpu = (unsigned long)hcpu;
+	struct timer_list *t = &per_cpu(mce_timer, cpu);
 
 	switch (action & ~CPU_TASKS_FROZEN) {
 	case CPU_ONLINE:
@@ -2409,9 +2356,11 @@ mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 		break;
 	case CPU_DOWN_PREPARE:
 		smp_call_function_single(cpu, mce_disable_cpu, &action, 1);
+		del_timer_sync(t);
 		break;
 	case CPU_DOWN_FAILED:
 		smp_call_function_single(cpu, mce_reenable_cpu, &action, 1);
+		mce_start_timer(cpu, t);
 		break;
 	}
 
@@ -2472,8 +2421,6 @@ static __init int mcheck_init_device(void)
 
 	/* register character device /dev/mcelog */
 	misc_register(&mce_chrdev_device);
-
-	err = mce_notify_work_init();
 
 	return err;
 }

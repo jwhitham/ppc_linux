@@ -378,12 +378,10 @@ static noinline __kprobes int vmalloc_fault(unsigned long address)
 	if (pgd_none(*pgd_ref))
 		return -1;
 
-	if (pgd_none(*pgd)) {
+	if (pgd_none(*pgd))
 		set_pgd(pgd, *pgd_ref);
-		arch_flush_lazy_mmu_mode();
-	} else {
+	else
 		BUG_ON(pgd_page_vaddr(*pgd) != pgd_page_vaddr(*pgd_ref));
-	}
 
 	/*
 	 * Below here mismatches are bugs because these lower tables
@@ -1110,7 +1108,7 @@ __do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	 * If we're in an interrupt, have no user context or are running
 	 * in an atomic region then we must not take the fault:
 	 */
-	if (unlikely(!mm || pagefault_disabled())) {
+	if (unlikely(in_atomic() || !mm)) {
 		bad_area_nosemaphore(regs, error_code, address);
 		return;
 	}

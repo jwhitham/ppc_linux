@@ -116,7 +116,6 @@ struct uprobe_trace_entry_head {
  *  NEED_RESCHED	- reschedule is requested
  *  HARDIRQ		- inside an interrupt handler
  *  SOFTIRQ		- inside a softirq handler
- *  NEED_RESCHED_LAZY	- lazy reschedule is requested
  */
 enum trace_flag_type {
 	TRACE_FLAG_IRQS_OFF		= 0x01,
@@ -124,7 +123,6 @@ enum trace_flag_type {
 	TRACE_FLAG_NEED_RESCHED		= 0x04,
 	TRACE_FLAG_HARDIRQ		= 0x08,
 	TRACE_FLAG_SOFTIRQ		= 0x10,
-	TRACE_FLAG_NEED_RESCHED_LAZY	= 0x20,
 };
 
 #define TRACE_BUF_SIZE		1024
@@ -285,14 +283,10 @@ struct tracer {
 	enum print_line_t	(*print_line)(struct trace_iterator *iter);
 	/* If you handled the flag setting, return 0 */
 	int			(*set_flag)(u32 old_flags, u32 bit, int set);
-	/* Return 0 if OK with change, else return non-zero */
-	int			(*flag_changed)(struct tracer *tracer,
-						u32 mask, int set);
 	struct tracer		*next;
 	struct tracer_flags	*flags;
 	bool			print_max;
 	bool			use_max_tr;
-	bool			enabled;
 };
 
 
@@ -841,8 +835,6 @@ extern const char *__stop___trace_bprintk_fmt[];
 
 void trace_printk_init_buffers(void);
 void trace_printk_start_comm(void);
-int trace_keep_overwrite(struct tracer *tracer, u32 mask, int set);
-int set_tracer_flag(unsigned int mask, int enabled);
 
 #undef FTRACE_ENTRY
 #define FTRACE_ENTRY(call, struct_name, id, tstruct, print, filter)	\

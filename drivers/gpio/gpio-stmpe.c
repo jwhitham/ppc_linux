@@ -307,15 +307,11 @@ static const struct irq_domain_ops stmpe_gpio_irq_simple_ops = {
 	.xlate = irq_domain_xlate_twocell,
 };
 
-static int stmpe_gpio_irq_init(struct stmpe_gpio *stmpe_gpio,
-		struct device_node *np)
+static int stmpe_gpio_irq_init(struct stmpe_gpio *stmpe_gpio)
 {
-	int base = 0;
+	int base = stmpe_gpio->irq_base;
 
-	if (!np)
-		base = stmpe_gpio->irq_base;
-
-	stmpe_gpio->domain = irq_domain_add_simple(np,
+	stmpe_gpio->domain = irq_domain_add_simple(NULL,
 				stmpe_gpio->chip.ngpio, base,
 				&stmpe_gpio_irq_simple_ops, stmpe_gpio);
 	if (!stmpe_gpio->domain) {
@@ -350,9 +346,6 @@ static int stmpe_gpio_probe(struct platform_device *pdev)
 	stmpe_gpio->chip = template_chip;
 	stmpe_gpio->chip.ngpio = stmpe->num_gpios;
 	stmpe_gpio->chip.dev = &pdev->dev;
-#ifdef CONFIG_OF
-	stmpe_gpio->chip.of_node = np;
-#endif
 	stmpe_gpio->chip.base = pdata ? pdata->gpio_base : -1;
 
 	if (pdata)
@@ -373,7 +366,7 @@ static int stmpe_gpio_probe(struct platform_device *pdev)
 		goto out_free;
 
 	if (irq >= 0) {
-		ret = stmpe_gpio_irq_init(stmpe_gpio, np);
+		ret = stmpe_gpio_irq_init(stmpe_gpio);
 		if (ret)
 			goto out_disable;
 

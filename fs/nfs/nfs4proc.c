@@ -1374,12 +1374,6 @@ int nfs4_open_delegation_recall(struct nfs_open_context *ctx, struct nfs4_state 
 			case -ENOMEM:
 				err = 0;
 				goto out;
-			case -NFS4ERR_DELAY:
-			case -NFS4ERR_GRACE:
-				set_bit(NFS_DELEGATED_STATE, &state->flags);
-				ssleep(1);
-				err = -EAGAIN;
-				goto out;
 		}
 		err = nfs4_handle_exception(server, err, &exception);
 	} while (exception.retry);
@@ -1469,7 +1463,7 @@ static void nfs4_open_prepare(struct rpc_task *task, void *calldata)
 	struct nfs4_state_owner *sp = data->owner;
 
 	if (nfs_wait_on_sequence(data->o_arg.seqid, task) != 0)
-		goto out_wait;
+		return;
 	/*
 	 * Check if we still need to send an OPEN call, or if we can use
 	 * a delegation instead.
@@ -1504,7 +1498,6 @@ unlock_no_action:
 	rcu_read_unlock();
 out_no_action:
 	task->tk_action = NULL;
-out_wait:
 	nfs4_sequence_done(task, &data->o_res.seq_res);
 }
 
@@ -2157,7 +2150,7 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 
 	dprintk("%s: begin!\n", __func__);
 	if (nfs_wait_on_sequence(calldata->arg.seqid, task) != 0)
-		goto out_wait;
+		return;
 
 	task->tk_msg.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_OPEN_DOWNGRADE];
 	calldata->arg.fmode = FMODE_READ|FMODE_WRITE;
@@ -2179,14 +2172,16 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 
 	if (!call_close) {
 		/* Note: exit _without_ calling nfs4_close_done */
-		goto out_no_action;
+		task->tk_action = NULL;
+		nfs4_sequence_done(task, &calldata->res.seq_res);
+		goto out;
 	}
 
 	if (calldata->arg.fmode == 0) {
 		task->tk_msg.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_CLOSE];
 		if (calldata->roc &&
 		    pnfs_roc_drain(inode, &calldata->roc_barrier, task))
-			goto out_wait;
+			goto out;
 	}
 
 	nfs_fattr_init(calldata->res.fattr);
@@ -2196,12 +2191,8 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 				&calldata->res.seq_res,
 				task) != 0)
 		nfs_release_seqid(calldata->arg.seqid);
+out:
 	dprintk("%s: done!\n", __func__);
-	return;
-out_no_action:
-	task->tk_action = NULL;
-out_wait:
-	nfs4_sequence_done(task, &calldata->res.seq_res);
 }
 
 static const struct rpc_call_ops nfs4_close_ops = {
@@ -4432,10 +4423,12 @@ static void nfs4_locku_prepare(struct rpc_task *task, void *data)
 	struct nfs4_unlockdata *calldata = data;
 
 	if (nfs_wait_on_sequence(calldata->arg.seqid, task) != 0)
-		goto out_wait;
+		return;
 	if (test_bit(NFS_LOCK_INITIALIZED, &calldata->lsp->ls_flags) == 0) {
 		/* Note: exit _without_ running nfs4_locku_done */
-		goto out_no_action;
+		task->tk_action = NULL;
+		nfs4_sequence_done(task, &calldata->res.seq_res);
+		return;
 	}
 	calldata->timestamp = jiffies;
 	if (nfs4_setup_sequence(calldata->server,
@@ -4443,11 +4436,6 @@ static void nfs4_locku_prepare(struct rpc_task *task, void *data)
 				&calldata->res.seq_res,
 				task) != 0)
 		nfs_release_seqid(calldata->arg.seqid);
-	return;
-out_no_action:
-	task->tk_action = NULL;
-out_wait:
-	nfs4_sequence_done(task, &calldata->res.seq_res);
 }
 
 static const struct rpc_call_ops nfs4_locku_ops = {
@@ -4513,9 +4501,9 @@ static int nfs4_proc_unlck(struct nfs4_state *state, int cmd, struct file_lock *
 	if (status != 0)
 		goto out;
 	/* Is this a delegated lock? */
-	lsp = request->fl_u.nfs4_fl.owner;
-	if (test_bit(NFS_LOCK_INITIALIZED, &lsp->ls_flags) == 0)
+	if (test_bit(NFS_DELEGATED_STATE, &state->flags))
 		goto out;
+	lsp = request->fl_u.nfs4_fl.owner;
 	seqid = nfs_alloc_seqid(&lsp->ls_seqid, GFP_KERNEL);
 	status = -ENOMEM;
 	if (seqid == NULL)
@@ -4588,7 +4576,7 @@ static void nfs4_lock_prepare(struct rpc_task *task, void *calldata)
 
 	dprintk("%s: begin!\n", __func__);
 	if (nfs_wait_on_sequence(data->arg.lock_seqid, task) != 0)
-		goto out_wait;
+		return;
 	/* Do we need to do an open_to_lock_owner? */
 	if (!(data->arg.lock_seqid->sequence->flags & NFS_SEQID_CONFIRMED)) {
 		if (nfs_wait_on_sequence(data->arg.open_seqid, task) != 0) {
@@ -4608,8 +4596,6 @@ static void nfs4_lock_prepare(struct rpc_task *task, void *calldata)
 	nfs_release_seqid(data->arg.open_seqid);
 out_release_lock_seqid:
 	nfs_release_seqid(data->arg.lock_seqid);
-out_wait:
-	nfs4_sequence_done(task, &data->res.seq_res);
 	dprintk("%s: done!, ret = %d\n", __func__, data->rpc_status);
 }
 
@@ -6093,13 +6079,11 @@ static struct page **nfs4_alloc_pages(size_t size, gfp_t gfp_flags)
 static void nfs4_layoutget_release(void *calldata)
 {
 	struct nfs4_layoutget *lgp = calldata;
-	struct inode *inode = lgp->args.inode;
-	struct nfs_server *server = NFS_SERVER(inode);
+	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
 	size_t max_pages = max_response_pages(server);
 
 	dprintk("--> %s\n", __func__);
 	nfs4_free_pages(lgp->args.layout.pages, max_pages);
-	pnfs_put_layout_hdr(NFS_I(inode)->layout);
 	put_nfs_open_context(lgp->args.ctx);
 	kfree(calldata);
 	dprintk("<-- %s\n", __func__);
@@ -6114,8 +6098,7 @@ static const struct rpc_call_ops nfs4_layoutget_call_ops = {
 struct pnfs_layout_segment *
 nfs4_proc_layoutget(struct nfs4_layoutget *lgp, gfp_t gfp_flags)
 {
-	struct inode *inode = lgp->args.inode;
-	struct nfs_server *server = NFS_SERVER(inode);
+	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
 	size_t max_pages = max_response_pages(server);
 	struct rpc_task *task;
 	struct rpc_message msg = {
@@ -6145,18 +6128,13 @@ nfs4_proc_layoutget(struct nfs4_layoutget *lgp, gfp_t gfp_flags)
 	lgp->res.layoutp = &lgp->args.layout;
 	lgp->res.seq_res.sr_slot = NULL;
 	nfs41_init_sequence(&lgp->args.seq_args, &lgp->res.seq_res, 0);
-
-	/* nfs4_layoutget_release calls pnfs_put_layout_hdr */
-	pnfs_get_layout_hdr(NFS_I(inode)->layout);
-
 	task = rpc_run_task(&task_setup_data);
 	if (IS_ERR(task))
 		return ERR_CAST(task);
 	status = nfs4_wait_for_completion_rpc_task(task);
 	if (status == 0)
 		status = task->tk_status;
-	/* if layoutp->len is 0, nfs4_layoutget_prepare called rpc_exit */
-	if (status == 0 && lgp->res.layoutp->len)
+	if (status == 0)
 		lseg = pnfs_layout_process(lgp);
 	rpc_put_task(task);
 	dprintk("<-- %s status=%d\n", __func__, status);
@@ -6372,8 +6350,22 @@ nfs4_layoutcommit_done(struct rpc_task *task, void *calldata)
 static void nfs4_layoutcommit_release(void *calldata)
 {
 	struct nfs4_layoutcommit_data *data = calldata;
+	struct pnfs_layout_segment *lseg, *tmp;
+	unsigned long *bitlock = &NFS_I(data->args.inode)->flags;
 
 	pnfs_cleanup_layoutcommit(data);
+	/* Matched by references in pnfs_set_layoutcommit */
+	list_for_each_entry_safe(lseg, tmp, &data->lseg_list, pls_lc_list) {
+		list_del_init(&lseg->pls_lc_list);
+		if (test_and_clear_bit(NFS_LSEG_LAYOUTCOMMIT,
+				       &lseg->pls_flags))
+			pnfs_put_lseg(lseg);
+	}
+
+	clear_bit_unlock(NFS_INO_LAYOUTCOMMITTING, bitlock);
+	smp_mb__after_clear_bit();
+	wake_up_bit(bitlock, NFS_INO_LAYOUTCOMMITTING);
+
 	put_rpccred(data->cred);
 	kfree(data);
 }

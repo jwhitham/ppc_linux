@@ -108,7 +108,6 @@ config X86
 	select KTIME_SCALAR if X86_32
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
-	select HAVE_PREEMPT_LAZY
 	select HAVE_CONTEXT_TRACKING if X86_64
 	select HAVE_IRQ_TIME_ACCOUNTING
 	select MODULES_USE_ELF_REL if X86_32
@@ -174,11 +173,8 @@ config ARCH_MAY_HAVE_PC_FDC
 	def_bool y
 	depends on ISA_DMA_API
 
-config RWSEM_GENERIC_SPINLOCK
-	def_bool PREEMPT_RT_FULL
-
 config RWSEM_XCHGADD_ALGORITHM
-	def_bool !RWSEM_GENERIC_SPINLOCK && !PREEMPT_RT_FULL
+	def_bool y
 
 config GENERIC_CALIBRATE_DELAY
 	def_bool y
@@ -776,7 +772,7 @@ config IOMMU_HELPER
 config MAXSMP
 	bool "Enable Maximum number of SMP Processors and NUMA Nodes"
 	depends on X86_64 && SMP && DEBUG_KERNEL && EXPERIMENTAL
-	select CPUMASK_OFFSTACK if !PREEMPT_RT_FULL
+	select CPUMASK_OFFSTACK
 	---help---
 	  Enable maximum number of CPUS and NUMA Nodes for this architecture.
 	  If unsure, say N.
@@ -1256,6 +1252,10 @@ config NODES_SHIFT
 	---help---
 	  Specify the maximum number of NUMA Nodes available on the target
 	  system.  Increases memory reserved to accommodate various tables.
+
+config HAVE_ARCH_ALLOC_REMAP
+	def_bool y
+	depends on X86_32 && NUMA
 
 config ARCH_HAVE_MEMORY_PRESENT
 	def_bool y

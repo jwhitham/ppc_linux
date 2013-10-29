@@ -321,7 +321,7 @@ asmlinkage void __kprobes do_sparc64_fault(struct pt_regs *regs)
 	 * If we're in an interrupt or have no user
 	 * context, we must not take the fault..
 	 */
-	if (!mm || pagefault_disabled())
+	if (in_atomic() || !mm)
 		goto intr_or_no_mm;
 
 	perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS, 1, regs, address);
@@ -472,13 +472,8 @@ good_area:
 #if defined(CONFIG_HUGETLB_PAGE) || defined(CONFIG_TRANSPARENT_HUGEPAGE)
 	mm_rss = mm->context.huge_pte_count;
 	if (unlikely(mm_rss >
-		     mm->context.tsb_block[MM_TSB_HUGE].tsb_rss_limit)) {
-		if (mm->context.tsb_block[MM_TSB_HUGE].tsb)
-			tsb_grow(mm, MM_TSB_HUGE, mm_rss);
-		else
-			hugetlb_setup(regs);
-
-	}
+		     mm->context.tsb_block[MM_TSB_HUGE].tsb_rss_limit))
+		tsb_grow(mm, MM_TSB_HUGE, mm_rss);
 #endif
 	return;
 

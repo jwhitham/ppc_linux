@@ -23,19 +23,6 @@ typedef struct {
 	unsigned long sig[_NSIG_WORDS];
 } sigset_t;
 
-/*
- * Because some traps use the IST stack, we must keep preemption
- * disabled while calling do_trap(), but do_trap() may call
- * force_sig_info() which will grab the signal spin_locks for the
- * task, which in PREEMPT_RT_FULL are mutexes.  By defining
- * ARCH_RT_DELAYS_SIGNAL_SEND the force_sig_info() will set
- * TIF_NOTIFY_RESUME and set up the signal to be sent on exit of the
- * trap.
- */
-#if defined(CONFIG_PREEMPT_RT_FULL) && defined(CONFIG_X86_64)
-#define ARCH_RT_DELAYS_SIGNAL_SEND
-#endif
-
 #ifndef CONFIG_COMPAT
 typedef sigset_t compat_sigset_t;
 #endif
@@ -44,9 +31,6 @@ typedef sigset_t compat_sigset_t;
 #include <uapi/asm/signal.h>
 #ifndef __ASSEMBLY__
 extern void do_notify_resume(struct pt_regs *, void *, __u32);
-
-#define __ARCH_HAS_SA_RESTORER
-
 #ifdef __i386__
 struct old_sigaction {
 	__sighandler_t sa_handler;

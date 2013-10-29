@@ -1726,9 +1726,9 @@ pch_gbe_clean_rx(struct pch_gbe_adapter *adapter,
 
 			skb->protocol = eth_type_trans(skb, netdev);
 			if (tcp_ip_status & PCH_GBE_RXD_ACC_STAT_TCPIPOK)
-				skb->ip_summed = CHECKSUM_UNNECESSARY;
-			else
 				skb->ip_summed = CHECKSUM_NONE;
+			else
+				skb->ip_summed = CHECKSUM_UNNECESSARY;
 
 			napi_gro_receive(&adapter->napi, skb);
 			(*work_done)++;
@@ -2114,8 +2114,10 @@ static int pch_gbe_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	struct pch_gbe_tx_ring *tx_ring = adapter->tx_ring;
 	unsigned long flags;
 
-	spin_lock_irqsave(&tx_ring->tx_lock, flags);
-
+	if (!spin_trylock_irqsave(&tx_ring->tx_lock, flags)) {
+		/* Collision - tell upper layer to requeue */
+		return NETDEV_TX_LOCKED;
+	}
 	if (unlikely(!PCH_GBE_DESC_UNUSED(tx_ring))) {
 		netif_stop_queue(netdev);
 		spin_unlock_irqrestore(&tx_ring->tx_lock, flags);

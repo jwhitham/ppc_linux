@@ -320,7 +320,6 @@ static void tlan_remove_one(struct pci_dev *pdev)
 	free_netdev(dev);
 
 	pci_set_drvdata(pdev, NULL);
-	cancel_work_sync(&priv->tlan_tqueue);
 }
 
 static void tlan_start(struct net_device *dev)
@@ -1912,8 +1911,10 @@ static void tlan_reset_lists(struct net_device *dev)
 		list->frame_size = TLAN_MAX_FRAME_SIZE;
 		list->buffer[0].count = TLAN_MAX_FRAME_SIZE | TLAN_LAST_BUFFER;
 		skb = netdev_alloc_skb_ip_align(dev, TLAN_MAX_FRAME_SIZE + 5);
-		if (!skb)
+		if (!skb) {
+			netdev_err(dev, "Out of memory for received data\n");
 			break;
+		}
 
 		list->buffer[0].address = pci_map_single(priv->pci_dev,
 							 skb->data,

@@ -299,7 +299,6 @@ void exynos4_restart(char mode, const char *cmd)
 
 void exynos5_restart(char mode, const char *cmd)
 {
-	struct device_node *np;
 	u32 val;
 	void __iomem *addr;
 
@@ -307,9 +306,8 @@ void exynos5_restart(char mode, const char *cmd)
 		val = 0x1;
 		addr = EXYNOS_SWRESET;
 	} else if (of_machine_is_compatible("samsung,exynos5440")) {
-		np = of_find_compatible_node(NULL, NULL, "samsung,exynos5440-clock");
-		addr = of_iomap(np, 0) + 0xcc;
-		val = (0xfff << 20) | (0x1 << 16);
+		val = (0x10 << 20) | (0x1 << 16);
+		addr = EXYNOS5440_SWRESET;
 	} else {
 		pr_err("%s: cannot support non-DT\n", __func__);
 		return;

@@ -206,8 +206,6 @@ static int is_softlockup(unsigned long touch_ts)
 
 #ifdef CONFIG_HARDLOCKUP_DETECTOR
 
-static DEFINE_RAW_SPINLOCK(watchdog_output_lock);
-
 static struct perf_event_attr wd_hw_attr = {
 	.type		= PERF_TYPE_HARDWARE,
 	.config		= PERF_COUNT_HW_CPU_CYCLES,
@@ -242,19 +240,10 @@ static void watchdog_overflow_callback(struct perf_event *event,
 		if (__this_cpu_read(hard_watchdog_warn) == true)
 			return;
 
-		/*
-		 * If early-printk is enabled then make sure we do not
-		 * lock up in printk() and kill console logging:
-		 */
-		printk_kill();
-
-		if (hardlockup_panic) {
+		if (hardlockup_panic)
 			panic("Watchdog detected hard LOCKUP on cpu %d", this_cpu);
-		} else {
-			raw_spin_lock(&watchdog_output_lock);
+		else
 			WARN(1, "Watchdog detected hard LOCKUP on cpu %d", this_cpu);
-			raw_spin_unlock(&watchdog_output_lock);
-		}
 
 		__this_cpu_write(hard_watchdog_warn, true);
 		return;
@@ -358,7 +347,6 @@ static void watchdog_enable(unsigned int cpu)
 	/* kick off the timer for the hardlockup detector */
 	hrtimer_init(hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	hrtimer->function = watchdog_timer_fn;
-	hrtimer->irqsafe = 1;
 
 	if (!watchdog_enabled) {
 		kthread_park(current);
