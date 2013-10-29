@@ -632,8 +632,12 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 	list_for_each_entry_safe(portal, tmpportal, &ctx->portals, list) {
 		if (portal->user.type == usdpaa_portal_qman) {
 			/* Give the portal back to the allocator */
+			init_qm_portal(portal->qportal,
+				       &portal->qman_portal_low);
 			qm_put_unused_portal(portal->qportal);
 		} else {
+			init_bm_portal(portal->bportal,
+				       &portal->bman_portal_low);
 			bm_put_unused_portal(portal->bportal);
 		}
 		list_del(&portal->list);
