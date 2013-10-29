@@ -41,6 +41,7 @@
 #include <linux/netdevice.h>
 
 #include "dpaa_eth.h"
+#include "dpaa_eth_common.h"
 #include "mac.h"
 #include "lnxwrp_fsl_fman.h"
 
@@ -285,17 +286,14 @@ static int __cold stop(struct mac_device *mac_dev)
 	return fm_mac_disable(mac_dev->get_mac_handle(mac_dev));
 }
 
-static int __cold set_multi(struct net_device *net_dev)
+static int __cold set_multi(struct net_device *net_dev,
+			    struct mac_device *mac_dev)
 {
-	struct dpa_priv_s	*priv;
-	struct mac_device	*mac_dev;
 	struct mac_priv_s	*mac_priv;
 	struct mac_address	*old_addr, *tmp;
 	struct netdev_hw_addr	*ha;
 	int			_errno;
 
-	priv = netdev_priv(net_dev);
-	mac_dev = priv->mac_dev;
 	mac_priv = macdev_priv(mac_dev);
 
 	/* Clear previous address list */
@@ -330,7 +328,9 @@ static int __cold set_multi(struct net_device *net_dev)
 static void adjust_link(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	struct mac_device *mac_dev = priv->mac_dev;
+	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
+	struct mac_device *mac_dev = proxy_dev ? proxy_dev->mac_dev :
+		priv->mac_dev;
 	struct phy_device *phy_dev = mac_dev->phy_dev;
 
 	fm_mac_adjust_link(mac_dev->get_mac_handle(mac_dev),
@@ -340,14 +340,10 @@ static void adjust_link(struct net_device *net_dev)
 /* Initializes driver's PHY state, and attaches to the PHY.
  * Returns 0 on success.
  */
-static int dtsec_init_phy(struct net_device *net_dev)
+static int dtsec_init_phy(struct net_device *net_dev,
+			  struct mac_device *mac_dev)
 {
-	struct dpa_priv_s	*priv;
-	struct mac_device	*mac_dev;
 	struct phy_device	*phy_dev;
-
-	priv = netdev_priv(net_dev);
-	mac_dev = priv->mac_dev;
 
 	if (!mac_dev->phy_node)
 		phy_dev = phy_connect(net_dev, mac_dev->fixed_bus_id,
@@ -364,18 +360,17 @@ static int dtsec_init_phy(struct net_device *net_dev)
 	}
 
 	/* Remove any features not supported by the controller */
-	phy_dev->supported &= priv->mac_dev->if_support;
+	phy_dev->supported &= mac_dev->if_support;
 	phy_dev->advertising = phy_dev->supported;
 
-	priv->mac_dev->phy_dev = phy_dev;
+	mac_dev->phy_dev = phy_dev;
 
 	return 0;
 }
 
-static int xgmac_init_phy(struct net_device *net_dev)
+static int xgmac_init_phy(struct net_device *net_dev,
+			  struct mac_device *mac_dev)
 {
-	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	struct mac_device *mac_dev = priv->mac_dev;
 	struct phy_device *phy_dev;
 
 	if (!mac_dev->phy_node)
@@ -392,7 +387,7 @@ static int xgmac_init_phy(struct net_device *net_dev)
 		return phy_dev == NULL ? -ENODEV : PTR_ERR(phy_dev);
 	}
 
-	phy_dev->supported &= priv->mac_dev->if_support;
+	phy_dev->supported &= mac_dev->if_support;
 	phy_dev->advertising = phy_dev->supported;
 
 	mac_dev->phy_dev = phy_dev;
@@ -400,14 +395,10 @@ static int xgmac_init_phy(struct net_device *net_dev)
 	return 0;
 }
 
-static int memac_init_phy(struct net_device *net_dev)
+static int memac_init_phy(struct net_device *net_dev,
+			  struct mac_device *mac_dev)
 {
-	struct dpa_priv_s       *priv;
-	struct mac_device       *mac_dev;
 	struct phy_device       *phy_dev;
-
-	priv = netdev_priv(net_dev);
-	mac_dev = priv->mac_dev;
 
 	if (macdev2enetinterface(mac_dev) == e_ENET_MODE_XGMII_10000) {
 		if (!mac_dev->phy_node) {
@@ -434,7 +425,7 @@ static int memac_init_phy(struct net_device *net_dev)
 	}
 
 	/* Remove any features not supported by the controller */
-	phy_dev->supported &= priv->mac_dev->if_support;
+	phy_dev->supported &= mac_dev->if_support;
 	phy_dev->advertising = phy_dev->supported;
 
 	mac_dev->phy_dev = phy_dev;

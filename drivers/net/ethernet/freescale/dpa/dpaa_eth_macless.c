@@ -76,7 +76,10 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
 /* forward declarations */
 static int __cold dpa_macless_start(struct net_device *net_dev);
 static int __cold dpa_macless_stop(struct net_device *net_dev);
-static int dpa_set_macless_address(struct net_device *net_dev, void *addr);
+static int __cold dpa_macless_set_address(struct net_device *net_dev,
+					  void *addr);
+static void __cold dpa_macless_set_rx_mode(struct net_device *net_dev);
+
 static int dpaa_eth_macless_probe(struct platform_device *_of_dev);
 static netdev_features_t
 dpa_macless_fix_features(struct net_device *dev, netdev_features_t features);
@@ -89,7 +92,8 @@ static const struct net_device_ops dpa_macless_ops = {
 	.ndo_stop = dpa_macless_stop,
 	.ndo_tx_timeout = dpa_timeout,
 	.ndo_get_stats64 = dpa_get_stats64,
-	.ndo_set_mac_address = dpa_set_macless_address,
+	.ndo_set_mac_address = dpa_macless_set_address,
+	.ndo_set_rx_mode = dpa_macless_set_rx_mode,
 	.ndo_validate_addr = eth_validate_addr,
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 	.ndo_select_queue = dpa_select_queue,
@@ -125,35 +129,64 @@ static const char macless_frame_queues[][25] = {
 
 static int __cold dpa_macless_start(struct net_device *net_dev)
 {
+	const struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
+
 	netif_tx_start_all_queues(net_dev);
+
+	if (proxy_dev)
+		dpa_proxy_start(net_dev);
+
 
 	return 0;
 }
 
 static int __cold dpa_macless_stop(struct net_device *net_dev)
 {
+	const struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
+
 	netif_tx_stop_all_queues(net_dev);
+
+	if (proxy_dev)
+		dpa_proxy_stop(proxy_dev, net_dev);
 
 	return 0;
 }
 
-static int dpa_set_macless_address(struct net_device *net_dev, void *addr)
+static int dpa_macless_set_address(struct net_device *net_dev, void *addr)
 {
-	const struct dpa_priv_s	*priv;
+	const struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
 	int			 _errno;
-
-	priv = netdev_priv(net_dev);
 
 	_errno = eth_mac_addr(net_dev, addr);
 	if (_errno < 0) {
 		if (netif_msg_drv(priv))
-			netdev_err(net_dev,
-				       "eth_mac_addr() = %d\n",
-				       _errno);
+			netdev_err(net_dev, "eth_mac_addr() = %d\n", _errno);
 		return _errno;
 	}
 
+	if (proxy_dev) {
+		_errno = dpa_proxy_set_mac_address(proxy_dev, net_dev);
+		if (_errno < 0) {
+			if (netif_msg_drv(priv))
+				netdev_err(net_dev, "proxy_set_mac_address() = %d\n",
+						_errno);
+			return _errno;
+		}
+	}
+
 	return 0;
+}
+
+static void __cold dpa_macless_set_rx_mode(struct net_device *net_dev)
+{
+	const struct dpa_priv_s	*priv = netdev_priv(net_dev);
+	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
+
+	if (proxy_dev)
+		dpa_proxy_set_rx_mode(proxy_dev, net_dev);
 }
 
 static netdev_features_t
@@ -178,6 +211,7 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
 	struct device *dev = net_dev->dev.parent;
 	const uint8_t *mac_addr;
 
@@ -189,6 +223,12 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 		if (netif_msg_probe(priv))
 			dev_err(dev, "No MAC address found!\n");
 		return -EINVAL;
+	}
+
+	if (proxy_dev) {
+		struct mac_device *mac_dev = proxy_dev->mac_dev;
+		net_dev->mem_start = mac_dev->res->start;
+		net_dev->mem_end = mac_dev->res->end;
 	}
 
 	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
@@ -223,6 +263,41 @@ static int dpa_fq_probe_macless(struct device *dev, struct list_head *list,
 	return 0;
 }
 
+struct proxy_device *dpa_macless_proxy_probe(struct platform_device *_of_dev)
+{
+	struct device		*dev;
+	const phandle		*proxy_prop;
+	struct proxy_device	*proxy_dev;
+	struct device_node	*proxy_node;
+	struct platform_device  *proxy_pdev;
+	int lenp;
+
+	dev = &_of_dev->dev;
+
+	proxy_prop = of_get_property(dev->of_node, "proxy", &lenp);
+	if (!proxy_prop)
+		return NULL;
+
+	proxy_node = of_find_node_by_phandle(*proxy_prop);
+	if (!proxy_node) {
+		dev_err(dev, "Cannot find proxy node\n");
+		return NULL;
+	}
+
+	proxy_pdev = of_find_device_by_node(proxy_node);
+	if (!proxy_pdev) {
+		of_node_put(proxy_node);
+		dev_err(dev, "Cannot find device represented by proxy node\n");
+		return NULL;
+	}
+
+	proxy_dev = dev_get_drvdata(&proxy_pdev->dev);
+
+	of_node_put(proxy_node);
+
+	return proxy_dev;
+}
+
 static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 {
 	int err = 0, i;
@@ -234,6 +309,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	struct net_device *net_dev = NULL;
 	struct dpa_priv_s *priv = NULL;
 	struct dpa_percpu_priv_s *percpu_priv;
+	static struct proxy_device *proxy_dev;
 	struct fm_port_fqs port_fqs;
 	struct task_struct *kth;
 	static u8 macless_idx;
@@ -249,6 +325,8 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	dpa_bp = dpa_bp_probe(_of_dev, &count);
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
+
+	proxy_dev = dpa_macless_proxy_probe(_of_dev);
 
 	dpa_bp->seed_cb = dpa_bp_shared_port_seed;
 
@@ -270,6 +348,8 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	sprintf(priv->if_type, "macless%d", macless_idx++);
 
 	priv->msg_enable = netif_msg_init(debug, -1);
+	/* control over proxy's mac device */
+	priv->peer = (void *)proxy_dev;
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
 
@@ -397,7 +477,10 @@ static int __init __cold dpa_macless_load(void)
 
 	return _errno;
 }
-module_init(dpa_macless_load);
+/* waits for proxy to initialize first, in case MAC device reference
+ * is needed
+ */
+late_initcall(dpa_macless_load);
 
 static void __exit __cold dpa_macless_unload(void)
 {

@@ -72,13 +72,14 @@ struct mac_device {
 	u32	tx_pause;
 
 	struct fm_mac_dev *(*get_mac_handle)(struct mac_device *mac_dev);
-	int (*init_phy)(struct net_device *net_dev);
+	int (*init_phy)(struct net_device *net_dev, struct mac_device *mac_dev);
 	int (*init)(struct mac_device *mac_dev);
 	int (*start)(struct mac_device *mac_dev);
 	int (*stop)(struct mac_device *mac_dev);
 	int (*set_promisc)(struct fm_mac_dev *fm_mac_dev, bool enable);
 	int (*change_addr)(struct fm_mac_dev *fm_mac_dev, uint8_t *addr);
-	int (*set_multi)(struct net_device *net_dev);
+	int (*set_multi)(struct net_device *net_dev,
+			 struct mac_device *mac_dev);
 	int (*uninit)(struct fm_mac_dev *fm_mac_dev);
 	int (*ptp_enable)(struct fm_mac_dev *fm_mac_dev);
 	int (*ptp_disable)(struct fm_mac_dev *fm_mac_dev);

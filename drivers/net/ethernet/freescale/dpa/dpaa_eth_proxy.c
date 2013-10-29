@@ -74,6 +74,8 @@ static struct platform_driver dpa_proxy_driver = {
 	.remove		= dpa_eth_proxy_remove
 };
 
+static struct proxy_device *proxy_dev;
+
 static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 {
 	int err = 0, i;
@@ -101,6 +103,15 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	mac_dev = dpa_mac_probe(_of_dev);
 	if (IS_ERR(mac_dev))
 		return PTR_ERR(mac_dev);
+
+	proxy_dev = devm_kzalloc(dev, sizeof(*proxy_dev), GFP_KERNEL);
+	if (!proxy_dev) {
+		dev_err(dev, "devm_kzalloc() failed\n");
+		return -ENOMEM;
+	}
+
+	proxy_dev->mac_dev = mac_dev;
+	dev_set_drvdata(dev, proxy_dev);
 
 	/* We have physical ports, so we need to establish
 	 * the buffer layout.
@@ -150,8 +161,100 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	return 0; /* Proxy interface initialization ended */
 }
 
+int dpa_proxy_set_mac_address(struct proxy_device *proxy_dev,
+			  struct net_device *net_dev)
+{
+	struct mac_device	*mac_dev;
+	int			 _errno;
+
+	mac_dev = proxy_dev->mac_dev;
+
+	_errno = mac_dev->change_addr(mac_dev->get_mac_handle(mac_dev),
+			net_dev->dev_addr);
+	if (_errno < 0)
+		return _errno;
+
+	return 0;
+}
+
+int dpa_proxy_set_rx_mode(struct proxy_device *proxy_dev,
+		       struct net_device *net_dev)
+{
+	struct mac_device *mac_dev = proxy_dev->mac_dev;
+	const struct dpa_priv_s	*priv = netdev_priv(net_dev);
+	int _errno;
+
+	_errno = mac_dev->set_multi(net_dev, mac_dev);
+	if (unlikely(_errno < 0))
+		return _errno;
+
+	return 0;
+}
+
+int dpa_proxy_start(struct net_device *net_dev)
+{
+	struct mac_device	*mac_dev;
+	const struct dpa_priv_s	*priv;
+	struct proxy_device	*proxy_dev;
+	int			 _errno;
+	int			i;
+
+	priv = netdev_priv(net_dev);
+	proxy_dev = (struct proxy_device *)priv->peer;
+	mac_dev = proxy_dev->mac_dev;
+
+	_errno = mac_dev->init_phy(net_dev, mac_dev);
+	if (_errno < 0) {
+		pr_alert("init_phy() = %d\n", _errno);
+		return _errno;
+	}
+
+	for_each_port_device(i, mac_dev->port_dev)
+		fm_port_enable(mac_dev->port_dev[i]);
+
+	_errno = mac_dev->start(mac_dev);
+	if (_errno < 0) {
+		pr_alert("mac_dev->start() = %d\n", _errno);
+		return _errno;
+	}
+
+	return _errno;
+}
+
+int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
+{
+	struct mac_device	*mac_dev;
+	int			 _errno;
+	int			i;
+
+	mac_dev = proxy_dev->mac_dev;
+
+	_errno = mac_dev->stop(mac_dev);
+	if (_errno < 0) {
+		pr_alert("mac_dev->stop() = %d\n", _errno);
+		return _errno;
+	}
+
+	for_each_port_device(i, mac_dev->port_dev)
+		fm_port_disable(mac_dev->port_dev[i]);
+
+	if (mac_dev->phy_dev)
+		phy_disconnect(mac_dev->phy_dev);
+	mac_dev->phy_dev = NULL;
+
+	return _errno;
+}
+
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev)
 {
+	struct device *dev;
+
+	dev = &of_dev->dev;
+	dev_set_drvdata(dev, NULL);
+
+	if (proxy_dev)
+		kfree(proxy_dev);
+
 	return 0;
 }
 

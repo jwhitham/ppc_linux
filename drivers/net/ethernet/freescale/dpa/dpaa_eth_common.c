@@ -129,7 +129,7 @@ int __cold dpa_start(struct net_device *net_dev)
 	priv = netdev_priv(net_dev);
 	mac_dev = priv->mac_dev;
 
-	err = mac_dev->init_phy(net_dev);
+	err = mac_dev->init_phy(net_dev, priv->mac_dev);
 	if (err < 0) {
 		if (netif_msg_ifup(priv))
 			netdev_err(net_dev, "init_phy() = %d\n", err);
@@ -614,7 +614,7 @@ void dpa_set_rx_mode(struct net_device *net_dev)
 					   _errno);
 	}
 
-	_errno = priv->mac_dev->set_multi(net_dev);
+	_errno = priv->mac_dev->set_multi(net_dev, priv->mac_dev);
 	if (unlikely(_errno < 0) && netif_msg_drv(priv))
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }

@@ -458,6 +458,8 @@ struct dpa_priv_s {
 	struct dpa_buffer_layout_s *buf_layout;
 	uint16_t rx_headroom;
 	char if_type[30];
+
+	void *peer;
 };
 
 struct fm_port_fqs {
