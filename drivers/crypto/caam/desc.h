@@ -237,6 +237,7 @@ struct sec4_sg_entry {
 #define LDST_SRCDST_WORD_DESCBUF_SHARED	(0x42 << LDST_SRCDST_SHIFT)
 #define LDST_SRCDST_WORD_DESCBUF_JOB_WE	(0x45 << LDST_SRCDST_SHIFT)
 #define LDST_SRCDST_WORD_DESCBUF_SHARED_WE (0x46 << LDST_SRCDST_SHIFT)
+#define LDST_SRCDST_WORD_INFO_FIFO_SZM	(0x71 << LDST_SRCDST_SHIFT)
 #define LDST_SRCDST_WORD_INFO_FIFO	(0x7a << LDST_SRCDST_SHIFT)
 
 /* Offset in source/destination */
@@ -278,6 +279,28 @@ struct sec4_sg_entry {
 #define LDLEN_SET_OFIFO_OFF_RSVD	(1 << 3)
 #define LDLEN_SET_OFIFO_OFFSET_SHIFT	0
 #define LDLEN_SET_OFIFO_OFFSET_MASK	(3 << LDLEN_SET_OFIFO_OFFSET_SHIFT)
+
+/* CCB Clear Written Register bits */
+#define CLRW_CLR_C1MODE              0x1
+#define CLRW_CLR_C1DATAS             0x4
+#define CLRW_CLR_C1ICV               0x8
+#define CLRW_CLR_C1CTX               0x20
+#define CLRW_CLR_C1KEY               0x40
+#define CLRW_CLR_PK_A                0x1000
+#define CLRW_CLR_PK_B                0x2000
+#define CLRW_CLR_PK_N                0x4000
+#define CLRW_CLR_PK_E                0x8000
+#define CLRW_CLR_C2MODE              0x10000
+#define CLRW_CLR_C2KEYS              0x20000
+#define CLRW_CLR_C2DATAS             0x40000
+#define CLRW_CLR_C2CTX               0x200000
+#define CLRW_CLR_C2KEY               0x400000
+#define CLRW_RESET_CLS2_DONE         0x04000000u /* era 4 */
+#define CLRW_RESET_CLS1_DONE         0x08000000u /* era 4 */
+#define CLRW_RESET_CLS2_CHA          0x10000000u /* era 4 */
+#define CLRW_RESET_CLS1_CHA          0x20000000u /* era 4 */
+#define CLRW_RESET_OFIFO             0x40000000u /* era 3 */
+#define CLRW_RESET_IFIFO_DFIFO       0x80000000u /* era 3 */
 
 /*
  * FIFO_LOAD/FIFO_STORE/SEQ_FIFO_LOAD/SEQ_FIFO_STORE
@@ -1439,6 +1462,8 @@ struct sec4_sg_entry {
 #define MATH_SRC1_REG3		(0x03 << MATH_SRC1_SHIFT)
 #define MATH_SRC1_IMM		(0x04 << MATH_SRC1_SHIFT)
 #define MATH_SRC1_DPOVRD	(0x07 << MATH_SRC0_SHIFT)
+#define MATH_SRC1_VARSEQINLEN	(0x08 << MATH_SRC1_SHIFT)
+#define MATH_SRC1_VARSEQOUTLEN	(0x09 << MATH_SRC1_SHIFT)
 #define MATH_SRC1_INFIFO	(0x0a << MATH_SRC1_SHIFT)
 #define MATH_SRC1_OUTFIFO	(0x0b << MATH_SRC1_SHIFT)
 #define MATH_SRC1_ONE		(0x0c << MATH_SRC1_SHIFT)
