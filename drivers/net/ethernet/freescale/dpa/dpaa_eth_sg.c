@@ -43,7 +43,6 @@
 #include "dpaa_eth_common.h"
 #include "dpaa_1588.h"
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
 
 /* DMA map and add a page frag back into the bpool.
@@ -940,4 +939,3 @@ enomem:
 	return NETDEV_TX_OK;
 }
 
-#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */

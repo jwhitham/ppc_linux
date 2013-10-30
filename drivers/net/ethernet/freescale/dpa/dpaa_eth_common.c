@@ -1216,13 +1216,11 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 		/* FIXME: why would we want to keep an empty FQ in cache? */
 		initfq.fqd.fq_ctrl = QM_FQCTRL_PREFERINCACHE;
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 		/* Try to reduce the number of portal interrupts for
 		 * Tx Confirmation FQs.
 		 */
 		if (dpa_fq->fq_type == FQ_TYPE_TX_CONFIRM)
 			initfq.fqd.fq_ctrl |= QM_FQCTRL_HOLDACTIVE;
-#endif
 
 		/* FQ placement */
 		initfq.we_mask |= QM_INITFQ_WE_DESTWQ;

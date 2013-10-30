@@ -499,14 +499,6 @@ static int __cold dpa_eth_priv_start(struct net_device *net_dev)
 
 	priv = netdev_priv(net_dev);
 
-#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-	/* Seed the global buffer pool at the first ifconfig up
-	 * of a private port. Update the percpu buffer counters
-	 * of each private interface.
-	 */
-	dpa_bp_priv_non_sg_seed(priv->dpa_bp);
-#endif
-
 	dpaa_eth_napi_enable(priv);
 
 	err = dpa_start(net_dev);
@@ -642,7 +634,6 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 		NETIF_F_LLTX);
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	/* Advertise S/G and HIGHDMA support for private interfaces */
 	net_dev->hw_features |= NETIF_F_SG | NETIF_F_HIGHDMA;
 	/* Recent kernels enable GSO automatically, if
@@ -650,7 +641,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	 * still declare GSO explicitly.
 	 */
 	net_dev->features |= NETIF_F_GSO;
-#endif
+
 	/* Advertise GRO support */
 	net_dev->features |= NETIF_F_GRO;
 
@@ -671,12 +662,8 @@ dpa_priv_bp_probe(struct device *dev)
 	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 	dpa_bp->seed_cb = dpa_bp_priv_seed;
 	dpa_bp->free_buf_cb = _dpa_bp_free_pf;
-#else
-	dpa_bp->free_buf_cb = _dpa_bp_free_skb;
-#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 	return dpa_bp;
 }
@@ -784,9 +771,6 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	 * the maximum buffer size for private ports if necessary
 	 */
 	dpa_bp->size = dpa_bp_size(&buf_layout[RX]);
-#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-	dpa_bp_default_buf_size_update(dpa_bp->size);
-#endif
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
 

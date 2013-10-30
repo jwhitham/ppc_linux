@@ -2,6 +2,7 @@ config FSL_DPAA_ETH
 	bool "DPAA Ethernet"
 	depends on FSL_SOC && FSL_BMAN && FSL_QMAN && FSL_FMAN
 	select PHYLIB
+	select FSL_DPAA_TX_RECYCLE if FMAN_T4240
 	---help---
 	  Data Path Acceleration Architecture Ethernet driver, supporting the
 	  Freescale QorIQ chips.
@@ -24,38 +25,9 @@ config FSL_DPAA_OFFLINE_PORTS
 	  Choosing this feature will not impact the functionality and/or performance of the system,
 	  so it is safe to have it.
 
-config FSL_DPAA_ETH_SG_SUPPORT
-	bool
-
-choice FSL_DPAA_ETH_OPTIMIZE
-	prompt "Optimization choices for the DPAA Ethernet driver"
-	depends on FSL_DPAA_ETH
-	default FSL_DPAA_ETH_OPTIMIZE_FOR_IPFWD
-	---help---
-	  Compile-time switch between driver optimizations for forwarding use-cases and
-	  termination scenarios.
-
-	config FSL_DPAA_ETH_OPTIMIZE_FOR_IPFWD
-		bool "Optimize for forwarding"
-		select FSL_DPAA_TX_RECYCLE if FMAN_T4240
-		select FMAN_RESOURCE_ALLOCATION_ALGORITHM if (FMAN_P3040_P4080_P5020 || FMAN_P1023)
-		---help---
-		  Optimize the DPAA-Ethernet driver for IP/IPSec forwarding use-cases.
-		  This option disabled SG support in the DPAA Ethernet driver.
-
-	config FSL_DPAA_ETH_OPTIMIZE_FOR_TERM
-		bool "Optimize for termination"
-		select FSL_DPAA_TX_RECYCLE if FMAN_T4240
-		select FSL_DPAA_ETH_SG_SUPPORT
-		---help---
-		  Optimize the DPAA-Ethernet driver for termination (TCP, UDP) use-cases.
-		  In particular, this choice enables Scatter-Gather (SG) support
-		  in the driver, which is momentarily not accessible otherwise.
-endchoice
-
 config FSL_DPAA_ETH_JUMBO_FRAME
 	bool "Optimize for jumbo frames (EXPERIMENTAL)"
-	depends on FSL_DPAA_ETH_SG_SUPPORT && EXPERIMENTAL
+	depends on EXPERIMENTAL
 	select FMAN_RESOURCE_ALLOCATION_ALGORITHM if (FMAN_P3040_P4080_P5020 || FMAN_P1023)
 	default n
 	---help---

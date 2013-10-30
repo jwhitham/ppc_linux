@@ -250,13 +250,9 @@ static uint32_t get_largest_buf_size(uint32_t max_rx_frame_size, uint32_t buf_si
 	uint32_t bp_size = bp_head + max_rx_frame_size
 		+ NET_IP_ALIGN;			/* DPA_BP_SIZE */
 
-#ifndef CONFIG_DPAA_ETH_SG_SUPPORT
-	return CEIL_DIV(bp_size, buf_size);
-#else
 	bp_size = CEIL_DIV(bp_size, 16);	/* frame split in 16 frags */
 
 	return max((uint32_t)16, CEIL_DIV(bp_size, buf_size));
-#endif /* CONFIG_DPAA_ETH_SG_SUPPORT */
 }
 
 /* Calculate the fifosize based on MURAM allocation, number of ports, dpde
@@ -369,8 +365,7 @@ int fm_precalculate_fifosizes(t_LnxWrpFmDev *p_LnxWrpFmDev, int muram_fifo_size)
  * buffer in the buffer pool SG frames will be received
  */
 #if defined(FM_FIFO_ALLOCATION_ALG) && \
-	!defined(FMAN_RESOURCES_UNIT_TEST) && \
-	defined(CONFIG_DPAA_ETH_SG_SUPPORT)
+	!defined(FMAN_RESOURCES_UNIT_TEST)
 		uint8_t fm_rev_major = 0;
 		fm_rev_major = (uint8_t) ((*
 				((volatile uint32_t *)

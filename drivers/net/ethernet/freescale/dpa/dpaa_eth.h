@@ -106,7 +106,6 @@ struct dpa_buffer_layout_s {
 	 FM_PORT_FRM_ERR_ILL_PLCR | FM_PORT_FRM_ERR_PRS_TIMEOUT	| \
 	 FM_PORT_FRM_ERR_PRS_ILL_INSTRUCT | FM_PORT_FRM_ERR_PRS_HDR_ERR)
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 #ifndef CONFIG_FSL_DPAA_ETH_JUMBO_FRAME
 /* The raw buffer size must be cacheline aligned.
  * Normally we use 2K buffers.
@@ -134,14 +133,6 @@ struct dpa_buffer_layout_s {
 						SMP_CACHE_BYTES)
 /* We must ensure that skb_shinfo is always cacheline-aligned. */
 #define DPA_SKB_SIZE(size)	((size) & ~(SMP_CACHE_BYTES - 1))
-#else /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
-
-/* Default buffer size is based on L2 MAX_FRM value, minus the FCS which
- * is stripped down by hardware.
- */
-#define dpa_bp_size(buffer_layout) \
-	dpa_get_buffer_size(buffer_layout, (dpa_get_max_frm() - ETH_FCS_LEN))
-#endif /* CONFIG_FSL_DPAA_ETH_SG_SUPPORT */
 
 /* Maximum size of a buffer for which recycling is allowed.
  * We need an upper limit such that forwarded skbs that get reallocated on Tx
@@ -437,10 +428,8 @@ void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 				      struct sk_buff *skb,
 				      int *use_gro);
 
-#ifdef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
 void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu_id);
 int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp);
-#endif
 
 /* Turn on HW checksum computation for this outgoing frame.
  * If the current protocol is not something we support in this regard
@@ -651,24 +640,9 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 	skb_get_queue_mapping(skb)
 #endif
 
-#ifndef CONFIG_FSL_DPAA_ETH_SG_SUPPORT
-void dpa_bp_default_buf_size_update(uint32_t size);
-uint32_t dpa_bp_default_buf_size_get(void);
-void dpa_bp_priv_non_sg_seed(struct dpa_bp *dpa_bp);
-
-static inline void _dpa_bp_free_skb(void *addr)
-{
-	struct sk_buff **skbh = addr;
-	struct sk_buff *skb;
-
-	skb = *skbh;
-	dev_kfree_skb_any(skb);
-}
-#else
 static inline void _dpa_bp_free_pf(void *addr)
 {
 	put_page(virt_to_head_page(addr));
 }
-#endif
 
 #endif	/* __DPA_H */
