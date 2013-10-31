@@ -1620,8 +1620,8 @@ int fm_fpm_dump_regs(void *h_fm, char *buf, int nn)
 	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_prc);
 	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_brkc);
 	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_mxd);
-	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_dis1);
-	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_dis2);
+	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_dist1);
+	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fmfp_dist2);
 	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fm_epi);
 	FM_DMP_V32(buf, n, p_fm->p_FmFpmRegs, fm_rie);
 

@@ -361,21 +361,25 @@ uint64_t fman_memac_get_counter(struct memac_regs *regs,
 	enum memac_counters reg_name);
 
 void fman_memac_set_tx_pause_frames(struct memac_regs *regs,
-	uint8_t priority,
-	uint16_t pauseTime,
-	uint16_t threshTime);
+	uint8_t priority, uint16_t pauseTime, uint16_t threshTime);
 
 uint16_t fman_memac_get_max_frame_len(struct memac_regs *regs);
 
-void fman_memac_set_exception(struct memac_regs *regs, uint32_t val, bool enable);
+void fman_memac_set_exception(struct memac_regs *regs, uint32_t val,
+	bool enable);
 
 void fman_memac_reset_stat(struct memac_regs *regs);
 
 void fman_memac_reset(struct memac_regs *regs);
 
+void fman_memac_reset_filter_table(struct memac_regs *regs);
+
+void fman_memac_set_hash_table_entry(struct memac_regs *regs, uint32_t crc);
+
 void fman_memac_set_hash_table(struct memac_regs *regs, uint32_t val);
 
-void fman_memac_set_rx_ignore_pause_frames(struct memac_regs  *regs,bool enable);
+void fman_memac_set_rx_ignore_pause_frames(struct memac_regs *regs,
+	bool enable);
 
 uint32_t fman_memac_get_event(struct memac_regs *regs, uint32_t ev_mask);
 
@@ -384,8 +388,8 @@ void fman_memac_ack_event(struct memac_regs *regs, uint32_t ev_mask);
 uint32_t fman_memac_get_interrupt_mask(struct memac_regs *regs);
 
 void fman_memac_adjust_link(struct memac_regs *regs,
-        enum enet_interface iface_mode,
-        enum enet_speed speed, bool full_dx);
+	enum enet_interface iface_mode,
+	enum enet_speed speed, bool full_dx);
 
 
 

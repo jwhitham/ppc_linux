@@ -394,7 +394,6 @@ typedef struct
 } t_FmPcdCcTree;
 
 
-bool        FmPcdManipIsManipNode(t_Handle h_Ad);
 t_Error     FmPcdCcNodeTreeTryLock(t_Handle h_FmPcd,t_Handle h_FmPcdCcNode, t_List *p_List);
 void        FmPcdCcNodeTreeReleaseLock(t_Handle h_FmPcd, t_List *p_List);
 t_Error     FmPcdUpdateCcShadow (t_FmPcd *p_FmPcd, uint32_t size, uint32_t align);

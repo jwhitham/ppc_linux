@@ -47,7 +47,6 @@
 
 
 /**************************************************************************//**
-
  @Group         FM_grp Frame Manager API
 
  @Description   Frame Manager Application Programming Interface
@@ -2538,6 +2537,7 @@ typedef struct t_FmPcdManipReassemParams {
     } u;
 } t_FmPcdManipReassemParams;
 
+
 /**************************************************************************//**
  @Description   Parameters for defining a manipulation node
 *//***************************************************************************/
@@ -2935,6 +2935,10 @@ t_Error FM_PCD_MatchTableDelete(t_Handle h_CcNode);
 
  @Cautions      Allowed only following FM_PCD_MatchTableSet();
                 Not relevant in the case the node is of type 'INDEXED_LOOKUP'.
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
+ 
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableModifyMissNextEngine(t_Handle                  h_CcNode,
                                               t_FmPcdCcNextEngineParams *p_FmPcdCcNextEngineParams);
@@ -2992,6 +2996,10 @@ t_Error FM_PCD_MatchTableAddKey(t_Handle            h_CcNode,
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_PCD_MatchTableSet().
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
+ 
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableModifyNextEngine(t_Handle                  h_CcNode,
                                           uint16_t                  keyIndex,
@@ -3013,6 +3021,9 @@ t_Error FM_PCD_MatchTableModifyNextEngine(t_Handle                  h_CcNode,
 
  @Cautions      Allowed only following FM_PCD_MatchTableSet() was called for this
                 node and the nodes that lead to it.
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableModifyKeyAndNextEngine(t_Handle            h_CcNode,
                                                 uint16_t            keyIndex,
@@ -3082,6 +3093,9 @@ t_Error FM_PCD_MatchTableFindNRemoveKey(t_Handle h_CcNode,
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_PCD_MatchTableSet().
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableFindNModifyNextEngine(t_Handle                  h_CcNode,
                                                uint8_t                   keySize,
@@ -3108,6 +3122,9 @@ t_Error FM_PCD_MatchTableFindNModifyNextEngine(t_Handle                  h_CcNod
 
  @Cautions      Allowed only following FM_PCD_MatchTableSet() was called for this
                 node and the nodes that lead to it.
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableFindNModifyKeyAndNextEngine(t_Handle            h_CcNode,
                                                      uint8_t             keySize,
@@ -3390,6 +3407,9 @@ t_Error FM_PCD_HashTableRemoveKey(t_Handle h_HashTbl,
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_PCD_HashTableSet().
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
 *//***************************************************************************/
 t_Error FM_PCD_HashTableModifyNextEngine(t_Handle                  h_HashTbl,
                                          uint8_t                   keySize,
@@ -3408,6 +3428,9 @@ t_Error FM_PCD_HashTableModifyNextEngine(t_Handle                  h_HashTbl,
  @Return        E_OK on success; Error code otherwise.
 
  @Cautions      Allowed only following FM_PCD_HashTableSet().
+                When configuring nextEngine = e_FM_PCD_CC, note that
+                p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
+                from the currently changed table.
 *//***************************************************************************/
 t_Error FM_PCD_HashTableModifyMissNextEngine(t_Handle                  h_HashTbl,
                                              t_FmPcdCcNextEngineParams *p_FmPcdCcNextEngineParams);

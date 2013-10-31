@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,48 +30,49 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __DDR_SDT_EXT_H
-#define __DDR_SDT_EXT_H
+#ifndef __FSL_FMAN_MEMAC_MII_ACC_H
+#define __FSL_FMAN_MEMAC_MII_ACC_H
 
+#include "common/general.h"
+#include "fsl_enet.h"
+/* MII Management Registers */
+#define MDIO_CFG_CLK_DIV_MASK       0x0000ff80
+#define MDIO_CFG_CLK_DIV_SHIFT      7
+#define MDIO_CFG_HOLD_MASK          0x0000001c
+#define MDIO_CFG_ENC45              0x00000040
+#define MDIO_CFG_READ_ERR           0x00000002
+#define MDIO_CFG_BSY                0x00000001
 
-/**************************************************************************//**
- @Group         ddr_Generic_Resources
+#define MDIO_CTL_PHY_ADDR_SHIFT     5
+#define MDIO_CTL_READ               0x00008000
 
- @Description   ddr generic functions, definitions and enums.
+#define MDIO_DATA_BSY               0x80000000
 
- @{
-*//***************************************************************************/
+/*MEMAC Internal PHY Registers - SGMII */
+#define PHY_SGMII_CR_PHY_RESET          0x8000
+#define PHY_SGMII_CR_RESET_AN           0x0200
+#define PHY_SGMII_CR_DEF_VAL            0x1140
+#define PHY_SGMII_DEV_ABILITY_SGMII     0x4001
+#define PHY_SGMII_DEV_ABILITY_1000X     0x01A0
+#define PHY_SGMII_IF_MODE_AN            0x0002
+#define PHY_SGMII_IF_MODE_SGMII         0x0001
+#define PHY_SGMII_IF_MODE_1000X         0x0000
 
+/*----------------------------------------------------*/
+/* MII Configuration Control Memory Map Registers     */
+/*----------------------------------------------------*/
+struct memac_mii_access_mem_map {
+	uint32_t   mdio_cfg;       /* 0x030  */
+	uint32_t   mdio_ctrl;      /* 0x034  */
+	uint32_t   mdio_data;      /* 0x038  */
+	uint32_t   mdio_addr;      /* 0x03c  */
+};
 
-/**************************************************************************//**
- @Description   SPD maximum size
-*//***************************************************************************/
-#define SPD_MAX_SIZE 256
+int fman_memac_mii_read_phy_reg(struct memac_mii_access_mem_map *mii_regs,
+	uint8_t phy_addr, uint8_t reg, uint16_t *data,
+	enum enet_speed enet_speed);
+int fman_memac_mii_write_phy_reg(struct memac_mii_access_mem_map *mii_regs,
+	uint8_t phy_addr, uint8_t reg, uint16_t data,
+	enum enet_speed enet_speed);
 
-/**************************************************************************//**
- @Description   DDR types select
-*//***************************************************************************/
-typedef enum e_DdrType
-{
-    e_DDR_DDR1,
-    e_DDR_DDR2,
-    e_DDR_DDR3,
-    e_DDR_DDR3L,
-    e_DDR_DDR4
-} e_DdrType;
-
-/**************************************************************************//**
- @Description   DDR Mode.
-*//***************************************************************************/
-typedef enum e_DdrMode
-{
-    e_DDR_BUS_WIDTH_32BIT,
-    e_DDR_BUS_WIDTH_64BIT
-} e_DdrMode;
-
-/** @} */ /* end of ddr_Generic_Resources group */
-
-
-
-#endif /* __DDR_SDT_EXT_H */
-
+#endif /* __MAC_API_MEMAC_MII_ACC_H */
