@@ -92,7 +92,109 @@ struct cprng_testvec {
 	unsigned short loops;
 };
 
+struct tls_testvec {
+	char *key;	/* wrapped keys for encryption and authentication */
+	char *iv;	/* initialization vector */
+	char *input;	/* input data */
+	char *assoc;	/* associated data: seq num, type, version, input len */
+	char *result;	/* result data */
+	unsigned char fail;	/* the test failure is expected */
+	unsigned char novrfy;	/* dec verification failure expected */
+	unsigned char klen;	/* key length */
+	unsigned short ilen;	/* input data length */
+	unsigned short alen;	/* associated data length */
+	unsigned short rlen;	/* result length */
+};
+
 static char zeroed_string[48];
+
+
+/*
+ * TLS1.0 synthetic test vectors
+ */
+#define TLS_ENC_TEST_VECTORS 2
+#define TLS_DEC_TEST_VECTORS 1
+
+static struct tls_testvec tls_enc_tv_template[] = {
+	{
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "Single block msg",
+		.ilen	= 16,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x10",
+		.alen	= 13,
+		.result	= "\xd5\xac\xb\xd2\xac\xad\x3f\xb1"
+			"\x59\x79\x1e\x91\x5f\x52\x14\x9c"
+			"\xc0\x75\xd8\x4c\x97\x0f\x07\x73"
+			"\xdc\x89\x47\x49\x49\xcb\x30\x6b"
+			"\x1b\x45\x23\xa1\xd0\x51\xcf\x02"
+			"\x2e\xa8\x5d\xa0\xfe\xca\x82\x61",
+		.rlen	= 16 + 20 + 12,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "",
+		.ilen	= 0,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x10",
+		.alen	= 13,
+		.result	= "\xa3\xdc\xf9\xac\x52\x70\x08\xcf"
+			"\x8d\x47\xbb\xe0\x64\xc0\x89\x2c"
+			"\xfb\x5d\x2d\x43\x35\x16\xeb\x4c"
+			"\x55\xb7\xcf\xaa\x9a\xe0\x02\x71",
+		.rlen	= 20 + 12,
+	}
+};
+
+static struct tls_testvec tls_dec_tv_template[] = {
+	{
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input	= "\xd5\xac\xb\xd2\xac\xad\x3f\xb1"
+			"\x59\x79\x1e\x91\x5f\x52\x14\x9c"
+			"\xc0\x75\xd8\x4c\x97\x0f\x07\x73"
+			"\xdc\x89\x47\x49\x49\xcb\x30\x6b"
+			"\x1b\x45\x23\xa1\xd0\x51\xcf\x02"
+			"\x2e\xa8\x5d\xa0\xfe\xca\x82\x61",
+		.ilen	= 16 + 20 + 12,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x30",
+		.alen	= 13,
+		.result	= "Single block msg",
+		.rlen	= 16,
+	}
+};
 
 /*
  * MD4 test vectors from RFC1320
