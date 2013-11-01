@@ -663,8 +663,10 @@ static void handle_transaction_done(struct smi_info *smi_info)
 		/* We got the flags from the SMI, now handle them. */
 		smi_info->handlers->get_result(smi_info->si_sm, msg, 4);
 		if (msg[2] != 0) {
-			dev_warn(smi_info->dev, "Could not enable interrupts"
-				 ", failed get, using polled mode.\n");
+			dev_warn(smi_info->dev,
+				 "Couldn't get irq info: %x.\n", msg[2]);
+			dev_warn(smi_info->dev,
+				 "Maybe ok, but ipmi might run very slowly.\n");
 			smi_info->si_state = SI_NORMAL;
 		} else {
 			msg[0] = (IPMI_NETFN_APP_REQUEST << 2);
@@ -685,10 +687,12 @@ static void handle_transaction_done(struct smi_info *smi_info)
 
 		/* We got the flags from the SMI, now handle them. */
 		smi_info->handlers->get_result(smi_info->si_sm, msg, 4);
-		if (msg[2] != 0)
-			dev_warn(smi_info->dev, "Could not enable interrupts"
-				 ", failed set, using polled mode.\n");
-		else
+		if (msg[2] != 0) {
+			dev_warn(smi_info->dev,
+				 "Couldn't set irq info: %x.\n", msg[2]);
+			dev_warn(smi_info->dev,
+				 "Maybe ok, but ipmi might run very slowly.\n");
+		} else
 			smi_info->interrupt_disabled = 0;
 		smi_info->si_state = SI_NORMAL;
 		break;
@@ -1208,6 +1212,16 @@ static int smi_num; /* Used to sequence the SMIs */
 #define DEFAULT_REGSPACING	1
 #define DEFAULT_REGSIZE		1
 
+#ifdef CONFIG_ACPI
+static bool          si_tryacpi = 1;
+#endif
+#ifdef CONFIG_DMI
+static bool          si_trydmi = 1;
+#endif
+static bool          si_tryplatform = 1;
+#ifdef CONFIG_PCI
+static bool          si_trypci = 1;
+#endif
 static bool          si_trydefaults = 1;
 static char          *si_type[SI_MAX_PARMS];
 #define MAX_SI_TYPE_STR 30
@@ -1238,6 +1252,25 @@ MODULE_PARM_DESC(hotmod, "Add and remove interfaces.  See"
 		 " Documentation/IPMI.txt in the kernel sources for the"
 		 " gory details.");
 
+#ifdef CONFIG_ACPI
+module_param_named(tryacpi, si_tryacpi, bool, 0);
+MODULE_PARM_DESC(tryacpi, "Setting this to zero will disable the"
+		 " default scan of the interfaces identified via ACPI");
+#endif
+#ifdef CONFIG_DMI
+module_param_named(trydmi, si_trydmi, bool, 0);
+MODULE_PARM_DESC(trydmi, "Setting this to zero will disable the"
+		 " default scan of the interfaces identified via DMI");
+#endif
+module_param_named(tryplatform, si_tryplatform, bool, 0);
+MODULE_PARM_DESC(tryacpi, "Setting this to zero will disable the"
+		 " default scan of the interfaces identified via platform"
+		 " interfaces like openfirmware");
+#ifdef CONFIG_PCI
+module_param_named(trypci, si_trypci, bool, 0);
+MODULE_PARM_DESC(tryacpi, "Setting this to zero will disable the"
+		 " default scan of the interfaces identified via pci");
+#endif
 module_param_named(trydefaults, si_trydefaults, bool, 0);
 MODULE_PARM_DESC(trydefaults, "Setting this to 'false' will disable the"
 		 " default scan of the KCS and SMIC interface at the standard"
@@ -2810,7 +2843,7 @@ static int smi_type_proc_show(struct seq_file *m, void *v)
 
 static int smi_type_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, smi_type_proc_show, PDE(inode)->data);
+	return single_open(file, smi_type_proc_show, PDE_DATA(inode));
 }
 
 static const struct file_operations smi_type_proc_ops = {
@@ -2853,7 +2886,7 @@ static int smi_si_stats_proc_show(struct seq_file *m, void *v)
 
 static int smi_si_stats_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, smi_si_stats_proc_show, PDE(inode)->data);
+	return single_open(file, smi_si_stats_proc_show, PDE_DATA(inode));
 }
 
 static const struct file_operations smi_si_stats_proc_ops = {
@@ -2881,7 +2914,7 @@ static int smi_params_proc_show(struct seq_file *m, void *v)
 
 static int smi_params_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, smi_params_proc_show, PDE(inode)->data);
+	return single_open(file, smi_params_proc_show, PDE_DATA(inode));
 }
 
 static const struct file_operations smi_params_proc_ops = {
@@ -3371,12 +3404,14 @@ static int init_ipmi_si(void)
 		return 0;
 	initialized = 1;
 
-	rv = platform_driver_register(&ipmi_driver);
-	if (rv) {
-		printk(KERN_ERR PFX "Unable to register driver: %d\n", rv);
-		return rv;
+	if (si_tryplatform) {
+		rv = platform_driver_register(&ipmi_driver);
+		if (rv) {
+			printk(KERN_ERR PFX "Unable to register "
+			       "driver: %d\n", rv);
+			return rv;
+		}
 	}
-
 
 	/* Parse out the si_type string into its components. */
 	str = si_type_str;
@@ -3400,24 +3435,31 @@ static int init_ipmi_si(void)
 		return 0;
 
 #ifdef CONFIG_PCI
-	rv = pci_register_driver(&ipmi_pci_driver);
-	if (rv)
-		printk(KERN_ERR PFX "Unable to register PCI driver: %d\n", rv);
-	else
-		pci_registered = 1;
+	if (si_trypci) {
+		rv = pci_register_driver(&ipmi_pci_driver);
+		if (rv)
+			printk(KERN_ERR PFX "Unable to register "
+			       "PCI driver: %d\n", rv);
+		else
+			pci_registered = 1;
+	}
 #endif
 
 #ifdef CONFIG_ACPI
-	pnp_register_driver(&ipmi_pnp_driver);
-	pnp_registered = 1;
+	if (si_tryacpi) {
+		pnp_register_driver(&ipmi_pnp_driver);
+		pnp_registered = 1;
+	}
 #endif
 
 #ifdef CONFIG_DMI
-	dmi_find_bmc();
+	if (si_trydmi)
+		dmi_find_bmc();
 #endif
 
 #ifdef CONFIG_ACPI
-	spmi_find_bmc();
+	if (si_tryacpi)
+		spmi_find_bmc();
 #endif
 
 	/* We prefer devices with interrupts, but in the case of a machine

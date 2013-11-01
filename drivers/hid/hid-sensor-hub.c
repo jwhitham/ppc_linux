@@ -18,8 +18,6 @@
  */
 #include <linux/device.h>
 #include <linux/hid.h>
-#include <linux/usb.h>
-#include "usbhid/usbhid.h"
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/mfd/core.h>
@@ -204,8 +202,8 @@ int sensor_hub_set_feature(struct hid_sensor_hub_device *hsdev, u32 report_id,
 		goto done_proc;
 	}
 	hid_set_field(report->field[field_index], 0, value);
-	usbhid_submit_report(hsdev->hdev, report, USB_DIR_OUT);
-	usbhid_wait_io(hsdev->hdev);
+	hid_hw_request(hsdev->hdev, report, HID_REQ_SET_REPORT);
+	hid_hw_wait(hsdev->hdev);
 
 done_proc:
 	mutex_unlock(&data->mutex);
@@ -227,8 +225,8 @@ int sensor_hub_get_feature(struct hid_sensor_hub_device *hsdev, u32 report_id,
 		ret = -EINVAL;
 		goto done_proc;
 	}
-	usbhid_submit_report(hsdev->hdev, report, USB_DIR_IN);
-	usbhid_wait_io(hsdev->hdev);
+	hid_hw_request(hsdev->hdev, report, HID_REQ_GET_REPORT);
+	hid_hw_wait(hsdev->hdev);
 	*value = report->field[field_index]->value[0];
 
 done_proc:
@@ -262,7 +260,7 @@ int sensor_hub_input_attr_get_raw_value(struct hid_sensor_hub_device *hsdev,
 		spin_unlock_irqrestore(&data->lock, flags);
 		goto err_free;
 	}
-	usbhid_submit_report(hsdev->hdev, report, USB_DIR_IN);
+	hid_hw_request(hsdev->hdev, report, HID_REQ_GET_REPORT);
 	spin_unlock_irqrestore(&data->lock, flags);
 	wait_for_completion_interruptible_timeout(&data->pending.ready, HZ*5);
 	switch (data->pending.raw_size) {
@@ -605,15 +603,11 @@ static void sensor_hub_remove(struct hid_device *hdev)
 }
 
 static const struct hid_device_id sensor_hub_devices[] = {
-	{ HID_DEVICE(BUS_USB, HID_GROUP_SENSOR_HUB, HID_ANY_ID, HID_ANY_ID) },
+	{ HID_DEVICE(HID_BUS_ANY, HID_GROUP_SENSOR_HUB, HID_ANY_ID,
+		     HID_ANY_ID) },
 	{ }
 };
 MODULE_DEVICE_TABLE(hid, sensor_hub_devices);
-
-static const struct hid_usage_id sensor_hub_grabbed_usages[] = {
-	{ HID_ANY_ID, HID_ANY_ID, HID_ANY_ID },
-	{ HID_ANY_ID - 1, HID_ANY_ID - 1, HID_ANY_ID - 1 }
-};
 
 static struct hid_driver sensor_hub_driver = {
 	.name = "hid-sensor-hub",
@@ -627,19 +621,7 @@ static struct hid_driver sensor_hub_driver = {
 	.reset_resume =  sensor_hub_reset_resume,
 #endif
 };
-
-static int __init sensor_hub_init(void)
-{
-	return hid_register_driver(&sensor_hub_driver);
-}
-
-static void __exit sensor_hub_exit(void)
-{
-	hid_unregister_driver(&sensor_hub_driver);
-}
-
-module_init(sensor_hub_init);
-module_exit(sensor_hub_exit);
+module_hid_driver(sensor_hub_driver);
 
 MODULE_DESCRIPTION("HID Sensor Hub driver");
 MODULE_AUTHOR("Srinivas Pandruvada <srinivas.pandruvada@intel.com>");

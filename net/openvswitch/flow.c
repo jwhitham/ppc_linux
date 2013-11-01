@@ -211,7 +211,7 @@ struct sw_flow_actions *ovs_flow_actions_alloc(const struct nlattr *actions)
 		return ERR_PTR(-ENOMEM);
 
 	sfa->actions_len = actions_len;
-	memcpy(sfa->actions, nla_data(actions), actions_len);
+	nla_memcpy(sfa->actions, actions, actions_len);
 	return sfa;
 }
 
@@ -299,10 +299,10 @@ void ovs_flow_tbl_destroy(struct flow_table *table)
 	for (i = 0; i < table->n_buckets; i++) {
 		struct sw_flow *flow;
 		struct hlist_head *head = flex_array_get(table->buckets, i);
-		struct hlist_node *node, *n;
+		struct hlist_node *n;
 		int ver = table->node_ver;
 
-		hlist_for_each_entry_safe(flow, node, n, head, hash_node[ver]) {
+		hlist_for_each_entry_safe(flow, n, head, hash_node[ver]) {
 			hlist_del_rcu(&flow->hash_node[ver]);
 			ovs_flow_free(flow);
 		}
@@ -332,7 +332,6 @@ struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *la
 {
 	struct sw_flow *flow;
 	struct hlist_head *head;
-	struct hlist_node *n;
 	int ver;
 	int i;
 
@@ -340,7 +339,7 @@ struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *la
 	while (*bucket < table->n_buckets) {
 		i = 0;
 		head = flex_array_get(table->buckets, *bucket);
-		hlist_for_each_entry_rcu(flow, n, head, hash_node[ver]) {
+		hlist_for_each_entry_rcu(flow, head, hash_node[ver]) {
 			if (i < *last) {
 				i++;
 				continue;
@@ -367,11 +366,10 @@ static void flow_table_copy_flows(struct flow_table *old, struct flow_table *new
 	for (i = 0; i < old->n_buckets; i++) {
 		struct sw_flow *flow;
 		struct hlist_head *head;
-		struct hlist_node *n;
 
 		head = flex_array_get(old->buckets, i);
 
-		hlist_for_each_entry(flow, n, head, hash_node[old_ver])
+		hlist_for_each_entry(flow, head, hash_node[old_ver])
 			ovs_flow_tbl_insert(new, flow);
 	}
 	old->keep_flows = true;
@@ -468,7 +466,7 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 	proto = *(__be16 *) skb->data;
 	__skb_pull(skb, sizeof(__be16));
 
-	if (ntohs(proto) >= 1536)
+	if (ntohs(proto) >= ETH_P_802_3_MIN)
 		return proto;
 
 	if (skb->len < sizeof(struct llc_snap_hdr))
@@ -484,7 +482,11 @@ static __be16 parse_ethertype(struct sk_buff *skb)
 		return htons(ETH_P_802_2);
 
 	__skb_pull(skb, sizeof(struct llc_snap_hdr));
-	return llc->ethertype;
+
+	if (ntohs(llc->ethertype) >= ETH_P_802_3_MIN)
+		return llc->ethertype;
+
+	return htons(ETH_P_802_2);
 }
 
 static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
@@ -766,14 +768,13 @@ struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
 				struct sw_flow_key *key, int key_len)
 {
 	struct sw_flow *flow;
-	struct hlist_node *n;
 	struct hlist_head *head;
 	u32 hash;
 
 	hash = ovs_flow_hash(key, key_len);
 
 	head = find_bucket(table, hash);
-	hlist_for_each_entry_rcu(flow, n, head, hash_node[table->node_ver]) {
+	hlist_for_each_entry_rcu(flow, head, hash_node[table->node_ver]) {
 
 		if (flow->hash == hash &&
 		    !memcmp(&flow->key, key, key_len)) {
@@ -794,9 +795,9 @@ void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
 
 void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 {
+	BUG_ON(table->count == 0);
 	hlist_del_rcu(&flow->hash_node[table->node_ver]);
 	table->count--;
-	BUG_ON(table->count < 0);
 }
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
@@ -1037,7 +1038,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 	if (attrs & (1 << OVS_KEY_ATTR_ETHERTYPE)) {
 		swkey->eth.type = nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]);
-		if (ntohs(swkey->eth.type) < 1536)
+		if (ntohs(swkey->eth.type) < ETH_P_802_3_MIN)
 			return -EINVAL;
 		attrs &= ~(1 << OVS_KEY_ATTR_ETHERTYPE);
 	} else {

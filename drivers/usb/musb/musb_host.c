@@ -634,7 +634,17 @@ static bool musb_tx_dma_program(struct dma_controller *dma,
 		mode = 1;
 		csr |= MUSB_TXCSR_DMAMODE | MUSB_TXCSR_DMAENAB;
 		/* autoset shouldn't be set in high bandwidth */
-		if (qh->hb_mult == 1)
+		/*
+		 * Enable Autoset according to table
+		 * below
+		 * bulk_split hb_mult	Autoset_Enable
+		 *	0	1	Yes(Normal)
+		 *	0	>1	No(High BW ISO)
+		 *	1	1	Yes(HS bulk)
+		 *	1	>1	Yes(FS bulk)
+		 */
+		if (qh->hb_mult == 1 || (qh->hb_mult > 1 &&
+					can_bulk_split(hw_ep->musb, qh->type)))
 			csr |= MUSB_TXCSR_AUTOSET;
 	} else {
 		mode = 0;
@@ -746,7 +756,13 @@ static void musb_ep_program(struct musb *musb, u8 epnum,
 		/* general endpoint setup */
 		if (epnum) {
 			/* flush all old state, set default */
-			musb_h_tx_flush_fifo(hw_ep);
+			/*
+			 * We could be flushing valid
+			 * packets in double buffering
+			 * case
+			 */
+			if (!hw_ep->tx_double_buffered)
+				musb_h_tx_flush_fifo(hw_ep);
 
 			/*
 			 * We must not clear the DMAMODE bit before or in
@@ -763,11 +779,13 @@ static void musb_ep_program(struct musb *musb, u8 epnum,
 					);
 			csr |= MUSB_TXCSR_MODE;
 
-			if (usb_gettoggle(urb->dev, qh->epnum, 1))
-				csr |= MUSB_TXCSR_H_WR_DATATOGGLE
-					| MUSB_TXCSR_H_DATATOGGLE;
-			else
-				csr |= MUSB_TXCSR_CLRDATATOG;
+			if (!hw_ep->tx_double_buffered) {
+				if (usb_gettoggle(urb->dev, qh->epnum, 1))
+					csr |= MUSB_TXCSR_H_WR_DATATOGGLE
+						| MUSB_TXCSR_H_DATATOGGLE;
+				else
+					csr |= MUSB_TXCSR_CLRDATATOG;
+			}
 
 			musb_writew(epio, MUSB_TXCSR, csr);
 			/* REVISIT may need to clear FLUSHFIFO ... */
@@ -791,17 +809,19 @@ static void musb_ep_program(struct musb *musb, u8 epnum,
 		/* protocol/endpoint/interval/NAKlimit */
 		if (epnum) {
 			musb_writeb(epio, MUSB_TXTYPE, qh->type_reg);
-			if (musb->double_buffer_not_ok)
+			if (musb->double_buffer_not_ok) {
 				musb_writew(epio, MUSB_TXMAXP,
 						hw_ep->max_packet_sz_tx);
-			else if (can_bulk_split(musb, qh->type))
+			} else if (can_bulk_split(musb, qh->type)) {
+				qh->hb_mult = hw_ep->max_packet_sz_tx
+						/ packet_sz;
 				musb_writew(epio, MUSB_TXMAXP, packet_sz
-					| ((hw_ep->max_packet_sz_tx /
-						packet_sz) - 1) << 11);
-			else
+					| ((qh->hb_mult) - 1) << 11);
+			} else {
 				musb_writew(epio, MUSB_TXMAXP,
 						qh->maxpacket |
 						((qh->hb_mult - 1) << 11));
+			}
 			musb_writeb(epio, MUSB_TXINTERVAL, qh->intv_reg);
 		} else {
 			musb_writeb(epio, MUSB_NAKLIMIT0, qh->intv_reg);
@@ -1212,7 +1232,6 @@ void musb_host_tx(struct musb *musb, u8 epnum)
 	void __iomem		*mbase = musb->mregs;
 	struct dma_channel	*dma;
 	bool			transfer_pending = false;
-	static bool use_sg;
 
 	musb_ep_select(mbase, epnum);
 	tx_csr = musb_readw(epio, MUSB_TXCSR);
@@ -1443,9 +1462,9 @@ done:
 	 * NULL.
 	 */
 	if (!urb->transfer_buffer)
-		use_sg = true;
+		qh->use_sg = true;
 
-	if (use_sg) {
+	if (qh->use_sg) {
 		/* sg_miter_start is already done in musb_ep_program */
 		if (!sg_miter_next(&qh->sg_miter)) {
 			dev_err(musb->controller, "error: sg list empty\n");
@@ -1464,9 +1483,9 @@ done:
 
 	qh->segsize = length;
 
-	if (use_sg) {
+	if (qh->use_sg) {
 		if (offset + length >= urb->transfer_buffer_length)
-			use_sg = false;
+			qh->use_sg = false;
 	}
 
 	musb_ep_select(mbase, epnum);
@@ -1532,7 +1551,6 @@ void musb_host_rx(struct musb *musb, u8 epnum)
 	bool			done = false;
 	u32			status;
 	struct dma_channel	*dma;
-	static bool use_sg;
 	unsigned int sg_flags = SG_MITER_ATOMIC | SG_MITER_TO_SG;
 
 	musb_ep_select(mbase, epnum);
@@ -1858,12 +1876,12 @@ void musb_host_rx(struct musb *musb, u8 epnum)
 			 * NULL.
 			 */
 			if (!urb->transfer_buffer) {
-				use_sg = true;
+				qh->use_sg = true;
 				sg_miter_start(&qh->sg_miter, urb->sg, 1,
 						sg_flags);
 			}
 
-			if (use_sg) {
+			if (qh->use_sg) {
 				if (!sg_miter_next(&qh->sg_miter)) {
 					dev_err(musb->controller, "error: sg list empty\n");
 					sg_miter_stop(&qh->sg_miter);
@@ -1893,8 +1911,8 @@ finish:
 	urb->actual_length += xfer_len;
 	qh->offset += xfer_len;
 	if (done) {
-		if (use_sg)
-			use_sg = false;
+		if (qh->use_sg)
+			qh->use_sg = false;
 
 		if (urb->status == -EINPROGRESS)
 			urb->status = status;
@@ -2433,7 +2451,7 @@ static int musb_bus_suspend(struct usb_hcd *hcd)
 
 	if (musb->is_active) {
 		WARNING("trying to suspend as %s while active\n",
-				otg_state_string(musb->xceiv->state));
+				usb_otg_state_string(musb->xceiv->state));
 		return -EBUSY;
 	} else
 		return 0;
@@ -2444,6 +2462,118 @@ static int musb_bus_resume(struct usb_hcd *hcd)
 	/* resuming child port does the work */
 	return 0;
 }
+
+
+#ifndef CONFIG_MUSB_PIO_ONLY
+
+#define MUSB_USB_DMA_ALIGN 4
+
+struct musb_temp_buffer {
+	void *kmalloc_ptr;
+	void *old_xfer_buffer;
+	u8 data[0];
+};
+
+static void musb_free_temp_buffer(struct urb *urb)
+{
+	enum dma_data_direction dir;
+	struct musb_temp_buffer *temp;
+
+	if (!(urb->transfer_flags & URB_ALIGNED_TEMP_BUFFER))
+		return;
+
+	dir = usb_urb_dir_in(urb) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+
+	temp = container_of(urb->transfer_buffer, struct musb_temp_buffer,
+			    data);
+
+	if (dir == DMA_FROM_DEVICE) {
+		memcpy(temp->old_xfer_buffer, temp->data,
+		       urb->transfer_buffer_length);
+	}
+	urb->transfer_buffer = temp->old_xfer_buffer;
+	kfree(temp->kmalloc_ptr);
+
+	urb->transfer_flags &= ~URB_ALIGNED_TEMP_BUFFER;
+}
+
+static int musb_alloc_temp_buffer(struct urb *urb, gfp_t mem_flags)
+{
+	enum dma_data_direction dir;
+	struct musb_temp_buffer *temp;
+	void *kmalloc_ptr;
+	size_t kmalloc_size;
+
+	if (urb->num_sgs || urb->sg ||
+	    urb->transfer_buffer_length == 0 ||
+	    !((uintptr_t)urb->transfer_buffer & (MUSB_USB_DMA_ALIGN - 1)))
+		return 0;
+
+	dir = usb_urb_dir_in(urb) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+
+	/* Allocate a buffer with enough padding for alignment */
+	kmalloc_size = urb->transfer_buffer_length +
+		sizeof(struct musb_temp_buffer) + MUSB_USB_DMA_ALIGN - 1;
+
+	kmalloc_ptr = kmalloc(kmalloc_size, mem_flags);
+	if (!kmalloc_ptr)
+		return -ENOMEM;
+
+	/* Position our struct temp_buffer such that data is aligned */
+	temp = PTR_ALIGN(kmalloc_ptr, MUSB_USB_DMA_ALIGN);
+
+
+	temp->kmalloc_ptr = kmalloc_ptr;
+	temp->old_xfer_buffer = urb->transfer_buffer;
+	if (dir == DMA_TO_DEVICE)
+		memcpy(temp->data, urb->transfer_buffer,
+		       urb->transfer_buffer_length);
+	urb->transfer_buffer = temp->data;
+
+	urb->transfer_flags |= URB_ALIGNED_TEMP_BUFFER;
+
+	return 0;
+}
+
+static int musb_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
+				      gfp_t mem_flags)
+{
+	struct musb	*musb = hcd_to_musb(hcd);
+	int ret;
+
+	/*
+	 * The DMA engine in RTL1.8 and above cannot handle
+	 * DMA addresses that are not aligned to a 4 byte boundary.
+	 * For such engine implemented (un)map_urb_for_dma hooks.
+	 * Do not use these hooks for RTL<1.8
+	 */
+	if (musb->hwvers < MUSB_HWVERS_1800)
+		return usb_hcd_map_urb_for_dma(hcd, urb, mem_flags);
+
+	ret = musb_alloc_temp_buffer(urb, mem_flags);
+	if (ret)
+		return ret;
+
+	ret = usb_hcd_map_urb_for_dma(hcd, urb, mem_flags);
+	if (ret)
+		musb_free_temp_buffer(urb);
+
+	return ret;
+}
+
+static void musb_unmap_urb_for_dma(struct usb_hcd *hcd, struct urb *urb)
+{
+	struct musb	*musb = hcd_to_musb(hcd);
+
+	usb_hcd_unmap_urb_for_dma(hcd, urb);
+
+	/* Do not use this hook for RTL<1.8 (see description above) */
+	if (musb->hwvers < MUSB_HWVERS_1800)
+		return;
+
+	musb_free_temp_buffer(urb);
+}
+#endif /* !CONFIG_MUSB_PIO_ONLY */
 
 const struct hc_driver musb_hc_driver = {
 	.description		= "musb-hcd",
@@ -2463,6 +2593,11 @@ const struct hc_driver musb_hc_driver = {
 	.urb_enqueue		= musb_urb_enqueue,
 	.urb_dequeue		= musb_urb_dequeue,
 	.endpoint_disable	= musb_h_disable,
+
+#ifndef CONFIG_MUSB_PIO_ONLY
+	.map_urb_for_dma	= musb_map_urb_for_dma,
+	.unmap_urb_for_dma	= musb_unmap_urb_for_dma,
+#endif
 
 	.hub_status_data	= musb_hub_status_data,
 	.hub_control		= musb_hub_control,

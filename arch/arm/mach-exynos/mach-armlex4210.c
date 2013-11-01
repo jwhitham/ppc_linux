@@ -16,7 +16,6 @@
 #include <linux/smsc911x.h>
 
 #include <asm/mach/arch.h>
-#include <asm/hardware/gic.h>
 #include <asm/mach-types.h>
 
 #include <plat/cpu.h>
@@ -26,6 +25,7 @@
 #include <plat/regs-srom.h>
 #include <plat/sdhci.h>
 
+#include <mach/irqs.h>
 #include <mach/map.h>
 
 #include "common.h"
@@ -178,7 +178,6 @@ static void __init armlex4210_smsc911x_init(void)
 static void __init armlex4210_map_io(void)
 {
 	exynos_init_io(NULL, 0);
-	s3c24xx_init_clocks(24000000);
 	s3c24xx_init_uarts(armlex4210_uartcfgs,
 			   ARRAY_SIZE(armlex4210_uartcfgs));
 }
@@ -201,9 +200,8 @@ MACHINE_START(ARMLEX4210, "ARMLEX4210")
 	.smp		= smp_ops(exynos_smp_ops),
 	.init_irq	= exynos4_init_irq,
 	.map_io		= armlex4210_map_io,
-	.handle_irq	= gic_handle_irq,
 	.init_machine	= armlex4210_machine_init,
 	.init_late	= exynos_init_late,
-	.timer		= &exynos4_timer,
+	.init_time	= exynos_init_time,
 	.restart	= exynos4_restart,
 MACHINE_END

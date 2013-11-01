@@ -664,10 +664,9 @@ static int myri10ge_adopt_running_firmware(struct myri10ge_priv *mgp)
 	/* copy header of running firmware from SRAM to host memory to
 	 * validate firmware */
 	hdr = kmalloc(bytes, GFP_KERNEL);
-	if (hdr == NULL) {
-		dev_err(dev, "could not malloc firmware hdr\n");
+	if (hdr == NULL)
 		return -ENOMEM;
-	}
+
 	memcpy_fromio(hdr, mgp->sram + hdr_offset, bytes);
 	status = myri10ge_validate_firmware(mgp, hdr);
 	kfree(hdr);
@@ -1282,7 +1281,8 @@ myri10ge_vlan_rx(struct net_device *dev, void *addr, struct sk_buff *skb)
 	va = addr;
 	va += MXGEFW_PAD;
 	veh = (struct vlan_ethhdr *)va;
-	if ((dev->features & NETIF_F_HW_VLAN_RX) == NETIF_F_HW_VLAN_RX &&
+	if ((dev->features & NETIF_F_HW_VLAN_CTAG_RX) ==
+	    NETIF_F_HW_VLAN_CTAG_RX &&
 	    veh->h_vlan_proto == htons(ETH_P_8021Q)) {
 		/* fixup csum if needed */
 		if (skb->ip_summed == CHECKSUM_COMPLETE) {
@@ -1290,7 +1290,7 @@ myri10ge_vlan_rx(struct net_device *dev, void *addr, struct sk_buff *skb)
 			skb->csum = csum_sub(skb->csum, vsum);
 		}
 		/* pop tag */
-		__vlan_hwaccel_put_tag(skb, ntohs(veh->h_vlan_TCI));
+		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), ntohs(veh->h_vlan_TCI));
 		memmove(va + VLAN_HLEN, va, 2 * ETH_ALEN);
 		skb->len -= VLAN_HLEN;
 		skb->data_len -= VLAN_HLEN;
@@ -3593,10 +3593,9 @@ static int myri10ge_alloc_slices(struct myri10ge_priv *mgp)
 		bytes = mgp->max_intr_slots * sizeof(*ss->rx_done.entry);
 		ss->rx_done.entry = dma_alloc_coherent(&pdev->dev, bytes,
 						       &ss->rx_done.bus,
-						       GFP_KERNEL);
+						       GFP_KERNEL | __GFP_ZERO);
 		if (ss->rx_done.entry == NULL)
 			goto abort;
-		memset(ss->rx_done.entry, 0, bytes);
 		bytes = sizeof(*ss->fw_stats);
 		ss->fw_stats = dma_alloc_coherent(&pdev->dev, bytes,
 						  &ss->fw_stats_bus,
@@ -3889,8 +3888,8 @@ static int myri10ge_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	netdev->mtu = myri10ge_initial_mtu;
 	netdev->hw_features = mgp->features | NETIF_F_RXCSUM;
 
-	/* fake NETIF_F_HW_VLAN_RX for good GRO performance */
-	netdev->hw_features |= NETIF_F_HW_VLAN_RX;
+	/* fake NETIF_F_HW_VLAN_CTAG_RX for good GRO performance */
+	netdev->hw_features |= NETIF_F_HW_VLAN_CTAG_RX;
 
 	netdev->features = netdev->hw_features;
 

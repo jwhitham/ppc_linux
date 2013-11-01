@@ -75,8 +75,10 @@ enum arizona_type {
 #define ARIZONA_IRQ_DCS_HP_DONE           47
 #define ARIZONA_IRQ_FLL2_CLOCK_OK         48
 #define ARIZONA_IRQ_FLL1_CLOCK_OK         49
+#define ARIZONA_IRQ_MICD_CLAMP_RISE	  50
+#define ARIZONA_IRQ_MICD_CLAMP_FALL	  51
 
-#define ARIZONA_NUM_IRQ                   50
+#define ARIZONA_NUM_IRQ                   52
 
 struct snd_soc_dapm_context;
 
@@ -97,6 +99,9 @@ struct arizona {
 	struct irq_domain *virq;
 	struct regmap_irq_chip_data *aod_irq_chip;
 	struct regmap_irq_chip_data *irq_chip;
+
+	bool hpdet_magic;
+	unsigned int hp_ena;
 
 	struct mutex clk_lock;
 	int clk32k_ref;

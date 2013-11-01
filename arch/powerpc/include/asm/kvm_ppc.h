@@ -130,6 +130,7 @@ extern long kvmppc_prepare_vrma(struct kvm *kvm,
 extern void kvmppc_map_vrma(struct kvm_vcpu *vcpu,
 			struct kvm_memory_slot *memslot, unsigned long porder);
 extern int kvmppc_pseries_do_hcall(struct kvm_vcpu *vcpu);
+
 extern long kvm_vm_ioctl_create_spapr_tce(struct kvm *kvm,
 				struct kvm_create_spapr_tce *args);
 extern long kvmppc_h_put_tce(struct kvm_vcpu *vcpu, unsigned long liobn,
@@ -151,7 +152,7 @@ extern int kvmppc_core_prepare_memory_region(struct kvm *kvm,
 				struct kvm_userspace_memory_region *mem);
 extern void kvmppc_core_commit_memory_region(struct kvm *kvm,
 				struct kvm_userspace_memory_region *mem,
-				struct kvm_memory_slot old);
+				const struct kvm_memory_slot *old);
 extern int kvm_vm_ioctl_get_smmu_info(struct kvm *kvm,
 				      struct kvm_ppc_smmu_info *info);
 extern void kvmppc_core_flush_memslot(struct kvm *kvm,
@@ -165,6 +166,16 @@ extern int kvmppc_prepare_to_enter(struct kvm_vcpu *vcpu);
 extern int kvm_vm_ioctl_get_htab_fd(struct kvm *kvm, struct kvm_get_htab_fd *);
 
 int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq);
+
+extern int kvm_vm_ioctl_rtas_define_token(struct kvm *kvm, void __user *argp);
+extern int kvmppc_rtas_hcall(struct kvm_vcpu *vcpu);
+extern void kvmppc_rtas_tokens_free(struct kvm *kvm);
+extern int kvmppc_xics_set_xive(struct kvm *kvm, u32 irq, u32 server,
+				u32 priority);
+extern int kvmppc_xics_get_xive(struct kvm *kvm, u32 irq, u32 *server,
+				u32 *priority);
+extern int kvmppc_xics_int_on(struct kvm *kvm, u32 irq);
+extern int kvmppc_xics_int_off(struct kvm *kvm, u32 irq);
 
 /*
  * Cuts out inst bits with ordering according to spec.
@@ -255,6 +266,21 @@ static inline void kvmppc_set_xics_phys(int cpu, unsigned long addr)
 	paca[cpu].kvm_hstate.xics_phys = addr;
 }
 
+static inline u32 kvmppc_get_xics_latch(void)
+{
+	u32 xirr = get_paca()->kvm_hstate.saved_xirr;
+
+	get_paca()->kvm_hstate.saved_xirr = 0;
+
+	return xirr;
+}
+
+static inline void kvmppc_set_host_ipi(int cpu, u8 host_ipi)
+{
+	paca[cpu].kvm_hstate.host_ipi = host_ipi;
+}
+
+extern void kvmppc_fast_vcpu_kick(struct kvm_vcpu *vcpu);
 extern void kvm_linear_init(void);
 
 #else
@@ -263,6 +289,46 @@ static inline void kvmppc_set_xics_phys(int cpu, unsigned long addr)
 
 static inline void kvm_linear_init(void)
 {}
+
+static inline u32 kvmppc_get_xics_latch(void)
+{
+	return 0;
+}
+
+static inline void kvmppc_set_host_ipi(int cpu, u8 host_ipi)
+{}
+
+static inline void kvmppc_fast_vcpu_kick(struct kvm_vcpu *vcpu)
+{
+	kvm_vcpu_kick(vcpu);
+}
+#endif
+
+#ifdef CONFIG_KVM_XICS
+static inline int kvmppc_xics_enabled(struct kvm_vcpu *vcpu)
+{
+	return vcpu->arch.irq_type == KVMPPC_IRQ_XICS;
+}
+extern void kvmppc_xics_free_icp(struct kvm_vcpu *vcpu);
+extern int kvmppc_xics_create_icp(struct kvm_vcpu *vcpu, unsigned long server);
+extern int kvm_vm_ioctl_xics_irq(struct kvm *kvm, struct kvm_irq_level *args);
+extern int kvmppc_xics_hcall(struct kvm_vcpu *vcpu, u32 cmd);
+extern u64 kvmppc_xics_get_icp(struct kvm_vcpu *vcpu);
+extern int kvmppc_xics_set_icp(struct kvm_vcpu *vcpu, u64 icpval);
+extern int kvmppc_xics_connect_vcpu(struct kvm_device *dev,
+			struct kvm_vcpu *vcpu, u32 cpu);
+#else
+static inline int kvmppc_xics_enabled(struct kvm_vcpu *vcpu)
+	{ return 0; }
+static inline void kvmppc_xics_free_icp(struct kvm_vcpu *vcpu) { }
+static inline int kvmppc_xics_create_icp(struct kvm_vcpu *vcpu,
+					 unsigned long server)
+	{ return -EINVAL; }
+static inline int kvm_vm_ioctl_xics_irq(struct kvm *kvm,
+					struct kvm_irq_level *args)
+	{ return -ENOTTY; }
+static inline int kvmppc_xics_hcall(struct kvm_vcpu *vcpu, u32 cmd)
+	{ return 0; }
 #endif
 
 static inline void kvmppc_set_epr(struct kvm_vcpu *vcpu, u32 epr)
@@ -370,5 +436,7 @@ static inline ulong kvmppc_get_ea_indexed(struct kvm_vcpu *vcpu, int ra, int rb)
 
 	return ea;
 }
+
+extern void xics_wake_cpu(int cpu);
 
 #endif /* __POWERPC_KVM_PPC_H__ */

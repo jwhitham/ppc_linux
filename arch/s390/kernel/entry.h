@@ -7,6 +7,7 @@
 #include <asm/cputime.h>
 
 extern void *restart_stack;
+extern unsigned long suspend_zero_pages;
 
 void system_call(void);
 void pgm_check_handler(void);
@@ -73,10 +74,6 @@ long sys_s390_fadvise64(int fd, u32 offset_high, u32 offset_low,
 long sys_s390_fadvise64_64(struct fadvise64_64_args __user *args);
 long sys_s390_fallocate(int fd, int mode, loff_t offset, u32 len_high,
 			u32 len_low);
-long sys_sigsuspend(int history0, int history1, old_sigset_t mask);
-long sys_sigaction(int sig, const struct old_sigaction __user *act,
-		   struct old_sigaction __user *oact);
-long sys_sigaltstack(const stack_t __user *uss, stack_t __user *uoss);
 long sys_sigreturn(void);
 long sys_rt_sigreturn(void);
 long sys32_sigreturn(void);

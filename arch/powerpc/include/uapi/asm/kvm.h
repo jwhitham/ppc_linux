@@ -299,6 +299,10 @@ struct kvm_guest_debug_arch {
 		 * Type denotes h/w breakpoint, read watchpoint, write
 		 * watchpoint or watchpoint (both read and write).
 		 */
+#define KVMPPC_DEBUG_NONE		0x0
+#define KVMPPC_DEBUG_BREAKPOINT		(1UL << 1)
+#define KVMPPC_DEBUG_WATCH_WRITE	(1UL << 2)
+#define KVMPPC_DEBUG_WATCH_READ		(1UL << 3)
 		__u32 type;
 		__u32 reserved;
 	} bp[16];
@@ -336,6 +340,12 @@ struct kvm_create_spapr_tce {
 /* for KVM_ALLOCATE_RMA */
 struct kvm_allocate_rma {
 	__u64 rma_size;
+};
+
+/* for KVM_CAP_PPC_RTAS */
+struct kvm_rtas_token_args {
+	char name[120];
+	__u64 token;	/* Use a token of 0 to undefine a mapping */
 };
 
 struct kvm_book3e_206_tlb_entry {
@@ -397,6 +407,18 @@ struct kvm_get_htab_header {
 	__u16	n_valid;
 	__u16	n_invalid;
 };
+
+/* Per-vcpu XICS interrupt controller state */
+#define KVM_REG_PPC_ICP_STATE	(KVM_REG_PPC | KVM_REG_SIZE_U64 | 0x8c)
+
+#define  KVM_REG_PPC_ICP_CPPR_SHIFT	56	/* current proc priority */
+#define  KVM_REG_PPC_ICP_CPPR_MASK	0xff
+#define  KVM_REG_PPC_ICP_XISR_SHIFT	32	/* interrupt status field */
+#define  KVM_REG_PPC_ICP_XISR_MASK	0xffffff
+#define  KVM_REG_PPC_ICP_MFRR_SHIFT	24	/* pending IPI priority */
+#define  KVM_REG_PPC_ICP_MFRR_MASK	0xff
+#define  KVM_REG_PPC_ICP_PPRI_SHIFT	16	/* pending irq priority */
+#define  KVM_REG_PPC_ICP_PPRI_MASK	0xff
 
 /* Device control API: PPC-specific devices */
 #define KVM_DEV_MPIC_GRP_MISC		1
@@ -494,5 +516,17 @@ struct kvm_get_htab_header {
 #define KVM_REG_PPC_TLB2PS	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x99)
 #define KVM_REG_PPC_TLB3PS	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x9a)
 #define KVM_REG_PPC_EPTCFG	(KVM_REG_PPC | KVM_REG_SIZE_U32 | 0x9b)
+
+/* PPC64 eXternal Interrupt Controller Specification */
+#define KVM_DEV_XICS_GRP_SOURCES	1	/* 64-bit source attributes */
+
+/* Layout of 64-bit source attribute values */
+#define  KVM_XICS_DESTINATION_SHIFT	0
+#define  KVM_XICS_DESTINATION_MASK	0xffffffffULL
+#define  KVM_XICS_PRIORITY_SHIFT	32
+#define  KVM_XICS_PRIORITY_MASK		0xff
+#define  KVM_XICS_LEVEL_SENSITIVE	(1ULL << 40)
+#define  KVM_XICS_MASKED		(1ULL << 41)
+#define  KVM_XICS_PENDING		(1ULL << 42)
 
 #endif /* __LINUX_KVM_POWERPC_H */

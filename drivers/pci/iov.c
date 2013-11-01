@@ -33,7 +33,6 @@ static inline u8 virtfn_devfn(struct pci_dev *dev, int id)
 
 static struct pci_bus *virtfn_add_bus(struct pci_bus *bus, int busnr)
 {
-	int rc;
 	struct pci_bus *child;
 
 	if (bus->number == busnr)
@@ -48,12 +47,7 @@ static struct pci_bus *virtfn_add_bus(struct pci_bus *bus, int busnr)
 		return NULL;
 
 	pci_bus_insert_busn_res(child, busnr, busnr);
-	child->dev.parent = bus->bridge;
-	rc = pci_bus_add_child(child);
-	if (rc) {
-		pci_remove_bus(child);
-		return NULL;
-	}
+	bus->is_added = 1;
 
 	return child;
 }
@@ -123,8 +117,6 @@ static int virtfn_add(struct pci_dev *dev, int id, int reset)
 	virtfn->is_virtfn = 1;
 
 	rc = pci_bus_add_device(virtfn);
-	if (rc)
-		goto failed1;
 	sprintf(buf, "virtfn%u", id);
 	rc = sysfs_create_link(&dev->dev.kobj, &virtfn->dev.kobj, buf);
 	if (rc)
@@ -735,6 +727,47 @@ int pci_num_vf(struct pci_dev *dev)
 	return dev->sriov->num_VFs;
 }
 EXPORT_SYMBOL_GPL(pci_num_vf);
+
+/**
+ * pci_vfs_assigned - returns number of VFs are assigned to a guest
+ * @dev: the PCI device
+ *
+ * Returns number of VFs belonging to this device that are assigned to a guest.
+ * If device is not a physical function returns -ENODEV.
+ */
+int pci_vfs_assigned(struct pci_dev *dev)
+{
+	struct pci_dev *vfdev;
+	unsigned int vfs_assigned = 0;
+	unsigned short dev_id;
+
+	/* only search if we are a PF */
+	if (!dev->is_physfn)
+		return 0;
+
+	/*
+	 * determine the device ID for the VFs, the vendor ID will be the
+	 * same as the PF so there is no need to check for that one
+	 */
+	pci_read_config_word(dev, dev->sriov->pos + PCI_SRIOV_VF_DID, &dev_id);
+
+	/* loop through all the VFs to see if we own any that are assigned */
+	vfdev = pci_get_device(dev->vendor, dev_id, NULL);
+	while (vfdev) {
+		/*
+		 * It is considered assigned if it is a virtual function with
+		 * our dev as the physical function and the assigned bit is set
+		 */
+		if (vfdev->is_virtfn && (vfdev->physfn == dev) &&
+		    (vfdev->dev_flags & PCI_DEV_FLAGS_ASSIGNED))
+			vfs_assigned++;
+
+		vfdev = pci_get_device(dev->vendor, dev_id, vfdev);
+	}
+
+	return vfs_assigned;
+}
+EXPORT_SYMBOL_GPL(pci_vfs_assigned);
 
 /**
  * pci_sriov_set_totalvfs -- reduce the TotalVFs available

@@ -121,8 +121,7 @@ static struct sctp_endpoint *sctp_endpoint_init(struct sctp_endpoint *ep,
 
 	/* Initialize the basic object fields. */
 	atomic_set(&ep->base.refcnt, 1);
-	ep->base.dead = 0;
-	ep->base.malloced = 1;
+	ep->base.dead = false;
 
 	/* Create an input queue.  */
 	sctp_inq_init(&ep->base.inqueue);
@@ -151,13 +150,11 @@ static struct sctp_endpoint *sctp_endpoint_init(struct sctp_endpoint *ep,
 	ep->rcvbuf_policy = net->sctp.rcvbuf_policy;
 
 	/* Initialize the secret key used with cookie. */
-	get_random_bytes(&ep->secret_key[0], SCTP_SECRET_SIZE);
-	ep->last_key = ep->current_key = 0;
-	ep->key_changed_at = jiffies;
+	get_random_bytes(ep->secret_key, sizeof(ep->secret_key));
 
 	/* SCTP-AUTH extensions*/
 	INIT_LIST_HEAD(&ep->endpoint_shared_keys);
-	null_key = sctp_auth_shkey_create(0, GFP_KERNEL);
+	null_key = sctp_auth_shkey_create(0, gfp);
 	if (!null_key)
 		goto nomem;
 
@@ -200,7 +197,7 @@ struct sctp_endpoint *sctp_endpoint_new(struct sock *sk, gfp_t gfp)
 		goto fail;
 	if (!sctp_endpoint_init(ep, sk, gfp))
 		goto fail_init;
-	ep->base.malloced = 1;
+
 	SCTP_DBG_OBJCNT_INC(ep);
 	return ep;
 
@@ -236,7 +233,7 @@ void sctp_endpoint_add_asoc(struct sctp_endpoint *ep,
  */
 void sctp_endpoint_free(struct sctp_endpoint *ep)
 {
-	ep->base.dead = 1;
+	ep->base.dead = true;
 
 	ep->base.sk->sk_state = SCTP_SS_CLOSED;
 
@@ -249,8 +246,6 @@ void sctp_endpoint_free(struct sctp_endpoint *ep)
 /* Final destructor for endpoint.  */
 static void sctp_endpoint_destroy(struct sctp_endpoint *ep)
 {
-	int i;
-
 	SCTP_ASSERT(ep->base.dead, "Endpoint is not dead", return);
 
 	/* Free up the HMAC transform. */
@@ -273,8 +268,7 @@ static void sctp_endpoint_destroy(struct sctp_endpoint *ep)
 	sctp_inq_free(&ep->base.inqueue);
 	sctp_bind_addr_free(&ep->base.bind_addr);
 
-	for (i = 0; i < SCTP_HOW_MANY_SECRETS; ++i)
-		memset(&ep->secret_key[i], 0, SCTP_SECRET_SIZE);
+	memset(ep->secret_key, 0, sizeof(ep->secret_key));
 
 	/* Remove and free the port */
 	if (sctp_sk(ep->base.sk)->bind_hash)
@@ -284,11 +278,8 @@ static void sctp_endpoint_destroy(struct sctp_endpoint *ep)
 	if (ep->base.sk)
 		sock_put(ep->base.sk);
 
-	/* Finally, free up our memory. */
-	if (ep->base.malloced) {
-		kfree(ep);
-		SCTP_DBG_OBJCNT_DEC(ep);
-	}
+	kfree(ep);
+	SCTP_DBG_OBJCNT_DEC(ep);
 }
 
 /* Hold a reference to an endpoint. */
@@ -337,7 +328,6 @@ static struct sctp_association *__sctp_endpoint_lookup_assoc(
 	struct sctp_transport *t = NULL;
 	struct sctp_hashbucket *head;
 	struct sctp_ep_common *epb;
-	struct hlist_node *node;
 	int hash;
 	int rport;
 
@@ -355,7 +345,7 @@ static struct sctp_association *__sctp_endpoint_lookup_assoc(
 				 rport);
 	head = &sctp_assoc_hashtable[hash];
 	read_lock(&head->lock);
-	sctp_for_each_hentry(epb, node, &head->chain) {
+	sctp_for_each_hentry(epb, &head->chain) {
 		tmp = sctp_assoc(epb);
 		if (tmp->ep != ep || rport != tmp->peer.port)
 			continue;

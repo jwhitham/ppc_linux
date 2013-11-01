@@ -139,6 +139,10 @@ struct lpfc_queue {
 
 	struct lpfc_sli_ring *pring; /* ptr to io ring associated with q */
 
+	uint16_t db_format;
+#define LPFC_DB_RING_FORMAT	0x01
+#define LPFC_DB_LIST_FORMAT	0x02
+	void __iomem *db_regaddr;
 	/* For q stats */
 	uint32_t q_cnt_1;
 	uint32_t q_cnt_2;
@@ -342,11 +346,6 @@ struct lpfc_bmbx {
 #define SLI4_CT_VFI 2
 #define SLI4_CT_FCFI 3
 
-#define LPFC_SLI4_FL1_MAX_SEGMENT_SIZE	0x10000
-#define LPFC_SLI4_FL1_MAX_BUF_SIZE	0X2000
-#define LPFC_SLI4_MIN_BUF_SIZE		0x400
-#define LPFC_SLI4_MAX_BUF_SIZE		0x20000
-
 /*
  * SLI4 specific data structures
  */
@@ -436,6 +435,17 @@ struct lpfc_sli4_lnk_info {
 
 #define LPFC_SLI4_HANDLER_NAME_SZ	16
 
+/* Used for IRQ vector to CPU mapping */
+struct lpfc_vector_map_info {
+	uint16_t	phys_id;
+	uint16_t	core_id;
+	uint16_t	irq;
+	uint16_t	channel_id;
+	struct cpumask	maskbits;
+};
+#define LPFC_VECTOR_MAP_EMPTY	0xffff
+#define LPFC_MAX_CPU		256
+
 /* SLI4 HBA data structure entries */
 struct lpfc_sli4_hba {
 	void __iomem *conf_regs_memmap_p; /* Kernel memory mapped address for
@@ -508,6 +518,10 @@ struct lpfc_sli4_hba {
 	struct lpfc_queue *hdr_rq; /* Slow-path Header Receive queue */
 	struct lpfc_queue *dat_rq; /* Slow-path Data Receive queue */
 
+	uint8_t fw_func_mode;	/* FW function protocol mode */
+	uint32_t ulp0_mode;	/* ULP0 protocol mode */
+	uint32_t ulp1_mode;	/* ULP1 protocol mode */
+
 	/* Setup information for various queue parameters */
 	int eq_esize;
 	int eq_ecount;
@@ -565,6 +579,11 @@ struct lpfc_sli4_hba {
 	struct lpfc_iov iov;
 	spinlock_t abts_scsi_buf_list_lock; /* list of aborted SCSI IOs */
 	spinlock_t abts_sgl_list_lock; /* list of aborted els IOs */
+
+	/* CPU to vector mapping information */
+	struct lpfc_vector_map_info *cpu_map;
+	uint16_t num_online_cpu;
+	uint16_t num_present_cpu;
 };
 
 enum lpfc_sge_type {

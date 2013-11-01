@@ -30,6 +30,8 @@ Status: works
 Configuration Options: not applicable, uses comedi PCI auto config
 */
 
+#include <linux/pci.h>
+
 #include "../comedidev.h"
 
 #define PCI_DEVICE_ID_PIO1616L 0x8172
@@ -75,9 +77,7 @@ static int contec_auto_attach(struct comedi_device *dev,
 	struct comedi_subdevice *s;
 	int ret;
 
-	dev->board_name = dev->driver->driver_name;
-
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
 	dev->iobase = pci_resource_start(pcidev, 0);
@@ -107,32 +107,18 @@ static int contec_auto_attach(struct comedi_device *dev,
 	return 0;
 }
 
-static void contec_detach(struct comedi_device *dev)
-{
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
-}
-
 static struct comedi_driver contec_pci_dio_driver = {
 	.driver_name	= "contec_pci_dio",
 	.module		= THIS_MODULE,
 	.auto_attach	= contec_auto_attach,
-	.detach		= contec_detach,
+	.detach		= comedi_pci_disable,
 };
 
 static int contec_pci_dio_pci_probe(struct pci_dev *dev,
-					      const struct pci_device_id *ent)
+				    const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &contec_pci_dio_driver);
-}
-
-static void contec_pci_dio_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
+	return comedi_pci_auto_config(dev, &contec_pci_dio_driver,
+				      id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(contec_pci_dio_pci_table) = {
@@ -145,7 +131,7 @@ static struct pci_driver contec_pci_dio_pci_driver = {
 	.name		= "contec_pci_dio",
 	.id_table	= contec_pci_dio_pci_table,
 	.probe		= contec_pci_dio_pci_probe,
-	.remove		= contec_pci_dio_pci_remove,
+	.remove		= comedi_pci_auto_unconfig,
 };
 module_comedi_pci_driver(contec_pci_dio_driver, contec_pci_dio_pci_driver);
 

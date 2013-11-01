@@ -12,6 +12,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/i2c.h>
 #include <linux/platform_data/i2c-nomadik.h>
@@ -24,11 +25,13 @@
 #include <linux/mfd/abx500/ab8500.h>
 #include <linux/regulator/ab8500.h>
 #include <linux/regulator/fixed.h>
+#include <linux/regulator/driver.h>
+#include <linux/regulator/gpio-regulator.h>
 #include <linux/mfd/tc3589x.h>
 #include <linux/mfd/tps6105x.h>
 #include <linux/mfd/abx500/ab8500-gpio.h>
 #include <linux/mfd/abx500/ab8500-codec.h>
-#include <linux/leds-lp5521.h>
+#include <linux/platform_data/leds-lp55xx.h>
 #include <linux/input.h>
 #include <linux/smsc911x.h>
 #include <linux/gpio_keys.h>
@@ -40,15 +43,14 @@
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
-#include <asm/hardware/gic.h>
 
-#include <mach/hardware.h>
-#include <mach/setup.h>
-#include <mach/devices.h>
-#include <mach/irqs.h>
+#include "setup.h"
+#include "devices.h"
+#include "irqs.h"
 #include <linux/platform_data/crypto-ux500.h>
 
 #include "ste-dma40-db8500.h"
+#include "db8500-regs.h"
 #include "devices-db8500.h"
 #include "board-mop500.h"
 #include "board-mop500-regulators.h"
@@ -90,26 +92,39 @@ static struct platform_device snowball_gpio_en_3v3_regulator_dev = {
        },
 };
 
-static struct ab8500_gpio_platform_data ab8500_gpio_pdata = {
+/* Dynamically populated. */
+static struct gpio sdi0_reg_gpios[] = {
+	{ 0, GPIOF_OUT_INIT_LOW, "mmci_vsel" },
+};
+
+static struct gpio_regulator_state sdi0_reg_states[] = {
+	{ .value = 2900000, .gpios = (0 << 0) },
+	{ .value = 1800000, .gpios = (1 << 0) },
+};
+
+static struct gpio_regulator_config sdi0_reg_info = {
+	.supply_name		= "ext-mmc-level-shifter",
+	.gpios			= sdi0_reg_gpios,
+	.nr_gpios		= ARRAY_SIZE(sdi0_reg_gpios),
+	.states			= sdi0_reg_states,
+	.nr_states		= ARRAY_SIZE(sdi0_reg_states),
+	.type			= REGULATOR_VOLTAGE,
+	.enable_high		= 1,
+	.enabled_at_boot	= 0,
+	.init_data		= &sdi0_reg_init_data,
+	.startup_delay		= 100,
+};
+
+static struct platform_device sdi0_regulator = {
+	.name = "gpio-regulator",
+	.id   = -1,
+	.dev  = {
+		.platform_data = &sdi0_reg_info,
+	},
+};
+
+static struct abx500_gpio_platform_data ab8500_gpio_pdata = {
 	.gpio_base		= MOP500_AB8500_PIN_GPIO(1),
-	.irq_base		= MOP500_AB8500_VIR_GPIO_IRQ_BASE,
-	/* config_reg is the initial configuration of ab8500 pins.
-	 * The pins can be configured as GPIO or alt functions based
-	 * on value present in GpioSel1 to GpioSel6 and AlternatFunction
-	 * register. This is the array of 7 configuration settings.
-	 * One has to compile time decide these settings. Below is the
-	 * explanation of these setting
-	 * GpioSel1 = 0x00 => Pins GPIO1 to GPIO8 are not used as GPIO
-	 * GpioSel2 = 0x1E => Pins GPIO10 to GPIO13 are configured as GPIO
-	 * GpioSel3 = 0x80 => Pin GPIO24 is configured as GPIO
-	 * GpioSel4 = 0x01 => Pin GPIo25 is configured as GPIO
-	 * GpioSel5 = 0x7A => Pins GPIO34, GPIO36 to GPIO39 are conf as GPIO
-	 * GpioSel6 = 0x00 => Pins GPIO41 & GPIo42 are not configured as GPIO
-	 * AlternaFunction = 0x00 => If Pins GPIO10 to 13 are not configured
-	 * as GPIO then this register selectes the alternate fucntions
-	 */
-	.config_reg		= {0x00, 0x1E, 0x80, 0x01,
-					0x7A, 0x00, 0x00},
 };
 
 /* ab8500-codec */
@@ -215,71 +230,11 @@ static struct platform_device snowball_sbnet_dev = {
 	},
 };
 
-static struct ab8500_platform_data ab8500_platdata = {
+struct ab8500_platform_data ab8500_platdata = {
 	.irq_base	= MOP500_AB8500_IRQ_BASE,
-	.regulator_reg_init = ab8500_regulator_reg_init,
-	.num_regulator_reg_init	= ARRAY_SIZE(ab8500_regulator_reg_init),
-	.regulator	= ab8500_regulators,
-	.num_regulator	= ARRAY_SIZE(ab8500_regulators),
+	.regulator	= &ab8500_regulator_plat_data,
 	.gpio		= &ab8500_gpio_pdata,
 	.codec		= &ab8500_codec_pdata,
-};
-
-/*
- * Thermal Sensor
- */
-
-static struct resource db8500_thsens_resources[] = {
-	{
-		.name = "IRQ_HOTMON_LOW",
-		.start  = IRQ_PRCMU_HOTMON_LOW,
-		.end    = IRQ_PRCMU_HOTMON_LOW,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name = "IRQ_HOTMON_HIGH",
-		.start  = IRQ_PRCMU_HOTMON_HIGH,
-		.end    = IRQ_PRCMU_HOTMON_HIGH,
-		.flags  = IORESOURCE_IRQ,
-	},
-};
-
-static struct db8500_thsens_platform_data db8500_thsens_data = {
-	.trip_points[0] = {
-		.temp = 70000,
-		.type = THERMAL_TRIP_ACTIVE,
-		.cdev_name = {
-			[0] = "thermal-cpufreq-0",
-		},
-	},
-	.trip_points[1] = {
-		.temp = 75000,
-		.type = THERMAL_TRIP_ACTIVE,
-		.cdev_name = {
-			[0] = "thermal-cpufreq-0",
-		},
-	},
-	.trip_points[2] = {
-		.temp = 80000,
-		.type = THERMAL_TRIP_ACTIVE,
-		.cdev_name = {
-			[0] = "thermal-cpufreq-0",
-		},
-	},
-	.trip_points[3] = {
-		.temp = 85000,
-		.type = THERMAL_TRIP_CRITICAL,
-	},
-	.num_trips = 4,
-};
-
-static struct platform_device u8500_thsens_device = {
-	.name           = "db8500-thermal",
-	.resource       = db8500_thsens_resources,
-	.num_resources  = ARRAY_SIZE(db8500_thsens_resources),
-	.dev	= {
-		.platform_data	= &db8500_thsens_data,
-	},
 };
 
 static struct platform_device u8500_cpufreq_cooling_device = {
@@ -320,7 +275,7 @@ static struct tc3589x_platform_data mop500_tc35892_data = {
 	.irq_base	= MOP500_EGPIO_IRQ_BASE,
 };
 
-static struct lp5521_led_config lp5521_pri_led[] = {
+static struct lp55xx_led_config lp5521_pri_led[] = {
        [0] = {
 	       .chan_nr = 0,
 	       .led_current = 0x2f,
@@ -338,14 +293,14 @@ static struct lp5521_led_config lp5521_pri_led[] = {
        },
 };
 
-static struct lp5521_platform_data __initdata lp5521_pri_data = {
+static struct lp55xx_platform_data __initdata lp5521_pri_data = {
        .label = "lp5521_pri",
        .led_config     = &lp5521_pri_led[0],
        .num_channels   = 3,
-       .clock_mode     = LP5521_CLOCK_EXT,
+       .clock_mode     = LP55XX_CLOCK_EXT,
 };
 
-static struct lp5521_led_config lp5521_sec_led[] = {
+static struct lp55xx_led_config lp5521_sec_led[] = {
        [0] = {
 	       .chan_nr = 0,
 	       .led_current = 0x2f,
@@ -363,11 +318,11 @@ static struct lp5521_led_config lp5521_sec_led[] = {
        },
 };
 
-static struct lp5521_platform_data __initdata lp5521_sec_data = {
+static struct lp55xx_platform_data __initdata lp5521_sec_data = {
        .label = "lp5521_sec",
        .led_config     = &lp5521_sec_led[0],
        .num_channels   = 3,
-       .clock_mode     = LP5521_CLOCK_EXT,
+       .clock_mode     = LP55XX_CLOCK_EXT,
 };
 
 static struct i2c_board_info __initdata mop500_i2c0_devices[] = {
@@ -448,14 +403,23 @@ static int mop500_prox_activate(struct device *dev)
 			"no regulator\n");
 		return PTR_ERR(prox_regulator);
 	}
-	regulator_enable(prox_regulator);
-	return 0;
+
+	return regulator_enable(prox_regulator);
 }
 
 static void mop500_prox_deactivate(struct device *dev)
 {
 	regulator_disable(prox_regulator);
 	regulator_put(prox_regulator);
+}
+
+void mop500_snowball_ethernet_clock_enable(void)
+{
+	struct clk *clk;
+
+	clk = clk_get_sys("fsmc", NULL);
+	if (!IS_ERR(clk))
+		clk_prepare_enable(clk);
 }
 
 static struct cryp_platform_data u8500_cryp1_platform_data = {
@@ -500,6 +464,7 @@ static struct hash_platform_data u8500_hash1_platform_data = {
 /* add any platform devices here - TODO */
 static struct platform_device *mop500_platform_devs[] __initdata = {
 	&mop500_gpio_keys_device,
+	&sdi0_regulator,
 };
 
 #ifdef CONFIG_STE_DMA40
@@ -641,8 +606,8 @@ static struct platform_device *snowball_platform_devs[] __initdata = {
 	&snowball_key_dev,
 	&snowball_sbnet_dev,
 	&snowball_gpio_en_3v3_regulator_dev,
-	&u8500_thsens_device,
 	&u8500_cpufreq_cooling_device,
+	&sdi0_regulator,
 };
 
 static void __init mop500_init_machine(void)
@@ -651,10 +616,14 @@ static void __init mop500_init_machine(void)
 	int i2c0_devs;
 	int i;
 
+	platform_device_register(&db8500_prcmu_device);
 	mop500_gpio_keys[0].gpio = GPIO_PROX_SENSOR;
 
+	sdi0_reg_info.enable_gpio = GPIO_SDMMC_EN;
+	sdi0_reg_info.gpios[0].gpio = GPIO_SDMMC_1V8_3V_SEL;
+
 	mop500_pinmaps_init();
-	parent = u8500_init_devices(&ab8500_platdata);
+	parent = u8500_init_devices();
 
 	for (i = 0; i < ARRAY_SIZE(mop500_platform_devs); i++)
 		mop500_platform_devs[i]->dev.parent = parent;
@@ -685,8 +654,13 @@ static void __init snowball_init_machine(void)
 	struct device *parent = NULL;
 	int i;
 
+	platform_device_register(&db8500_prcmu_device);
+
+	sdi0_reg_info.enable_gpio = SNOWBALL_SDMMC_EN_GPIO;
+	sdi0_reg_info.gpios[0].gpio = SNOWBALL_SDMMC_1V8_3V_GPIO;
+
 	snowball_pinmaps_init();
-	parent = u8500_init_devices(&ab8500_platdata);
+	parent = u8500_init_devices();
 
 	for (i = 0; i < ARRAY_SIZE(snowball_platform_devs); i++)
 		snowball_platform_devs[i]->dev.parent = parent;
@@ -700,6 +674,8 @@ static void __init snowball_init_machine(void)
 	mop500_audio_init(parent);
 	mop500_uart_init(parent);
 
+	mop500_snowball_ethernet_clock_enable();
+
 	/* This board has full regulator constraints */
 	regulator_has_full_constraints();
 }
@@ -710,6 +686,7 @@ static void __init hrefv60_init_machine(void)
 	int i2c0_devs;
 	int i;
 
+	platform_device_register(&db8500_prcmu_device);
 	/*
 	 * The HREFv60 board removed a GPIO expander and routed
 	 * all these GPIO pins to the internal GPIO controller
@@ -717,8 +694,11 @@ static void __init hrefv60_init_machine(void)
 	 */
 	mop500_gpio_keys[0].gpio = HREFV60_PROX_SENSE_GPIO;
 
+	sdi0_reg_info.enable_gpio = HREFV60_SDMMC_EN_GPIO;
+	sdi0_reg_info.gpios[0].gpio = HREFV60_SDMMC_1V8_3V_GPIO;
+
 	hrefv60_pinmaps_init();
-	parent = u8500_init_devices(&ab8500_platdata);
+	parent = u8500_init_devices();
 
 	for (i = 0; i < ARRAY_SIZE(mop500_platform_devs); i++)
 		mop500_platform_devs[i]->dev.parent = parent;
@@ -751,8 +731,7 @@ MACHINE_START(U8500, "ST-Ericsson MOP500 platform")
 	.map_io		= u8500_map_io,
 	.init_irq	= ux500_init_irq,
 	/* we re-use nomadik timer here */
-	.timer		= &ux500_timer,
-	.handle_irq	= gic_handle_irq,
+	.init_time	= ux500_timer_init,
 	.init_machine	= mop500_init_machine,
 	.init_late	= ux500_init_late,
 MACHINE_END
@@ -761,8 +740,7 @@ MACHINE_START(U8520, "ST-Ericsson U8520 Platform HREFP520")
 	.atag_offset	= 0x100,
 	.map_io		= u8500_map_io,
 	.init_irq	= ux500_init_irq,
-	.timer		= &ux500_timer,
-	.handle_irq	= gic_handle_irq,
+	.init_time	= ux500_timer_init,
 	.init_machine	= mop500_init_machine,
 	.init_late	= ux500_init_late,
 MACHINE_END
@@ -772,8 +750,7 @@ MACHINE_START(HREFV60, "ST-Ericsson U8500 Platform HREFv60+")
 	.smp		= smp_ops(ux500_smp_ops),
 	.map_io		= u8500_map_io,
 	.init_irq	= ux500_init_irq,
-	.timer		= &ux500_timer,
-	.handle_irq	= gic_handle_irq,
+	.init_time	= ux500_timer_init,
 	.init_machine	= hrefv60_init_machine,
 	.init_late	= ux500_init_late,
 MACHINE_END
@@ -784,8 +761,7 @@ MACHINE_START(SNOWBALL, "Calao Systems Snowball platform")
 	.map_io		= u8500_map_io,
 	.init_irq	= ux500_init_irq,
 	/* we re-use nomadik timer here */
-	.timer		= &ux500_timer,
-	.handle_irq	= gic_handle_irq,
+	.init_time	= ux500_timer_init,
 	.init_machine	= snowball_init_machine,
 	.init_late	= NULL,
 MACHINE_END

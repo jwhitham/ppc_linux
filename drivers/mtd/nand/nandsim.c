@@ -218,7 +218,6 @@ MODULE_PARM_DESC(bch,		 "Enable BCH ecc and set how many bits should "
 #define STATE_CMD_READOOB      0x00000005 /* read OOB area */
 #define STATE_CMD_ERASE1       0x00000006 /* sector erase first command */
 #define STATE_CMD_STATUS       0x00000007 /* read status */
-#define STATE_CMD_STATUS_M     0x00000008 /* read multi-plane status (isn't implemented) */
 #define STATE_CMD_SEQIN        0x00000009 /* sequential data input */
 #define STATE_CMD_READID       0x0000000A /* read ID */
 #define STATE_CMD_ERASE2       0x0000000B /* sector erase second command */
@@ -263,14 +262,13 @@ MODULE_PARM_DESC(bch,		 "Enable BCH ecc and set how many bits should "
 #define NS_OPER_STATES   6  /* Maximum number of states in operation */
 
 #define OPT_ANY          0xFFFFFFFF /* any chip supports this operation */
-#define OPT_PAGE256      0x00000001 /* 256-byte  page chips */
 #define OPT_PAGE512      0x00000002 /* 512-byte  page chips */
 #define OPT_PAGE2048     0x00000008 /* 2048-byte page chips */
 #define OPT_SMARTMEDIA   0x00000010 /* SmartMedia technology chips */
 #define OPT_PAGE512_8BIT 0x00000040 /* 512-byte page chips with 8-bit bus width */
 #define OPT_PAGE4096     0x00000080 /* 4096-byte page chips */
 #define OPT_LARGEPAGE    (OPT_PAGE2048 | OPT_PAGE4096) /* 2048 & 4096-byte page chips */
-#define OPT_SMALLPAGE    (OPT_PAGE256  | OPT_PAGE512)  /* 256 and 512-byte page chips */
+#define OPT_SMALLPAGE    (OPT_PAGE512) /* 512-byte page chips */
 
 /* Remove action bits from state */
 #define NS_STATE(x) ((x) & ~ACTION_MASK)
@@ -406,8 +404,6 @@ static struct nandsim_operations {
 	{OPT_ANY, {STATE_CMD_ERASE1, STATE_ADDR_SEC, STATE_CMD_ERASE2 | ACTION_SECERASE, STATE_READY}},
 	/* Read status */
 	{OPT_ANY, {STATE_CMD_STATUS, STATE_DATAOUT_STATUS, STATE_READY}},
-	/* Read multi-plane status */
-	{OPT_SMARTMEDIA, {STATE_CMD_STATUS_M, STATE_DATAOUT_STATUS_M, STATE_READY}},
 	/* Read ID */
 	{OPT_ANY, {STATE_CMD_READID, STATE_ADDR_ZERO, STATE_DATAOUT_ID, STATE_READY}},
 	/* Large page devices read page */
@@ -699,10 +695,7 @@ static int init_nandsim(struct mtd_info *mtd)
 	ns->geom.secszoob = ns->geom.secsz + ns->geom.oobsz * ns->geom.pgsec;
 	ns->options = 0;
 
-	if (ns->geom.pgsz == 256) {
-		ns->options |= OPT_PAGE256;
-	}
-	else if (ns->geom.pgsz == 512) {
+	if (ns->geom.pgsz == 512) {
 		ns->options |= OPT_PAGE512;
 		if (ns->busw == 8)
 			ns->options |= OPT_PAGE512_8BIT;
@@ -769,9 +762,9 @@ static int init_nandsim(struct mtd_info *mtd)
 	}
 
 	/* Detect how many ID bytes the NAND chip outputs */
-        for (i = 0; nand_flash_ids[i].name != NULL; i++) {
-                if (second_id_byte != nand_flash_ids[i].id)
-                        continue;
+	for (i = 0; nand_flash_ids[i].name != NULL; i++) {
+		if (second_id_byte != nand_flash_ids[i].dev_id)
+			continue;
 	}
 
 	if (ns->busw == 16)
@@ -1079,8 +1072,6 @@ static char *get_state_name(uint32_t state)
 			return "STATE_CMD_ERASE1";
 		case STATE_CMD_STATUS:
 			return "STATE_CMD_STATUS";
-		case STATE_CMD_STATUS_M:
-			return "STATE_CMD_STATUS_M";
 		case STATE_CMD_SEQIN:
 			return "STATE_CMD_SEQIN";
 		case STATE_CMD_READID:
@@ -1145,7 +1136,6 @@ static int check_command(int cmd)
 	case NAND_CMD_RNDOUTSTART:
 		return 0;
 
-	case NAND_CMD_STATUS_MULTI:
 	default:
 		return 1;
 	}
@@ -1171,8 +1161,6 @@ static uint32_t get_state_by_command(unsigned command)
 			return STATE_CMD_ERASE1;
 		case NAND_CMD_STATUS:
 			return STATE_CMD_STATUS;
-		case NAND_CMD_STATUS_MULTI:
-			return STATE_CMD_STATUS_M;
 		case NAND_CMD_SEQIN:
 			return STATE_CMD_SEQIN;
 		case NAND_CMD_READID:
@@ -1408,40 +1396,32 @@ static void clear_memalloc(int memalloc)
 		current->flags &= ~PF_MEMALLOC;
 }
 
-static ssize_t read_file(struct nandsim *ns, struct file *file, void *buf, size_t count, loff_t *pos)
+static ssize_t read_file(struct nandsim *ns, struct file *file, void *buf, size_t count, loff_t pos)
 {
-	mm_segment_t old_fs;
 	ssize_t tx;
 	int err, memalloc;
 
-	err = get_pages(ns, file, count, *pos);
+	err = get_pages(ns, file, count, pos);
 	if (err)
 		return err;
-	old_fs = get_fs();
-	set_fs(get_ds());
 	memalloc = set_memalloc();
-	tx = vfs_read(file, (char __user *)buf, count, pos);
+	tx = kernel_read(file, pos, buf, count);
 	clear_memalloc(memalloc);
-	set_fs(old_fs);
 	put_pages(ns);
 	return tx;
 }
 
-static ssize_t write_file(struct nandsim *ns, struct file *file, void *buf, size_t count, loff_t *pos)
+static ssize_t write_file(struct nandsim *ns, struct file *file, void *buf, size_t count, loff_t pos)
 {
-	mm_segment_t old_fs;
 	ssize_t tx;
 	int err, memalloc;
 
-	err = get_pages(ns, file, count, *pos);
+	err = get_pages(ns, file, count, pos);
 	if (err)
 		return err;
-	old_fs = get_fs();
-	set_fs(get_ds());
 	memalloc = set_memalloc();
-	tx = vfs_write(file, (char __user *)buf, count, pos);
+	tx = kernel_write(file, buf, count, pos);
 	clear_memalloc(memalloc);
-	set_fs(old_fs);
 	put_pages(ns);
 	return tx;
 }
@@ -1476,12 +1456,12 @@ int do_read_error(struct nandsim *ns, int num)
 
 void do_bit_flips(struct nandsim *ns, int num)
 {
-	if (bitflips && random32() < (1 << 22)) {
+	if (bitflips && prandom_u32() < (1 << 22)) {
 		int flips = 1;
 		if (bitflips > 1)
-			flips = (random32() % (int) bitflips) + 1;
+			flips = (prandom_u32() % (int) bitflips) + 1;
 		while (flips--) {
-			int pos = random32() % (num * 8);
+			int pos = prandom_u32() % (num * 8);
 			ns->buf.byte[pos / 8] ^= (1 << (pos % 8));
 			NS_WARN("read_page: flipping bit %d in page %d "
 				"reading from %d ecc: corrected=%u failed=%u\n",
@@ -1511,7 +1491,7 @@ static void read_page(struct nandsim *ns, int num)
 			if (do_read_error(ns, num))
 				return;
 			pos = (loff_t)ns->regs.row * ns->geom.pgszoob + ns->regs.column + ns->regs.off;
-			tx = read_file(ns, ns->cfile, ns->buf.byte, num, &pos);
+			tx = read_file(ns, ns->cfile, ns->buf.byte, num, pos);
 			if (tx != num) {
 				NS_ERR("read_page: read error for page %d ret %ld\n", ns->regs.row, (long)tx);
 				return;
@@ -1573,7 +1553,7 @@ static int prog_page(struct nandsim *ns, int num)
 	u_char *pg_off;
 
 	if (ns->cfile) {
-		loff_t off, pos;
+		loff_t off;
 		ssize_t tx;
 		int all;
 
@@ -1585,8 +1565,7 @@ static int prog_page(struct nandsim *ns, int num)
 			memset(ns->file_buf, 0xff, ns->geom.pgszoob);
 		} else {
 			all = 0;
-			pos = off;
-			tx = read_file(ns, ns->cfile, pg_off, num, &pos);
+			tx = read_file(ns, ns->cfile, pg_off, num, off);
 			if (tx != num) {
 				NS_ERR("prog_page: read error for page %d ret %ld\n", ns->regs.row, (long)tx);
 				return -1;
@@ -1595,16 +1574,15 @@ static int prog_page(struct nandsim *ns, int num)
 		for (i = 0; i < num; i++)
 			pg_off[i] &= ns->buf.byte[i];
 		if (all) {
-			pos = (loff_t)ns->regs.row * ns->geom.pgszoob;
-			tx = write_file(ns, ns->cfile, ns->file_buf, ns->geom.pgszoob, &pos);
+			loff_t pos = (loff_t)ns->regs.row * ns->geom.pgszoob;
+			tx = write_file(ns, ns->cfile, ns->file_buf, ns->geom.pgszoob, pos);
 			if (tx != ns->geom.pgszoob) {
 				NS_ERR("prog_page: write error for page %d ret %ld\n", ns->regs.row, (long)tx);
 				return -1;
 			}
 			ns->pages_written[ns->regs.row] = 1;
 		} else {
-			pos = off;
-			tx = write_file(ns, ns->cfile, pg_off, num, &pos);
+			tx = write_file(ns, ns->cfile, pg_off, num, off);
 			if (tx != num) {
 				NS_ERR("prog_page: write error for page %d ret %ld\n", ns->regs.row, (long)tx);
 				return -1;
@@ -2316,7 +2294,7 @@ static int __init ns_init_module(void)
 		nand->geom.idbytes = 2;
 	nand->regs.status = NS_STATUS_OK(nand);
 	nand->nxstate = STATE_UNKNOWN;
-	nand->options |= OPT_PAGE256; /* temporary value */
+	nand->options |= OPT_PAGE512; /* temporary value */
 	nand->ids[0] = first_id_byte;
 	nand->ids[1] = second_id_byte;
 	nand->ids[2] = third_id_byte;

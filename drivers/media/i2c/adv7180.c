@@ -135,6 +135,10 @@ struct adv7180_state {
 
 static v4l2_std_id adv7180_std_to_v4l2(u8 status1)
 {
+	/* in case V4L2_IN_ST_NO_SIGNAL */
+	if (!(status1 & ADV7180_STATUS1_IN_LOCK))
+		return V4L2_STD_UNKNOWN;
+
 	switch (status1 & ADV7180_STATUS1_AUTOD_MASK) {
 	case ADV7180_STATUS1_AUTOD_NTSM_M_J:
 		return V4L2_STD_NTSC;
@@ -402,9 +406,6 @@ static const struct v4l2_subdev_video_ops adv7180_video_ops = {
 static const struct v4l2_subdev_core_ops adv7180_core_ops = {
 	.g_chip_ident = adv7180_g_chip_ident,
 	.s_std = adv7180_s_std,
-	.queryctrl = v4l2_subdev_queryctrl,
-	.g_ctrl = v4l2_subdev_g_ctrl,
-	.s_ctrl = v4l2_subdev_s_ctrl,
 };
 
 static const struct v4l2_subdev_ops adv7180_ops = {

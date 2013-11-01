@@ -427,8 +427,8 @@ static void setup_page_sizes(void)
 	int i, psize;
 
 #ifdef CONFIG_PPC_FSL_BOOK3E
-	int fsl_mmu = mmu_has_feature(MMU_FTR_TYPE_FSL_E);
 	unsigned int mmucfg = mfspr(SPRN_MMUCFG);
+	int fsl_mmu = mmu_has_feature(MMU_FTR_TYPE_FSL_E);
 
 	if (fsl_mmu && (mmucfg & MMUCFG_MAVN) == MMUCFG_MAVN_V1) {
 		unsigned int tlb1cfg = mfspr(SPRN_TLB1CFG);

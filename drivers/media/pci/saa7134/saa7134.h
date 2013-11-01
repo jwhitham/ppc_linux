@@ -29,21 +29,24 @@
 #include <linux/notifier.h>
 #include <linux/delay.h>
 #include <linux/mutex.h>
+#include <linux/pm_qos.h>
 
 #include <asm/io.h>
 
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-fh.h>
 #include <media/tuner.h>
 #include <media/rc-core.h>
 #include <media/ir-kbd-i2c.h>
 #include <media/videobuf-dma-sg.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
-#if defined(CONFIG_VIDEO_SAA7134_DVB) || defined(CONFIG_VIDEO_SAA7134_DVB_MODULE)
+#if IS_ENABLED(CONFIG_VIDEO_SAA7134_DVB)
 #include <media/videobuf-dvb.h>
 #endif
+#include "tda8290.h"
 
 #define UNSET (-1U)
 
@@ -332,6 +335,8 @@ struct saa7134_card_ir {
 #define SAA7134_BOARD_SENSORAY811_911       188
 #define SAA7134_BOARD_KWORLD_PC150U         189
 #define SAA7134_BOARD_ASUSTeK_PS3_100      190
+#define SAA7134_BOARD_HAWELL_HW_9004V1      191
+#define SAA7134_BOARD_AVERMEDIA_A706		192
 
 #define SAA7134_MAXBOARDS 32
 #define SAA7134_INPUT_MAX 8
@@ -388,7 +393,7 @@ struct saa7134_board {
 	unsigned char		rds_addr;
 
 	unsigned int            tda9887_conf;
-	unsigned int            tuner_config;
+	struct tda829x_config   tda829x_conf;
 
 	/* peripheral I/O */
 	enum saa7134_video_out  video_out;
@@ -464,11 +469,12 @@ struct saa7134_dmaqueue {
 
 /* video filehandle status */
 struct saa7134_fh {
+	struct v4l2_fh             fh;
 	struct saa7134_dev         *dev;
 	unsigned int               radio;
 	enum v4l2_buf_type         type;
 	unsigned int               resources;
-	enum v4l2_priority	   prio;
+	struct pm_qos_request	   qos_request;
 
 	/* video overlay */
 	struct v4l2_window         win;
@@ -539,7 +545,6 @@ struct saa7134_dev {
 	struct list_head           devlist;
 	struct mutex               lock;
 	spinlock_t                 slock;
-	struct v4l2_prio_state     prio;
 	struct v4l2_device         v4l2_dev;
 	/* workstruct for loading modules */
 	struct work_struct request_module_wk;
@@ -602,7 +607,6 @@ struct saa7134_dev {
 	int                        ctl_contrast;
 	int                        ctl_hue;
 	int                        ctl_saturation;
-	int                        ctl_freq;
 	int                        ctl_mute;             /* audio */
 	int                        ctl_volume;
 	int                        ctl_invert;           /* private */
@@ -642,7 +646,7 @@ struct saa7134_dev {
 	struct work_struct         empress_workqueue;
 	int                        empress_started;
 
-#if defined(CONFIG_VIDEO_SAA7134_DVB) || defined(CONFIG_VIDEO_SAA7134_DVB_MODULE)
+#if IS_ENABLED(CONFIG_VIDEO_SAA7134_DVB)
 	/* SAA7134_MPEG_DVB only */
 	struct videobuf_dvb_frontends frontends;
 	int (*original_demod_sleep)(struct dvb_frontend *fe);
@@ -763,7 +767,7 @@ extern struct video_device saa7134_radio_template;
 int saa7134_s_ctrl_internal(struct saa7134_dev *dev,  struct saa7134_fh *fh, struct v4l2_control *c);
 int saa7134_g_ctrl_internal(struct saa7134_dev *dev,  struct saa7134_fh *fh, struct v4l2_control *c);
 int saa7134_queryctrl(struct file *file, void *priv, struct v4l2_queryctrl *c);
-int saa7134_s_std_internal(struct saa7134_dev *dev,  struct saa7134_fh *fh, v4l2_std_id *id);
+int saa7134_s_std_internal(struct saa7134_dev *dev,  struct saa7134_fh *fh, v4l2_std_id id);
 
 int saa7134_videoport_init(struct saa7134_dev *dev);
 void saa7134_set_tvnorm_hw(struct saa7134_dev *dev);

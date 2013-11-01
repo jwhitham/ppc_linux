@@ -292,7 +292,7 @@ static int
 nfs_file_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	int ret;
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 
 	do {
 		ret = filemap_write_and_wait_range(inode->i_mapping, start, end);
@@ -744,6 +744,7 @@ static int
 do_unlk(struct file *filp, int cmd, struct file_lock *fl, int is_local)
 {
 	struct inode *inode = filp->f_mapping->host;
+	struct nfs_lock_context *l_ctx;
 	int status;
 
 	/*
@@ -751,6 +752,14 @@ do_unlk(struct file *filp, int cmd, struct file_lock *fl, int is_local)
 	 * with locks..
 	 */
 	nfs_sync_mapping(filp->f_mapping);
+
+	l_ctx = nfs_get_lock_context(nfs_file_open_context(filp));
+	if (!IS_ERR(l_ctx)) {
+		status = nfs_iocounter_wait(&l_ctx->io_count);
+		nfs_put_lock_context(l_ctx);
+		if (status < 0)
+			return status;
+	}
 
 	/* NOTE: special case
 	 * 	If we're signalled while cleaning up locks on process exit, we

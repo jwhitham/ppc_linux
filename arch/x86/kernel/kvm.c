@@ -20,6 +20,7 @@
  *   Authors: Anthony Liguori <aliguori@us.ibm.com>
  */
 
+#include <linux/context_tracking.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/kvm_para.h>
@@ -43,7 +44,6 @@
 #include <asm/apicdef.h>
 #include <asm/hypervisor.h>
 #include <asm/kvm_guest.h>
-#include <asm/context_tracking.h>
 
 static int kvmapf = 1;
 
@@ -254,16 +254,18 @@ EXPORT_SYMBOL_GPL(kvm_read_and_reset_pf_reason);
 dotraplinkage void __kprobes
 do_async_page_fault(struct pt_regs *regs, unsigned long error_code)
 {
+	enum ctx_state prev_state;
+
 	switch (kvm_read_and_reset_pf_reason()) {
 	default:
 		do_page_fault(regs, error_code);
 		break;
 	case KVM_PV_REASON_PAGE_NOT_PRESENT:
 		/* page is swapped out by the host. */
-		exception_enter(regs);
+		prev_state = exception_enter();
 		exit_idle();
 		kvm_async_pf_task_wait((u32)read_cr2());
-		exception_exit(regs);
+		exception_exit(prev_state);
 		break;
 	case KVM_PV_REASON_PAGE_READY:
 		rcu_irq_enter();
@@ -297,9 +299,9 @@ static void kvm_register_steal_time(void)
 
 	memset(st, 0, sizeof(*st));
 
-	wrmsrl(MSR_KVM_STEAL_TIME, (__pa(st) | KVM_MSR_ENABLED));
-	printk(KERN_INFO "kvm-stealtime: cpu %d, msr %lx\n",
-		cpu, __pa(st));
+	wrmsrl(MSR_KVM_STEAL_TIME, (slow_virt_to_phys(st) | KVM_MSR_ENABLED));
+	pr_info("kvm-stealtime: cpu %d, msr %llx\n",
+		cpu, (unsigned long long) slow_virt_to_phys(st));
 }
 
 static DEFINE_PER_CPU(unsigned long, kvm_apic_eoi) = KVM_PV_EOI_DISABLED;
@@ -324,7 +326,7 @@ void __cpuinit kvm_guest_cpu_init(void)
 		return;
 
 	if (kvm_para_has_feature(KVM_FEATURE_ASYNC_PF) && kvmapf) {
-		u64 pa = __pa(&__get_cpu_var(apf_reason));
+		u64 pa = slow_virt_to_phys(&__get_cpu_var(apf_reason));
 
 #ifdef CONFIG_PREEMPT
 		pa |= KVM_ASYNC_PF_SEND_ALWAYS;
@@ -340,7 +342,8 @@ void __cpuinit kvm_guest_cpu_init(void)
 		/* Size alignment is implied but just to make it explicit. */
 		BUILD_BUG_ON(__alignof__(kvm_apic_eoi) < 4);
 		__get_cpu_var(kvm_apic_eoi) = 0;
-		pa = __pa(&__get_cpu_var(kvm_apic_eoi)) | KVM_MSR_ENABLED;
+		pa = slow_virt_to_phys(&__get_cpu_var(kvm_apic_eoi))
+			| KVM_MSR_ENABLED;
 		wrmsrl(MSR_KVM_PV_EOI_EN, pa);
 	}
 
@@ -505,6 +508,7 @@ static bool __init kvm_detect(void)
 const struct hypervisor_x86 x86_hyper_kvm __refconst = {
 	.name			= "KVM",
 	.detect			= kvm_detect,
+	.x2apic_available	= kvm_para_available,
 };
 EXPORT_SYMBOL_GPL(x86_hyper_kvm);
 

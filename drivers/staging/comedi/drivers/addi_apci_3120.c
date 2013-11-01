@@ -1,3 +1,5 @@
+#include <linux/pci.h>
+
 #include "../comedidev.h"
 #include "comedi_fc.h"
 #include "amcc_s5933.h"
@@ -6,11 +8,14 @@
 
 #include "addi-data/hwdrv_apci3120.c"
 
+enum apci3120_boardid {
+	BOARD_APCI3120,
+	BOARD_APCI3001,
+};
+
 static const struct addi_board apci3120_boardtypes[] = {
-	{
+	[BOARD_APCI3120] = {
 		.pc_DriverName		= "apci3120",
-		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA_OLD,
-		.i_DeviceId		= 0x818D,
 		.i_NbrAiChannel		= 16,
 		.i_NbrAiChannelDiff	= 8,
 		.i_AiChannelList	= 16,
@@ -21,10 +26,9 @@ static const struct addi_board apci3120_boardtypes[] = {
 		.i_NbrDoChannel		= 4,
 		.i_DoMaxdata		= 0x0f,
 		.interrupt		= v_APCI3120_Interrupt,
-	}, {
+	},
+	[BOARD_APCI3001] = {
 		.pc_DriverName		= "apci3001",
-		.i_VendorId		= PCI_VENDOR_ID_ADDIDATA_OLD,
-		.i_DeviceId		= 0x828D,
 		.i_NbrAiChannel		= 16,
 		.i_NbrAiChannelDiff	= 8,
 		.i_AiChannelList	= 16,
@@ -45,31 +49,17 @@ static irqreturn_t v_ADDI_Interrupt(int irq, void *d)
 	return IRQ_RETVAL(1);
 }
 
-static const void *apci3120_find_boardinfo(struct comedi_device *dev,
-					   struct pci_dev *pcidev)
-{
-	const struct addi_board *this_board;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(apci3120_boardtypes); i++) {
-		this_board = &apci3120_boardtypes[i];
-		if (this_board->i_VendorId == pcidev->vendor &&
-		    this_board->i_DeviceId == pcidev->device)
-			return this_board;
-	}
-	return NULL;
-}
-
 static int apci3120_auto_attach(struct comedi_device *dev,
-					  unsigned long context_unused)
+				unsigned long context)
 {
 	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-	const struct addi_board *this_board;
+	const struct addi_board *this_board = NULL;
 	struct addi_private *devpriv;
 	struct comedi_subdevice *s;
 	int ret, pages, i;
 
-	this_board = apci3120_find_boardinfo(dev, pcidev);
+	if (context < ARRAY_SIZE(apci3120_boardtypes))
+		this_board = &apci3120_boardtypes[context];
 	if (!this_board)
 		return -ENODEV;
 	dev->board_ptr = this_board;
@@ -80,7 +70,7 @@ static int apci3120_auto_attach(struct comedi_device *dev,
 		return -ENOMEM;
 	dev->private = devpriv;
 
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
 	pci_set_master(pcidev);
@@ -213,7 +203,6 @@ static int apci3120_auto_attach(struct comedi_device *dev,
 
 static void apci3120_detach(struct comedi_device *dev)
 {
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	struct addi_private *devpriv = dev->private;
 
 	if (devpriv) {
@@ -232,10 +221,7 @@ static void apci3120_detach(struct comedi_device *dev)
 				devpriv->ui_DmaBufferPages[1]);
 		}
 	}
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
+	comedi_pci_disable(dev);
 }
 
 static struct comedi_driver apci3120_driver = {
@@ -246,19 +232,14 @@ static struct comedi_driver apci3120_driver = {
 };
 
 static int apci3120_pci_probe(struct pci_dev *dev,
-					const struct pci_device_id *ent)
+			      const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &apci3120_driver);
-}
-
-static void apci3120_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
+	return comedi_pci_auto_config(dev, &apci3120_driver, id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(apci3120_pci_table) = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA_OLD, 0x818d) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_ADDIDATA_OLD, 0x828d) },
+	{ PCI_VDEVICE(AMCC, 0x818d), BOARD_APCI3120 },
+	{ PCI_VDEVICE(AMCC, 0x828d), BOARD_APCI3001 },
 	{ 0 }
 };
 MODULE_DEVICE_TABLE(pci, apci3120_pci_table);
@@ -267,7 +248,7 @@ static struct pci_driver apci3120_pci_driver = {
 	.name		= "addi_apci_3120",
 	.id_table	= apci3120_pci_table,
 	.probe		= apci3120_pci_probe,
-	.remove		= apci3120_pci_remove,
+	.remove		= comedi_pci_auto_unconfig,
 };
 module_comedi_pci_driver(apci3120_driver, apci3120_pci_driver);
 

@@ -26,7 +26,6 @@
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
-#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -307,7 +306,7 @@ static void mx1_camera_wakeup(struct mx1_camera_dev *pcdev,
 	/* _init is used to debug races, see comment in mx1_camera_reqbufs() */
 	list_del_init(&vb->queue);
 	vb->state = VIDEOBUF_DONE;
-	do_gettimeofday(&vb->ts);
+	v4l2_get_timestamp(&vb->ts);
 	vb->field_count++;
 	wake_up(&vb->done);
 
@@ -373,7 +372,7 @@ static void mx1_camera_init_videobuf(struct videobuf_queue *q,
 	videobuf_queue_dma_contig_init(q, &mx1_videobuf_ops, icd->parent,
 				&pcdev->lock, V4L2_BUF_TYPE_VIDEO_CAPTURE,
 				V4L2_FIELD_NONE,
-				sizeof(struct mx1_buffer), icd, &icd->video_lock);
+				sizeof(struct mx1_buffer), icd, &ici->host_lock);
 }
 
 static int mclk_get_divisor(struct mx1_camera_dev *pcdev)
@@ -777,7 +776,7 @@ static int __init mx1_camera_probe(struct platform_device *pdev)
 	/* request irq */
 	err = claim_fiq(&fh);
 	if (err) {
-		dev_err(&pdev->dev, "Camera interrupt register failed \n");
+		dev_err(&pdev->dev, "Camera interrupt register failed\n");
 		goto exit_free_dma;
 	}
 
@@ -854,24 +853,13 @@ static int __exit mx1_camera_remove(struct platform_device *pdev)
 }
 
 static struct platform_driver mx1_camera_driver = {
-	.driver 	= {
+	.driver		= {
 		.name	= DRIVER_NAME,
 	},
 	.remove		= __exit_p(mx1_camera_remove),
 };
 
-static int __init mx1_camera_init(void)
-{
-	return platform_driver_probe(&mx1_camera_driver, mx1_camera_probe);
-}
-
-static void __exit mx1_camera_exit(void)
-{
-	return platform_driver_unregister(&mx1_camera_driver);
-}
-
-module_init(mx1_camera_init);
-module_exit(mx1_camera_exit);
+module_platform_driver_probe(mx1_camera_driver, mx1_camera_probe);
 
 MODULE_DESCRIPTION("i.MX1/i.MXL SoC Camera Host driver");
 MODULE_AUTHOR("Paulius Zaleckas <paulius.zaleckas@teltonika.lt>");

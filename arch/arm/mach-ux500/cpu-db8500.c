@@ -27,17 +27,16 @@
 #include <asm/pmu.h>
 #include <asm/mach/map.h>
 #include <asm/mach/arch.h>
-#include <asm/hardware/gic.h>
 
-#include <mach/hardware.h>
-#include <mach/setup.h>
-#include <mach/devices.h>
-#include <mach/db8500-regs.h>
-#include <mach/irqs.h>
+#include "setup.h"
+#include "devices.h"
+#include "irqs.h"
 
 #include "devices-db8500.h"
 #include "ste-dma40-db8500.h"
+#include "db8500-regs.h"
 #include "board-mop500.h"
+#include "id.h"
 
 /* minimum static i/o mapping required to boot U8500 platforms */
 static struct map_desc u8500_uart_io_desc[] __initdata = {
@@ -93,8 +92,6 @@ void __init u8500_map_io(void)
 		iotable_init(u9540_io_desc, ARRAY_SIZE(u9540_io_desc));
 	else
 		iotable_init(u8500_io_desc, ARRAY_SIZE(u8500_io_desc));
-
-	_PRCMU_BASE = __io_address(U8500_PRCMU_BASE);
 }
 
 static struct resource db8500_pmu_resources[] = {
@@ -137,14 +134,9 @@ static struct platform_device db8500_pmu_device = {
 	.dev.platform_data	= &db8500_pmu_platdata,
 };
 
-static struct platform_device db8500_prcmu_device = {
-	.name			= "db8500-prcmu",
-};
-
 static struct platform_device *platform_devs[] __initdata = {
 	&u8500_dma40_device,
 	&db8500_pmu_device,
-	&db8500_prcmu_device,
 };
 
 static resource_size_t __initdata db8500_gpio_base[] = {
@@ -199,7 +191,7 @@ static const char *db8500_read_soc_id(void)
 	/* Throw these device-specific numbers into the entropy pool */
 	add_device_randomness(uid, 0x14);
 	return kasprintf(GFP_KERNEL, "%08x%08x%08x%08x%08x",
-			 readl((u32 *)uid+1),
+			 readl((u32 *)uid+0),
 			 readl((u32 *)uid+1), readl((u32 *)uid+2),
 			 readl((u32 *)uid+3), readl((u32 *)uid+4));
 }
@@ -214,7 +206,7 @@ static struct device * __init db8500_soc_device_init(void)
 /*
  * This function is called from the board init
  */
-struct device * __init u8500_init_devices(struct ab8500_platform_data *ab8500)
+struct device * __init u8500_init_devices(void)
 {
 	struct device *parent;
 	int i;
@@ -227,8 +219,6 @@ struct device * __init u8500_init_devices(struct ab8500_platform_data *ab8500)
 
 	for (i = 0; i < ARRAY_SIZE(platform_devs); i++)
 		platform_devs[i]->dev.parent = parent;
-
-	db8500_prcmu_device.dev.platform_data = ab8500;
 
 	platform_add_devices(platform_devs, ARRAY_SIZE(platform_devs));
 
@@ -284,8 +274,11 @@ static struct of_dev_auxdata u8500_auxdata_lookup[] __initdata = {
 	OF_DEV_AUXDATA("st,nomadik-i2c", 0x80128000, "nmk-i2c.2", NULL),
 	OF_DEV_AUXDATA("st,nomadik-i2c", 0x80110000, "nmk-i2c.3", NULL),
 	OF_DEV_AUXDATA("st,nomadik-i2c", 0x8012a000, "nmk-i2c.4", NULL),
+	OF_DEV_AUXDATA("stericsson,db8500-prcmu", 0x80157000, "db8500-prcmu",
+			&db8500_prcmu_pdata),
+	OF_DEV_AUXDATA("smsc,lan9115", 0x50000000, "smsc911x.0", NULL),
 	/* Requires device name bindings. */
-	OF_DEV_AUXDATA("stericsson,nmk_pinctrl", U8500_PRCMU_BASE,
+	OF_DEV_AUXDATA("stericsson,nmk-pinctrl", U8500_PRCMU_BASE,
 		"pinctrl-db8500", NULL),
 	/* Requires clock name and DMA bindings. */
 	OF_DEV_AUXDATA("stericsson,ux500-msp-i2s", 0x80123000,
@@ -314,9 +307,10 @@ static void __init u8500_init_machine(void)
 	/* Pinmaps must be in place before devices register */
 	if (of_machine_is_compatible("st-ericsson,mop500"))
 		mop500_pinmaps_init();
-	else if (of_machine_is_compatible("calaosystems,snowball-a9500"))
+	else if (of_machine_is_compatible("calaosystems,snowball-a9500")) {
 		snowball_pinmaps_init();
-	else if (of_machine_is_compatible("st-ericsson,hrefv60+"))
+		mop500_snowball_ethernet_clock_enable();
+	} else if (of_machine_is_compatible("st-ericsson,hrefv60+"))
 		hrefv60_pinmaps_init();
 	else if (of_machine_is_compatible("st-ericsson,ccu9540")) {}
 		/* TODO: Add pinmaps for ccu9540 board. */
@@ -341,8 +335,7 @@ DT_MACHINE_START(U8500_DT, "ST-Ericsson Ux5x0 platform (Device Tree Support)")
 	.map_io		= u8500_map_io,
 	.init_irq	= ux500_init_irq,
 	/* we re-use nomadik timer here */
-	.timer		= &ux500_timer,
-	.handle_irq	= gic_handle_irq,
+	.init_time	= ux500_timer_init,
 	.init_machine	= u8500_init_machine,
 	.init_late	= NULL,
 	.dt_compat      = stericsson_dt_platform_compat,

@@ -476,7 +476,7 @@ static struct pch_dma_desc *pdc_desc_get(struct pch_dma_chan *pd_chan)
 	dev_dbg(chan2dev(&pd_chan->chan), "scanned %d descriptors\n", i);
 
 	if (!ret) {
-		ret = pdc_alloc_desc(&pd_chan->chan, GFP_NOIO);
+		ret = pdc_alloc_desc(&pd_chan->chan, GFP_ATOMIC);
 		if (ret) {
 			spin_lock(&pd_chan->lock);
 			pd_chan->descs_allocated++;
@@ -1029,18 +1029,7 @@ static struct pci_driver pch_dma_driver = {
 #endif
 };
 
-static int __init pch_dma_init(void)
-{
-	return pci_register_driver(&pch_dma_driver);
-}
-
-static void __exit pch_dma_exit(void)
-{
-	pci_unregister_driver(&pch_dma_driver);
-}
-
-module_init(pch_dma_init);
-module_exit(pch_dma_exit);
+module_pci_driver(pch_dma_driver);
 
 MODULE_DESCRIPTION("Intel EG20T PCH / LAPIS Semicon ML7213/ML7223/ML7831 IOH "
 		   "DMA controller driver");

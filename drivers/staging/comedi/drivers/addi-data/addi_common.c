@@ -11,13 +11,21 @@ Copyright (C) 2004,2005  ADDI-DATA GmbH for the source code of this module.
 	http://www.addi-data.com
 	info@addi-data.com
 
-This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version.
 
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
-You should also find the complete GPL in the COPYING file accompanying this source code.
+You should also find the complete GPL in the COPYING file accompanying this
+source code.
 
 @endverbatim
 */
@@ -29,10 +37,10 @@ You should also find the complete GPL in the COPYING file accompanying this sour
   | Tel : +49 (0) 7223/9493-0     | email    : info@addi-data.com         |
   | Fax : +49 (0) 7223/9493-92    | Internet : http://www.addi-data.com   |
   +-----------------------------------------------------------------------+
-  | Project   : ADDI DATA         | Compiler : GCC 		          |
+  | Project   : ADDI DATA         | Compiler : GCC                        |
   | Modulname : addi_common.c     | Version  : 2.96                       |
   +-------------------------------+---------------------------------------+
-  | Author    :           | Date     :                    		  |
+  | Author    :           | Date     :                                    |
   +-----------------------------------------------------------------------+
   | Description : ADDI COMMON Main Module                                 |
   +-----------------------------------------------------------------------+
@@ -76,37 +84,16 @@ static int i_ADDI_Reset(struct comedi_device *dev)
 	return 0;
 }
 
-static const void *addi_find_boardinfo(struct comedi_device *dev,
-				       struct pci_dev *pcidev)
-{
-	const void *p = dev->driver->board_name;
-	const struct addi_board *this_board;
-	int i;
-
-	for (i = 0; i < dev->driver->num_names; i++) {
-		this_board = p;
-		if (this_board->i_VendorId == pcidev->vendor &&
-		    this_board->i_DeviceId == pcidev->device)
-			return this_board;
-		p += dev->driver->offset;
-	}
-	return NULL;
-}
-
 static int addi_auto_attach(struct comedi_device *dev,
 				      unsigned long context_unused)
 {
 	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-	const struct addi_board *this_board;
+	const struct addi_board *this_board = comedi_board(dev);
 	struct addi_private *devpriv;
 	struct comedi_subdevice *s;
 	int ret, n_subdevices;
 	unsigned int dw_Dummy;
 
-	this_board = addi_find_boardinfo(dev, pcidev);
-	if (!this_board)
-		return -ENODEV;
-	dev->board_ptr = this_board;
 	dev->board_name = this_board->pc_DriverName;
 
 	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
@@ -114,7 +101,7 @@ static int addi_auto_attach(struct comedi_device *dev,
 		return -ENOMEM;
 	dev->private = devpriv;
 
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
 
@@ -133,8 +120,7 @@ static int addi_auto_attach(struct comedi_device *dev,
 		/* board has an ADDIDATA_9054 eeprom */
 		dev->iobase = pci_resource_start(pcidev, 2);
 		devpriv->iobase = pci_resource_start(pcidev, 2);
-		devpriv->dw_AiBase = ioremap(pci_resource_start(pcidev, 3),
-					     this_board->i_IorangeBase3);
+		devpriv->dw_AiBase = pci_ioremap_bar(pcidev, 3);
 	}
 	devpriv->i_IobaseReserved = pci_resource_start(pcidev, 3);
 
@@ -167,11 +153,11 @@ static int addi_auto_attach(struct comedi_device *dev,
 	if (this_board->i_PCIEeprom) {
 		if (!(strcmp(this_board->pc_EepromChip, "S5920"))) {
 			/*  Set 3 wait stait */
-			if (!(strcmp(dev->board_name, "apci035"))) {
+			if (!(strcmp(dev->board_name, "apci035")))
 				outl(0x80808082, devpriv->i_IobaseAmcc + 0x60);
-			} else {
+			else
 				outl(0x83838383, devpriv->i_IobaseAmcc + 0x60);
-			}
+
 			/*  Enable the interrupt for the controller */
 			dw_Dummy = inl(devpriv->i_IobaseAmcc + 0x38);
 			outl(dw_Dummy | 0x2000, devpriv->i_IobaseAmcc + 0x38);
@@ -330,7 +316,6 @@ static int addi_auto_attach(struct comedi_device *dev,
 
 static void i_ADDI_Detach(struct comedi_device *dev)
 {
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	struct addi_private *devpriv = dev->private;
 
 	if (devpriv) {
@@ -341,8 +326,5 @@ static void i_ADDI_Detach(struct comedi_device *dev)
 		if (devpriv->dw_AiBase)
 			iounmap(devpriv->dw_AiBase);
 	}
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
+	comedi_pci_disable(dev);
 }

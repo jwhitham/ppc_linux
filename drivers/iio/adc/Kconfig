@@ -30,6 +30,18 @@ config AD7298
 	  To compile this driver as a module, choose M here: the
 	  module will be called ad7298.
 
+config AD7923
+	tristate "Analog Devices AD7923 and similar ADCs driver"
+	depends on SPI
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
+	help
+	  Say yes here to build support for Analog Devices
+	  AD7904, AD7914, AD7923, AD7924 4 Channel ADCs.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ad7923.
+
 config AD7791
 	tristate "Analog Devices AD7791 ADC driver"
 	depends on SPI
@@ -91,6 +103,14 @@ config AT91_ADC
 	help
 	  Say yes here to build support for Atmel AT91 ADC.
 
+config EXYNOS_ADC
+	bool "Exynos ADC driver support"
+	depends on OF
+	help
+	  Core support for the ADC block found in the Samsung EXYNOS series
+	  of SoCs for drivers such as the touchscreen and hwmon to use to share
+	  this resource.
+
 config LP8788_ADC
 	bool "LP8788 ADC driver"
 	depends on MFD_LP8788
@@ -100,10 +120,8 @@ config LP8788_ADC
 config MAX1363
 	tristate "Maxim max1363 ADC driver"
 	depends on I2C
-	select IIO_TRIGGER
-	select MAX1363_RING_BUFFER
 	select IIO_BUFFER
-	select IIO_KFIFO_BUF
+	select IIO_TRIGGERED_BUFFER
 	help
 	  Say yes here to build support for many Maxim i2c analog to digital
 	  converters (ADC). (max1361, max1362, max1363, max1364, max1036,

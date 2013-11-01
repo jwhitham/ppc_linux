@@ -322,8 +322,8 @@ static int gfs2_dinode_in(struct gfs2_inode *ip, const void *buf)
 		break;
 	};
 
-	ip->i_inode.i_uid = be32_to_cpu(str->di_uid);
-	ip->i_inode.i_gid = be32_to_cpu(str->di_gid);
+	i_uid_write(&ip->i_inode, be32_to_cpu(str->di_uid));
+	i_gid_write(&ip->i_inode, be32_to_cpu(str->di_gid));
 	gfs2_set_nlink(&ip->i_inode, be32_to_cpu(str->di_nlink));
 	i_size_write(&ip->i_inode, be64_to_cpu(str->di_size));
 	gfs2_set_inode_blocks(&ip->i_inode, be64_to_cpu(str->di_blocks));
@@ -515,12 +515,12 @@ static int trans_go_demote_ok(const struct gfs2_glock *gl)
  *
  * gl_spin lock is held while calling this
  */
-static void iopen_go_callback(struct gfs2_glock *gl)
+static void iopen_go_callback(struct gfs2_glock *gl, bool remote)
 {
 	struct gfs2_inode *ip = (struct gfs2_inode *)gl->gl_object;
 	struct gfs2_sbd *sdp = gl->gl_sbd;
 
-	if (sdp->sd_vfs->s_flags & MS_RDONLY)
+	if (!remote || (sdp->sd_vfs->s_flags & MS_RDONLY))
 		return;
 
 	if (gl->gl_demote_state == LM_ST_UNLOCKED &&

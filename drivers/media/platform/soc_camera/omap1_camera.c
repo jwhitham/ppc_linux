@@ -592,7 +592,7 @@ static void videobuf_done(struct omap1_cam_dev *pcdev,
 			suspend_capture(pcdev);
 		}
 		vb->state = result;
-		do_gettimeofday(&vb->ts);
+		v4l2_get_timestamp(&vb->ts);
 		if (result != VIDEOBUF_ERROR)
 			vb->field_count++;
 		wake_up(&vb->done);
@@ -1383,12 +1383,12 @@ static void omap1_cam_init_videobuf(struct videobuf_queue *q,
 		videobuf_queue_dma_contig_init(q, &omap1_videobuf_ops,
 				icd->parent, &pcdev->lock,
 				V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_FIELD_NONE,
-				sizeof(struct omap1_cam_buf), icd, &icd->video_lock);
+				sizeof(struct omap1_cam_buf), icd, &ici->host_lock);
 	else
 		videobuf_queue_sg_init(q, &omap1_videobuf_ops,
 				icd->parent, &pcdev->lock,
 				V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_FIELD_NONE,
-				sizeof(struct omap1_cam_buf), icd, &icd->video_lock);
+				sizeof(struct omap1_cam_buf), icd, &ici->host_lock);
 
 	/* use videobuf mode (auto)selected with the module parameter */
 	pcdev->vb_mode = sg_mode ? OMAP1_CAM_DMA_SG : OMAP1_CAM_DMA_CONTIG;
@@ -1546,7 +1546,7 @@ static struct soc_camera_host_ops omap1_host_ops = {
 	.poll		= omap1_cam_poll,
 };
 
-static int __init omap1_cam_probe(struct platform_device *pdev)
+static int omap1_cam_probe(struct platform_device *pdev)
 {
 	struct omap1_cam_dev *pcdev;
 	struct resource *res;
@@ -1677,7 +1677,7 @@ exit:
 	return err;
 }
 
-static int __exit omap1_cam_remove(struct platform_device *pdev)
+static int omap1_cam_remove(struct platform_device *pdev)
 {
 	struct soc_camera_host *soc_host = to_soc_camera_host(&pdev->dev);
 	struct omap1_cam_dev *pcdev = container_of(soc_host,
@@ -1709,7 +1709,7 @@ static struct platform_driver omap1_cam_driver = {
 		.name	= DRIVER_NAME,
 	},
 	.probe		= omap1_cam_probe,
-	.remove		= __exit_p(omap1_cam_remove),
+	.remove		= omap1_cam_remove,
 };
 
 module_platform_driver(omap1_cam_driver);

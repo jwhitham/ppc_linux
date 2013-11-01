@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2010 Google, Inc.
+ * Copyright (c) 2013, NVIDIA CORPORATION.  All rights reserved.
  *
  * Author:
  *	Colin Cross <ccross@android.com>
@@ -37,6 +38,7 @@ enum tegra_revision {
 
 #define TEGRA20		0x20
 #define TEGRA30		0x30
+#define TEGRA114	0x35
 
 extern int tegra_sku_id;
 extern int tegra_cpu_process_id;
@@ -63,6 +65,12 @@ static inline void tegra20_init_speedo_data(void) {}
 void tegra30_init_speedo_data(void);
 #else
 static inline void tegra30_init_speedo_data(void) {}
+#endif
+
+#ifdef CONFIG_ARCH_TEGRA_114_SOC
+void tegra114_init_speedo_data(void);
+#else
+static inline void tegra114_init_speedo_data(void) {}
 #endif
 
 #endif

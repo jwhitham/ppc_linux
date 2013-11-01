@@ -12,7 +12,7 @@
 #include "util/parse-options.h"
 #include "util/trace-event.h"
 #include "util/debug.h"
-#include "util/debugfs.h"
+#include <lk/debugfs.h>
 #include "util/tool.h"
 #include "util/stat.h"
 
@@ -973,8 +973,7 @@ __cmd_buildid_list(const char *file_name, int argc, const char **argv)
 
 int cmd_kvm(int argc, const char **argv, const char *prefix __maybe_unused)
 {
-	const char *file_name;
-
+	const char *file_name = NULL;
 	const struct option kvm_options[] = {
 		OPT_STRING('i', "input", &file_name, "file",
 			   "Input file name"),

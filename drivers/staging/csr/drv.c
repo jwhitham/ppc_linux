@@ -819,15 +819,15 @@ unifi_write(struct file *filp, const char *p, size_t len, loff_t *poff)
         unifi_trace(priv, UDBG2, "unifi_write: signal 0x%.4X len:%d\n",
                     sig_id, signal_size);
 
-        /* Allocate a buffer for the signal */
-        signal_buf = kmalloc(signal_size, GFP_KERNEL);
+	/* Allocate a buffer for the signal */
+	signal_buf = kmemdup(bulkdata.d[0].os_data_ptr, signal_size,
+				GFP_KERNEL);
         if (!signal_buf) {
             unifi_net_data_free(priv, &bulkdata.d[0]);
             return -ENOMEM;
         }
 
         /* Get the signal from the os_data_ptr */
-        memcpy(signal_buf, bulkdata.d[0].os_data_ptr, signal_size);
         signal_buf[5] = (pcli->sender_id >> 8) & 0xff;
 
         if (signal_size < len) {
@@ -1815,7 +1815,7 @@ udi_log_event(ul_client_t *pcli,
     }
 
     /* Allocate log structure plus actual signal. */
-    logptr = (udi_log_t *)kmalloc(sizeof(udi_log_t) + total_len, GFP_KERNEL);
+    logptr = kmalloc(sizeof(udi_log_t) + total_len, GFP_KERNEL);
 
     if (logptr == NULL) {
         printk(KERN_ERR
@@ -1890,7 +1890,7 @@ uf_sme_queue_message(unifi_priv_t *priv, u8 *buffer, int length)
     }
 
     /* Allocate log structure plus actual signal. */
-    logptr = (udi_log_t *)kmalloc(sizeof(udi_log_t) + length, GFP_ATOMIC);
+    logptr = kmalloc(sizeof(udi_log_t) + length, GFP_ATOMIC);
     if (logptr == NULL) {
         unifi_error(priv, "Failed to allocate %d bytes for an SME message\n",
                     sizeof(udi_log_t) + length);
@@ -1941,7 +1941,7 @@ uf_sme_queue_message(unifi_priv_t *priv, u8 *buffer, int length)
  *
  ****************************************************************************
  */
-static struct file_operations unifi_fops = {
+static const struct file_operations unifi_fops = {
     .owner      = THIS_MODULE,
     .open       = unifi_open,
     .release    = unifi_release,
@@ -2041,7 +2041,7 @@ void uf_destroy_device_nodes(unifi_priv_t *priv)
  * ----------------------------------------------------------------
  */
 static int
-uf_create_debug_device(struct file_operations *fops)
+uf_create_debug_device(const struct file_operations *fops)
 {
     int ret;
 

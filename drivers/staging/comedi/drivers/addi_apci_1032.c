@@ -29,6 +29,9 @@
  * source code.
  */
 
+#include <linux/pci.h>
+#include <linux/interrupt.h>
+
 #include "../comedidev.h"
 #include "comedi_fc.h"
 #include "amcc_s5933.h"
@@ -293,14 +296,12 @@ static int apci1032_auto_attach(struct comedi_device *dev,
 	struct comedi_subdevice *s;
 	int ret;
 
-	dev->board_name = dev->driver->driver_name;
-
 	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
 	if (!devpriv)
 		return -ENOMEM;
 	dev->private = devpriv;
 
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
 
@@ -350,16 +351,11 @@ static int apci1032_auto_attach(struct comedi_device *dev,
 
 static void apci1032_detach(struct comedi_device *dev)
 {
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-
 	if (dev->iobase)
 		apci1032_reset(dev);
 	if (dev->irq)
 		free_irq(dev->irq, dev);
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
+	comedi_pci_disable(dev);
 }
 
 static struct comedi_driver apci1032_driver = {
@@ -370,14 +366,9 @@ static struct comedi_driver apci1032_driver = {
 };
 
 static int apci1032_pci_probe(struct pci_dev *dev,
-					const struct pci_device_id *ent)
+			      const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &apci1032_driver);
-}
-
-static void apci1032_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
+	return comedi_pci_auto_config(dev, &apci1032_driver, id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(apci1032_pci_table) = {
@@ -390,7 +381,7 @@ static struct pci_driver apci1032_pci_driver = {
 	.name		= "addi_apci_1032",
 	.id_table	= apci1032_pci_table,
 	.probe		= apci1032_pci_probe,
-	.remove		= apci1032_pci_remove,
+	.remove		= comedi_pci_auto_unconfig,
 };
 module_comedi_pci_driver(apci1032_driver, apci1032_pci_driver);
 

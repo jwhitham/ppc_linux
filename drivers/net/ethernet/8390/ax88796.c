@@ -358,7 +358,7 @@ static int ax_mii_probe(struct net_device *dev)
 		return -ENODEV;
 	}
 
-	ret = phy_connect_direct(dev, phy_dev, ax_handle_link_change, 0,
+	ret = phy_connect_direct(dev, phy_dev, ax_handle_link_change,
 				 PHY_INTERFACE_MODE_MII);
 	if (ret) {
 		netdev_err(dev, "Could not attach to PHY\n");
@@ -828,7 +828,7 @@ static int ax_probe(struct platform_device *pdev)
 	struct ei_device *ei_local;
 	struct ax_device *ax;
 	struct resource *irq, *mem, *mem2;
-	resource_size_t mem_size, mem2_size = 0;
+	unsigned long mem_size, mem2_size = 0;
 	int ret = 0;
 
 	dev = ax__alloc_ei_netdev(sizeof(struct ax_device));

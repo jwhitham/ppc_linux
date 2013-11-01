@@ -20,7 +20,6 @@
 struct task_struct;
 struct exec_domain;
 #include <asm/processor.h>
-#include <asm/ftrace.h>
 #include <linux/atomic.h>
 
 struct thread_info {
@@ -241,8 +240,6 @@ static inline struct thread_info *current_thread_info(void)
 #define TS_POLLING		0x0004	/* idle task polling need_resched,
 					   skip sending interrupt */
 #define TS_RESTORE_SIGMASK	0x0008	/* restore signal mask in do_signal() */
-
-#define tsk_is_polling(t) (task_thread_info(t)->status & TS_POLLING)
 
 #ifndef __ASSEMBLY__
 #define HAVE_SET_RESTORE_SIGMASK	1

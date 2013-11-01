@@ -283,7 +283,7 @@ static void assign_requested_resources_sorted(struct list_head *head,
 		idx = res - &dev_res->dev->resource[0];
 		if (resource_size(res) &&
 		    pci_assign_resource(dev_res->dev, idx)) {
-			if (fail_head && !pci_is_root_bus(dev_res->dev->bus)) {
+			if (fail_head) {
 				/*
 				 * if the failed res is for ROM BAR, and it will
 				 * be enabled later, don't add it to the list
@@ -1115,9 +1115,9 @@ void __ref pci_bus_size_bridges(struct pci_bus *bus)
 }
 EXPORT_SYMBOL(pci_bus_size_bridges);
 
-static void __ref __pci_bus_assign_resources(const struct pci_bus *bus,
-					 struct list_head *realloc_head,
-					 struct list_head *fail_head)
+void __ref __pci_bus_assign_resources(const struct pci_bus *bus,
+				      struct list_head *realloc_head,
+				      struct list_head *fail_head)
 {
 	struct pci_bus *b;
 	struct pci_dev *dev;
@@ -1545,6 +1545,8 @@ again:
 
 enable_all:
 	retval = pci_reenable_device(bridge);
+	if (retval)
+		dev_err(&bridge->dev, "Error reenabling bridge (%d)\n", retval);
 	pci_set_master(bridge);
 	pci_enable_bridges(parent);
 }

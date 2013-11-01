@@ -1,6 +1,3 @@
-#include <libelf.h>
-#include <gelf.h>
-#include <elf.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
@@ -718,6 +715,17 @@ int dso__load_sym(struct dso *dso, struct map *map,
 					sym.st_value);
 			used_opd = true;
 		}
+		/*
+		 * When loading symbols in a data mapping, ABS symbols (which
+		 * has a value of SHN_ABS in its st_shndx) failed at
+		 * elf_getscn().  And it marks the loading as a failure so
+		 * already loaded symbols cannot be fixed up.
+		 *
+		 * I'm not sure what should be done. Just ignore them for now.
+		 * - Namhyung Kim
+		 */
+		if (sym.st_shndx == SHN_ABS)
+			continue;
 
 		sec = elf_getscn(runtime_ss->elf, sym.st_shndx);
 		if (!sec)
@@ -798,9 +806,12 @@ int dso__load_sym(struct dso *dso, struct map *map,
 		 * DWARF DW_compile_unit has this, but we don't always have access
 		 * to it...
 		 */
-		demangled = bfd_demangle(NULL, elf_name, DMGL_PARAMS | DMGL_ANSI);
-		if (demangled != NULL)
-			elf_name = demangled;
+		if (symbol_conf.demangle) {
+			demangled = bfd_demangle(NULL, elf_name,
+						 DMGL_PARAMS | DMGL_ANSI);
+			if (demangled != NULL)
+				elf_name = demangled;
+		}
 new_symbol:
 		f = symbol__new(sym.st_value, sym.st_size,
 				GELF_ST_BIND(sym.st_info), elf_name);

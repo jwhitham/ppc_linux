@@ -650,7 +650,7 @@ static struct device_node *cpu_to_l2cache(int cpu)
 }
 
 /* Activate a secondary processor. */
-void start_secondary(void *unused)
+__cpuinit void start_secondary(void *unused)
 {
 	unsigned int cpu = smp_processor_id();
 	struct device_node *l2_cache;
@@ -709,7 +709,7 @@ void start_secondary(void *unused)
 
 	local_irq_enable();
 
-	cpu_idle();
+	cpu_startup_entry(CPUHP_ONLINE);
 
 	BUG();
 }

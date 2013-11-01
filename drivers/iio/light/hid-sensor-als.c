@@ -28,7 +28,6 @@
 #include <linux/iio/buffer.h>
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
-#include "../common/hid-sensors/hid-sensor-attributes.h"
 #include "../common/hid-sensors/hid-sensor-trigger.h"
 
 /*Format: HID-SENSOR-usage_id_in_hex*/
@@ -39,7 +38,7 @@
 
 struct als_state {
 	struct hid_sensor_hub_callbacks callbacks;
-	struct hid_sensor_iio_common common_attributes;
+	struct hid_sensor_common common_attributes;
 	struct hid_sensor_hub_attribute_info als_illum;
 	u32 illum;
 };
@@ -50,10 +49,10 @@ static const struct iio_chan_spec als_channels[] = {
 		.type = IIO_INTENSITY,
 		.modified = 1,
 		.channel2 = IIO_MOD_LIGHT_BOTH,
-		.info_mask = IIO_CHAN_INFO_OFFSET_SHARED_BIT |
-		IIO_CHAN_INFO_SCALE_SHARED_BIT |
-		IIO_CHAN_INFO_SAMP_FREQ_SHARED_BIT |
-		IIO_CHAN_INFO_HYSTERESIS_SHARED_BIT,
+		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_OFFSET) |
+		BIT(IIO_CHAN_INFO_SCALE) |
+		BIT(IIO_CHAN_INFO_SAMP_FREQ) |
+		BIT(IIO_CHAN_INFO_HYSTERESIS),
 		.scan_index = CHANNEL_SCAN_INDEX_ILLUM,
 	}
 };

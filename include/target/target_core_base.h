@@ -44,7 +44,7 @@
 /* Used by core_alua_store_tg_pt_gp_info() and target_core_alua_tg_pt_gp_show_attr_members() */
 #define TG_PT_GROUP_NAME_BUF			256
 /* Used to parse VPD into struct t10_vpd */
-#define VPD_TMP_BUF_SIZE			128
+#define VPD_TMP_BUF_SIZE			254
 /* Used by transport_generic_cmd_sequencer() */
 #define READ_BLOCK_LEN          		6
 #define READ_CAP_LEN            		8
@@ -75,6 +75,8 @@
 #define DA_MAX_WRITE_SAME_LEN			0
 /* Default max transfer length */
 #define DA_FABRIC_MAX_SECTORS			8192
+/* Use a model alias based on the configfs backend device name */
+#define DA_EMULATE_MODEL_ALIAS			0
 /* Emulation for Direct Page Out */
 #define DA_EMULATE_DPO				0
 /* Emulation for Forced Unit Access WRITEs */
@@ -193,6 +195,7 @@ enum tcm_sense_reason_table {
 	TCM_RESERVATION_CONFLICT		= R(0x10),
 	TCM_ADDRESS_OUT_OF_RANGE		= R(0x11),
 	TCM_OUT_OF_RESOURCES			= R(0x12),
+	TCM_PARAMETER_LIST_LENGTH_ERROR		= R(0x13),
 #undef R
 };
 
@@ -211,7 +214,6 @@ enum tcm_tmreq_table {
 	TMR_LUN_RESET		= 5,
 	TMR_TARGET_WARM_RESET	= 6,
 	TMR_TARGET_COLD_RESET	= 7,
-	TMR_FABRIC_TMR		= 255,
 };
 
 /* fabric independent task management response values */
@@ -461,7 +463,6 @@ struct se_cmd {
 #define CMD_T_ABORTED		(1 << 0)
 #define CMD_T_ACTIVE		(1 << 1)
 #define CMD_T_COMPLETE		(1 << 2)
-#define CMD_T_QUEUED		(1 << 3)
 #define CMD_T_SENT		(1 << 4)
 #define CMD_T_STOP		(1 << 5)
 #define CMD_T_FAILED		(1 << 6)
@@ -542,6 +543,7 @@ struct se_session {
 	struct list_head	sess_list;
 	struct list_head	sess_acl_list;
 	struct list_head	sess_cmd_list;
+	struct list_head	sess_wait_list;
 	spinlock_t		sess_cmd_lock;
 	struct kref		sess_kref;
 };
@@ -570,12 +572,8 @@ struct se_dev_entry {
 	bool			def_pr_registered;
 	/* See transport_lunflags_table */
 	u32			lun_flags;
-	u32			deve_cmds;
 	u32			mapped_lun;
-	u32			average_bytes;
-	u32			last_byte_count;
 	u32			total_cmds;
-	u32			total_bytes;
 	u64			pr_res_key;
 	u64			creation_time;
 	u32			attach_count;
@@ -592,6 +590,7 @@ struct se_dev_entry {
 };
 
 struct se_dev_attrib {
+	int		emulate_model_alias;
 	int		emulate_dpo;
 	int		emulate_fua_write;
 	int		emulate_fua_read;

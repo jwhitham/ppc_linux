@@ -727,7 +727,6 @@ static long ffs_ep0_ioctl(struct file *file, unsigned code, unsigned long value)
 }
 
 static const struct file_operations ffs_ep0_operations = {
-	.owner =	THIS_MODULE,
 	.llseek =	no_llseek,
 
 	.open =		ffs_ep0_open,
@@ -947,7 +946,6 @@ static long ffs_epfile_ioctl(struct file *file, unsigned code,
 }
 
 static const struct file_operations ffs_epfile_operations = {
-	.owner =	THIS_MODULE,
 	.llseek =	no_llseek,
 
 	.open =		ffs_epfile_open,
@@ -1103,8 +1101,8 @@ static int ffs_fs_parse_opts(struct ffs_sb_fill_data *data, char *opts)
 		return 0;
 
 	for (;;) {
-		char *end, *eq, *comma;
 		unsigned long value;
+		char *eq, *comma;
 
 		/* Option limit */
 		comma = strchr(opts, ',');
@@ -1120,8 +1118,7 @@ static int ffs_fs_parse_opts(struct ffs_sb_fill_data *data, char *opts)
 		*eq = 0;
 
 		/* Parse value */
-		value = simple_strtoul(eq + 1, &end, 0);
-		if (unlikely(*end != ',' && *end != 0)) {
+		if (kstrtoul(eq + 1, 0, &value)) {
 			pr_err("%s: invalid value: %s\n", opts, eq + 1);
 			return -EINVAL;
 		}
@@ -1236,6 +1233,7 @@ static struct file_system_type ffs_fs_type = {
 	.mount		= ffs_fs_mount,
 	.kill_sb	= ffs_fs_kill_sb,
 };
+MODULE_ALIAS_FS("functionfs");
 
 
 /* Driver's main init/cleanup functions *************************************/

@@ -6,7 +6,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2013, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -149,7 +149,7 @@ acpi_ds_get_predicate_value(struct acpi_walk_state *walk_state,
 
 	/* Truncate the predicate to 32-bits if necessary */
 
-	acpi_ex_truncate_for32bit_table(local_obj_desc);
+	(void)acpi_ex_truncate_for32bit_table(local_obj_desc);
 
 	/*
 	 * Save the result of the predicate evaluation on
@@ -693,7 +693,7 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 		default:
 
 			ACPI_ERROR((AE_INFO,
-				    "Unimplemented opcode, class=0x%X type=0x%X Opcode=-0x%X Op=%p",
+				    "Unimplemented opcode, class=0x%X type=0x%X Opcode=0x%X Op=%p",
 				    op_class, op_type, op->common.aml_opcode,
 				    op));
 
@@ -706,7 +706,7 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
 	 * ACPI 2.0 support for 64-bit integers: Truncate numeric
 	 * result value if we are executing from a 32-bit ACPI table
 	 */
-	acpi_ex_truncate_for32bit_table(walk_state->result_obj);
+	(void)acpi_ex_truncate_for32bit_table(walk_state->result_obj);
 
 	/*
 	 * Check if we just completed the evaluation of a

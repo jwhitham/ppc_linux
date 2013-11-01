@@ -33,6 +33,7 @@
  */
 
 /include/ "b4si-post.dtsi"
+
 &bportals {
 	#address-cells = <0x1>;
 	#size-cells = <0x1>;
@@ -386,12 +387,14 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		cell-index = <1>;
+		fsl,liodn-reg = <&guts 0x510>; /* RIO1LIODNR */
 	};
 
 	port2 {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		cell-index = <2>;
+		fsl,liodn-reg = <&guts 0x514>; /* RIO2LIODNR */
 	};
 };
 
@@ -454,7 +457,7 @@
 	};
 
 	corenet-cf@18000 {
-		compatible = "fsl,corenet2-cf";
+		compatible = "fsl,b4860-corenet-cf";
 	};
 
 /include/ "qoriq-fman3-0-1g-4.dtsi"

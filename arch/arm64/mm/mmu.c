@@ -25,6 +25,7 @@
 #include <linux/nodemask.h>
 #include <linux/memblock.h>
 #include <linux/fs.h>
+#include <linux/io.h>
 
 #include <asm/cputype.h>
 #include <asm/sections.h>
@@ -251,6 +252,47 @@ static void __init create_mapping(phys_addr_t phys, unsigned long virt,
 	} while (pgd++, addr = next, addr != end);
 }
 
+#ifdef CONFIG_EARLY_PRINTK
+/*
+ * Create an early I/O mapping using the pgd/pmd entries already populated
+ * in head.S as this function is called too early to allocated any memory. The
+ * mapping size is 2MB with 4KB pages or 64KB or 64KB pages.
+ */
+void __iomem * __init early_io_map(phys_addr_t phys, unsigned long virt)
+{
+	unsigned long size, mask;
+	bool page64k = IS_ENABLED(CONFIG_ARM64_64K_PAGES);
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *pte;
+
+	/*
+	 * No early pte entries with !ARM64_64K_PAGES configuration, so using
+	 * sections (pmd).
+	 */
+	size = page64k ? PAGE_SIZE : SECTION_SIZE;
+	mask = ~(size - 1);
+
+	pgd = pgd_offset_k(virt);
+	pud = pud_offset(pgd, virt);
+	if (pud_none(*pud))
+		return NULL;
+	pmd = pmd_offset(pud, virt);
+
+	if (page64k) {
+		if (pmd_none(*pmd))
+			return NULL;
+		pte = pte_offset_kernel(pmd, virt);
+		set_pte(pte, __pte((phys & mask) | PROT_DEVICE_nGnRE));
+	} else {
+		set_pmd(pmd, __pmd((phys & mask) | PROT_SECT_DEVICE_nGnRE));
+	}
+
+	return (void __iomem *)((virt & mask) + (phys & ~mask));
+}
+#endif
+
 static void __init map_mem(void)
 {
 	struct memblock_region *reg;
@@ -349,17 +391,14 @@ int kern_addr_valid(unsigned long addr)
 }
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
 #ifdef CONFIG_ARM64_64K_PAGES
-int __meminit vmemmap_populate(struct page *start_page,
-			       unsigned long size, int node)
+int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node)
 {
-	return vmemmap_populate_basepages(start_page, size, node);
+	return vmemmap_populate_basepages(start, end, node);
 }
 #else	/* !CONFIG_ARM64_64K_PAGES */
-int __meminit vmemmap_populate(struct page *start_page,
-			       unsigned long size, int node)
+int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node)
 {
-	unsigned long addr = (unsigned long)start_page;
-	unsigned long end = (unsigned long)(start_page + size);
+	unsigned long addr = start;
 	unsigned long next;
 	pgd_t *pgd;
 	pud_t *pud;
@@ -392,4 +431,7 @@ int __meminit vmemmap_populate(struct page *start_page,
 	return 0;
 }
 #endif	/* CONFIG_ARM64_64K_PAGES */
+void vmemmap_free(unsigned long start, unsigned long end)
+{
+}
 #endif	/* CONFIG_SPARSEMEM_VMEMMAP */

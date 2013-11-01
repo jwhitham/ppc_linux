@@ -125,7 +125,6 @@ static int ad5791_spi_read(struct spi_device *spi, u8 addr, u32 *val)
 		u8 d8[4];
 	} data[3];
 	int ret;
-	struct spi_message msg;
 	struct spi_transfer xfers[] = {
 		{
 			.tx_buf = &data[0].d8[1],
@@ -144,10 +143,7 @@ static int ad5791_spi_read(struct spi_device *spi, u8 addr, u32 *val)
 			      AD5791_ADDR(addr));
 	data[1].d32 = cpu_to_be32(AD5791_ADDR(AD5791_ADDR_NOOP));
 
-	spi_message_init(&msg);
-	spi_message_add_tail(&xfers[0], &msg);
-	spi_message_add_tail(&xfers[1], &msg);
-	ret = spi_sync(spi, &msg);
+	ret = spi_sync_transfer(spi, xfers, ARRAY_SIZE(xfers));
 
 	*val = be32_to_cpu(data[2].d32);
 
@@ -306,9 +302,9 @@ static const struct iio_chan_spec_ext_info ad5791_ext_info[] = {
 	.indexed = 1,					\
 	.address = AD5791_ADDR_DAC0,			\
 	.channel = 0,					\
-	.info_mask = IIO_CHAN_INFO_RAW_SEPARATE_BIT |	\
-		IIO_CHAN_INFO_SCALE_SHARED_BIT |	\
-		IIO_CHAN_INFO_OFFSET_SHARED_BIT,	\
+	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),	\
+	.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE) |	\
+		BIT(IIO_CHAN_INFO_OFFSET),		\
 	.scan_type = IIO_ST('u', bits, 24, shift),	\
 	.ext_info = ad5791_ext_info,			\
 }

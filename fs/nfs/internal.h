@@ -229,6 +229,13 @@ extern void nfs_pgheader_init(struct nfs_pageio_descriptor *desc,
 			      struct nfs_pgio_header *hdr,
 			      void (*release)(struct nfs_pgio_header *hdr));
 void nfs_set_pgio_error(struct nfs_pgio_header *hdr, int error, loff_t pos);
+int nfs_iocounter_wait(struct nfs_io_counter *c);
+
+static inline void nfs_iocounter_init(struct nfs_io_counter *c)
+{
+	c->flags = 0;
+	atomic_set(&c->io_count, 0);
+}
 
 /* nfs2xdr.c */
 extern struct rpc_procinfo nfs_procedures[];
@@ -329,7 +336,6 @@ extern int __init register_nfs_fs(void);
 extern void __exit unregister_nfs_fs(void);
 extern void nfs_sb_active(struct super_block *sb);
 extern void nfs_sb_deactive(struct super_block *sb);
-extern void nfs_sb_deactive_async(struct super_block *sb);
 
 /* namespace.c */
 #define NFS_PATH_CANONICAL 1

@@ -90,7 +90,6 @@ int sca3000_read_data_short(struct sca3000_state *st,
 			    uint8_t reg_address_high,
 			    int len)
 {
-	struct spi_message msg;
 	struct spi_transfer xfer[2] = {
 		{
 			.len = 1,
@@ -101,11 +100,8 @@ int sca3000_read_data_short(struct sca3000_state *st,
 		}
 	};
 	st->tx[0] = SCA3000_READ_REG(reg_address_high);
-	spi_message_init(&msg);
-	spi_message_add_tail(&xfer[0], &msg);
-	spi_message_add_tail(&xfer[1], &msg);
 
-	return spi_sync(st->us, &msg);
+	return spi_sync_transfer(st->us, xfer, ARRAY_SIZE(xfer));
 }
 
 /**
@@ -133,7 +129,6 @@ static int sca3000_reg_lock_on(struct sca3000_state *st)
  **/
 static int __sca3000_unlock_reg_lock(struct sca3000_state *st)
 {
-	struct spi_message msg;
 	struct spi_transfer xfer[3] = {
 		{
 			.len = 2,
@@ -154,12 +149,8 @@ static int __sca3000_unlock_reg_lock(struct sca3000_state *st)
 	st->tx[3] = 0x50;
 	st->tx[4] = SCA3000_WRITE_REG(SCA3000_REG_ADDR_UNLOCK);
 	st->tx[5] = 0xA0;
-	spi_message_init(&msg);
-	spi_message_add_tail(&xfer[0], &msg);
-	spi_message_add_tail(&xfer[1], &msg);
-	spi_message_add_tail(&xfer[2], &msg);
 
-	return spi_sync(st->us, &msg);
+	return spi_sync_transfer(st->us, xfer, ARRAY_SIZE(xfer));
 }
 
 /**
@@ -428,8 +419,6 @@ static IIO_DEVICE_ATTR(measurement_mode, S_IRUGO | S_IWUSR,
 
 static IIO_DEVICE_ATTR(revision, S_IRUGO, sca3000_show_rev, NULL, 0);
 
-#define SCA3000_INFO_MASK			\
-	IIO_CHAN_INFO_RAW_SEPARATE_BIT | IIO_CHAN_INFO_SCALE_SHARED_BIT
 #define SCA3000_EVENT_MASK					\
 	(IIO_EV_BIT(IIO_EV_TYPE_MAG, IIO_EV_DIR_RISING))
 
@@ -438,7 +427,8 @@ static IIO_DEVICE_ATTR(revision, S_IRUGO, sca3000_show_rev, NULL, 0);
 		.type = IIO_ACCEL,				\
 		.modified = 1,					\
 		.channel2 = mod,				\
-		.info_mask = SCA3000_INFO_MASK,			\
+		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),	\
+		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE),\
 		.address = index,				\
 		.scan_index = index,				\
 		.scan_type = {					\

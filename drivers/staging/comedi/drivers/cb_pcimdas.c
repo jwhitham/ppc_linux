@@ -40,10 +40,11 @@ No interrupts, multi channel or FIFO AI, although the card looks like it could s
 See http://www.mccdaq.com/PDFs/Manuals/pcim-das1602-16.pdf for more details.
 */
 
-#include "../comedidev.h"
-
+#include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+
+#include "../comedidev.h"
 
 #include "plx9052.h"
 #include "8255.h"
@@ -214,14 +215,12 @@ static int cb_pcimdas_auto_attach(struct comedi_device *dev,
 	unsigned long iobase_8255;
 	int ret;
 
-	dev->board_name = dev->driver->driver_name;
-
 	devpriv = kzalloc(sizeof(*devpriv), GFP_KERNEL);
 	if (!devpriv)
 		return -ENOMEM;
 	dev->private = devpriv;
 
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
 
@@ -276,14 +275,9 @@ static int cb_pcimdas_auto_attach(struct comedi_device *dev,
 
 static void cb_pcimdas_detach(struct comedi_device *dev)
 {
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-
 	if (dev->irq)
 		free_irq(dev->irq, dev);
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
+	comedi_pci_disable(dev);
 }
 
 static struct comedi_driver cb_pcimdas_driver = {
@@ -294,14 +288,10 @@ static struct comedi_driver cb_pcimdas_driver = {
 };
 
 static int cb_pcimdas_pci_probe(struct pci_dev *dev,
-					  const struct pci_device_id *ent)
+				const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &cb_pcimdas_driver);
-}
-
-static void cb_pcimdas_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
+	return comedi_pci_auto_config(dev, &cb_pcimdas_driver,
+				      id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(cb_pcimdas_pci_table) = {
@@ -314,7 +304,7 @@ static struct pci_driver cb_pcimdas_pci_driver = {
 	.name		= "cb_pcimdas",
 	.id_table	= cb_pcimdas_pci_table,
 	.probe		= cb_pcimdas_pci_probe,
-	.remove		= cb_pcimdas_pci_remove,
+	.remove		= comedi_pci_auto_unconfig,
 };
 module_comedi_pci_driver(cb_pcimdas_driver, cb_pcimdas_pci_driver);
 

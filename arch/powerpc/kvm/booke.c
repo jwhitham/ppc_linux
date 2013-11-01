@@ -743,7 +743,6 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 		ret = s;
 		goto out;
 	}
-	kvmppc_fix_ee_before_entry();
 
 	kvm_guest_enter();
 
@@ -795,6 +794,8 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	vcpu->arch.saved_dbcr0 = current->thread.dbcr0;
 	current->thread.dbcr0 = 0;
 	kvmppc_booke_vcpu_load_debug_regs(vcpu);
+
+	kvmppc_fix_ee_before_entry();
 
 	ret = __kvmppc_vcpu_run(kvm_run, vcpu);
 
@@ -1771,7 +1772,7 @@ int kvmppc_core_prepare_memory_region(struct kvm *kvm,
 
 void kvmppc_core_commit_memory_region(struct kvm *kvm,
 				struct kvm_userspace_memory_region *mem,
-				struct kvm_memory_slot old)
+				const struct kvm_memory_slot *old)
 {
 }
 

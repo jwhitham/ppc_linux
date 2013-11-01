@@ -306,11 +306,8 @@ static int gfar_alloc_skb_resources(struct net_device *ndev)
 		vaddr = dma_alloc_coherent(dev, BD_RING_REG_SZ(priv),
 					   &addr, GFP_KERNEL);
 
-	if (!vaddr) {
-		netif_err(priv, ifup, ndev,
-			  "Could not allocate buffer descriptors!\n");
+	if (!vaddr)
 		return -ENOMEM;
-	}
 
 	for (i = 0; i < priv->num_tx_queues; i++) {
 		tx_queue = priv->tx_queue[i];
@@ -335,14 +332,12 @@ static int gfar_alloc_skb_resources(struct net_device *ndev)
 	/* Setup the skbuff rings */
 	for (i = 0; i < priv->num_tx_queues; i++) {
 		tx_queue = priv->tx_queue[i];
-		tx_queue->tx_skbuff = kmalloc(sizeof(*tx_queue->tx_skbuff) *
-					      tx_queue->tx_ring_size,
-					      GFP_KERNEL);
-		if (!tx_queue->tx_skbuff) {
-			netif_err(priv, ifup, ndev,
-				  "Could not allocate tx_skbuff\n");
+		tx_queue->tx_skbuff =
+			kmalloc_array(tx_queue->tx_ring_size,
+				      sizeof(*tx_queue->tx_skbuff),
+				      GFP_KERNEL);
+		if (!tx_queue->tx_skbuff)
 			goto cleanup;
-		}
 
 		for (k = 0; k < tx_queue->tx_ring_size; k++)
 			tx_queue->tx_skbuff[k] = NULL;
@@ -350,15 +345,12 @@ static int gfar_alloc_skb_resources(struct net_device *ndev)
 
 	for (i = 0; i < priv->num_rx_queues; i++) {
 		rx_queue = priv->rx_queue[i];
-		rx_queue->rx_skbuff = kmalloc(sizeof(*rx_queue->rx_skbuff) *
-					      rx_queue->rx_ring_size,
-					      GFP_KERNEL);
-
-		if (!rx_queue->rx_skbuff) {
-			netif_err(priv, ifup, ndev,
-				  "Could not allocate rx_skbuff\n");
+		rx_queue->rx_skbuff =
+			kmalloc_array(rx_queue->rx_ring_size,
+				      sizeof(*rx_queue->rx_skbuff),
+				      GFP_KERNEL);
+		if (!rx_queue->rx_skbuff)
 			goto cleanup;
-		}
 
 		for (j = 0; j < rx_queue->rx_ring_size; j++)
 			rx_queue->rx_skbuff[j] = NULL;
@@ -464,7 +456,7 @@ static void gfar_init_mac(struct net_device *ndev)
 		priv->uses_rxfcb = 1;
 	}
 
-	if (ndev->features & NETIF_F_HW_VLAN_RX) {
+	if (ndev->features & NETIF_F_HW_VLAN_CTAG_RX) {
 		rctrl |= RCTRL_VLEX | RCTRL_PRSDEP_INIT;
 		priv->uses_rxfcb = 1;
 	}
@@ -1274,8 +1266,9 @@ static int gfar_probe(struct platform_device *ofdev)
 	}
 
 	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_VLAN) {
-		dev->hw_features |= NETIF_F_HW_VLAN_TX | NETIF_F_HW_VLAN_RX;
-		dev->features |= NETIF_F_HW_VLAN_RX;
+		dev->hw_features |= NETIF_F_HW_VLAN_CTAG_TX |
+				    NETIF_F_HW_VLAN_CTAG_RX;
+		dev->features |= NETIF_F_HW_VLAN_CTAG_RX;
 	}
 
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
@@ -2323,7 +2316,6 @@ static void gfar_configure_rx_coalescing(struct gfar_private *priv,
 	}
 }
 
-
 void gfar_configure_coalescing_all(struct gfar_private *priv)
 {
 	gfar_configure_tx_coalescing(priv, 0xFF);
@@ -3098,7 +3090,7 @@ void gfar_vlan_mode(struct net_device *dev, netdev_features_t features)
 	local_irq_save(flags);
 	lock_rx_qs(priv);
 
-	if (features & NETIF_F_HW_VLAN_TX) {
+	if (features & NETIF_F_HW_VLAN_CTAG_TX) {
 		/* Enable VLAN tag insertion */
 		tempval = gfar_read(&regs->tctrl);
 		tempval |= TCTRL_VLINS;
@@ -3110,7 +3102,7 @@ void gfar_vlan_mode(struct net_device *dev, netdev_features_t features)
 		gfar_write(&regs->tctrl, tempval);
 	}
 
-	if (features & NETIF_F_HW_VLAN_RX) {
+	if (features & NETIF_F_HW_VLAN_CTAG_RX) {
 		/* Enable VLAN tag extraction */
 		tempval = gfar_read(&regs->rctrl);
 		tempval |= (RCTRL_VLEX | RCTRL_PRSDEP_INIT);
@@ -3686,13 +3678,13 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	/* Tell the skb what kind of packet this is */
 	skb->protocol = eth_type_trans(skb, dev);
 
-	/* There's need to check for NETIF_F_HW_VLAN_RX here.
+	/* There's need to check for NETIF_F_HW_VLAN_CTAG_RX here.
 	 * Even if vlan rx accel is disabled, on some chips
 	 * RXFCB_VLN is pseudo randomly set.
 	 */
-	if (dev->features & NETIF_F_HW_VLAN_RX &&
+	if (dev->features & NETIF_F_HW_VLAN_CTAG_RX &&
 	    fcb->flags & RXFCB_VLN)
-		__vlan_hwaccel_put_tag(skb, fcb->vlctl);
+		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), fcb->vlctl);
 
 	/* Send the packet up the stack */
 	napi_gro_receive(napi, skb);

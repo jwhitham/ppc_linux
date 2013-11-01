@@ -23,6 +23,7 @@
 #include <linux/jbd2.h>
 #include <linux/mount.h>
 #include <linux/path.h>
+#include <linux/aio.h>
 #include <linux/quotaops.h>
 #include <linux/pagevec.h>
 #include "ext4.h"
@@ -167,7 +168,7 @@ static ssize_t
 ext4_file_write(struct kiocb *iocb, const struct iovec *iov,
 		unsigned long nr_segs, loff_t pos)
 {
-	struct inode *inode = iocb->ki_filp->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(iocb->ki_filp);
 	ssize_t ret;
 
 	/*
@@ -240,7 +241,7 @@ static int ext4_file_open(struct inode * inode, struct file * filp)
 			handle_t *handle;
 			int err;
 
-			handle = ext4_journal_start_sb(sb, 1);
+			handle = ext4_journal_start_sb(sb, EXT4_HT_MISC, 1);
 			if (IS_ERR(handle))
 				return PTR_ERR(handle);
 			err = ext4_journal_get_write_access(handle, sbi->s_sbh);
@@ -464,10 +465,8 @@ static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 		 * If there is a delay extent at this offset,
 		 * it will be as a data.
 		 */
-		es.start = last;
-		(void)ext4_es_find_extent(inode, &es);
-		if (last >= es.start &&
-		    last < es.start + es.len) {
+		ext4_es_find_delayed_extent_range(inode, last, last, &es);
+		if (es.es_len != 0 && in_range(last, es.es_lblk, es.es_len)) {
 			if (last != start)
 				dataoff = last << blkbits;
 			break;
@@ -549,11 +548,9 @@ static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
 		 * If there is a delay extent at this offset,
 		 * we will skip this extent.
 		 */
-		es.start = last;
-		(void)ext4_es_find_extent(inode, &es);
-		if (last >= es.start &&
-		    last < es.start + es.len) {
-			last = es.start + es.len;
+		ext4_es_find_delayed_extent_range(inode, last, last, &es);
+		if (es.es_len != 0 && in_range(last, es.es_lblk, es.es_len)) {
+			last = es.es_lblk + es.es_len;
 			holeoff = last << blkbits;
 			continue;
 		}

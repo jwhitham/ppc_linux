@@ -78,14 +78,14 @@ xfs_swapext(
 		goto out_put_tmp_file;
 	}
 
-	if (IS_SWAPFILE(f.file->f_path.dentry->d_inode) ||
-	    IS_SWAPFILE(tmp.file->f_path.dentry->d_inode)) {
+	if (IS_SWAPFILE(file_inode(f.file)) ||
+	    IS_SWAPFILE(file_inode(tmp.file))) {
 		error = XFS_ERROR(EINVAL);
 		goto out_put_tmp_file;
 	}
 
-	ip = XFS_I(f.file->f_path.dentry->d_inode);
-	tip = XFS_I(tmp.file->f_path.dentry->d_inode);
+	ip = XFS_I(file_inode(f.file));
+	tip = XFS_I(file_inode(tmp.file));
 
 	if (ip->i_mount != tip->i_mount) {
 		error = XFS_ERROR(EINVAL);
@@ -218,6 +218,14 @@ xfs_swap_extents(
 	int		aforkblks = 0;
 	int		taforkblks = 0;
 	__uint64_t	tmp;
+
+	/*
+	 * We have no way of updating owner information in the BMBT blocks for
+	 * each inode on CRC enabled filesystems, so to avoid corrupting the
+	 * this metadata we simply don't allow extent swaps to occur.
+	 */
+	if (xfs_sb_version_hascrc(&mp->m_sb))
+		return XFS_ERROR(EINVAL);
 
 	tempifp = kmem_alloc(sizeof(xfs_ifork_t), KM_MAYFAIL);
 	if (!tempifp) {

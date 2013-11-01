@@ -38,16 +38,18 @@ static void pty_close(struct tty_struct *tty, struct file *filp)
 	if (tty->driver->subtype == PTY_TYPE_MASTER)
 		WARN_ON(tty->count > 1);
 	else {
+		if (test_bit(TTY_IO_ERROR, &tty->flags))
+			return;
 		if (tty->count > 2)
 			return;
 	}
+	set_bit(TTY_IO_ERROR, &tty->flags);
 	wake_up_interruptible(&tty->read_wait);
 	wake_up_interruptible(&tty->write_wait);
 	tty->packet = 0;
 	/* Review - krefs on tty_link ?? */
 	if (!tty->link)
 		return;
-	tty->link->packet = 0;
 	set_bit(TTY_OTHER_CLOSED, &tty->link->flags);
 	wake_up_interruptible(&tty->link->read_wait);
 	wake_up_interruptible(&tty->link->write_wait);
@@ -55,9 +57,10 @@ static void pty_close(struct tty_struct *tty, struct file *filp)
 		set_bit(TTY_OTHER_CLOSED, &tty->flags);
 #ifdef CONFIG_UNIX98_PTYS
 		if (tty->driver == ptm_driver) {
-		        mutex_lock(&devpts_mutex);
-			devpts_pty_kill(tty->link->driver_data);
-		        mutex_unlock(&devpts_mutex);
+			mutex_lock(&devpts_mutex);
+			if (tty->link->driver_data)
+				devpts_pty_kill(tty->link->driver_data);
+			mutex_unlock(&devpts_mutex);
 		}
 #endif
 		tty_unlock(tty);
@@ -120,10 +123,10 @@ static int pty_write(struct tty_struct *tty, const unsigned char *buf, int c)
 
 	if (c > 0) {
 		/* Stuff the data into the input queue of the other end */
-		c = tty_insert_flip_string(to, buf, c);
+		c = tty_insert_flip_string(to->port, buf, c);
 		/* And shovel */
 		if (c) {
-			tty_flip_buffer_push(to);
+			tty_flip_buffer_push(to->port);
 			tty_wakeup(tty);
 		}
 	}
@@ -241,24 +244,24 @@ static void pty_flush_buffer(struct tty_struct *tty)
 
 static int pty_open(struct tty_struct *tty, struct file *filp)
 {
-	int	retval = -ENODEV;
-
 	if (!tty || !tty->link)
-		goto out;
+		return -ENODEV;
 
-	retval = -EIO;
 	if (test_bit(TTY_OTHER_CLOSED, &tty->flags))
 		goto out;
 	if (test_bit(TTY_PTY_LOCK, &tty->link->flags))
 		goto out;
-	if (tty->link->count != 1)
+	if (tty->driver->subtype == PTY_TYPE_SLAVE && tty->link->count != 1)
 		goto out;
 
+	clear_bit(TTY_IO_ERROR, &tty->flags);
 	clear_bit(TTY_OTHER_CLOSED, &tty->link->flags);
 	set_bit(TTY_THROTTLED, &tty->flags);
-	retval = 0;
+	return 0;
+
 out:
-	return retval;
+	set_bit(TTY_IO_ERROR, &tty->flags);
+	return -EIO;
 }
 
 static void pty_set_termios(struct tty_struct *tty,
@@ -399,15 +402,8 @@ err:
 	return retval;
 }
 
-/* this is called once with whichever end is closed last */
-static void pty_unix98_shutdown(struct tty_struct *tty)
-{
-	devpts_kill_index(tty->driver_data, tty->index);
-}
-
 static void pty_cleanup(struct tty_struct *tty)
 {
-	tty->port->itty = NULL;
 	tty_port_put(tty->port);
 }
 
@@ -621,6 +617,12 @@ static void pty_unix98_remove(struct tty_driver *driver, struct tty_struct *tty)
 {
 }
 
+/* this is called once with whichever end is closed last */
+static void pty_unix98_shutdown(struct tty_struct *tty)
+{
+	devpts_kill_index(tty->driver_data, tty->index);
+}
+
 static const struct tty_operations ptm_unix98_ops = {
 	.lookup = ptm_unix98_lookup,
 	.install = pty_unix98_install,
@@ -663,7 +665,7 @@ static const struct tty_operations pty_unix98_ops = {
  *	Allocate a unix98 pty master device from the ptmx driver.
  *
  *	Locking: tty_mutex protects the init_dev work. tty->count should
- * 		protect the rest.
+ *		protect the rest.
  *		allocated_ptys_lock handles the list of free pty numbers
  */
 
@@ -675,6 +677,9 @@ static int ptmx_open(struct inode *inode, struct file *filp)
 	int index;
 
 	nonseekable_open(inode, filp);
+
+	/* We refuse fsnotify events on ptmx, since it's a shared resource */
+	filp->f_mode |= FMODE_NONOTIFY;
 
 	retval = tty_alloc_file(filp);
 	if (retval)
@@ -704,6 +709,7 @@ static int ptmx_open(struct inode *inode, struct file *filp)
 	mutex_unlock(&tty_mutex);
 
 	set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */
+	tty->driver_data = inode;
 
 	tty_add_file(tty, filp);
 
@@ -714,14 +720,13 @@ static int ptmx_open(struct inode *inode, struct file *filp)
 		retval = PTR_ERR(slave_inode);
 		goto err_release;
 	}
+	tty->link->driver_data = slave_inode;
 
 	retval = ptm_driver->ops->open(tty, filp);
 	if (retval)
 		goto err_release;
 
 	tty_unlock(tty);
-	tty->driver_data = inode;
-	tty->link->driver_data = slave_inode;
 	return 0;
 err_release:
 	tty_unlock(tty);
@@ -797,7 +802,7 @@ static void __init unix98_pty_init(void)
 	cdev_init(&ptmx_cdev, &ptmx_fops);
 	if (cdev_add(&ptmx_cdev, MKDEV(TTYAUX_MAJOR, 2), 1) ||
 	    register_chrdev_region(MKDEV(TTYAUX_MAJOR, 2), 1, "/dev/ptmx") < 0)
-		panic("Couldn't register /dev/ptmx driver\n");
+		panic("Couldn't register /dev/ptmx driver");
 	device_create(tty_class, NULL, MKDEV(TTYAUX_MAJOR, 2), NULL, "ptmx");
 }
 

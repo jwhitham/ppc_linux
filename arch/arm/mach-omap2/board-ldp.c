@@ -28,6 +28,7 @@
 #include <linux/io.h>
 #include <linux/smsc911x.h>
 #include <linux/mmc/host.h>
+#include <linux/usb/phy.h>
 #include <linux/platform_data/spi-omap2-mcspi.h>
 
 #include <asm/mach-types.h>
@@ -40,7 +41,7 @@
 #include "gpmc-smsc911x.h"
 
 #include <video/omapdss.h>
-#include <video/omap-panel-generic-dpi.h>
+#include <video/omap-panel-data.h>
 
 #include "board-flash.h"
 #include "mux.h"
@@ -180,34 +181,13 @@ static inline void __init ldp_init_smsc911x(void)
 
 /* LCD */
 
-static int ldp_backlight_gpio;
-static int ldp_lcd_enable_gpio;
-
 #define LCD_PANEL_RESET_GPIO		55
 #define LCD_PANEL_QVGA_GPIO		56
 
-static int ldp_panel_enable_lcd(struct omap_dss_device *dssdev)
-{
-	if (gpio_is_valid(ldp_lcd_enable_gpio))
-		gpio_direction_output(ldp_lcd_enable_gpio, 1);
-	if (gpio_is_valid(ldp_backlight_gpio))
-		gpio_direction_output(ldp_backlight_gpio, 1);
-
-	return 0;
-}
-
-static void ldp_panel_disable_lcd(struct omap_dss_device *dssdev)
-{
-	if (gpio_is_valid(ldp_lcd_enable_gpio))
-		gpio_direction_output(ldp_lcd_enable_gpio, 0);
-	if (gpio_is_valid(ldp_backlight_gpio))
-		gpio_direction_output(ldp_backlight_gpio, 0);
-}
-
 static struct panel_generic_dpi_data ldp_panel_data = {
 	.name			= "nec_nl2432dr22-11b",
-	.platform_enable	= ldp_panel_enable_lcd,
-	.platform_disable	= ldp_panel_disable_lcd,
+	.num_gpios		= 4,
+	/* gpios filled in code */
 };
 
 static struct omap_dss_device ldp_lcd_device = {
@@ -230,41 +210,19 @@ static struct omap_dss_board_info ldp_dss_data = {
 
 static void __init ldp_display_init(void)
 {
-	int r;
-
-	static struct gpio gpios[] __initdata = {
-		{LCD_PANEL_RESET_GPIO, GPIOF_OUT_INIT_HIGH, "LCD RESET"},
-		{LCD_PANEL_QVGA_GPIO, GPIOF_OUT_INIT_HIGH, "LCD QVGA"},
-	};
-
-	r = gpio_request_array(gpios, ARRAY_SIZE(gpios));
-	if (r) {
-		pr_err("Cannot request LCD GPIOs, error %d\n", r);
-		return;
-	}
+	ldp_panel_data.gpios[2] = LCD_PANEL_RESET_GPIO;
+	ldp_panel_data.gpios[3] = LCD_PANEL_QVGA_GPIO;
 
 	omap_display_init(&ldp_dss_data);
 }
 
 static int ldp_twl_gpio_setup(struct device *dev, unsigned gpio, unsigned ngpio)
 {
-	int r;
+	ldp_panel_data.gpios[0] = gpio + 7;
+	ldp_panel_data.gpio_invert[0] = true;
 
-	struct gpio gpios[] = {
-		{gpio + 7 , GPIOF_OUT_INIT_LOW, "LCD ENABLE"},
-		{gpio + 15, GPIOF_OUT_INIT_LOW, "LCD BACKLIGHT"},
-	};
-
-	r = gpio_request_array(gpios, ARRAY_SIZE(gpios));
-	if (r) {
-		pr_err("Cannot request LCD GPIOs, error %d\n", r);
-		ldp_backlight_gpio = -EINVAL;
-		ldp_lcd_enable_gpio = -EINVAL;
-		return r;
-	}
-
-	ldp_backlight_gpio = gpio + 15;
-	ldp_lcd_enable_gpio = gpio + 7;
+	ldp_panel_data.gpios[1] = gpio + 15;
+	ldp_panel_data.gpio_invert[1] = true;
 
 	return 0;
 }
@@ -418,6 +376,7 @@ static void __init omap_ldp_init(void)
 	omap_ads7846_init(1, 54, 310, NULL);
 	omap_serial_init();
 	omap_sdrc_init(NULL, NULL);
+	usb_bind_phy("musb-hdrc.0.auto", 0, "twl4030_usb");
 	usb_musb_init(NULL);
 	board_nand_init(ldp_nand_partitions, ARRAY_SIZE(ldp_nand_partitions),
 			ZOOM_NAND_CS, 0, nand_default_timings);
@@ -435,6 +394,6 @@ MACHINE_START(OMAP_LDP, "OMAP LDP board")
 	.handle_irq	= omap3_intc_handle_irq,
 	.init_machine	= omap_ldp_init,
 	.init_late	= omap3430_init_late,
-	.timer		= &omap3_timer,
+	.init_time	= omap3_sync32k_timer_init,
 	.restart	= omap3xxx_restart,
 MACHINE_END

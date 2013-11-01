@@ -13,13 +13,16 @@
 struct usbmisc_ops {
 	/* It's called once when probe a usb device */
 	int (*init)(struct device *dev);
+	/* It's called once after adding a usb device */
+	int (*post)(struct device *dev);
 };
 
 struct usbmisc_usb_device {
 	struct device *dev; /* usb controller device */
 	int index;
 
-	int disable_oc:1; /* over current detect disabled */
+	unsigned int disable_oc:1; /* over current detect disabled */
+	unsigned int evdo:1; /* set external vbus divider option */
 };
 
 int usbmisc_set_ops(const struct usbmisc_ops *ops);

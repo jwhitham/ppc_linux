@@ -609,6 +609,9 @@ static struct target_core_dev_attrib_attribute				\
 	__CONFIGFS_EATTR_RO(_name,					\
 	target_core_dev_show_attr_##_name);
 
+DEF_DEV_ATTRIB(emulate_model_alias);
+SE_DEV_ATTR(emulate_model_alias, S_IRUGO | S_IWUSR);
+
 DEF_DEV_ATTRIB(emulate_dpo);
 SE_DEV_ATTR(emulate_dpo, S_IRUGO | S_IWUSR);
 
@@ -681,6 +684,7 @@ SE_DEV_ATTR(max_write_same_len, S_IRUGO | S_IWUSR);
 CONFIGFS_EATTR_OPS(target_core_dev_attrib, se_dev_attrib, da_group);
 
 static struct configfs_attribute *target_core_dev_attrib_attrs[] = {
+	&target_core_dev_attrib_emulate_model_alias.attr,
 	&target_core_dev_attrib_emulate_dpo.attr,
 	&target_core_dev_attrib_emulate_fua_write.attr,
 	&target_core_dev_attrib_emulate_fua_read.attr,
@@ -1580,6 +1584,13 @@ static struct target_core_configfs_attribute target_core_attr_dev_udev_path = {
 	.store	= target_core_store_dev_udev_path,
 };
 
+static ssize_t target_core_show_dev_enable(void *p, char *page)
+{
+	struct se_device *dev = p;
+
+	return snprintf(page, PAGE_SIZE, "%d\n", !!(dev->dev_flags & DF_CONFIGURED));
+}
+
 static ssize_t target_core_store_dev_enable(
 	void *p,
 	const char *page,
@@ -1605,8 +1616,8 @@ static ssize_t target_core_store_dev_enable(
 static struct target_core_configfs_attribute target_core_attr_dev_enable = {
 	.attr	= { .ca_owner = THIS_MODULE,
 		    .ca_name = "enable",
-		    .ca_mode = S_IWUSR },
-	.show	= NULL,
+		    .ca_mode =  S_IRUGO | S_IWUSR },
+	.show	= target_core_show_dev_enable,
 	.store	= target_core_store_dev_enable,
 };
 

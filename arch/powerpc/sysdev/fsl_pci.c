@@ -102,21 +102,13 @@ static int fsl_indirect_read_config(struct pci_bus *bus, unsigned int devfn,
 	return indirect_read_config(bus, devfn, offset, len, val);
 }
 
-static struct pci_ops fsl_indirect_pci_ops =
+#if defined(CONFIG_FSL_SOC_BOOKE) || defined(CONFIG_PPC_86xx)
+
+static struct pci_ops fsl_indirect_pcie_ops =
 {
 	.read = fsl_indirect_read_config,
 	.write = indirect_write_config,
 };
-
-static void __init fsl_setup_indirect_pci(struct pci_controller* hose,
-					  resource_size_t cfg_addr,
-					  resource_size_t cfg_data, u32 flags)
-{
-	setup_indirect_pci(hose, cfg_addr, cfg_data, flags);
-	hose->ops = &fsl_indirect_pci_ops;
-}
-
-#if defined(CONFIG_FSL_SOC_BOOKE) || defined(CONFIG_PPC_86xx)
 
 #define MAX_PHYS_ADDR_BITS	40
 static u64 pci64_dma_offset = 1ull << MAX_PHYS_ADDR_BITS;
@@ -158,7 +150,7 @@ static int setup_one_atmu(struct ccsr_pci __iomem *pci,
 		flags |= 0x10000000; /* enable relaxed ordering */
 
 	for (i = 0; size > 0; i++) {
-		unsigned int bits = min(__ilog2_u64(size),
+		unsigned int bits = min(ilog2(size),
 					__ffs(pci_addr | phys_addr));
 
 		if (index + i >= 5)
@@ -183,7 +175,7 @@ static void setup_pci_atmu(struct pci_controller *hose)
 	struct ccsr_pci __iomem *pci = hose->private_data;
 	int i, j, n, mem_log, win_idx = 3, start_idx = 1, end_idx = 4;
 	u64 mem, sz, paddr_hi = 0;
-	u64 paddr_lo = ULLONG_MAX;
+	u64 offset = 0, paddr_lo = ULLONG_MAX;
 	u32 pcicsrbar = 0, pcicsrbar_sz;
 	u32 piwar = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
 			PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP;
@@ -246,8 +238,9 @@ static void setup_pci_atmu(struct pci_controller *hose)
 		paddr_lo = min(paddr_lo, (u64)hose->mem_resources[i].start);
 		paddr_hi = max(paddr_hi, (u64)hose->mem_resources[i].end);
 
-		n = setup_one_atmu(pci, j, &hose->mem_resources[i],
-				   hose->pci_mem_offset);
+		/* We assume all memory resources have the same offset */
+		offset = hose->mem_offset[i];
+		n = setup_one_atmu(pci, j, &hose->mem_resources[i], offset);
 
 		if (n < 0 || j >= 5) {
 			pr_err("Ran out of outbound PCI ATMUs for resource %d!\n", i);
@@ -271,14 +264,14 @@ static void setup_pci_atmu(struct pci_controller *hose)
 			out_be32(&pci->pow[j].powbar, (hose->io_base_phys >> 12));
 			/* Enable, IO R/W */
 			out_be32(&pci->pow[j].powar, 0x80088000
-				| (__ilog2_u64(hose->io_resource.end
+				| (ilog2(hose->io_resource.end
 				- hose->io_resource.start + 1) - 1));
 		}
 	}
 
 	/* convert to pci address space */
-	paddr_hi -= hose->pci_mem_offset;
-	paddr_lo -= hose->pci_mem_offset;
+	paddr_hi -= offset;
+	paddr_lo -= offset;
 
 	if (paddr_hi == paddr_lo) {
 		pr_err("%s: No outbound window space\n", name);
@@ -336,7 +329,7 @@ static void setup_pci_atmu(struct pci_controller *hose)
 	}
 
 	sz = min(mem, paddr_lo);
-	mem_log = __ilog2_u64(sz);
+	mem_log = ilog2(sz);
 
 	/* PCIe can overmap inbound & outbound since RX & TX are separated */
 #ifdef CONFIG_PPC_QEMU_E500
@@ -369,7 +362,7 @@ static void setup_pci_atmu(struct pci_controller *hose)
 		 * SWIOTLB and access the full range of memory
 		 */
 		if (sz != mem) {
-			mem_log = __ilog2_u64(mem);
+			mem_log = ilog2(mem);
 
 			/* Size window up if we dont fit in exact power-of-2 */
 			if ((1ull << mem_log) != mem)
@@ -406,7 +399,7 @@ static void setup_pci_atmu(struct pci_controller *hose)
 		sz -= 1ull << mem_log;
 
 		if (sz) {
-			mem_log = __ilog2_u64(sz);
+			mem_log = ilog2(sz);
 			piwar |= (mem_log - 1);
 
 			out_be32(&pci->piw[win_idx].pitar,  paddr >> 12);
@@ -547,13 +540,15 @@ int __init fsl_add_bridge(struct platform_device *pdev, int is_primary)
 	if (!hose->private_data)
 		goto no_bridge;
 
-	fsl_setup_indirect_pci(hose, rsrc.start, rsrc.start + 0x4,
-			       PPC_INDIRECT_TYPE_BIG_ENDIAN);
+	setup_indirect_pci(hose, rsrc.start, rsrc.start + 0x4,
+			   PPC_INDIRECT_TYPE_BIG_ENDIAN);
 
 	if (in_be32(&pci->block_rev1) < PCIE_IP_REV_3_0)
 		hose->indirect_type |= PPC_INDIRECT_TYPE_FSL_CFG_REG_LINK;
 
 	if (early_find_capability(hose, 0, 0, PCI_CAP_ID_EXP)) {
+		/* use fsl_indirect_read_config for PCIe */
+		hose->ops = &fsl_indirect_pcie_ops;
 		/* For PCIE read HEADER_TYPE to identify controler mode */
 		early_read_config_byte(hose, 0, 0, PCI_HEADER_TYPE, &hdr_type);
 		if ((hdr_type & 0x7f) != PCI_HEADER_TYPE_BRIDGE)

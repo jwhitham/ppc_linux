@@ -39,6 +39,19 @@ config HWMON_DEBUG_CHIP
 
 comment "Native drivers"
 
+config SENSORS_AB8500
+	tristate "AB8500 thermal monitoring"
+	depends on AB8500_GPADC && AB8500_BM
+	default n
+	help
+	  If you say yes here you get support for the thermal sensor part
+	  of the AB8500 chip. The driver includes thermal management for
+	  AB8500 die and two GPADC channels. The GPADC channel are preferably
+	  used to access sensors outside the AB8500 chip.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called abx500-temp.
+
 config SENSORS_ABITUGURU
 	tristate "Abit uGuru (rev 1 & 2)"
 	depends on X86 && DMI
@@ -179,12 +192,32 @@ config SENSORS_ADM9240
 	  This driver can also be built as a module.  If so, the module
 	  will be called adm9240.
 
-config SENSORS_ADT7410
-	tristate "Analog Devices ADT7410"
-	depends on I2C
+config SENSORS_ADT7X10
+	tristate
+	help
+	  This module contains common code shared by the ADT7310/ADT7320 and
+	  ADT7410/ADT7420 temperature monitoring chip drivers.
+
+	  If build as a module, the module will be called adt7x10.
+
+config SENSORS_ADT7310
+	tristate "Analog Devices ADT7310/ADT7320"
+	depends on SPI_MASTER
+	select SENSORS_ADT7X10
 	help
 	  If you say yes here you get support for the Analog Devices
-	  ADT7410 temperature monitoring chip.
+	  ADT7310 and ADT7320 temperature monitoring chips.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called adt7310.
+
+config SENSORS_ADT7410
+	tristate "Analog Devices ADT7410/ADT7420"
+	depends on I2C
+	select SENSORS_ADT7X10
+	help
+	  If you say yes here you get support for the Analog Devices
+	  ADT7410 and ADT7420 temperature monitoring chips.
 
 	  This driver can also be built as a module. If so, the module
 	  will be called adt7410.
@@ -499,6 +532,15 @@ config SENSORS_IBMPEX
 	  This driver can also be built as a module.  If so, the module
 	  will be called ibmpex.
 
+config SENSORS_IIO_HWMON
+	tristate "Hwmon driver that uses channels specified via iio maps"
+	depends on IIO
+	help
+	  This is a platform driver that in combination with a suitable
+	  map allows IIO devices to provide basic hwmon functionality
+	  for those channels specified in the map.  This map can be provided
+	  either via platform data or the device tree bindings.
+
 config SENSORS_IT87
 	tristate "ITE IT87xx and compatibles"
 	depends on !PPC
@@ -506,7 +548,8 @@ config SENSORS_IT87
 	help
 	  If you say yes here you get support for ITE IT8705F, IT8712F,
 	  IT8716F, IT8718F, IT8720F, IT8721F, IT8726F, IT8728F, IT8758E,
-	  IT8782F, and IT8783E/F sensor chips, and the SiS950 clone.
+	  IT8771E, IT8772E, IT8782F, and IT8783E/F sensor chips, and the
+	  SiS950 clone.
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called it87.
@@ -529,8 +572,8 @@ config SENSORS_JC42
 	  temperature sensors, which are used on many DDR3 memory modules for
 	  mobile devices and servers.  Support will include, but not be limited
 	  to, ADT7408, AT30TS00, CAT34TS02, CAT6095, MAX6604, MCP9804, MCP9805,
-	  MCP98242, MCP98243, MCP9843, SE97, SE98, STTS424(E), STTS2002,
-	  STTS3000, TSE2002B3, TSE2002GB2, TS3000B3, and TS3000GB2.
+	  MCP98242, MCP98243, MCP98244, MCP9843, SE97, SE98, STTS424(E),
+	  STTS2002, STTS3000, TSE2002B3, TSE2002GB2, TS3000B3, and TS3000GB2.
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called jc42.
@@ -587,7 +630,7 @@ config SENSORS_LM75
 	  temperature sensor chip, with models including:
 
 		- Analog Devices ADT75
-		- Dallas Semiconductor DS75 and DS1775
+		- Dallas Semiconductor DS75, DS1775 and DS7505
 		- Maxim MAX6625 and MAX6626
 		- Microchip MCP980x
 		- National Semiconductor LM75, LM75A
@@ -750,6 +793,16 @@ config SENSORS_LTC4261
 	  This driver can also be built as a module. If so, the module will
 	  be called ltc4261.
 
+config SENSORS_LM95234
+	tristate "National Semiconductor LM95234"
+	depends on I2C
+	help
+	  If you say yes here you get support for the LM95234 temperature
+	  sensor.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called lm95234.
+
 config SENSORS_LM95241
 	tristate "National Semiconductor LM95241 and compatibles"
 	depends on I2C
@@ -854,6 +907,17 @@ config SENSORS_MAX6650
 	  This driver can also be built as a module.  If so, the module
 	  will be called max6650.
 
+config SENSORS_MAX6697
+	tristate "Maxim MAX6697 and compatibles"
+	depends on I2C
+	help
+	  If you say yes here you get support for MAX6581, MAX6602, MAX6622,
+	  MAX6636, MAX6689, MAX6693, MAX6694, MAX6697, MAX6698, and MAX6699
+	  temperature sensor chips.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called max6697.
+
 config SENSORS_MCP3021
 	tristate "Microchip MCP3021 and compatibles"
 	depends on I2C
@@ -865,8 +929,22 @@ config SENSORS_MCP3021
 	  This driver can also be built as a module.  If so, the module
 	  will be called mcp3021.
 
+config SENSORS_NCT6775
+	tristate "Nuvoton NCT6775F and compatibles"
+	depends on !PPC
+	select HWMON_VID
+	help
+	  If you say yes here you get support for the hardware monitoring
+	  functionality of the Nuvoton NCT6775F, NCT6776F, NCT6779D
+	  and compatible Super-I/O chips. This driver replaces the
+	  w83627ehf driver for NCT6775F and NCT6776F.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called nct6775.
+
 config SENSORS_NTC_THERMISTOR
 	tristate "NTC thermistor support"
+	depends on (!OF && !IIO) || (OF && IIO)
 	help
 	  This driver supports NTC thermistors sensor reading and its
 	  interpretation. The driver can also monitor the temperature and
@@ -1145,6 +1223,16 @@ config SENSORS_AMC6821
 	  This driver can also be build as a module.  If so, the module
 	  will be called amc6821.
 
+config SENSORS_INA209
+	tristate "TI / Burr Brown INA209"
+	depends on I2C
+	help
+	  If you say yes here you get support for the TI / Burr Brown INA209
+	  voltage / current / power monitor I2C interface.
+
+	  This driver can also be built as a module. If so, the module will
+	  be called ina209.
+
 config SENSORS_INA2XX
 	tristate "Texas Instruments INA219 and compatibles"
 	depends on I2C
@@ -1182,8 +1270,8 @@ config SENSORS_TMP401
 	tristate "Texas Instruments TMP401 and compatibles"
 	depends on I2C
 	help
-	  If you say yes here you get support for Texas Instruments TMP401 and
-	  TMP411 temperature sensor chips.
+	  If you say yes here you get support for Texas Instruments TMP401,
+	  TMP411, TMP431, and TMP432 temperature sensor chips.
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called tmp401.

@@ -1,7 +1,7 @@
 /*******************************************************************************
 
   Intel PRO/1000 Linux driver
-  Copyright(c) 1999 - 2012 Intel Corporation.
+  Copyright(c) 1999 - 2013 Intel Corporation.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms and conditions of the GNU General Public License,
@@ -44,21 +44,6 @@
 
 #include "e1000.h"
 
-#define ID_LED_RESERVED_F746 0xF746
-#define ID_LED_DEFAULT_82573 ((ID_LED_DEF1_DEF2 << 12) | \
-			      (ID_LED_OFF1_ON2  <<  8) | \
-			      (ID_LED_DEF1_DEF2 <<  4) | \
-			      (ID_LED_DEF1_DEF2))
-
-#define E1000_GCR_L1_ACT_WITHOUT_L0S_RX 0x08000000
-#define AN_RETRY_COUNT          5 /* Autoneg Retry Count value */
-#define E1000_BASE1000T_STATUS          10
-#define E1000_IDLE_ERROR_COUNT_MASK     0xFF
-#define E1000_RECEIVE_ERROR_COUNTER     21
-#define E1000_RECEIVE_ERROR_MAX         0xFFFF
-
-#define E1000_NVM_INIT_CTRL2_MNGM 0x6000 /* Manageability Operation Mode mask */
-
 static s32 e1000_get_phy_id_82571(struct e1000_hw *hw);
 static s32 e1000_setup_copper_link_82571(struct e1000_hw *hw);
 static s32 e1000_setup_fiber_serdes_link_82571(struct e1000_hw *hw);
@@ -67,9 +52,7 @@ static s32 e1000_write_nvm_eewr_82571(struct e1000_hw *hw, u16 offset,
 				      u16 words, u16 *data);
 static s32 e1000_fix_nvm_checksum_82571(struct e1000_hw *hw);
 static void e1000_initialize_hw_bits_82571(struct e1000_hw *hw);
-static s32 e1000_setup_link_82571(struct e1000_hw *hw);
 static void e1000_clear_hw_cntrs_82571(struct e1000_hw *hw);
-static void e1000_clear_vfta_82571(struct e1000_hw *hw);
 static bool e1000_check_mng_mode_82574(struct e1000_hw *hw);
 static s32 e1000_led_on_82574(struct e1000_hw *hw);
 static void e1000_put_hw_semaphore_82571(struct e1000_hw *hw);
@@ -201,7 +184,7 @@ static s32 e1000_init_nvm_params_82571(struct e1000_hw *hw)
 	default:
 		nvm->type = e1000_nvm_eeprom_spi;
 		size = (u16)((eecd & E1000_EECD_SIZE_EX_MASK) >>
-				  E1000_EECD_SIZE_EX_SHIFT);
+			     E1000_EECD_SIZE_EX_SHIFT);
 		/* Added to a constant, "size" becomes the left-shift value
 		 * for setting word_size.
 		 */
@@ -449,13 +432,13 @@ static s32 e1000_get_phy_id_82571(struct e1000_hw *hw)
 		break;
 	case e1000_82574:
 	case e1000_82583:
-		ret_val = e1e_rphy(hw, PHY_ID1, &phy_id);
+		ret_val = e1e_rphy(hw, MII_PHYSID1, &phy_id);
 		if (ret_val)
 			return ret_val;
 
 		phy->id = (u32)(phy_id << 16);
-		udelay(20);
-		ret_val = e1e_rphy(hw, PHY_ID2, &phy_id);
+		usleep_range(20, 40);
+		ret_val = e1e_rphy(hw, MII_PHYSID2, &phy_id);
 		if (ret_val)
 			return ret_val;
 
@@ -499,7 +482,7 @@ static s32 e1000_get_hw_semaphore_82571(struct e1000_hw *hw)
 		if (!(swsm & E1000_SWSM_SMBI))
 			break;
 
-		udelay(50);
+		usleep_range(50, 100);
 		i++;
 	}
 
@@ -516,7 +499,7 @@ static s32 e1000_get_hw_semaphore_82571(struct e1000_hw *hw)
 		if (er32(SWSM) & E1000_SWSM_SWESMBI)
 			break;
 
-		udelay(50);
+		usleep_range(50, 100);
 	}
 
 	if (i == fw_timeout) {
@@ -543,6 +526,7 @@ static void e1000_put_hw_semaphore_82571(struct e1000_hw *hw)
 	swsm &= ~(E1000_SWSM_SMBI | E1000_SWSM_SWESMBI);
 	ew32(SWSM, swsm);
 }
+
 /**
  *  e1000_get_hw_semaphore_82573 - Acquire hardware semaphore
  *  @hw: pointer to the HW structure
@@ -556,15 +540,13 @@ static s32 e1000_get_hw_semaphore_82573(struct e1000_hw *hw)
 	s32 i = 0;
 
 	extcnf_ctrl = er32(EXTCNF_CTRL);
-	extcnf_ctrl |= E1000_EXTCNF_CTRL_MDIO_SW_OWNERSHIP;
 	do {
+		extcnf_ctrl |= E1000_EXTCNF_CTRL_MDIO_SW_OWNERSHIP;
 		ew32(EXTCNF_CTRL, extcnf_ctrl);
 		extcnf_ctrl = er32(EXTCNF_CTRL);
 
 		if (extcnf_ctrl & E1000_EXTCNF_CTRL_MDIO_SW_OWNERSHIP)
 			break;
-
-		extcnf_ctrl |= E1000_EXTCNF_CTRL_MDIO_SW_OWNERSHIP;
 
 		usleep_range(2000, 4000);
 		i++;
@@ -865,9 +847,9 @@ static s32 e1000_write_nvm_eewr_82571(struct e1000_hw *hw, u16 offset,
 	}
 
 	for (i = 0; i < words; i++) {
-		eewr = (data[i] << E1000_NVM_RW_REG_DATA) |
-		       ((offset+i) << E1000_NVM_RW_ADDR_SHIFT) |
-		       E1000_NVM_RW_REG_START;
+		eewr = ((data[i] << E1000_NVM_RW_REG_DATA) |
+			((offset + i) << E1000_NVM_RW_ADDR_SHIFT) |
+			E1000_NVM_RW_REG_START);
 
 		ret_val = e1000e_poll_eerd_eewr_done(hw, E1000_NVM_POLL_WRITE);
 		if (ret_val)
@@ -894,8 +876,7 @@ static s32 e1000_get_cfg_done_82571(struct e1000_hw *hw)
 	s32 timeout = PHY_CFG_TIMEOUT;
 
 	while (timeout) {
-		if (er32(EEMNGCTL) &
-		    E1000_NVM_CFG_DONE_PORT_0)
+		if (er32(EEMNGCTL) & E1000_NVM_CFG_DONE_PORT_0)
 			break;
 		usleep_range(1000, 2000);
 		timeout--;
@@ -937,6 +918,8 @@ static s32 e1000_set_d0_lplu_state_82571(struct e1000_hw *hw, bool active)
 
 		/* When LPLU is enabled, we should disable SmartSpeed */
 		ret_val = e1e_rphy(hw, IGP01E1000_PHY_PORT_CONFIG, &data);
+		if (ret_val)
+			return ret_val;
 		data &= ~IGP01E1000_PSCFR_SMART_SPEED;
 		ret_val = e1e_wphy(hw, IGP01E1000_PHY_PORT_CONFIG, data);
 		if (ret_val)
@@ -1039,7 +1022,7 @@ static s32 e1000_reset_hw_82571(struct e1000_hw *hw)
 	}
 
 	if (hw->nvm.type == e1000_nvm_flash_hw) {
-		udelay(10);
+		usleep_range(10, 20);
 		ctrl_ext = er32(CTRL_EXT);
 		ctrl_ext |= E1000_CTRL_EXT_EE_RST;
 		ew32(CTRL_EXT, ctrl_ext);
@@ -1112,9 +1095,9 @@ static s32 e1000_init_hw_82571(struct e1000_hw *hw)
 
 	/* Initialize identification LED */
 	ret_val = mac->ops.id_led_init(hw);
+	/* An error is not fatal and we should not stop init due to this */
 	if (ret_val)
 		e_dbg("Error initializing identification LED\n");
-		/* This is not fatal and we should not stop init due to this */
 
 	/* Disabling VLAN filtering */
 	e_dbg("Initializing the IEEE VLAN\n");
@@ -1139,9 +1122,8 @@ static s32 e1000_init_hw_82571(struct e1000_hw *hw)
 
 	/* Set the transmit descriptor write-back policy */
 	reg_data = er32(TXDCTL(0));
-	reg_data = (reg_data & ~E1000_TXDCTL_WTHRESH) |
-		   E1000_TXDCTL_FULL_TX_DESC_WB |
-		   E1000_TXDCTL_COUNT_DESC;
+	reg_data = ((reg_data & ~E1000_TXDCTL_WTHRESH) |
+		    E1000_TXDCTL_FULL_TX_DESC_WB | E1000_TXDCTL_COUNT_DESC);
 	ew32(TXDCTL(0), reg_data);
 
 	/* ...for both queues. */
@@ -1157,9 +1139,9 @@ static s32 e1000_init_hw_82571(struct e1000_hw *hw)
 		break;
 	default:
 		reg_data = er32(TXDCTL(1));
-		reg_data = (reg_data & ~E1000_TXDCTL_WTHRESH) |
-			   E1000_TXDCTL_FULL_TX_DESC_WB |
-			   E1000_TXDCTL_COUNT_DESC;
+		reg_data = ((reg_data & ~E1000_TXDCTL_WTHRESH) |
+			    E1000_TXDCTL_FULL_TX_DESC_WB |
+			    E1000_TXDCTL_COUNT_DESC);
 		ew32(TXDCTL(1), reg_data);
 		break;
 	}
@@ -1329,9 +1311,10 @@ static void e1000_clear_vfta_82571(struct e1000_hw *hw)
 			 */
 			vfta_offset = (hw->mng_cookie.vlan_id >>
 				       E1000_VFTA_ENTRY_SHIFT) &
-				      E1000_VFTA_ENTRY_MASK;
-			vfta_bit_in_reg = 1 << (hw->mng_cookie.vlan_id &
-					       E1000_VFTA_ENTRY_BIT_SHIFT_MASK);
+			    E1000_VFTA_ENTRY_MASK;
+			vfta_bit_in_reg =
+			    1 << (hw->mng_cookie.vlan_id &
+				  E1000_VFTA_ENTRY_BIT_SHIFT_MASK);
 		}
 		break;
 	default:
@@ -1399,7 +1382,7 @@ bool e1000_check_phy_82574(struct e1000_hw *hw)
 {
 	u16 status_1kbt = 0;
 	u16 receive_errors = 0;
-	s32 ret_val = 0;
+	s32 ret_val;
 
 	/* Read PHY Receive Error counter first, if its is max - all F's then
 	 * read the Base1000T status register If both are max then PHY is hung.
@@ -1544,13 +1527,12 @@ static s32 e1000_check_for_serdes_link_82571(struct e1000_hw *hw)
 
 	ctrl = er32(CTRL);
 	status = er32(STATUS);
-	rxcw = er32(RXCW);
+	er32(RXCW);
 	/* SYNCH bit and IV bit are sticky */
-	udelay(10);
+	usleep_range(10, 20);
 	rxcw = er32(RXCW);
 
 	if ((rxcw & E1000_RXCW_SYNCH) && !(rxcw & E1000_RXCW_IV)) {
-
 		/* Receiver is synchronized with no invalid bits.  */
 		switch (mac->serdes_link_state) {
 		case e1000_serdes_link_autoneg_complete:
@@ -1650,7 +1632,7 @@ static s32 e1000_check_for_serdes_link_82571(struct e1000_hw *hw)
 			 * the IV bit and restart Autoneg
 			 */
 			for (i = 0; i < AN_RETRY_COUNT; i++) {
-				udelay(10);
+				usleep_range(10, 20);
 				rxcw = er32(RXCW);
 				if ((rxcw & E1000_RXCW_SYNCH) &&
 				    (rxcw & E1000_RXCW_C))
@@ -1799,6 +1781,8 @@ static s32 e1000_fix_nvm_checksum_82571(struct e1000_hw *hw)
 			if (ret_val)
 				return ret_val;
 			ret_val = e1000e_update_nvm_checksum(hw);
+			if (ret_val)
+				return ret_val;
 		}
 	}
 
@@ -1812,7 +1796,7 @@ static s32 e1000_fix_nvm_checksum_82571(struct e1000_hw *hw)
 static s32 e1000_read_mac_addr_82571(struct e1000_hw *hw)
 {
 	if (hw->mac.type == e1000_82571) {
-		s32 ret_val = 0;
+		s32 ret_val;
 
 		/* If there's an alternate MAC address place it in RAR0
 		 * so that it will override the Si installed default perm
@@ -1931,7 +1915,7 @@ static const struct e1000_phy_operations e82_phy_ops_igp = {
 	.set_d0_lplu_state	= e1000_set_d0_lplu_state_82571,
 	.set_d3_lplu_state	= e1000e_set_d3_lplu_state,
 	.write_reg		= e1000e_write_phy_reg_igp,
-	.cfg_on_link_up      	= NULL,
+	.cfg_on_link_up		= NULL,
 };
 
 static const struct e1000_phy_operations e82_phy_ops_m88 = {
@@ -1940,7 +1924,7 @@ static const struct e1000_phy_operations e82_phy_ops_m88 = {
 	.check_reset_block	= e1000e_check_reset_block_generic,
 	.commit			= e1000e_phy_sw_reset,
 	.force_speed_duplex	= e1000e_phy_force_speed_duplex_m88,
-	.get_cfg_done		= e1000e_get_cfg_done,
+	.get_cfg_done		= e1000e_get_cfg_done_generic,
 	.get_cable_length	= e1000e_get_cable_length_m88,
 	.get_info		= e1000e_get_phy_info_m88,
 	.read_reg		= e1000e_read_phy_reg_m88,
@@ -1949,7 +1933,7 @@ static const struct e1000_phy_operations e82_phy_ops_m88 = {
 	.set_d0_lplu_state	= e1000_set_d0_lplu_state_82571,
 	.set_d3_lplu_state	= e1000e_set_d3_lplu_state,
 	.write_reg		= e1000e_write_phy_reg_m88,
-	.cfg_on_link_up      	= NULL,
+	.cfg_on_link_up		= NULL,
 };
 
 static const struct e1000_phy_operations e82_phy_ops_bm = {
@@ -1958,7 +1942,7 @@ static const struct e1000_phy_operations e82_phy_ops_bm = {
 	.check_reset_block	= e1000e_check_reset_block_generic,
 	.commit			= e1000e_phy_sw_reset,
 	.force_speed_duplex	= e1000e_phy_force_speed_duplex_m88,
-	.get_cfg_done		= e1000e_get_cfg_done,
+	.get_cfg_done		= e1000e_get_cfg_done_generic,
 	.get_cable_length	= e1000e_get_cable_length_m88,
 	.get_info		= e1000e_get_phy_info_m88,
 	.read_reg		= e1000e_read_phy_reg_bm2,
@@ -1967,7 +1951,7 @@ static const struct e1000_phy_operations e82_phy_ops_bm = {
 	.set_d0_lplu_state	= e1000_set_d0_lplu_state_82571,
 	.set_d3_lplu_state	= e1000e_set_d3_lplu_state,
 	.write_reg		= e1000e_write_phy_reg_bm2,
-	.cfg_on_link_up      	= NULL,
+	.cfg_on_link_up		= NULL,
 };
 
 static const struct e1000_nvm_operations e82571_nvm_ops = {
@@ -2044,6 +2028,7 @@ const struct e1000_info e1000_82574_info = {
 				  | FLAG_HAS_MSIX
 				  | FLAG_HAS_JUMBO_FRAMES
 				  | FLAG_HAS_WOL
+				  | FLAG_HAS_HW_TIMESTAMP
 				  | FLAG_APME_IN_CTRL3
 				  | FLAG_HAS_SMART_POWER_DOWN
 				  | FLAG_HAS_AMT
@@ -2065,6 +2050,7 @@ const struct e1000_info e1000_82583_info = {
 	.mac			= e1000_82583,
 	.flags			= FLAG_HAS_HW_VLAN_FILTER
 				  | FLAG_HAS_WOL
+				  | FLAG_HAS_HW_TIMESTAMP
 				  | FLAG_APME_IN_CTRL3
 				  | FLAG_HAS_SMART_POWER_DOWN
 				  | FLAG_HAS_AMT
@@ -2079,4 +2065,3 @@ const struct e1000_info e1000_82583_info = {
 	.phy_ops		= &e82_phy_ops_bm,
 	.nvm_ops		= &e82571_nvm_ops,
 };
-

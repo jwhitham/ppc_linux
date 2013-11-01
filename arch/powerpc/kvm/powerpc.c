@@ -336,6 +336,10 @@ int kvm_dev_ioctl_check_extension(long ext)
 #ifdef CONFIG_PPC_BOOK3S_64
 	case KVM_CAP_SPAPR_TCE:
 	case KVM_CAP_PPC_ALLOC_HTAB:
+	case KVM_CAP_PPC_RTAS:
+#ifdef CONFIG_KVM_XICS
+	case KVM_CAP_IRQ_XICS:
+#endif
 		r = 1;
 		break;
 #endif /* CONFIG_PPC_BOOK3S_64 */
@@ -412,18 +416,17 @@ int kvm_arch_create_memslot(struct kvm_memory_slot *slot, unsigned long npages)
 }
 
 int kvm_arch_prepare_memory_region(struct kvm *kvm,
-                                   struct kvm_memory_slot *memslot,
-                                   struct kvm_memory_slot old,
-                                   struct kvm_userspace_memory_region *mem,
-                                   int user_alloc)
+				   struct kvm_memory_slot *memslot,
+				   struct kvm_userspace_memory_region *mem,
+				   enum kvm_mr_change change)
 {
 	return kvmppc_core_prepare_memory_region(kvm, memslot, mem);
 }
 
 void kvm_arch_commit_memory_region(struct kvm *kvm,
-               struct kvm_userspace_memory_region *mem,
-               struct kvm_memory_slot old,
-               int user_alloc)
+				   struct kvm_userspace_memory_region *mem,
+				   const struct kvm_memory_slot *old,
+				   enum kvm_mr_change change)
 {
 	kvmppc_core_commit_memory_region(kvm, mem, old);
 }
@@ -465,6 +468,9 @@ void kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
 	switch (vcpu->arch.irq_type) {
 	case KVMPPC_IRQ_MPIC:
 		kvmppc_mpic_disconnect_vcpu(vcpu->arch.mpic, vcpu);
+		break;
+	case KVMPPC_IRQ_XICS:
+		kvmppc_xics_free_icp(vcpu);
 		break;
 	}
 
@@ -829,6 +835,25 @@ static int kvm_vcpu_ioctl_enable_cap(struct kvm_vcpu *vcpu,
 		break;
 	}
 #endif
+#ifdef CONFIG_KVM_XICS
+	case KVM_CAP_IRQ_XICS: {
+		struct file *filp;
+		struct kvm_device *dev;
+
+		r = -EBADF;
+		filp = fget(cap->args[0]);
+		if (!filp)
+			break;
+
+		r = -EPERM;
+		dev = kvm_device_from_filp(filp);
+		if (dev)
+			r = kvmppc_xics_connect_vcpu(dev, vcpu, cap->args[1]);
+
+		fput(filp);
+		break;
+	}
+#endif /* CONFIG_KVM_XICS */
 	default:
 		r = -EINVAL;
 		break;
@@ -951,13 +976,15 @@ static int kvm_vm_ioctl_get_pvinfo(struct kvm_ppc_pvinfo *pvinfo)
 	return 0;
 }
 
-int kvm_vm_ioctl_irq_line(struct kvm *kvm, struct kvm_irq_level *irq_event)
+int kvm_vm_ioctl_irq_line(struct kvm *kvm, struct kvm_irq_level *irq_event,
+			  bool line_status)
 {
 	if (!irqchip_in_kernel(kvm))
 		return -ENXIO;
 
 	irq_event->status = kvm_set_irq(kvm, KVM_USERSPACE_IRQ_SOURCE_ID,
-					irq_event->irq, irq_event->level);
+					irq_event->irq, irq_event->level,
+					line_status);
 	return 0;
 }
 
@@ -995,6 +1022,7 @@ long kvm_arch_vm_ioctl(struct file *filp,
 #ifdef CONFIG_KVM_BOOK3S_64_HV
 	case KVM_ALLOCATE_RMA: {
 		struct kvm_allocate_rma rma;
+		struct kvm *kvm = filp->private_data;
 
 		r = kvm_vm_ioctl_allocate_rma(kvm, &rma);
 		if (r >= 0 && copy_to_user(argp, &rma, sizeof(rma)))
@@ -1037,6 +1065,12 @@ long kvm_arch_vm_ioctl(struct file *filp,
 		r = kvm_vm_ioctl_get_smmu_info(kvm, &info);
 		if (r >= 0 && copy_to_user(argp, &info, sizeof(info)))
 			r = -EFAULT;
+		break;
+	}
+	case KVM_PPC_RTAS_DEFINE_TOKEN: {
+		struct kvm *kvm = filp->private_data;
+
+		r = kvm_vm_ioctl_rtas_define_token(kvm, argp);
 		break;
 	}
 #endif /* CONFIG_PPC_BOOK3S_64 */

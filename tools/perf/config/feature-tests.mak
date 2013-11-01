@@ -61,15 +61,13 @@ int main(void)
 }
 endef
 
-ifndef NO_NEWT
-define SOURCE_NEWT
-#include <newt.h>
+ifndef NO_SLANG
+define SOURCE_SLANG
+#include <slang.h>
 
 int main(void)
 {
-	newtInit();
-	newtCls();
-	return newtFinished();
+	return SLsmg_init_smg();
 }
 endef
 endif
@@ -223,5 +221,16 @@ define SOURCE_ON_EXIT
 int main(void)
 {
 	return on_exit(NULL, NULL);
+}
+endef
+
+define SOURCE_LIBNUMA
+#include <numa.h>
+#include <numaif.h>
+
+int main(void)
+{
+	numa_available();
+	return 0;
 }
 endef

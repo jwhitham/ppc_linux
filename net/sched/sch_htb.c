@@ -38,6 +38,7 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <net/netlink.h>
+#include <net/sch_generic.h>
 #include <net/pkt_sched.h>
 
 /* HTB algorithm.
@@ -69,12 +70,6 @@ enum htb_cmode {
 	HTB_CANT_SEND,		/* class can't send and can't borrow */
 	HTB_MAY_BORROW,		/* class can't send but may borrow */
 	HTB_CAN_SEND		/* class can send */
-};
-
-struct htb_rate_cfg {
-	u64 rate_bps;
-	u32 mult;
-	u32 shift;
 };
 
 /* interior & leaf nodes; props specific to leaves are marked L: */
@@ -114,7 +109,7 @@ struct htb_class {
 	} un;
 	struct rb_node node[TC_HTB_NUMPRIO];	/* node for self or feed tree */
 	struct rb_node pq_node;	/* node for event queue */
-	psched_time_t pq_key;
+	s64	pq_key;
 
 	int prio_activity;	/* for which prios are we active */
 	enum htb_cmode cmode;	/* current mode of the class */
@@ -124,12 +119,12 @@ struct htb_class {
 	int filter_cnt;
 
 	/* token bucket parameters */
-	struct htb_rate_cfg rate;
-	struct htb_rate_cfg ceil;
-	s64 buffer, cbuffer;	/* token bucket depth/rate */
-	psched_tdiff_t mbuffer;	/* max wait time */
-	s64 tokens, ctokens;	/* current number of tokens */
-	psched_time_t t_c;	/* checkpoint time */
+	struct psched_ratecfg rate;
+	struct psched_ratecfg ceil;
+	s64	buffer, cbuffer;	/* token bucket depth/rate */
+	s64	mbuffer;		/* max wait time */
+	s64	tokens, ctokens;	/* current number of tokens */
+	s64	t_c;			/* checkpoint time */
 };
 
 struct htb_sched {
@@ -146,15 +141,15 @@ struct htb_sched {
 	struct rb_root wait_pq[TC_HTB_MAXDEPTH];
 
 	/* time of nearest event per level (row) */
-	psched_time_t near_ev_cache[TC_HTB_MAXDEPTH];
+	s64	near_ev_cache[TC_HTB_MAXDEPTH];
 
 	int defcls;		/* class where unclassified flows go to */
 
 	/* filters for qdisc itself */
 	struct tcf_proto *filter_list;
 
-	int rate2quantum;	/* quant = rate / rate2quantum */
-	psched_time_t now;	/* cached dequeue time */
+	int	rate2quantum;	/* quant = rate / rate2quantum */
+	s64	now;	/* cached dequeue time */
 	struct qdisc_watchdog watchdog;
 
 	/* non shaped skbs; let them go directly thru */
@@ -167,45 +162,6 @@ struct htb_sched {
 	unsigned int warned;	/* only one warning */
 	struct work_struct work;
 };
-
-static u64 l2t_ns(struct htb_rate_cfg *r, unsigned int len)
-{
-	return ((u64)len * r->mult) >> r->shift;
-}
-
-static void htb_precompute_ratedata(struct htb_rate_cfg *r)
-{
-	u64 factor;
-	u64 mult;
-	int shift;
-
-	r->shift = 0;
-	r->mult = 1;
-	/*
-	 * Calibrate mult, shift so that token counting is accurate
-	 * for smallest packet size (64 bytes).  Token (time in ns) is
-	 * computed as (bytes * 8) * NSEC_PER_SEC / rate_bps.  It will
-	 * work as long as the smallest packet transfer time can be
-	 * accurately represented in nanosec.
-	 */
-	if (r->rate_bps > 0) {
-		/*
-		 * Higher shift gives better accuracy.  Find the largest
-		 * shift such that mult fits in 32 bits.
-		 */
-		for (shift = 0; shift < 16; shift++) {
-			r->shift = shift;
-			factor = 8LLU * NSEC_PER_SEC * (1 << r->shift);
-			mult = div64_u64(factor, r->rate_bps);
-			if (mult > UINT_MAX)
-				break;
-		}
-
-		r->shift = shift - 1;
-		factor = 8LLU * NSEC_PER_SEC * (1 << r->shift);
-		r->mult = div64_u64(factor, r->rate_bps);
-	}
-}
 
 /* find class in global hash table using given handle */
 static inline struct htb_class *htb_find(u32 handle, struct Qdisc *sch)
@@ -632,7 +588,7 @@ static inline void htb_accnt_tokens(struct htb_class *cl, int bytes, s64 diff)
 
 	if (toks > cl->buffer)
 		toks = cl->buffer;
-	toks -= (s64) l2t_ns(&cl->rate, bytes);
+	toks -= (s64) psched_l2t_ns(&cl->rate, bytes);
 	if (toks <= -cl->mbuffer)
 		toks = 1 - cl->mbuffer;
 
@@ -645,7 +601,7 @@ static inline void htb_accnt_ctokens(struct htb_class *cl, int bytes, s64 diff)
 
 	if (toks > cl->cbuffer)
 		toks = cl->cbuffer;
-	toks -= (s64) l2t_ns(&cl->ceil, bytes);
+	toks -= (s64) psched_l2t_ns(&cl->ceil, bytes);
 	if (toks <= -cl->mbuffer)
 		toks = 1 - cl->mbuffer;
 
@@ -708,8 +664,8 @@ static void htb_charge_class(struct htb_sched *q, struct htb_class *cl,
  * next pending event (0 for no event in pq, q->now for too many events).
  * Note: Applied are events whose have cl->pq_key <= q->now.
  */
-static psched_time_t htb_do_events(struct htb_sched *q, int level,
-				   unsigned long start)
+static s64 htb_do_events(struct htb_sched *q, int level,
+			 unsigned long start)
 {
 	/* don't run for longer than 2 jiffies; 2 is used instead of
 	 * 1 to simplify things when jiffy is going to be incremented
@@ -901,7 +857,7 @@ static struct sk_buff *htb_dequeue(struct Qdisc *sch)
 	struct sk_buff *skb;
 	struct htb_sched *q = qdisc_priv(sch);
 	int level;
-	psched_time_t next_event;
+	s64 next_event;
 	unsigned long start_at;
 
 	/* try to dequeue direct packets as high prio (!) to minimize cpu work */
@@ -924,7 +880,7 @@ ok:
 	for (level = 0; level < TC_HTB_MAXDEPTH; level++) {
 		/* common case optimization - skip event handler quickly */
 		int m;
-		psched_time_t event;
+		s64 event;
 
 		if (q->now >= q->near_ev_cache[level]) {
 			event = htb_do_events(q, level, start_at);
@@ -993,11 +949,10 @@ static void htb_reset(struct Qdisc *sch)
 {
 	struct htb_sched *q = qdisc_priv(sch);
 	struct htb_class *cl;
-	struct hlist_node *n;
 	unsigned int i;
 
 	for (i = 0; i < q->clhash.hashsize; i++) {
-		hlist_for_each_entry(cl, n, &q->clhash.hash[i], common.hnode) {
+		hlist_for_each_entry(cl, &q->clhash.hash[i], common.hnode) {
 			if (cl->level)
 				memset(&cl->un.inner, 0, sizeof(cl->un.inner));
 			else {
@@ -1026,6 +981,7 @@ static const struct nla_policy htb_policy[TCA_HTB_MAX + 1] = {
 	[TCA_HTB_INIT]	= { .len = sizeof(struct tc_htb_glob) },
 	[TCA_HTB_CTAB]	= { .type = NLA_BINARY, .len = TC_RTAB_SIZE },
 	[TCA_HTB_RTAB]	= { .type = NLA_BINARY, .len = TC_RTAB_SIZE },
+	[TCA_HTB_DIRECT_QLEN] = { .type = NLA_U32 },
 };
 
 static void htb_work_func(struct work_struct *work)
@@ -1039,7 +995,7 @@ static void htb_work_func(struct work_struct *work)
 static int htb_init(struct Qdisc *sch, struct nlattr *opt)
 {
 	struct htb_sched *q = qdisc_priv(sch);
-	struct nlattr *tb[TCA_HTB_INIT + 1];
+	struct nlattr *tb[TCA_HTB_MAX + 1];
 	struct tc_htb_glob *gopt;
 	int err;
 	int i;
@@ -1047,20 +1003,16 @@ static int htb_init(struct Qdisc *sch, struct nlattr *opt)
 	if (!opt)
 		return -EINVAL;
 
-	err = nla_parse_nested(tb, TCA_HTB_INIT, opt, htb_policy);
+	err = nla_parse_nested(tb, TCA_HTB_MAX, opt, htb_policy);
 	if (err < 0)
 		return err;
 
-	if (tb[TCA_HTB_INIT] == NULL) {
-		pr_err("HTB: hey probably you have bad tc tool ?\n");
+	if (!tb[TCA_HTB_INIT])
 		return -EINVAL;
-	}
+
 	gopt = nla_data(tb[TCA_HTB_INIT]);
-	if (gopt->version != HTB_VER >> 16) {
-		pr_err("HTB: need tc/htb version %d (minor is %d), you have %d\n",
-		       HTB_VER >> 16, HTB_VER & 0xffff, gopt->version);
+	if (gopt->version != HTB_VER >> 16)
 		return -EINVAL;
-	}
 
 	err = qdisc_class_hash_init(&q->clhash);
 	if (err < 0)
@@ -1072,10 +1024,13 @@ static int htb_init(struct Qdisc *sch, struct nlattr *opt)
 	INIT_WORK(&q->work, htb_work_func);
 	skb_queue_head_init(&q->direct_queue);
 
-	q->direct_qlen = qdisc_dev(sch)->tx_queue_len;
-	if (q->direct_qlen < 2)	/* some devices have zero tx_queue_len */
-		q->direct_qlen = 2;
-
+	if (tb[TCA_HTB_DIRECT_QLEN])
+		q->direct_qlen = nla_get_u32(tb[TCA_HTB_DIRECT_QLEN]);
+	else {
+		q->direct_qlen = qdisc_dev(sch)->tx_queue_len;
+		if (q->direct_qlen < 2)	/* some devices have zero tx_queue_len */
+			q->direct_qlen = 2;
+	}
 	if ((q->rate2quantum = gopt->rate2quantum) < 1)
 		q->rate2quantum = 1;
 	q->defcls = gopt->defcls;
@@ -1101,7 +1056,8 @@ static int htb_dump(struct Qdisc *sch, struct sk_buff *skb)
 	nest = nla_nest_start(skb, TCA_OPTIONS);
 	if (nest == NULL)
 		goto nla_put_failure;
-	if (nla_put(skb, TCA_HTB_INIT, sizeof(gopt), &gopt))
+	if (nla_put(skb, TCA_HTB_INIT, sizeof(gopt), &gopt) ||
+	    nla_put_u32(skb, TCA_HTB_DIRECT_QLEN, q->direct_qlen))
 		goto nla_put_failure;
 	nla_nest_end(skb, nest);
 
@@ -1134,9 +1090,9 @@ static int htb_dump_class(struct Qdisc *sch, unsigned long arg,
 
 	memset(&opt, 0, sizeof(opt));
 
-	opt.rate.rate = cl->rate.rate_bps >> 3;
+	psched_ratecfg_getrate(&opt.rate, &cl->rate);
 	opt.buffer = PSCHED_NS2TICKS(cl->buffer);
-	opt.ceil.rate = cl->ceil.rate_bps >> 3;
+	psched_ratecfg_getrate(&opt.ceil, &cl->ceil);
 	opt.cbuffer = PSCHED_NS2TICKS(cl->cbuffer);
 	opt.quantum = cl->quantum;
 	opt.prio = cl->prio;
@@ -1161,8 +1117,8 @@ htb_dump_class_stats(struct Qdisc *sch, unsigned long arg, struct gnet_dump *d)
 
 	if (!cl->level && cl->un.leaf.q)
 		cl->qstats.qlen = cl->un.leaf.q->q.qlen;
-	cl->xstats.tokens = cl->tokens;
-	cl->xstats.ctokens = cl->ctokens;
+	cl->xstats.tokens = PSCHED_NS2TICKS(cl->tokens);
+	cl->xstats.ctokens = PSCHED_NS2TICKS(cl->ctokens);
 
 	if (gnet_stats_copy_basic(d, &cl->bstats) < 0 ||
 	    gnet_stats_copy_rate_est(d, NULL, &cl->rate_est) < 0 ||
@@ -1244,7 +1200,7 @@ static void htb_parent_to_leaf(struct htb_sched *q, struct htb_class *cl,
 	parent->un.leaf.q = new_q ? new_q : &noop_qdisc;
 	parent->tokens = parent->buffer;
 	parent->ctokens = parent->cbuffer;
-	parent->t_c = psched_get_time();
+	parent->t_c = ktime_to_ns(ktime_get());
 	parent->cmode = HTB_CAN_SEND;
 }
 
@@ -1262,7 +1218,7 @@ static void htb_destroy_class(struct Qdisc *sch, struct htb_class *cl)
 static void htb_destroy(struct Qdisc *sch)
 {
 	struct htb_sched *q = qdisc_priv(sch);
-	struct hlist_node *n, *next;
+	struct hlist_node *next;
 	struct htb_class *cl;
 	unsigned int i;
 
@@ -1276,11 +1232,11 @@ static void htb_destroy(struct Qdisc *sch)
 	tcf_destroy_chain(&q->filter_list);
 
 	for (i = 0; i < q->clhash.hashsize; i++) {
-		hlist_for_each_entry(cl, n, &q->clhash.hash[i], common.hnode)
+		hlist_for_each_entry(cl, &q->clhash.hash[i], common.hnode)
 			tcf_destroy_chain(&cl->filter_list);
 	}
 	for (i = 0; i < q->clhash.hashsize; i++) {
-		hlist_for_each_entry_safe(cl, n, next, &q->clhash.hash[i],
+		hlist_for_each_entry_safe(cl, next, &q->clhash.hash[i],
 					  common.hnode)
 			htb_destroy_class(sch, cl);
 	}
@@ -1356,7 +1312,7 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 	struct htb_sched *q = qdisc_priv(sch);
 	struct htb_class *cl = (struct htb_class *)*arg, *parent;
 	struct nlattr *opt = tca[TCA_OPTIONS];
-	struct nlattr *tb[__TCA_HTB_MAX];
+	struct nlattr *tb[TCA_HTB_MAX + 1];
 	struct tc_htb_opt *hopt;
 
 	/* extract all subattrs from opt attr */
@@ -1459,10 +1415,10 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 		cl->parent = parent;
 
 		/* set class to be in HTB_CAN_SEND state */
-		cl->tokens = hopt->buffer;
-		cl->ctokens = hopt->cbuffer;
-		cl->mbuffer = 60 * PSCHED_TICKS_PER_SEC;	/* 1min */
-		cl->t_c = psched_get_time();
+		cl->tokens = PSCHED_TICKS2NS(hopt->buffer);
+		cl->ctokens = PSCHED_TICKS2NS(hopt->cbuffer);
+		cl->mbuffer = 60ULL * NSEC_PER_SEC;	/* 1min */
+		cl->t_c = ktime_to_ns(ktime_get());
 		cl->cmode = HTB_CAN_SEND;
 
 		/* attach to the hash list and parent's family */
@@ -1503,17 +1459,11 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 			cl->prio = TC_HTB_NUMPRIO - 1;
 	}
 
-	cl->buffer = hopt->buffer;
-	cl->cbuffer = hopt->cbuffer;
+	psched_ratecfg_precompute(&cl->rate, &hopt->rate);
+	psched_ratecfg_precompute(&cl->ceil, &hopt->ceil);
 
-	cl->rate.rate_bps = (u64)hopt->rate.rate << 3;
-	cl->ceil.rate_bps = (u64)hopt->ceil.rate << 3;
-
-	htb_precompute_ratedata(&cl->rate);
-	htb_precompute_ratedata(&cl->ceil);
-
-	cl->buffer = hopt->buffer << PSCHED_SHIFT;
-	cl->cbuffer = hopt->buffer << PSCHED_SHIFT;
+	cl->buffer = PSCHED_TICKS2NS(hopt->buffer);
+	cl->cbuffer = PSCHED_TICKS2NS(hopt->buffer);
 
 	sch_tree_unlock(sch);
 
@@ -1566,14 +1516,13 @@ static void htb_walk(struct Qdisc *sch, struct qdisc_walker *arg)
 {
 	struct htb_sched *q = qdisc_priv(sch);
 	struct htb_class *cl;
-	struct hlist_node *n;
 	unsigned int i;
 
 	if (arg->stop)
 		return;
 
 	for (i = 0; i < q->clhash.hashsize; i++) {
-		hlist_for_each_entry(cl, n, &q->clhash.hash[i], common.hnode) {
+		hlist_for_each_entry(cl, &q->clhash.hash[i], common.hnode) {
 			if (arg->count < arg->skip) {
 				arg->count++;
 				continue;

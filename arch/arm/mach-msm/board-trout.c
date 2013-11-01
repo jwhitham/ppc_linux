@@ -36,6 +36,7 @@
 extern int trout_init_mmc(unsigned int);
 
 static struct platform_device *devices[] __initdata = {
+	&msm_device_gpio_7201,
 	&msm_device_uart3,
 	&msm_device_smd,
 	&msm_device_nand,
@@ -110,5 +111,5 @@ MACHINE_START(TROUT, "HTC Dream")
 	.init_irq	= trout_init_irq,
 	.init_machine	= trout_init,
 	.init_late	= trout_init_late,
-	.timer		= &msm7x01_timer,
+	.init_time	= msm7x01_timer_init,
 MACHINE_END

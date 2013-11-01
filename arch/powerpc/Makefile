@@ -88,7 +88,6 @@ endif
 CFLAGS-$(CONFIG_PPC64)	:= -mtraceback=no -mcall-aixdesc
 CFLAGS-$(CONFIG_PPC64)	+= $(call cc-option,-mcmodel=medium,-mminimal-toc)
 CFLAGS-$(CONFIG_PPC64)	+= $(call cc-option,-mno-pointers-to-nested-functions)
-
 CFLAGS-$(CONFIG_PPC32)	:= -ffixed-r2 -mmultiple
 
 CFLAGS-$(CONFIG_GENERIC_CPU) += $(call cc-option,-mtune=power7,-mtune=power4)
@@ -176,6 +175,7 @@ head-$(CONFIG_FSL_BOOKE)	:= arch/powerpc/kernel/head_fsl_booke.o
 head-$(CONFIG_PPC64)		+= arch/powerpc/kernel/entry_64.o
 head-$(CONFIG_PPC_FPU)		+= arch/powerpc/kernel/fpu.o
 head-$(CONFIG_ALTIVEC)		+= arch/powerpc/kernel/vector.o
+head-$(CONFIG_PPC_OF_BOOT_TRAMPOLINE)  += arch/powerpc/kernel/prom_init.o
 
 core-y				+= arch/powerpc/kernel/ \
 				   arch/powerpc/mm/ \
@@ -183,6 +183,7 @@ core-y				+= arch/powerpc/kernel/ \
 				   arch/powerpc/sysdev/ \
 				   arch/powerpc/platforms/ \
 				   arch/powerpc/math-emu/ \
+				   arch/powerpc/crypto/ \
 				   arch/powerpc/net/
 core-$(CONFIG_XMON)		+= arch/powerpc/xmon/
 core-$(CONFIG_KVM) 		+= arch/powerpc/kvm/

@@ -11,6 +11,7 @@
  */
 
 #include <linux/delay.h>
+#include <linux/err.h>
 #include <linux/io.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -22,7 +23,6 @@
 #include <sound/soc.h>
 
 #include <linux/platform_data/dma-ep93xx.h>
-#include "ep93xx-pcm.h"
 
 /*
  * Per channel (1-4) registers.
@@ -100,14 +100,16 @@ struct ep93xx_ac97_info {
 /* currently ALSA only supports a single AC97 device */
 static struct ep93xx_ac97_info *ep93xx_ac97_info;
 
-static struct ep93xx_pcm_dma_params ep93xx_ac97_pcm_out = {
+static struct ep93xx_dma_data ep93xx_ac97_pcm_out = {
 	.name		= "ac97-pcm-out",
 	.dma_port	= EP93XX_DMA_AAC1,
+	.direction	= DMA_MEM_TO_DEV,
 };
 
-static struct ep93xx_pcm_dma_params ep93xx_ac97_pcm_in = {
+static struct ep93xx_dma_data ep93xx_ac97_pcm_in = {
 	.name		= "ac97-pcm-in",
 	.dma_port	= EP93XX_DMA_AAC1,
+	.direction	= DMA_DEV_TO_MEM,
 };
 
 static inline unsigned ep93xx_ac97_read_reg(struct ep93xx_ac97_info *info,
@@ -315,7 +317,7 @@ static int ep93xx_ac97_trigger(struct snd_pcm_substream *substream,
 static int ep93xx_ac97_startup(struct snd_pcm_substream *substream,
 			       struct snd_soc_dai *dai)
 {
-	struct ep93xx_pcm_dma_params *dma_data;
+	struct ep93xx_dma_data *dma_data;
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		dma_data = &ep93xx_ac97_pcm_out;
@@ -352,6 +354,10 @@ static struct snd_soc_dai_driver ep93xx_ac97_dai = {
 	.ops			= &ep93xx_ac97_dai_ops,
 };
 
+static const struct snd_soc_component_driver ep93xx_ac97_component = {
+	.name		= "ep93xx-ac97",
+};
+
 static int ep93xx_ac97_probe(struct platform_device *pdev)
 {
 	struct ep93xx_ac97_info *info;
@@ -367,9 +373,9 @@ static int ep93xx_ac97_probe(struct platform_device *pdev)
 	if (!res)
 		return -ENODEV;
 
-	info->regs = devm_request_and_ioremap(&pdev->dev, res);
-	if (!info->regs)
-		return -ENXIO;
+	info->regs = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(info->regs))
+		return PTR_ERR(info->regs);
 
 	irq = platform_get_irq(pdev, 0);
 	if (!irq)
@@ -389,7 +395,8 @@ static int ep93xx_ac97_probe(struct platform_device *pdev)
 	ep93xx_ac97_info = info;
 	platform_set_drvdata(pdev, info);
 
-	ret = snd_soc_register_dai(&pdev->dev, &ep93xx_ac97_dai);
+	ret = snd_soc_register_component(&pdev->dev, &ep93xx_ac97_component,
+					 &ep93xx_ac97_dai, 1);
 	if (ret)
 		goto fail;
 
@@ -406,7 +413,7 @@ static int ep93xx_ac97_remove(struct platform_device *pdev)
 {
 	struct ep93xx_ac97_info	*info = platform_get_drvdata(pdev);
 
-	snd_soc_unregister_dai(&pdev->dev);
+	snd_soc_unregister_component(&pdev->dev);
 
 	/* disable the AC97 controller */
 	ep93xx_ac97_write_reg(info, AC97GCR, 0);

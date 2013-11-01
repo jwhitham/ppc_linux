@@ -33,7 +33,7 @@
 #include <linux/of_gpio.h>
 #include <linux/pm_runtime.h>
 #include <linux/export.h>
-#include <linux/sched.h>
+#include <linux/sched/rt.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/ioport.h>
@@ -334,7 +334,7 @@ struct spi_device *spi_alloc_device(struct spi_master *master)
 	spi->dev.parent = &master->dev;
 	spi->dev.bus = &spi_bus_type;
 	spi->dev.release = spidev_release;
-	spi->cs_gpio = -EINVAL;
+	spi->cs_gpio = -ENOENT;
 	device_initialize(&spi->dev);
 	return spi;
 }
@@ -543,17 +543,16 @@ static void spi_pump_messages(struct kthread_work *work)
 	/* Lock queue and check for queue work */
 	spin_lock_irqsave(&master->queue_lock, flags);
 	if (list_empty(&master->queue) || !master->running) {
-		if (master->busy && master->unprepare_transfer_hardware) {
-			ret = master->unprepare_transfer_hardware(master);
-			if (ret) {
-				spin_unlock_irqrestore(&master->queue_lock, flags);
-				dev_err(&master->dev,
-					"failed to unprepare transfer hardware\n");
-				return;
-			}
+		if (!master->busy) {
+			spin_unlock_irqrestore(&master->queue_lock, flags);
+			return;
 		}
 		master->busy = false;
 		spin_unlock_irqrestore(&master->queue_lock, flags);
+		if (master->unprepare_transfer_hardware &&
+		    master->unprepare_transfer_hardware(master))
+			dev_err(&master->dev,
+				"failed to unprepare transfer hardware\n");
 		return;
 	}
 
@@ -984,7 +983,7 @@ static void acpi_register_spi_devices(struct spi_master *master)
 	acpi_status status;
 	acpi_handle handle;
 
-	handle = ACPI_HANDLE(&master->dev);
+	handle = ACPI_HANDLE(master->dev.parent);
 	if (!handle)
 		return;
 
@@ -1059,18 +1058,20 @@ EXPORT_SYMBOL_GPL(spi_alloc_master);
 #ifdef CONFIG_OF
 static int of_spi_register_master(struct spi_master *master)
 {
-	u16 nb;
-	int i, *cs;
+	int nb, i, *cs;
 	struct device_node *np = master->dev.of_node;
 
 	if (!np)
 		return 0;
 
 	nb = of_gpio_named_count(np, "cs-gpios");
-	master->num_chipselect = max(nb, master->num_chipselect);
+	master->num_chipselect = max(nb, (int)master->num_chipselect);
 
-	if (nb < 1)
+	/* Return error only for an incorrectly formed cs-gpios property */
+	if (nb == 0 || nb == -ENOENT)
 		return 0;
+	else if (nb < 0)
+		return nb;
 
 	cs = devm_kzalloc(&master->dev,
 			  sizeof(int) * master->num_chipselect,
@@ -1080,7 +1081,8 @@ static int of_spi_register_master(struct spi_master *master)
 	if (!master->cs_gpios)
 		return -ENOMEM;
 
-	memset(cs, -EINVAL, master->num_chipselect);
+	for (i = 0; i < master->num_chipselect; i++)
+		cs[i] = -ENOENT;
 
 	for (i = 0; i < nb; i++)
 		cs[i] = of_get_named_gpio(np, "cs-gpios", i);
@@ -1134,6 +1136,9 @@ int spi_register_master(struct spi_master *master)
 	 */
 	if (master->num_chipselect == 0)
 		return -EINVAL;
+
+	if ((master->bus_num < 0) && master->dev.of_node)
+		master->bus_num = of_alias_get_id(master->dev.of_node, "spi");
 
 	/* convention:  dynamically assigned bus IDs count down from the max */
 	if (master->bus_num < 0) {
@@ -1248,10 +1253,10 @@ int spi_master_resume(struct spi_master *master)
 }
 EXPORT_SYMBOL_GPL(spi_master_resume);
 
-static int __spi_master_match(struct device *dev, void *data)
+static int __spi_master_match(struct device *dev, const void *data)
 {
 	struct spi_master *m;
-	u16 *bus_num = data;
+	const u16 *bus_num = data;
 
 	m = container_of(dev, struct spi_master, dev);
 	return m->bus_num == *bus_num;
@@ -1366,12 +1371,22 @@ static int __spi_async(struct spi_device *spi, struct spi_message *message)
 	}
 
 	/**
-	 * Set transfer bits_per_word as spi device default if it is not
-	 * set for this transfer.
+	 * Set transfer bits_per_word and max speed as spi device default if
+	 * it is not set for this transfer.
 	 */
 	list_for_each_entry(xfer, &message->transfers, transfer_list) {
 		if (!xfer->bits_per_word)
 			xfer->bits_per_word = spi->bits_per_word;
+		if (!xfer->speed_hz)
+			xfer->speed_hz = spi->max_speed_hz;
+		if (master->bits_per_word_mask) {
+			/* Only 32 bits fit in the mask */
+			if (xfer->bits_per_word > 32)
+				return -EINVAL;
+			if (!(master->bits_per_word_mask &
+					BIT(xfer->bits_per_word - 1)))
+				return -EINVAL;
+		}
 	}
 
 	message->spi = spi;
@@ -1656,7 +1671,8 @@ int spi_write_then_read(struct spi_device *spi,
 	 * using the pre-allocated buffer or the transfer is too large.
 	 */
 	if ((n_tx + n_rx) > SPI_BUFSIZ || !mutex_trylock(&lock)) {
-		local_buf = kmalloc(max((unsigned)SPI_BUFSIZ, n_tx + n_rx), GFP_KERNEL);
+		local_buf = kmalloc(max((unsigned)SPI_BUFSIZ, n_tx + n_rx),
+				    GFP_KERNEL | GFP_DMA);
 		if (!local_buf)
 			return -ENOMEM;
 	} else {

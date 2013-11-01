@@ -957,12 +957,12 @@ static int vidioc_querystd(struct file *file, void *priv, v4l2_std_id *std_id)
 	return 0;
 }
 
-static int vidioc_s_std(struct file *file, void *priv, v4l2_std_id *id)
+static int vidioc_s_std(struct file *file, void *priv, v4l2_std_id id)
 {
 	struct viu_fh *fh = priv;
 
-	fh->dev->std = *id;
-	decoder_call(fh->dev, core, s_std, *id);
+	fh->dev->std = id;
+	decoder_call(fh->dev, core, s_std, id);
 	return 0;
 }
 
@@ -1181,7 +1181,7 @@ static void viu_capture_intr(struct viu_dev *dev, u32 status)
 
 		if (waitqueue_active(&buf->vb.done)) {
 			list_del(&buf->vb.queue);
-			do_gettimeofday(&buf->vb.ts);
+			v4l2_get_timestamp(&buf->vb.ts);
 			buf->vb.state = VIDEOBUF_DONE;
 			buf->vb.field_count++;
 			wake_up(&buf->vb.done);

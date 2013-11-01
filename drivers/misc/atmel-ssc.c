@@ -154,16 +154,9 @@ static int ssc_probe(struct platform_device *pdev)
 	ssc->pdata = (struct atmel_ssc_platform_data *)plat_dat;
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!regs) {
-		dev_dbg(&pdev->dev, "no mmio resource defined\n");
-		return -ENXIO;
-	}
-
-	ssc->regs = devm_request_and_ioremap(&pdev->dev, regs);
-	if (!ssc->regs) {
-		dev_dbg(&pdev->dev, "ioremap failed\n");
-		return -EINVAL;
-	}
+	ssc->regs = devm_ioremap_resource(&pdev->dev, regs);
+	if (IS_ERR(ssc->regs))
+		return PTR_ERR(ssc->regs);
 
 	ssc->phybase = regs->start;
 
@@ -175,7 +168,7 @@ static int ssc_probe(struct platform_device *pdev)
 
 	/* disable all interrupts */
 	clk_enable(ssc->clk);
-	ssc_writel(ssc->regs, IDR, ~0UL);
+	ssc_writel(ssc->regs, IDR, -1);
 	ssc_readl(ssc->regs, SR);
 	clk_disable(ssc->clk);
 

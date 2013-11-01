@@ -74,14 +74,6 @@ static int omap2_nand_gpmc_retime(
 	t.cs_wr_off = gpmc_t->cs_wr_off;
 	t.wr_cycle = gpmc_t->wr_cycle;
 
-	/* Configure GPMC */
-	if (gpmc_nand_data->devsize == NAND_BUSWIDTH_16)
-		gpmc_cs_configure(gpmc_nand_data->cs, GPMC_CONFIG_DEV_SIZE, 1);
-	else
-		gpmc_cs_configure(gpmc_nand_data->cs, GPMC_CONFIG_DEV_SIZE, 0);
-	gpmc_cs_configure(gpmc_nand_data->cs,
-			GPMC_CONFIG_DEV_TYPE, GPMC_DEVICETYPE_NAND);
-	gpmc_cs_configure(gpmc_nand_data->cs, GPMC_CONFIG_WP, 0);
 	err = gpmc_cs_set_timings(gpmc_nand_data->cs, &t);
 	if (err)
 		return err;
@@ -89,20 +81,21 @@ static int omap2_nand_gpmc_retime(
 	return 0;
 }
 
-static bool __init gpmc_hwecc_bch_capable(enum omap_ecc ecc_opt)
+static bool gpmc_hwecc_bch_capable(enum omap_ecc ecc_opt)
 {
 	/* support only OMAP3 class */
-	if (!cpu_is_omap34xx()) {
+	if (!cpu_is_omap34xx() && !soc_is_am33xx()) {
 		pr_err("BCH ecc is not supported on this CPU\n");
 		return 0;
 	}
 
 	/*
-	 * For now, assume 4-bit mode is only supported on OMAP3630 ES1.x, x>=1.
-	 * Other chips may be added if confirmed to work.
+	 * For now, assume 4-bit mode is only supported on OMAP3630 ES1.x, x>=1
+	 * and AM33xx derivates. Other chips may be added if confirmed to work.
 	 */
 	if ((ecc_opt == OMAP_ECC_BCH4_CODE_HW) &&
-	    (!cpu_is_omap3630() || (GET_OMAP_REVISION() == 0))) {
+	    (!cpu_is_omap3630() || (GET_OMAP_REVISION() == 0)) &&
+	    (!soc_is_am33xx())) {
 		pr_err("BCH 4-bit mode is not supported on this CPU\n");
 		return 0;
 	}
@@ -110,18 +103,22 @@ static bool __init gpmc_hwecc_bch_capable(enum omap_ecc ecc_opt)
 	return 1;
 }
 
-int __init gpmc_nand_init(struct omap_nand_platform_data *gpmc_nand_data,
-			  struct gpmc_timings *gpmc_t)
+int gpmc_nand_init(struct omap_nand_platform_data *gpmc_nand_data,
+		   struct gpmc_timings *gpmc_t)
 {
 	int err	= 0;
+	struct gpmc_settings s;
 	struct device *dev = &gpmc_nand_device.dev;
+
+	memset(&s, 0, sizeof(struct gpmc_settings));
 
 	gpmc_nand_device.dev.platform_data = gpmc_nand_data;
 
 	err = gpmc_cs_request(gpmc_nand_data->cs, NAND_IO_SIZE,
 				(unsigned long *)&gpmc_nand_resource[0].start);
 	if (err < 0) {
-		dev_err(dev, "Cannot request GPMC CS\n");
+		dev_err(dev, "Cannot request GPMC CS %d, error %d\n",
+			gpmc_nand_data->cs, err);
 		return err;
 	}
 
@@ -139,11 +136,31 @@ int __init gpmc_nand_init(struct omap_nand_platform_data *gpmc_nand_data,
 			dev_err(dev, "Unable to set gpmc timings: %d\n", err);
 			return err;
 		}
-	}
 
-	/* Enable RD PIN Monitoring Reg */
-	if (gpmc_nand_data->dev_ready) {
-		gpmc_cs_configure(gpmc_nand_data->cs, GPMC_CONFIG_RDY_BSY, 1);
+		if (gpmc_nand_data->of_node) {
+			gpmc_read_settings_dt(gpmc_nand_data->of_node, &s);
+		} else {
+			s.device_nand = true;
+
+			/* Enable RD PIN Monitoring Reg */
+			if (gpmc_nand_data->dev_ready) {
+				s.wait_on_read = true;
+				s.wait_on_write = true;
+			}
+		}
+
+		if (gpmc_nand_data->devsize == NAND_BUSWIDTH_16)
+			s.device_width = GPMC_DEVWIDTH_16BIT;
+		else
+			s.device_width = GPMC_DEVWIDTH_8BIT;
+
+		err = gpmc_cs_program_settings(gpmc_nand_data->cs, &s);
+		if (err < 0)
+			goto out_free_cs;
+
+		err = gpmc_configure(GPMC_CONFIG_WP, 0);
+		if (err < 0)
+			goto out_free_cs;
 	}
 
 	gpmc_update_nand_reg(&gpmc_nand_data->reg, gpmc_nand_data->cs);

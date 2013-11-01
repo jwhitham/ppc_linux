@@ -1,6 +1,6 @@
 /*
  * QLogic Fibre Channel HBA Driver
- * Copyright (c)  2003-2012 QLogic Corporation
+ * Copyright (c)  2003-2013 QLogic Corporation
  *
  * See LICENSE.qla2xxx for copyright and licensing details.
  */
@@ -847,14 +847,21 @@ static int
 qla82xx_rom_lock(struct qla_hw_data *ha)
 {
 	int done = 0, timeout = 0;
+	uint32_t lock_owner = 0;
+	scsi_qla_host_t *vha = pci_get_drvdata(ha->pdev);
 
 	while (!done) {
 		/* acquire semaphore2 from PCI HW block */
 		done = qla82xx_rd_32(ha, QLA82XX_PCIE_REG(PCIE_SEM2_LOCK));
 		if (done == 1)
 			break;
-		if (timeout >= qla82xx_rom_lock_timeout)
+		if (timeout >= qla82xx_rom_lock_timeout) {
+			lock_owner = qla82xx_rd_32(ha, QLA82XX_ROM_LOCK_ID);
+			ql_dbg(ql_dbg_p3p, vha, 0xb085,
+			    "Failed to acquire rom lock, acquired by %d.\n",
+			    lock_owner);
 			return -1;
+		}
 		timeout++;
 	}
 	qla82xx_wr_32(ha, QLA82XX_ROM_LOCK_ID, ROM_LOCK_DRIVER);
@@ -2067,9 +2074,6 @@ qla82xx_intr_handler(int irq, void *dev_id)
 		}
 		WRT_REG_DWORD(&reg->host_int, 0);
 	}
-	spin_unlock_irqrestore(&ha->hardware_lock, flags);
-	if (!ha->flags.msi_enabled)
-		qla82xx_wr_32(ha, ha->nx_legacy_intr.tgt_mask_reg, 0xfbff);
 
 #ifdef QL_DEBUG_LEVEL_17
 	if (!irq && ha->flags.eeh_busy)
@@ -2078,11 +2082,12 @@ qla82xx_intr_handler(int irq, void *dev_id)
 		    status, ha->mbx_cmd_flags, ha->flags.mbox_int, stat);
 #endif
 
-	if (test_bit(MBX_INTR_WAIT, &ha->mbx_cmd_flags) &&
-	    (status & MBX_INTERRUPT) && ha->flags.mbox_int) {
-		set_bit(MBX_INTERRUPT, &ha->mbx_cmd_flags);
-		complete(&ha->mbx_intr_comp);
-	}
+	qla2x00_handle_mbx_completion(ha, status);
+	spin_unlock_irqrestore(&ha->hardware_lock, flags);
+
+	if (!ha->flags.msi_enabled)
+		qla82xx_wr_32(ha, ha->nx_legacy_intr.tgt_mask_reg, 0xfbff);
+
 	return IRQ_HANDLED;
 }
 
@@ -2142,8 +2147,6 @@ qla82xx_msix_default(int irq, void *dev_id)
 		WRT_REG_DWORD(&reg->host_int, 0);
 	} while (0);
 
-	spin_unlock_irqrestore(&ha->hardware_lock, flags);
-
 #ifdef QL_DEBUG_LEVEL_17
 	if (!irq && ha->flags.eeh_busy)
 		ql_log(ql_log_warn, vha, 0x5044,
@@ -2151,11 +2154,9 @@ qla82xx_msix_default(int irq, void *dev_id)
 		    status, ha->mbx_cmd_flags, ha->flags.mbox_int, stat);
 #endif
 
-	if (test_bit(MBX_INTR_WAIT, &ha->mbx_cmd_flags) &&
-		(status & MBX_INTERRUPT) && ha->flags.mbox_int) {
-			set_bit(MBX_INTERRUPT, &ha->mbx_cmd_flags);
-			complete(&ha->mbx_intr_comp);
-	}
+	qla2x00_handle_mbx_completion(ha, status);
+	spin_unlock_irqrestore(&ha->hardware_lock, flags);
+
 	return IRQ_HANDLED;
 }
 
@@ -3338,7 +3339,7 @@ void qla82xx_clear_pending_mbx(scsi_qla_host_t *vha)
 		ha->flags.mbox_busy = 0;
 		ql_log(ql_log_warn, vha, 0x6010,
 		    "Doing premature completion of mbx command.\n");
-		if (test_bit(MBX_INTR_WAIT, &ha->mbx_cmd_flags))
+		if (test_and_clear_bit(MBX_INTR_WAIT, &ha->mbx_cmd_flags))
 			complete(&ha->mbx_intr_comp);
 	}
 }
@@ -3629,7 +3630,7 @@ qla82xx_chip_reset_cleanup(scsi_qla_host_t *vha)
 			req = ha->req_q_map[que];
 			if (!req)
 				continue;
-			for (cnt = 1; cnt < MAX_OUTSTANDING_COMMANDS; cnt++) {
+			for (cnt = 1; cnt < req->num_outstanding_cmds; cnt++) {
 				sp = req->outstanding_cmds[cnt];
 				if (sp) {
 					if (!sp->u.scmd.ctx ||

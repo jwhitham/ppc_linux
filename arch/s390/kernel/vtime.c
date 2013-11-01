@@ -127,7 +127,7 @@ void vtime_account_user(struct task_struct *tsk)
  * Update process times based on virtual cpu times stored by entry.S
  * to the lowcore fields user_timer, system_timer & steal_clock.
  */
-void vtime_account(struct task_struct *tsk)
+void vtime_account_irq_enter(struct task_struct *tsk)
 {
 	struct thread_info *ti = task_thread_info(tsk);
 	u64 timer, system;
@@ -145,10 +145,10 @@ void vtime_account(struct task_struct *tsk)
 
 	virt_timer_forward(system);
 }
-EXPORT_SYMBOL_GPL(vtime_account);
+EXPORT_SYMBOL_GPL(vtime_account_irq_enter);
 
 void vtime_account_system(struct task_struct *tsk)
-__attribute__((alias("vtime_account")));
+__attribute__((alias("vtime_account_irq_enter")));
 EXPORT_SYMBOL_GPL(vtime_account_system);
 
 void __kprobes vtime_stop_cpu(void)
@@ -158,8 +158,6 @@ void __kprobes vtime_stop_cpu(void)
 	unsigned long psw_mask;
 
 	trace_hardirqs_on();
-	/* Don't trace preempt off for idle. */
-	stop_critical_timings();
 
 	/* Wait for external, I/O or machine check interrupt. */
 	psw_mask = psw_kernel_bits | PSW_MASK_WAIT | PSW_MASK_DAT |
@@ -168,9 +166,6 @@ void __kprobes vtime_stop_cpu(void)
 
 	/* Call the assembler magic in entry.S */
 	psw_idle(idle, psw_mask);
-
-	/* Reenable preemption tracer. */
-	start_critical_timings();
 
 	/* Account time spent with enabled wait psw loaded as idle time. */
 	idle->sequence++;
@@ -191,7 +186,7 @@ cputime64_t s390_get_idle_time(int cpu)
 	unsigned int sequence;
 
 	do {
-		now = get_clock();
+		now = get_tod_clock();
 		sequence = ACCESS_ONCE(idle->sequence);
 		idle_enter = ACCESS_ONCE(idle->clock_idle_enter);
 		idle_exit = ACCESS_ONCE(idle->clock_idle_exit);

@@ -1563,12 +1563,12 @@ static int mp_open(struct tty_struct *tty, struct file *filp)
 
 	state = uart_get(drv, line);
 
-	mtpt  = (struct mp_port *)state->port;
-
 	if (IS_ERR(state)) {
 		retval = PTR_ERR(state);
 		goto fail;
 	}
+
+	mtpt  = (struct mp_port *)state->port;
 
 	tty->driver_data = state;
 	tty->low_latency = (state->port->flags & UPF_LOW_LATENCY) ? 1 : 0;
@@ -2248,7 +2248,7 @@ static irqreturn_t multi_interrupt(int irq, void *dev_id)
 		mtpt = list_entry(lhead, struct mp_port, list);
 		
 		iir = serial_in(mtpt, UART_IIR);
-		printk("intrrupt! port %d, iir 0x%x\n", mtpt->port.line, iir); //wlee
+		printk("interrupt! port %d, iir 0x%x\n", mtpt->port.line, iir); //wlee
 		if (!(iir & UART_IIR_NO_INT)) 
 		{
 			printk("interrupt handle\n");
@@ -2830,7 +2830,7 @@ static void __init multi_init_ports(void)
 
 			mtpt->port.uartclk  = BASE_BAUD * 16;
 
-			/* get input clock infomation */
+			/* get input clock information */
 			osc = inb(sbdev->option_reg_addr + MP_OPTR_DIR0 + i/8) & 0x0F;
 			if (osc==0x0f)
 				osc = 0;
@@ -2851,18 +2851,12 @@ static void __init multi_init_ports(void)
 				printk("IIR_RET = %x\n",b_ret);
 			}
 
-			if(IIR_RS232 == (b_ret & IIR_RS232))
-			{
-				mtpt->interface = RS232;
-			}
-			if(IIR_RS422 == (b_ret & IIR_RS422))
-			{
+			/* default to RS232 */
+			mtpt->interface = RS232;
+			if (IIR_RS422 == (b_ret & IIR_TYPE_MASK))
 				mtpt->interface = RS422PTP;
-			}
-			if(IIR_RS485 == (b_ret & IIR_RS485))
-			{
+			if (IIR_RS485 == (b_ret & IIR_TYPE_MASK))
 				mtpt->interface = RS485NE;
-			}
 		}
 	}
 }

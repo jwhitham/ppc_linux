@@ -36,6 +36,7 @@
 #include "xfs_ioctl.h"
 #include "xfs_trace.h"
 
+#include <linux/aio.h>
 #include <linux/dcache.h>
 #include <linux/falloc.h>
 #include <linux/pagevec.h>
@@ -775,8 +776,6 @@ xfs_file_aio_write(
 	if (ocount == 0)
 		return 0;
 
-	sb_start_write(inode->i_sb);
-
 	if (XFS_FORCED_SHUTDOWN(ip->i_mount)) {
 		ret = -EIO;
 		goto out;
@@ -800,7 +799,6 @@ xfs_file_aio_write(
 	}
 
 out:
-	sb_end_write(inode->i_sb);
 	return ret;
 }
 
@@ -811,7 +809,7 @@ xfs_file_fallocate(
 	loff_t		offset,
 	loff_t		len)
 {
-	struct inode	*inode = file->f_path.dentry->d_inode;
+	struct inode	*inode = file_inode(file);
 	long		error;
 	loff_t		new_size = 0;
 	xfs_flock64_t	bf;
@@ -893,7 +891,7 @@ xfs_dir_open(
 	 */
 	mode = xfs_ilock_map_shared(ip);
 	if (ip->i_d.di_nextents > 0)
-		xfs_dir2_data_readahead(NULL, ip, 0, -1);
+		xfs_dir3_data_readahead(NULL, ip, 0, -1);
 	xfs_iunlock(ip, mode);
 	return 0;
 }
@@ -912,7 +910,7 @@ xfs_file_readdir(
 	void		*dirent,
 	filldir_t	filldir)
 {
-	struct inode	*inode = filp->f_path.dentry->d_inode;
+	struct inode	*inode = file_inode(filp);
 	xfs_inode_t	*ip = XFS_I(inode);
 	int		error;
 	size_t		bufsize;

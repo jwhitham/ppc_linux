@@ -570,7 +570,6 @@ static struct davinci_mmc_config dm6446evm_mmc_config = {
 	.get_cd		= dm6444evm_mmc_get_cd,
 	.get_ro		= dm6444evm_mmc_get_ro,
 	.wires		= 4,
-	.version	= MMC_CTLR_VERSION_1
 };
 
 static struct i2c_board_info __initdata i2c_info[] =  {
@@ -622,7 +621,7 @@ static struct vpbe_enc_mode_info dm644xevm_enc_std_timing[] = {
 	{
 		.name		= "ntsc",
 		.timings_type	= VPBE_ENC_STD,
-		.std_id		= V4L2_STD_525_60,
+		.std_id		= V4L2_STD_NTSC,
 		.interlaced	= 1,
 		.xres		= 720,
 		.yres		= 480,
@@ -634,7 +633,7 @@ static struct vpbe_enc_mode_info dm644xevm_enc_std_timing[] = {
 	{
 		.name		= "pal",
 		.timings_type	= VPBE_ENC_STD,
-		.std_id		= V4L2_STD_625_50,
+		.std_id		= V4L2_STD_PAL,
 		.interlaced	= 1,
 		.xres		= 720,
 		.yres		= 576,
@@ -649,7 +648,7 @@ static struct vpbe_enc_mode_info dm644xevm_enc_std_timing[] = {
 static struct vpbe_enc_mode_info dm644xevm_enc_preset_timing[] = {
 	{
 		.name		= "480p59_94",
-		.timings_type	= VPBE_ENC_CUSTOM_TIMINGS,
+		.timings_type	= VPBE_ENC_DV_TIMINGS,
 		.dv_timings	= V4L2_DV_BT_CEA_720X480P59_94,
 		.interlaced	= 0,
 		.xres		= 720,
@@ -661,7 +660,7 @@ static struct vpbe_enc_mode_info dm644xevm_enc_preset_timing[] = {
 	},
 	{
 		.name		= "576p50",
-		.timings_type	= VPBE_ENC_CUSTOM_TIMINGS,
+		.timings_type	= VPBE_ENC_DV_TIMINGS,
 		.dv_timings	= V4L2_DV_BT_CEA_720X576P50,
 		.interlaced	= 0,
 		.xres		= 720,
@@ -690,7 +689,7 @@ static struct vpbe_output dm644xevm_vpbe_outputs[] = {
 			.std		= VENC_STD_ALL,
 			.capabilities	= V4L2_OUT_CAP_STD,
 		},
-		.subdev_name	= VPBE_VENC_SUBDEV_NAME,
+		.subdev_name	= DM644X_VPBE_VENC_SUBDEV_NAME,
 		.default_mode	= "ntsc",
 		.num_modes	= ARRAY_SIZE(dm644xevm_enc_std_timing),
 		.modes		= dm644xevm_enc_std_timing,
@@ -702,7 +701,7 @@ static struct vpbe_output dm644xevm_vpbe_outputs[] = {
 			.type		= V4L2_OUTPUT_TYPE_ANALOG,
 			.capabilities	= V4L2_OUT_CAP_DV_TIMINGS,
 		},
-		.subdev_name	= VPBE_VENC_SUBDEV_NAME,
+		.subdev_name	= DM644X_VPBE_VENC_SUBDEV_NAME,
 		.default_mode	= "480p59_94",
 		.num_modes	= ARRAY_SIZE(dm644xevm_enc_preset_timing),
 		.modes		= dm644xevm_enc_preset_timing,
@@ -713,10 +712,10 @@ static struct vpbe_config dm644xevm_display_cfg = {
 	.module_name	= "dm644x-vpbe-display",
 	.i2c_adapter_id	= 1,
 	.osd		= {
-		.module_name	= VPBE_OSD_SUBDEV_NAME,
+		.module_name	= DM644X_VPBE_OSD_SUBDEV_NAME,
 	},
 	.venc		= {
-		.module_name	= VPBE_VENC_SUBDEV_NAME,
+		.module_name	= DM644X_VPBE_VENC_SUBDEV_NAME,
 	},
 	.num_outputs	= ARRAY_SIZE(dm644xevm_vpbe_outputs),
 	.outputs	= dm644xevm_vpbe_outputs,
@@ -750,26 +749,11 @@ static int davinci_phy_fixup(struct phy_device *phydev)
 	return 0;
 }
 
-#if defined(CONFIG_BLK_DEV_PALMCHIP_BK3710) || \
-    defined(CONFIG_BLK_DEV_PALMCHIP_BK3710_MODULE)
-#define HAS_ATA 1
-#else
-#define HAS_ATA 0
-#endif
+#define HAS_ATA		IS_ENABLED(CONFIG_BLK_DEV_PALMCHIP_BK3710)
 
-#if defined(CONFIG_MTD_PHYSMAP) || \
-    defined(CONFIG_MTD_PHYSMAP_MODULE)
-#define HAS_NOR 1
-#else
-#define HAS_NOR 0
-#endif
+#define HAS_NOR		IS_ENABLED(CONFIG_MTD_PHYSMAP)
 
-#if defined(CONFIG_MTD_NAND_DAVINCI) || \
-    defined(CONFIG_MTD_NAND_DAVINCI_MODULE)
-#define HAS_NAND 1
-#else
-#define HAS_NAND 0
-#endif
+#define HAS_NAND	IS_ENABLED(CONFIG_MTD_NAND_DAVINCI)
 
 static __init void davinci_evm_init(void)
 {
@@ -825,7 +809,7 @@ MACHINE_START(DAVINCI_EVM, "DaVinci DM644x EVM")
 	.atag_offset  = 0x100,
 	.map_io	      = davinci_evm_map_io,
 	.init_irq     = davinci_irq_init,
-	.timer	      = &davinci_timer,
+	.init_time	= davinci_timer_init,
 	.init_machine = davinci_evm_init,
 	.init_late	= davinci_init_late,
 	.dma_zone_size	= SZ_128M,

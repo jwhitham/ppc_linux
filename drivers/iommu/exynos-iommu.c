@@ -511,7 +511,7 @@ int exynos_sysmmu_enable(struct device *dev, unsigned long pgtable)
 	return ret;
 }
 
-bool exynos_sysmmu_disable(struct device *dev)
+static bool exynos_sysmmu_disable(struct device *dev)
 {
 	struct sysmmu_drvdata *data = dev_get_drvdata(dev->archdata.iommu);
 	bool disabled;
@@ -1027,7 +1027,7 @@ done:
 }
 
 static phys_addr_t exynos_iommu_iova_to_phys(struct iommu_domain *domain,
-					  u64 iova)
+					  dma_addr_t iova)
 {
 	struct exynos_iommu_domain *priv = domain->priv;
 	unsigned long *entry;

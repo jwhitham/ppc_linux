@@ -34,6 +34,8 @@ This driver is a simple driver to read the counter values from
 Kolter Electronic PCI Counter Card.
 */
 
+#include <linux/pci.h>
+
 #include "../comedidev.h"
 
 #define CNT_CARD_DEVICE_ID      0x0014
@@ -94,9 +96,7 @@ static int cnt_auto_attach(struct comedi_device *dev,
 	struct comedi_subdevice *s;
 	int ret;
 
-	dev->board_name = dev->driver->driver_name;
-
-	ret = comedi_pci_enable(pcidev, dev->board_name);
+	ret = comedi_pci_enable(dev);
 	if (ret)
 		return ret;
 	dev->iobase = pci_resource_start(pcidev, 0);
@@ -129,32 +129,18 @@ static int cnt_auto_attach(struct comedi_device *dev,
 	return 0;
 }
 
-static void cnt_detach(struct comedi_device *dev)
-{
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
-
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-	}
-}
-
 static struct comedi_driver ke_counter_driver = {
 	.driver_name	= "ke_counter",
 	.module		= THIS_MODULE,
 	.auto_attach	= cnt_auto_attach,
-	.detach		= cnt_detach,
+	.detach		= comedi_pci_disable,
 };
 
 static int ke_counter_pci_probe(struct pci_dev *dev,
-					  const struct pci_device_id *ent)
+				const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &ke_counter_driver);
-}
-
-static void ke_counter_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
+	return comedi_pci_auto_config(dev, &ke_counter_driver,
+				      id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(ke_counter_pci_table) = {
@@ -167,7 +153,7 @@ static struct pci_driver ke_counter_pci_driver = {
 	.name		= "ke_counter",
 	.id_table	= ke_counter_pci_table,
 	.probe		= ke_counter_pci_probe,
-	.remove		= ke_counter_pci_remove,
+	.remove		= comedi_pci_auto_unconfig,
 };
 module_comedi_pci_driver(ke_counter_driver, ke_counter_pci_driver);
 

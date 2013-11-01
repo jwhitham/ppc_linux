@@ -418,7 +418,7 @@ static int esdhc_of_get_cd(struct sdhci_host *host)
 	return !!present;
 }
 
-static struct sdhci_ops sdhci_esdhc_ops = {
+static const struct sdhci_ops sdhci_esdhc_ops = {
 	.read_l = esdhc_readl,
 	.read_w = esdhc_readw,
 	.read_b = esdhc_readb,
@@ -440,7 +440,7 @@ static struct sdhci_ops sdhci_esdhc_ops = {
 	.adma_workaround = esdhci_of_adma_workaround,
 };
 
-static struct sdhci_pltfm_data sdhci_esdhc_pdata = {
+static const struct sdhci_pltfm_data sdhci_esdhc_pdata = {
 	/*
 	 * card detection could be handled via GPIO
 	 * eSDHC cannot support End Attribute in NOP ADMA descriptor

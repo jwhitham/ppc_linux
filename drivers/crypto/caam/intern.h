@@ -41,6 +41,7 @@ struct caam_jrentry_info {
 struct caam_drv_private_jr {
 	struct list_head	list_node;
 	struct device		*dev;
+	struct platform_device *jr_pdev;/* points to platform device for JR */
 	int ridx;
 	struct caam_job_ring __iomem *rregs;	/* JobR's register space */
 	struct napi_struct __percpu *irqtask;

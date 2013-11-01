@@ -183,7 +183,7 @@ static irqreturn_t octeon_i2c_isr(int irq, void *dev_id)
 	struct octeon_i2c *i2c = dev_id;
 
 	octeon_i2c_int_disable(i2c);
-	wake_up_interruptible(&i2c->queue);
+	wake_up(&i2c->queue);
 
 	return IRQ_HANDLED;
 }
@@ -206,9 +206,9 @@ static int octeon_i2c_wait(struct octeon_i2c *i2c)
 
 	octeon_i2c_int_enable(i2c);
 
-	result = wait_event_interruptible_timeout(i2c->queue,
-						  octeon_i2c_test_iflg(i2c),
-						  i2c->adap.timeout);
+	result = wait_event_timeout(i2c->queue,
+					octeon_i2c_test_iflg(i2c),
+					i2c->adap.timeout);
 
 	octeon_i2c_int_disable(i2c);
 
@@ -440,7 +440,7 @@ static struct i2c_adapter octeon_i2c_ops = {
 	.owner = THIS_MODULE,
 	.name = "OCTEON adapter",
 	.algo = &octeon_i2c_algo,
-	.timeout = 2,
+	.timeout = HZ / 50,
 };
 
 /**
@@ -595,7 +595,7 @@ static int octeon_i2c_probe(struct platform_device *pdev)
 	result = i2c_add_adapter(&i2c->adap);
 	if (result < 0) {
 		dev_err(i2c->dev, "failed to add adapter\n");
-		goto fail_add;
+		goto out;
 	}
 	dev_info(i2c->dev, "version %s\n", DRV_VERSION);
 
@@ -603,8 +603,6 @@ static int octeon_i2c_probe(struct platform_device *pdev)
 
 	return 0;
 
-fail_add:
-	platform_set_drvdata(pdev, NULL);
 out:
 	return result;
 };
@@ -614,7 +612,6 @@ static int octeon_i2c_remove(struct platform_device *pdev)
 	struct octeon_i2c *i2c = platform_get_drvdata(pdev);
 
 	i2c_del_adapter(&i2c->adap);
-	platform_set_drvdata(pdev, NULL);
 	return 0;
 };
 

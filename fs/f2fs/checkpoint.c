@@ -20,6 +20,7 @@
 #include "f2fs.h"
 #include "node.h"
 #include "segment.h"
+#include <trace/events/f2fs.h>
 
 static struct kmem_cache *orphan_entry_slab;
 static struct kmem_cache *inode_entry_slab;
@@ -57,13 +58,19 @@ repeat:
 		cond_resched();
 		goto repeat;
 	}
-	if (f2fs_readpage(sbi, page, index, READ_SYNC)) {
+	if (PageUptodate(page))
+		goto out;
+
+	if (f2fs_readpage(sbi, page, index, READ_SYNC))
+		goto repeat;
+
+	lock_page(page);
+	if (page->mapping != mapping) {
 		f2fs_put_page(page, 1);
 		goto repeat;
 	}
+out:
 	mark_page_accessed(page);
-
-	/* We do not allow returning an errorneous page */
 	return page;
 }
 
@@ -72,22 +79,22 @@ static int f2fs_write_meta_page(struct page *page,
 {
 	struct inode *inode = page->mapping->host;
 	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
-	int err;
+
+	/* Should not write any meta pages, if any IO error was occurred */
+	if (wbc->for_reclaim ||
+			is_set_ckpt_flags(F2FS_CKPT(sbi), CP_ERROR_FLAG)) {
+		dec_page_count(sbi, F2FS_DIRTY_META);
+		wbc->pages_skipped++;
+		set_page_dirty(page);
+		return AOP_WRITEPAGE_ACTIVATE;
+	}
 
 	wait_on_page_writeback(page);
 
-	err = write_meta_page(sbi, page, wbc);
-	if (err) {
-		wbc->pages_skipped++;
-		set_page_dirty(page);
-	}
-
+	write_meta_page(sbi, page);
 	dec_page_count(sbi, F2FS_DIRTY_META);
-
-	/* In this case, we should not unlock this page */
-	if (err != AOP_WRITEPAGE_ACTIVATE)
-		unlock_page(page);
-	return err;
+	unlock_page(page);
+	return 0;
 }
 
 static int f2fs_write_meta_pages(struct address_space *mapping,
@@ -138,7 +145,10 @@ long sync_meta_pages(struct f2fs_sb_info *sbi, enum page_type type,
 			BUG_ON(page->mapping != mapping);
 			BUG_ON(!PageDirty(page));
 			clear_page_dirty_for_io(page);
-			f2fs_write_meta_page(page, &wbc);
+			if (f2fs_write_meta_page(page, &wbc)) {
+				unlock_page(page);
+				break;
+			}
 			if (nwritten++ >= nr_to_write)
 				break;
 		}
@@ -161,7 +171,6 @@ static int f2fs_set_meta_page_dirty(struct page *page)
 	if (!PageDirty(page)) {
 		__set_page_dirty_nobuffers(page);
 		inc_page_count(sbi, F2FS_DIRTY_META);
-		F2FS_SET_SB_DIRT(sbi);
 		return 1;
 	}
 	return 0;
@@ -216,19 +225,11 @@ retry:
 	new->ino = ino;
 
 	/* add new_oentry into list which is sorted by inode number */
-	if (orphan) {
-		struct orphan_inode_entry *prev;
-
-		/* get previous entry */
-		prev = list_entry(orphan->list.prev, typeof(*prev), list);
-		if (&prev->list != head)
-			/* insert new orphan inode entry */
-			list_add(&new->list, &prev->list);
-		else
-			list_add(&new->list, head);
-	} else {
+	if (orphan)
+		list_add(&new->list, this->prev);
+	else
 		list_add_tail(&new->list, head);
-	}
+
 	sbi->n_orphans++;
 out:
 	mutex_unlock(&sbi->orphan_inode_mutex);
@@ -545,56 +546,46 @@ retry:
 /*
  * Freeze all the FS-operations for checkpoint.
  */
-void block_operations(struct f2fs_sb_info *sbi)
+static void block_operations(struct f2fs_sb_info *sbi)
 {
-	int t;
 	struct writeback_control wbc = {
 		.sync_mode = WB_SYNC_ALL,
 		.nr_to_write = LONG_MAX,
 		.for_reclaim = 0,
 	};
+	struct blk_plug plug;
 
-	/* Stop renaming operation */
-	mutex_lock_op(sbi, RENAME);
-	mutex_lock_op(sbi, DENTRY_OPS);
+	blk_start_plug(&plug);
 
-retry_dents:
+retry_flush_dents:
+	mutex_lock_all(sbi);
+
 	/* write all the dirty dentry pages */
-	sync_dirty_dir_inodes(sbi);
-
-	mutex_lock_op(sbi, DATA_WRITE);
 	if (get_pages(sbi, F2FS_DIRTY_DENTS)) {
-		mutex_unlock_op(sbi, DATA_WRITE);
-		goto retry_dents;
+		mutex_unlock_all(sbi);
+		sync_dirty_dir_inodes(sbi);
+		goto retry_flush_dents;
 	}
-
-	/* block all the operations */
-	for (t = DATA_NEW; t <= NODE_TRUNC; t++)
-		mutex_lock_op(sbi, t);
-
-	mutex_lock(&sbi->write_inode);
 
 	/*
 	 * POR: we should ensure that there is no dirty node pages
 	 * until finishing nat/sit flush.
 	 */
-retry:
-	sync_node_pages(sbi, 0, &wbc);
-
-	mutex_lock_op(sbi, NODE_WRITE);
+retry_flush_nodes:
+	mutex_lock(&sbi->node_write);
 
 	if (get_pages(sbi, F2FS_DIRTY_NODES)) {
-		mutex_unlock_op(sbi, NODE_WRITE);
-		goto retry;
+		mutex_unlock(&sbi->node_write);
+		sync_node_pages(sbi, 0, &wbc);
+		goto retry_flush_nodes;
 	}
-	mutex_unlock(&sbi->write_inode);
+	blk_finish_plug(&plug);
 }
 
 static void unblock_operations(struct f2fs_sb_info *sbi)
 {
-	int t;
-	for (t = NODE_WRITE; t >= RENAME; t--)
-		mutex_unlock_op(sbi, t);
+	mutex_unlock(&sbi->node_write);
+	mutex_unlock_all(sbi);
 }
 
 static void do_checkpoint(struct f2fs_sb_info *sbi, bool is_umount)
@@ -717,27 +708,28 @@ static void do_checkpoint(struct f2fs_sb_info *sbi, bool is_umount)
 	sbi->alloc_valid_block_count = 0;
 
 	/* Here, we only have one bio having CP pack */
-	if (is_set_ckpt_flags(ckpt, CP_ERROR_FLAG))
-		sbi->sb->s_flags |= MS_RDONLY;
-	else
-		sync_meta_pages(sbi, META_FLUSH, LONG_MAX);
+	sync_meta_pages(sbi, META_FLUSH, LONG_MAX);
 
-	clear_prefree_segments(sbi);
-	F2FS_RESET_SB_DIRT(sbi);
+	if (!is_set_ckpt_flags(ckpt, CP_ERROR_FLAG)) {
+		clear_prefree_segments(sbi);
+		F2FS_RESET_SB_DIRT(sbi);
+	}
 }
 
 /*
  * We guarantee that this checkpoint procedure should not fail.
  */
-void write_checkpoint(struct f2fs_sb_info *sbi, bool blocked, bool is_umount)
+void write_checkpoint(struct f2fs_sb_info *sbi, bool is_umount)
 {
 	struct f2fs_checkpoint *ckpt = F2FS_CKPT(sbi);
 	unsigned long long ckpt_ver;
 
-	if (!blocked) {
-		mutex_lock(&sbi->cp_mutex);
-		block_operations(sbi);
-	}
+	trace_f2fs_write_checkpoint(sbi->sb, is_umount, "start block_ops");
+
+	mutex_lock(&sbi->cp_mutex);
+	block_operations(sbi);
+
+	trace_f2fs_write_checkpoint(sbi->sb, is_umount, "finish block_ops");
 
 	f2fs_submit_bio(sbi, DATA, true);
 	f2fs_submit_bio(sbi, NODE, true);
@@ -755,13 +747,13 @@ void write_checkpoint(struct f2fs_sb_info *sbi, bool blocked, bool is_umount)
 	flush_nat_entries(sbi);
 	flush_sit_entries(sbi);
 
-	reset_victim_segmap(sbi);
-
 	/* unlock all the fs_lock[] in do_checkpoint() */
 	do_checkpoint(sbi, is_umount);
 
 	unblock_operations(sbi);
 	mutex_unlock(&sbi->cp_mutex);
+
+	trace_f2fs_write_checkpoint(sbi->sb, is_umount, "finish checkpoint");
 }
 
 void init_orphan_info(struct f2fs_sb_info *sbi)

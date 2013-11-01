@@ -1069,7 +1069,6 @@ static int intel_mid_i2c_probe(struct pci_dev *dev,
 fail3:
 	free_irq(dev->irq, mrst);
 fail2:
-	pci_set_drvdata(dev, NULL);
 	kfree(mrst);
 fail1:
 	iounmap(base);
@@ -1083,11 +1082,9 @@ static void intel_mid_i2c_remove(struct pci_dev *dev)
 {
 	struct intel_mid_i2c_private *mrst = pci_get_drvdata(dev);
 	intel_mid_i2c_disable(&mrst->adap);
-	if (i2c_del_adapter(&mrst->adap))
-		dev_err(&dev->dev, "Failed to delete i2c adapter");
+	i2c_del_adapter(&mrst->adap);
 
 	free_irq(dev->irq, mrst);
-	pci_set_drvdata(dev, NULL);
 	iounmap(mrst->base);
 	kfree(mrst);
 	pci_release_region(dev, 0);

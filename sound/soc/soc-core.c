@@ -58,6 +58,7 @@ static DEFINE_MUTEX(client_mutex);
 static LIST_HEAD(dai_list);
 static LIST_HEAD(platform_list);
 static LIST_HEAD(codec_list);
+static LIST_HEAD(component_list);
 
 /*
  * This is a timeout to do a DAPM powerdown after a stream is closed().
@@ -251,7 +252,7 @@ static ssize_t codec_reg_write_file(struct file *file,
 		return -EINVAL;
 
 	/* Userspace has been fiddling around behind the kernel's back */
-	add_taint(TAINT_USER);
+	add_taint(TAINT_USER, LOCKDEP_NOW_UNRELIABLE);
 
 	snd_soc_write(codec, reg, value);
 	return buf_size;
@@ -1107,6 +1108,10 @@ static int soc_probe_codec(struct snd_soc_card *card,
 				"ASoC: failed to probe CODEC %d\n", ret);
 			goto err_probe;
 		}
+		WARN(codec->dapm.idle_bias_off &&
+			codec->dapm.bias_level != SND_SOC_BIAS_OFF,
+			"codec %s can not start from non-off bias"
+			" with idle_bias_off==1\n", codec->name);
 	}
 
 	/* If the driver didn't set I/O up try regmap */
@@ -2959,7 +2964,7 @@ int snd_soc_put_volsw_range(struct snd_kcontrol *kcontrol,
 	val = val << shift;
 
 	ret = snd_soc_update_bits_locked(codec, reg, val_mask, val);
-	if (ret != 0)
+	if (ret < 0)
 		return ret;
 
 	if (snd_soc_volsw_is_stereo(mc)) {
@@ -3122,8 +3127,11 @@ int snd_soc_bytes_put(struct snd_kcontrol *kcontrol,
 	if (!codec->using_regmap)
 		return -EINVAL;
 
-	data = ucontrol->value.bytes.data;
 	len = params->num_regs * codec->val_bytes;
+
+	data = kmemdup(ucontrol->value.bytes.data, len, GFP_KERNEL | GFP_DMA);
+	if (!data)
+		return -ENOMEM;
 
 	/*
 	 * If we've got a mask then we need to preserve the register
@@ -3133,13 +3141,9 @@ int snd_soc_bytes_put(struct snd_kcontrol *kcontrol,
 	if (params->mask) {
 		ret = regmap_read(codec->control_data, params->base, &val);
 		if (ret != 0)
-			return ret;
+			goto out;
 
 		val &= params->mask;
-
-		data = kmemdup(data, len, GFP_KERNEL);
-		if (!data)
-			return -ENOMEM;
 
 		switch (codec->val_bytes) {
 		case 1:
@@ -3155,15 +3159,16 @@ int snd_soc_bytes_put(struct snd_kcontrol *kcontrol,
 			((u32 *)data)[0] |= cpu_to_be32(val);
 			break;
 		default:
-			return -EINVAL;
+			ret = -EINVAL;
+			goto out;
 		}
 	}
 
 	ret = regmap_raw_write(codec->control_data, params->base,
 			       data, len);
 
-	if (params->mask)
-		kfree(data);
+out:
+	kfree(data);
 
 	return ret;
 }
@@ -3540,12 +3545,20 @@ EXPORT_SYMBOL_GPL(snd_soc_dai_set_tristate);
  * snd_soc_dai_digital_mute - configure DAI system or master clock.
  * @dai: DAI
  * @mute: mute enable
+ * @direction: stream to mute
  *
  * Mutes the DAI DAC.
  */
-int snd_soc_dai_digital_mute(struct snd_soc_dai *dai, int mute)
+int snd_soc_dai_digital_mute(struct snd_soc_dai *dai, int mute,
+			     int direction)
 {
-	if (dai->driver && dai->driver->ops->digital_mute)
+	if (!dai->driver)
+		return -ENOTSUPP;
+
+	if (dai->driver->ops->mute_stream)
+		return dai->driver->ops->mute_stream(dai, mute, direction);
+	else if (direction == SNDRV_PCM_STREAM_PLAYBACK &&
+		 dai->driver->ops->digital_mute)
 		return dai->driver->ops->digital_mute(dai, mute);
 	else
 		return -ENOTSUPP;
@@ -3728,7 +3741,7 @@ static inline char *fmt_multiple_name(struct device *dev,
  *
  * @dai: DAI to register
  */
-int snd_soc_register_dai(struct device *dev,
+static int snd_soc_register_dai(struct device *dev,
 		struct snd_soc_dai_driver *dai_drv)
 {
 	struct snd_soc_codec *codec;
@@ -3775,14 +3788,13 @@ int snd_soc_register_dai(struct device *dev,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(snd_soc_register_dai);
 
 /**
  * snd_soc_unregister_dai - Unregister a DAI from the ASoC core
  *
  * @dai: DAI to unregister
  */
-void snd_soc_unregister_dai(struct device *dev)
+static void snd_soc_unregister_dai(struct device *dev)
 {
 	struct snd_soc_dai *dai;
 
@@ -3801,7 +3813,6 @@ found:
 	kfree(dai->name);
 	kfree(dai);
 }
-EXPORT_SYMBOL_GPL(snd_soc_unregister_dai);
 
 /**
  * snd_soc_register_dais - Register multiple DAIs with the ASoC core
@@ -3809,7 +3820,7 @@ EXPORT_SYMBOL_GPL(snd_soc_unregister_dai);
  * @dai: Array of DAIs to register
  * @count: Number of DAIs
  */
-int snd_soc_register_dais(struct device *dev,
+static int snd_soc_register_dais(struct device *dev,
 		struct snd_soc_dai_driver *dai_drv, size_t count)
 {
 	struct snd_soc_codec *codec;
@@ -3873,7 +3884,6 @@ err:
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(snd_soc_register_dais);
 
 /**
  * snd_soc_unregister_dais - Unregister multiple DAIs from the ASoC core
@@ -3881,31 +3891,23 @@ EXPORT_SYMBOL_GPL(snd_soc_register_dais);
  * @dai: Array of DAIs to unregister
  * @count: Number of DAIs
  */
-void snd_soc_unregister_dais(struct device *dev, size_t count)
+static void snd_soc_unregister_dais(struct device *dev, size_t count)
 {
 	int i;
 
 	for (i = 0; i < count; i++)
 		snd_soc_unregister_dai(dev);
 }
-EXPORT_SYMBOL_GPL(snd_soc_unregister_dais);
 
 /**
- * snd_soc_register_platform - Register a platform with the ASoC core
- *
- * @platform: platform to register
+ * snd_soc_add_platform - Add a platform to the ASoC core
+ * @dev: The parent device for the platform
+ * @platform: The platform to add
+ * @platform_driver: The driver for the platform
  */
-int snd_soc_register_platform(struct device *dev,
-		struct snd_soc_platform_driver *platform_drv)
+int snd_soc_add_platform(struct device *dev, struct snd_soc_platform *platform,
+		const struct snd_soc_platform_driver *platform_drv)
 {
-	struct snd_soc_platform *platform;
-
-	dev_dbg(dev, "ASoC: platform register %s\n", dev_name(dev));
-
-	platform = kzalloc(sizeof(struct snd_soc_platform), GFP_KERNEL);
-	if (platform == NULL)
-		return -ENOMEM;
-
 	/* create platform component name */
 	platform->name = fmt_single_name(dev, &platform->id);
 	if (platform->name == NULL) {
@@ -3928,7 +3930,61 @@ int snd_soc_register_platform(struct device *dev,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(snd_soc_add_platform);
+
+/**
+ * snd_soc_register_platform - Register a platform with the ASoC core
+ *
+ * @platform: platform to register
+ */
+int snd_soc_register_platform(struct device *dev,
+		const struct snd_soc_platform_driver *platform_drv)
+{
+	struct snd_soc_platform *platform;
+	int ret;
+
+	dev_dbg(dev, "ASoC: platform register %s\n", dev_name(dev));
+
+	platform = kzalloc(sizeof(struct snd_soc_platform), GFP_KERNEL);
+	if (platform == NULL)
+		return -ENOMEM;
+
+	ret = snd_soc_add_platform(dev, platform, platform_drv);
+	if (ret)
+		kfree(platform);
+
+	return ret;
+}
 EXPORT_SYMBOL_GPL(snd_soc_register_platform);
+
+/**
+ * snd_soc_remove_platform - Remove a platform from the ASoC core
+ * @platform: the platform to remove
+ */
+void snd_soc_remove_platform(struct snd_soc_platform *platform)
+{
+	mutex_lock(&client_mutex);
+	list_del(&platform->list);
+	mutex_unlock(&client_mutex);
+
+	dev_dbg(platform->dev, "ASoC: Unregistered platform '%s'\n",
+		platform->name);
+	kfree(platform->name);
+}
+EXPORT_SYMBOL_GPL(snd_soc_remove_platform);
+
+struct snd_soc_platform *snd_soc_lookup_platform(struct device *dev)
+{
+	struct snd_soc_platform *platform;
+
+	list_for_each_entry(platform, &platform_list, list) {
+		if (dev == platform->dev)
+			return platform;
+	}
+
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(snd_soc_lookup_platform);
 
 /**
  * snd_soc_unregister_platform - Unregister a platform from the ASoC core
@@ -3939,19 +3995,11 @@ void snd_soc_unregister_platform(struct device *dev)
 {
 	struct snd_soc_platform *platform;
 
-	list_for_each_entry(platform, &platform_list, list) {
-		if (dev == platform->dev)
-			goto found;
-	}
-	return;
+	platform = snd_soc_lookup_platform(dev);
+	if (!platform)
+		return;
 
-found:
-	mutex_lock(&client_mutex);
-	list_del(&platform->list);
-	mutex_unlock(&client_mutex);
-
-	dev_dbg(dev, "ASoC: Unregistered platform '%s'\n", platform->name);
-	kfree(platform->name);
+	snd_soc_remove_platform(platform);
 	kfree(platform);
 }
 EXPORT_SYMBOL_GPL(snd_soc_unregister_platform);
@@ -4012,8 +4060,8 @@ int snd_soc_register_codec(struct device *dev,
 	/* create CODEC component name */
 	codec->name = fmt_single_name(dev, &codec->id);
 	if (codec->name == NULL) {
-		kfree(codec);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto fail_codec;
 	}
 
 	if (codec_drv->compress_type)
@@ -4052,7 +4100,7 @@ int snd_soc_register_codec(struct device *dev,
 						      reg_size, GFP_KERNEL);
 			if (!codec->reg_def_copy) {
 				ret = -ENOMEM;
-				goto fail;
+				goto fail_codec_name;
 			}
 		}
 	}
@@ -4076,18 +4124,22 @@ int snd_soc_register_codec(struct device *dev,
 	mutex_unlock(&client_mutex);
 
 	/* register any DAIs */
-	if (num_dai) {
-		ret = snd_soc_register_dais(dev, dai_drv, num_dai);
-		if (ret < 0)
-			dev_err(codec->dev, "ASoC: Failed to regster"
-				" DAIs: %d\n", ret);
+	ret = snd_soc_register_dais(dev, dai_drv, num_dai);
+	if (ret < 0) {
+		dev_err(codec->dev, "ASoC: Failed to regster DAIs: %d\n", ret);
+		goto fail_codec_name;
 	}
 
 	dev_dbg(codec->dev, "ASoC: Registered codec '%s'\n", codec->name);
 	return 0;
 
-fail:
+fail_codec_name:
+	mutex_lock(&client_mutex);
+	list_del(&codec->list);
+	mutex_unlock(&client_mutex);
+
 	kfree(codec->name);
+fail_codec:
 	kfree(codec);
 	return ret;
 }
@@ -4101,7 +4153,6 @@ EXPORT_SYMBOL_GPL(snd_soc_register_codec);
 void snd_soc_unregister_codec(struct device *dev)
 {
 	struct snd_soc_codec *codec;
-	int i;
 
 	list_for_each_entry(codec, &codec_list, list) {
 		if (dev == codec->dev)
@@ -4110,9 +4161,7 @@ void snd_soc_unregister_codec(struct device *dev)
 	return;
 
 found:
-	if (codec->num_dai)
-		for (i = 0; i < codec->num_dai; i++)
-			snd_soc_unregister_dai(dev);
+	snd_soc_unregister_dais(dev, codec->num_dai);
 
 	mutex_lock(&client_mutex);
 	list_del(&codec->list);
@@ -4126,6 +4175,92 @@ found:
 	kfree(codec);
 }
 EXPORT_SYMBOL_GPL(snd_soc_unregister_codec);
+
+
+/**
+ * snd_soc_register_component - Register a component with the ASoC core
+ *
+ */
+int snd_soc_register_component(struct device *dev,
+			 const struct snd_soc_component_driver *cmpnt_drv,
+			 struct snd_soc_dai_driver *dai_drv,
+			 int num_dai)
+{
+	struct snd_soc_component *cmpnt;
+	int ret;
+
+	dev_dbg(dev, "component register %s\n", dev_name(dev));
+
+	cmpnt = devm_kzalloc(dev, sizeof(*cmpnt), GFP_KERNEL);
+	if (!cmpnt) {
+		dev_err(dev, "ASoC: Failed to allocate memory\n");
+		return -ENOMEM;
+	}
+
+	cmpnt->name = fmt_single_name(dev, &cmpnt->id);
+	if (!cmpnt->name) {
+		dev_err(dev, "ASoC: Failed to simplifying name\n");
+		return -ENOMEM;
+	}
+
+	cmpnt->dev	= dev;
+	cmpnt->driver	= cmpnt_drv;
+	cmpnt->num_dai	= num_dai;
+
+	/*
+	 * snd_soc_register_dai()  uses fmt_single_name(), and
+	 * snd_soc_register_dais() uses fmt_multiple_name()
+	 * for dai->name which is used for name based matching
+	 */
+	if (1 == num_dai)
+		ret = snd_soc_register_dai(dev, dai_drv);
+	else
+		ret = snd_soc_register_dais(dev, dai_drv, num_dai);
+	if (ret < 0) {
+		dev_err(dev, "ASoC: Failed to regster DAIs: %d\n", ret);
+		goto error_component_name;
+	}
+
+	mutex_lock(&client_mutex);
+	list_add(&cmpnt->list, &component_list);
+	mutex_unlock(&client_mutex);
+
+	dev_dbg(cmpnt->dev, "ASoC: Registered component '%s'\n", cmpnt->name);
+
+	return ret;
+
+error_component_name:
+	kfree(cmpnt->name);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(snd_soc_register_component);
+
+/**
+ * snd_soc_unregister_component - Unregister a component from the ASoC core
+ *
+ */
+void snd_soc_unregister_component(struct device *dev)
+{
+	struct snd_soc_component *cmpnt;
+
+	list_for_each_entry(cmpnt, &component_list, list) {
+		if (dev == cmpnt->dev)
+			goto found;
+	}
+	return;
+
+found:
+	snd_soc_unregister_dais(dev, cmpnt->num_dai);
+
+	mutex_lock(&client_mutex);
+	list_del(&cmpnt->list);
+	mutex_unlock(&client_mutex);
+
+	dev_dbg(dev, "ASoC: Unregistered component '%s'\n", cmpnt->name);
+	kfree(cmpnt->name);
+}
+EXPORT_SYMBOL_GPL(snd_soc_unregister_component);
 
 /* Retrieve a card's name from device tree */
 int snd_soc_of_parse_card_name(struct snd_soc_card *card,
@@ -4187,7 +4322,6 @@ int snd_soc_of_parse_audio_routing(struct snd_soc_card *card,
 			dev_err(card->dev,
 				"ASoC: Property '%s' index %d could not be read: %d\n",
 				propname, 2 * i, ret);
-			kfree(routes);
 			return -EINVAL;
 		}
 		ret = of_property_read_string_index(np, propname,
@@ -4196,7 +4330,6 @@ int snd_soc_of_parse_audio_routing(struct snd_soc_card *card,
 			dev_err(card->dev,
 				"ASoC: Property '%s' index %d could not be read: %d\n",
 				propname, (2 * i) + 1, ret);
-			kfree(routes);
 			return -EINVAL;
 		}
 	}
@@ -4207,6 +4340,113 @@ int snd_soc_of_parse_audio_routing(struct snd_soc_card *card,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_soc_of_parse_audio_routing);
+
+unsigned int snd_soc_of_parse_daifmt(struct device_node *np,
+				     const char *prefix)
+{
+	int ret, i;
+	char prop[128];
+	unsigned int format = 0;
+	int bit, frame;
+	const char *str;
+	struct {
+		char *name;
+		unsigned int val;
+	} of_fmt_table[] = {
+		{ "i2s",	SND_SOC_DAIFMT_I2S },
+		{ "right_j",	SND_SOC_DAIFMT_RIGHT_J },
+		{ "left_j",	SND_SOC_DAIFMT_LEFT_J },
+		{ "dsp_a",	SND_SOC_DAIFMT_DSP_A },
+		{ "dsp_b",	SND_SOC_DAIFMT_DSP_B },
+		{ "ac97",	SND_SOC_DAIFMT_AC97 },
+		{ "pdm",	SND_SOC_DAIFMT_PDM},
+		{ "msb",	SND_SOC_DAIFMT_MSB },
+		{ "lsb",	SND_SOC_DAIFMT_LSB },
+	};
+
+	if (!prefix)
+		prefix = "";
+
+	/*
+	 * check "[prefix]format = xxx"
+	 * SND_SOC_DAIFMT_FORMAT_MASK area
+	 */
+	snprintf(prop, sizeof(prop), "%sformat", prefix);
+	ret = of_property_read_string(np, prop, &str);
+	if (ret == 0) {
+		for (i = 0; i < ARRAY_SIZE(of_fmt_table); i++) {
+			if (strcmp(str, of_fmt_table[i].name) == 0) {
+				format |= of_fmt_table[i].val;
+				break;
+			}
+		}
+	}
+
+	/*
+	 * check "[prefix]continuous-clock"
+	 * SND_SOC_DAIFMT_CLOCK_MASK area
+	 */
+	snprintf(prop, sizeof(prop), "%scontinuous-clock", prefix);
+	if (of_get_property(np, prop, NULL))
+		format |= SND_SOC_DAIFMT_CONT;
+	else
+		format |= SND_SOC_DAIFMT_GATED;
+
+	/*
+	 * check "[prefix]bitclock-inversion"
+	 * check "[prefix]frame-inversion"
+	 * SND_SOC_DAIFMT_INV_MASK area
+	 */
+	snprintf(prop, sizeof(prop), "%sbitclock-inversion", prefix);
+	bit = !!of_get_property(np, prop, NULL);
+
+	snprintf(prop, sizeof(prop), "%sframe-inversion", prefix);
+	frame = !!of_get_property(np, prop, NULL);
+
+	switch ((bit << 4) + frame) {
+	case 0x11:
+		format |= SND_SOC_DAIFMT_IB_IF;
+		break;
+	case 0x10:
+		format |= SND_SOC_DAIFMT_IB_NF;
+		break;
+	case 0x01:
+		format |= SND_SOC_DAIFMT_NB_IF;
+		break;
+	default:
+		/* SND_SOC_DAIFMT_NB_NF is default */
+		break;
+	}
+
+	/*
+	 * check "[prefix]bitclock-master"
+	 * check "[prefix]frame-master"
+	 * SND_SOC_DAIFMT_MASTER_MASK area
+	 */
+	snprintf(prop, sizeof(prop), "%sbitclock-master", prefix);
+	bit = !!of_get_property(np, prop, NULL);
+
+	snprintf(prop, sizeof(prop), "%sframe-master", prefix);
+	frame = !!of_get_property(np, prop, NULL);
+
+	switch ((bit << 4) + frame) {
+	case 0x11:
+		format |= SND_SOC_DAIFMT_CBM_CFM;
+		break;
+	case 0x10:
+		format |= SND_SOC_DAIFMT_CBM_CFS;
+		break;
+	case 0x01:
+		format |= SND_SOC_DAIFMT_CBS_CFM;
+		break;
+	default:
+		format |= SND_SOC_DAIFMT_CBS_CFS;
+		break;
+	}
+
+	return format;
+}
+EXPORT_SYMBOL_GPL(snd_soc_of_parse_daifmt);
 
 static int __init snd_soc_init(void)
 {

@@ -33,7 +33,6 @@
 #include <linux/platform_data/usb-ehci-orion.h>
 #include <plat/common.h>
 #include <plat/time.h>
-#include <plat/addr-map.h>
 #include <linux/platform_data/dma-mv_xor.h>
 #include "common.h"
 
@@ -499,6 +498,28 @@ void __init kirkwood_wdt_init(void)
 	orion_wdt_init();
 }
 
+/*****************************************************************************
+ * CPU idle
+ ****************************************************************************/
+static struct resource kirkwood_cpuidle_resource[] = {
+	{
+		.flags	= IORESOURCE_MEM,
+		.start	= DDR_OPERATION_BASE,
+		.end	= DDR_OPERATION_BASE + 3,
+	},
+};
+
+static struct platform_device kirkwood_cpuidle = {
+	.name		= "kirkwood_cpuidle",
+	.id		= -1,
+	.resource	= kirkwood_cpuidle_resource,
+	.num_resources	= 1,
+};
+
+void __init kirkwood_cpuidle_init(void)
+{
+	platform_device_register(&kirkwood_cpuidle);
+}
 
 /*****************************************************************************
  * Time handling
@@ -507,12 +528,9 @@ void __init kirkwood_init_early(void)
 {
 	orion_time_set_base(TIMER_VIRT_BASE);
 
-	/*
-	 * Some Kirkwood devices allocate their coherent buffers from atomic
-	 * context. Increase size of atomic coherent pool to make sure such
-	 * the allocations won't fail.
-	 */
-	init_dma_coherent_pool_size(SZ_1M);
+	mvebu_mbus_init("marvell,kirkwood-mbus",
+			BRIDGE_WINS_BASE, BRIDGE_WINS_SZ,
+			DDR_WINDOW_CPU_BASE, DDR_WINDOW_CPU_SZ);
 }
 
 int kirkwood_tclk;
@@ -530,17 +548,13 @@ static int __init kirkwood_find_tclk(void)
 	return 166666667;
 }
 
-static void __init kirkwood_timer_init(void)
+void __init kirkwood_timer_init(void)
 {
 	kirkwood_tclk = kirkwood_find_tclk();
 
 	orion_time_init(BRIDGE_VIRT_BASE, BRIDGE_INT_TIMER1_CLR,
 			IRQ_KIRKWOOD_BRIDGE, kirkwood_tclk);
 }
-
-struct sys_timer kirkwood_timer = {
-	.init = kirkwood_timer_init,
-};
 
 /*****************************************************************************
  * Audio
@@ -632,6 +646,38 @@ char * __init kirkwood_id(void)
 	}
 }
 
+void __init kirkwood_setup_wins(void)
+{
+	/*
+	 * The PCIe windows will no longer be statically allocated
+	 * here once Kirkwood is migrated to the pci-mvebu driver.
+	 */
+	mvebu_mbus_add_window_remap_flags("pcie0.0",
+					  KIRKWOOD_PCIE_IO_PHYS_BASE,
+					  KIRKWOOD_PCIE_IO_SIZE,
+					  KIRKWOOD_PCIE_IO_BUS_BASE,
+					  MVEBU_MBUS_PCI_IO);
+	mvebu_mbus_add_window_remap_flags("pcie0.0",
+					  KIRKWOOD_PCIE_MEM_PHYS_BASE,
+					  KIRKWOOD_PCIE_MEM_SIZE,
+					  MVEBU_MBUS_NO_REMAP,
+					  MVEBU_MBUS_PCI_MEM);
+	mvebu_mbus_add_window_remap_flags("pcie1.0",
+					  KIRKWOOD_PCIE1_IO_PHYS_BASE,
+					  KIRKWOOD_PCIE1_IO_SIZE,
+					  KIRKWOOD_PCIE1_IO_BUS_BASE,
+					  MVEBU_MBUS_PCI_IO);
+	mvebu_mbus_add_window_remap_flags("pcie1.0",
+					  KIRKWOOD_PCIE1_MEM_PHYS_BASE,
+					  KIRKWOOD_PCIE1_MEM_SIZE,
+					  MVEBU_MBUS_NO_REMAP,
+					  MVEBU_MBUS_PCI_MEM);
+	mvebu_mbus_add_window("nand", KIRKWOOD_NAND_MEM_PHYS_BASE,
+			      KIRKWOOD_NAND_MEM_SIZE);
+	mvebu_mbus_add_window("sram", KIRKWOOD_SRAM_PHYS_BASE,
+			      KIRKWOOD_SRAM_SIZE);
+}
+
 void __init kirkwood_l2_init(void)
 {
 #ifdef CONFIG_CACHE_FEROCEON_L2
@@ -657,7 +703,7 @@ void __init kirkwood_init(void)
 	 */
 	writel(readl(CPU_CONFIG) & ~CPU_CONFIG_ERROR_PROP, CPU_CONFIG);
 
-	kirkwood_setup_cpu_mbus();
+	kirkwood_setup_wins();
 
 	kirkwood_l2_init();
 
@@ -671,6 +717,7 @@ void __init kirkwood_init(void)
 	kirkwood_xor1_init();
 	kirkwood_crypto_init();
 
+	kirkwood_cpuidle_init();
 #ifdef CONFIG_KEXEC
 	kexec_reinit = kirkwood_enable_pcie;
 #endif

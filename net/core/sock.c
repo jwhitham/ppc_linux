@@ -186,8 +186,10 @@ void mem_cgroup_sockets_destroy(struct mem_cgroup *memcg)
 static struct lock_class_key af_family_keys[AF_MAX];
 static struct lock_class_key af_family_slock_keys[AF_MAX];
 
+#if defined(CONFIG_MEMCG_KMEM)
 struct static_key memcg_socket_limit_enabled;
 EXPORT_SYMBOL(memcg_socket_limit_enabled);
+#endif
 
 /*
  * Make lock validator output more readable. (we pre-construct these
@@ -208,7 +210,7 @@ static const char *const af_family_key_strings[AF_MAX+1] = {
   "sk_lock-AF_TIPC"  , "sk_lock-AF_BLUETOOTH", "sk_lock-IUCV"        ,
   "sk_lock-AF_RXRPC" , "sk_lock-AF_ISDN"     , "sk_lock-AF_PHONET"   ,
   "sk_lock-AF_IEEE802154", "sk_lock-AF_CAIF" , "sk_lock-AF_ALG"      ,
-  "sk_lock-AF_NFC"   , "sk_lock-AF_MAX"
+  "sk_lock-AF_NFC"   , "sk_lock-AF_VSOCK"    , "sk_lock-AF_MAX"
 };
 static const char *const af_family_slock_key_strings[AF_MAX+1] = {
   "slock-AF_UNSPEC", "slock-AF_UNIX"     , "slock-AF_INET"     ,
@@ -224,7 +226,7 @@ static const char *const af_family_slock_key_strings[AF_MAX+1] = {
   "slock-AF_TIPC"  , "slock-AF_BLUETOOTH", "slock-AF_IUCV"     ,
   "slock-AF_RXRPC" , "slock-AF_ISDN"     , "slock-AF_PHONET"   ,
   "slock-AF_IEEE802154", "slock-AF_CAIF" , "slock-AF_ALG"      ,
-  "slock-AF_NFC"   , "slock-AF_MAX"
+  "slock-AF_NFC"   , "slock-AF_VSOCK"    ,"slock-AF_MAX"
 };
 static const char *const af_family_clock_key_strings[AF_MAX+1] = {
   "clock-AF_UNSPEC", "clock-AF_UNIX"     , "clock-AF_INET"     ,
@@ -240,7 +242,7 @@ static const char *const af_family_clock_key_strings[AF_MAX+1] = {
   "clock-AF_TIPC"  , "clock-AF_BLUETOOTH", "clock-AF_IUCV"     ,
   "clock-AF_RXRPC" , "clock-AF_ISDN"     , "clock-AF_PHONET"   ,
   "clock-AF_IEEE802154", "clock-AF_CAIF" , "clock-AF_ALG"      ,
-  "clock-AF_NFC"   , "clock-AF_MAX"
+  "clock-AF_NFC"   , "clock-AF_VSOCK"    , "clock-AF_MAX"
 };
 
 /*
@@ -569,9 +571,7 @@ static int sock_getbindtodevice(struct sock *sk, char __user *optval,
 	int ret = -ENOPROTOOPT;
 #ifdef CONFIG_NETDEVICES
 	struct net *net = sock_net(sk);
-	struct net_device *dev;
 	char devname[IFNAMSIZ];
-	unsigned seq;
 
 	if (sk->sk_bound_dev_if == 0) {
 		len = 0;
@@ -582,20 +582,9 @@ static int sock_getbindtodevice(struct sock *sk, char __user *optval,
 	if (len < IFNAMSIZ)
 		goto out;
 
-retry:
-	seq = read_seqcount_begin(&devnet_rename_seq);
-	rcu_read_lock();
-	dev = dev_get_by_index_rcu(net, sk->sk_bound_dev_if);
-	ret = -ENODEV;
-	if (!dev) {
-		rcu_read_unlock();
+	ret = netdev_get_name(net, devname, sk->sk_bound_dev_if);
+	if (ret)
 		goto out;
-	}
-
-	strcpy(devname, dev->name);
-	rcu_read_unlock();
-	if (read_seqcount_retry(&devnet_rename_seq, seq))
-		goto retry;
 
 	len = strlen(devname) + 1;
 
@@ -664,6 +653,9 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 		break;
 	case SO_REUSEADDR:
 		sk->sk_reuse = (valbool ? SK_CAN_REUSE : SK_NO_REUSE);
+		break;
+	case SO_REUSEPORT:
+		sk->sk_reuseport = valbool;
 		break;
 	case SO_TYPE:
 	case SO_PROTOCOL:
@@ -861,6 +853,13 @@ set_rcvbuf:
 		ret = sk_detach_filter(sk);
 		break;
 
+	case SO_LOCK_FILTER:
+		if (sock_flag(sk, SOCK_FILTER_LOCKED) && !valbool)
+			ret = -EPERM;
+		else
+			sock_valbool_flag(sk, SOCK_FILTER_LOCKED, valbool);
+		break;
+
 	case SO_PASSSEC:
 		if (valbool)
 			set_bit(SOCK_PASSSEC, &sock->flags);
@@ -893,6 +892,10 @@ set_rcvbuf:
 
 	case SO_NOFCS:
 		sock_valbool_flag(sk, SOCK_NOFCS, valbool);
+		break;
+
+	case SO_SELECT_ERR_QUEUE:
+		sock_valbool_flag(sk, SOCK_SELECT_ERR_QUEUE, valbool);
 		break;
 
 	default:
@@ -963,6 +966,10 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 
 	case SO_REUSEADDR:
 		v.val = sk->sk_reuse;
+		break;
+
+	case SO_REUSEPORT:
+		v.val = sk->sk_reuseport;
 		break;
 
 	case SO_KEEPALIVE:
@@ -1140,6 +1147,14 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 
 		goto lenout;
 
+	case SO_LOCK_FILTER:
+		v.val = sock_flag(sk, SOCK_FILTER_LOCKED);
+		break;
+
+	case SO_SELECT_ERR_QUEUE:
+		v.val = sock_flag(sk, SOCK_SELECT_ERR_QUEUE);
+		break;
+
 	default:
 		return -ENOPROTOOPT;
 	}
@@ -1187,18 +1202,6 @@ static void sock_copy(struct sock *nsk, const struct sock *osk)
 	nsk->sk_security = sptr;
 	security_sk_clone(osk, nsk);
 #endif
-}
-
-/*
- * caches using SLAB_DESTROY_BY_RCU should let .next pointer from nulls nodes
- * un-modified. Special care is taken when initializing object to zero.
- */
-static inline void sk_prot_clear_nulls(struct sock *sk, int size)
-{
-	if (offsetof(struct sock, sk_node.next) != 0)
-		memset(sk, 0, offsetof(struct sock, sk_node.next));
-	memset(&sk->sk_node.pprev, 0,
-	       size - offsetof(struct sock, sk_node.pprev));
 }
 
 void sk_prot_clear_portaddr_nulls(struct sock *sk, int size)
@@ -1278,13 +1281,12 @@ static void sk_prot_free(struct proto *prot, struct sock *sk)
 	module_put(owner);
 }
 
-#ifdef CONFIG_CGROUPS
 #if IS_ENABLED(CONFIG_NET_CLS_CGROUP)
-void sock_update_classid(struct sock *sk, struct task_struct *task)
+void sock_update_classid(struct sock *sk)
 {
 	u32 classid;
 
-	classid = task_cls_classid(task);
+	classid = task_cls_classid(current);
 	if (classid != sk->sk_classid)
 		sk->sk_classid = classid;
 }
@@ -1292,15 +1294,14 @@ EXPORT_SYMBOL(sock_update_classid);
 #endif
 
 #if IS_ENABLED(CONFIG_NETPRIO_CGROUP)
-void sock_update_netprioidx(struct sock *sk, struct task_struct *task)
+void sock_update_netprioidx(struct sock *sk)
 {
 	if (in_interrupt())
 		return;
 
-	sk->sk_cgrp_prioidx = task_netprioidx(task);
+	sk->sk_cgrp_prioidx = task_netprioidx(current);
 }
 EXPORT_SYMBOL_GPL(sock_update_netprioidx);
-#endif
 #endif
 
 /**
@@ -1327,8 +1328,8 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		sock_net_set(sk, get_net(net));
 		atomic_set(&sk->sk_wmem_alloc, 1);
 
-		sock_update_classid(sk, current);
-		sock_update_netprioidx(sk, current);
+		sock_update_classid(sk);
+		sock_update_netprioidx(sk);
 	}
 
 	return sk;
@@ -2212,7 +2213,7 @@ EXPORT_SYMBOL(sk_reset_timer);
 
 void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 {
-	if (timer_pending(timer) && del_timer(timer))
+	if (del_timer(timer))
 		__sock_put(sk);
 }
 EXPORT_SYMBOL(sk_stop_timer);
@@ -2818,7 +2819,7 @@ static const struct file_operations proto_seq_fops = {
 
 static __net_init int proto_init_net(struct net *net)
 {
-	if (!proc_net_fops_create(net, "protocols", S_IRUGO, &proto_seq_fops))
+	if (!proc_create("protocols", S_IRUGO, net->proc_net, &proto_seq_fops))
 		return -ENOMEM;
 
 	return 0;
@@ -2826,7 +2827,7 @@ static __net_init int proto_init_net(struct net *net)
 
 static __net_exit void proto_exit_net(struct net *net)
 {
-	proc_net_remove(net, "protocols");
+	remove_proc_entry("protocols", net->proc_net);
 }
 
 

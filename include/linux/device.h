@@ -21,9 +21,11 @@
 #include <linux/compiler.h>
 #include <linux/types.h>
 #include <linux/mutex.h>
+#include <linux/pinctrl/devinfo.h>
 #include <linux/pm.h>
 #include <linux/atomic.h>
 #include <linux/ratelimit.h>
+#include <linux/uidgid.h>
 #include <asm/device.h>
 
 struct device;
@@ -110,17 +112,11 @@ struct bus_type {
 	struct iommu_ops *iommu_ops;
 
 	struct subsys_private *p;
+	struct lock_class_key lock_key;
 };
 
-/* This is a #define to keep the compiler from merging different
- * instances of the __key variable */
-#define bus_register(subsys)			\
-({						\
-	static struct lock_class_key __key;	\
-	__bus_register(subsys, &__key);	\
-})
-extern int __must_check __bus_register(struct bus_type *bus,
-				       struct lock_class_key *key);
+extern int __must_check bus_register(struct bus_type *bus);
+
 extern void bus_unregister(struct bus_type *bus);
 
 extern int __must_check bus_rescan_devices(struct bus_type *bus);
@@ -301,6 +297,8 @@ void subsys_interface_unregister(struct subsys_interface *sif);
 
 int subsys_system_register(struct bus_type *subsys,
 			   const struct attribute_group **groups);
+int subsys_virtual_register(struct bus_type *subsys,
+			    const struct attribute_group **groups);
 
 /**
  * struct class - device classes
@@ -395,8 +393,8 @@ extern int class_for_each_device(struct class *class, struct device *start,
 				 void *data,
 				 int (*fn)(struct device *dev, void *data));
 extern struct device *class_find_device(struct class *class,
-					struct device *start, void *data,
-					int (*match)(struct device *, void *));
+					struct device *start, const void *data,
+					int (*match)(struct device *, const void *));
 
 struct class_attribute {
 	struct attribute attr;
@@ -470,7 +468,8 @@ struct device_type {
 	const char *name;
 	const struct attribute_group **groups;
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
-	char *(*devnode)(struct device *dev, umode_t *mode);
+	char *(*devnode)(struct device *dev, umode_t *mode,
+			 kuid_t *uid, kgid_t *gid);
 	void (*release)(struct device *dev);
 
 	const struct dev_pm_ops *pm;
@@ -573,8 +572,13 @@ extern int devres_release_group(struct device *dev, void *id);
 extern void *devm_kzalloc(struct device *dev, size_t size, gfp_t gfp);
 extern void devm_kfree(struct device *dev, void *p);
 
+void __iomem *devm_ioremap_resource(struct device *dev, struct resource *res);
 void __iomem *devm_request_and_ioremap(struct device *dev,
 			struct resource *res);
+
+/* allows to add/remove a custom action to devres stack */
+int devm_add_action(struct device *dev, void (*action)(void *), void *data);
+void devm_remove_action(struct device *dev, void (*action)(void *), void *data);
 
 struct device_dma_parameters {
 	/*
@@ -620,6 +624,8 @@ struct acpi_dev_node {
  * @pm_domain:	Provide callbacks that are executed during system suspend,
  * 		hibernation, system resume and during runtime PM transitions
  * 		along with subsystem-level and driver-level callbacks.
+ * @pins:	For device pin management.
+ *		See Documentation/pinctrl.txt for details.
  * @numa_node:	NUMA node this device is close to.
  * @dma_mask:	Dma mask (if dma'ble device).
  * @coherent_dma_mask: Like dma_mask, but for alloc_coherent mapping as not all
@@ -671,6 +677,10 @@ struct device {
 					   core doesn't touch it */
 	struct dev_pm_info	power;
 	struct dev_pm_domain	*pm_domain;
+
+#ifdef CONFIG_PINCTRL
+	struct dev_pin_info	*pins;
+#endif
 
 #ifdef CONFIG_NUMA
 	int		numa_node;	/* NUMA node this device is close to */
@@ -841,7 +851,8 @@ extern int device_rename(struct device *dev, const char *new_name);
 extern int device_move(struct device *dev, struct device *new_parent,
 		       enum dpm_order dpm_order);
 extern const char *device_get_devnode(struct device *dev,
-				      umode_t *mode, const char **tmp);
+				      umode_t *mode, kuid_t *uid, kgid_t *gid,
+				      const char **tmp);
 extern void *dev_get_drvdata(const struct device *dev);
 extern int dev_set_drvdata(struct device *dev, void *data);
 

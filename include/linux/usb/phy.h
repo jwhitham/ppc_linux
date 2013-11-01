@@ -91,6 +91,9 @@ struct usb_phy {
 	int	(*init)(struct usb_phy *x);
 	void	(*shutdown)(struct usb_phy *x);
 
+	/* enable/disable VBUS */
+	int	(*set_vbus)(struct usb_phy *x, int on);
+
 	/* effective for B devices, ignored for A-peripheral */
 	int	(*set_power)(struct usb_phy *x,
 				unsigned mA);
@@ -106,9 +109,25 @@ struct usb_phy {
 			enum usb_device_speed speed);
 };
 
+/**
+ * struct usb_phy_bind - represent the binding for the phy
+ * @dev_name: the device name of the device that will bind to the phy
+ * @phy_dev_name: the device name of the phy
+ * @index: used if a single controller uses multiple phys
+ * @phy: reference to the phy
+ * @list: to maintain a linked list of the binding information
+ */
+struct usb_phy_bind {
+	const char	*dev_name;
+	const char	*phy_dev_name;
+	u8		index;
+	struct usb_phy	*phy;
+	struct list_head list;
+};
 
 /* for board-specific init logic */
 extern int usb_add_phy(struct usb_phy *, enum usb_phy_type type);
+extern int usb_add_phy_dev(struct usb_phy *);
 extern void usb_remove_phy(struct usb_phy *);
 
 /* helpers for direct access thru low-level io interface */
@@ -144,23 +163,63 @@ usb_phy_shutdown(struct usb_phy *x)
 		x->shutdown(x);
 }
 
+static inline int
+usb_phy_vbus_on(struct usb_phy *x)
+{
+	if (!x->set_vbus)
+		return 0;
+
+	return x->set_vbus(x, true);
+}
+
+static inline int
+usb_phy_vbus_off(struct usb_phy *x)
+{
+	if (!x->set_vbus)
+		return 0;
+
+	return x->set_vbus(x, false);
+}
+
 /* for usb host and peripheral controller drivers */
-#ifdef CONFIG_USB_OTG_UTILS
+#if IS_ENABLED(CONFIG_USB_PHY)
 extern struct usb_phy *usb_get_phy(enum usb_phy_type type);
 extern struct usb_phy *devm_usb_get_phy(struct device *dev,
 	enum usb_phy_type type);
+extern struct usb_phy *usb_get_phy_dev(struct device *dev, u8 index);
+extern struct usb_phy *devm_usb_get_phy_dev(struct device *dev, u8 index);
+extern struct usb_phy *devm_usb_get_phy_by_phandle(struct device *dev,
+	const char *phandle, u8 index);
 extern void usb_put_phy(struct usb_phy *);
 extern void devm_usb_put_phy(struct device *dev, struct usb_phy *x);
+extern int usb_bind_phy(const char *dev_name, u8 index,
+				const char *phy_dev_name);
 #else
 static inline struct usb_phy *usb_get_phy(enum usb_phy_type type)
 {
-	return NULL;
+	return ERR_PTR(-ENXIO);
 }
 
 static inline struct usb_phy *devm_usb_get_phy(struct device *dev,
 	enum usb_phy_type type)
 {
-	return NULL;
+	return ERR_PTR(-ENXIO);
+}
+
+static inline struct usb_phy *usb_get_phy_dev(struct device *dev, u8 index)
+{
+	return ERR_PTR(-ENXIO);
+}
+
+static inline struct usb_phy *devm_usb_get_phy_dev(struct device *dev, u8 index)
+{
+	return ERR_PTR(-ENXIO);
+}
+
+static inline struct usb_phy *devm_usb_get_phy_by_phandle(struct device *dev,
+	const char *phandle, u8 index)
+{
+	return ERR_PTR(-ENXIO);
 }
 
 static inline void usb_put_phy(struct usb_phy *x)
@@ -171,6 +230,11 @@ static inline void devm_usb_put_phy(struct device *dev, struct usb_phy *x)
 {
 }
 
+static inline int usb_bind_phy(const char *dev_name, u8 index,
+				const char *phy_dev_name)
+{
+	return -EOPNOTSUPP;
+}
 #endif
 
 static inline int

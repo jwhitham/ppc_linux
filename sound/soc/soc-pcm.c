@@ -383,8 +383,7 @@ static int soc_pcm_close(struct snd_pcm_substream *substream)
 	/* Muting the DAC suppresses artifacts caused during digital
 	 * shutdown, for example from stopping clocks.
 	 */
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		snd_soc_dai_digital_mute(codec_dai, 1);
+	snd_soc_dai_digital_mute(codec_dai, 1, substream->stream);
 
 	if (cpu_dai->driver->ops->shutdown)
 		cpu_dai->driver->ops->shutdown(substream, cpu_dai);
@@ -488,7 +487,7 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 	snd_soc_dapm_stream_event(rtd, substream->stream,
 			SND_SOC_DAPM_STREAM_START);
 
-	snd_soc_dai_digital_mute(codec_dai, 0);
+	snd_soc_dai_digital_mute(codec_dai, 0, substream->stream);
 
 out:
 	mutex_unlock(&rtd->pcm_mutex);
@@ -586,7 +585,7 @@ static int soc_pcm_hw_free(struct snd_pcm_substream *substream)
 
 	/* apply codec digital mute */
 	if (!codec->active)
-		snd_soc_dai_digital_mute(codec_dai, 1);
+		snd_soc_dai_digital_mute(codec_dai, 1, substream->stream);
 
 	/* free any machine hw params */
 	if (rtd->dai_link->ops && rtd->dai_link->ops->hw_free)
@@ -929,8 +928,13 @@ static int dpcm_add_paths(struct snd_soc_pcm_runtime *fe, int stream,
 	/* Create any new FE <--> BE connections */
 	for (i = 0; i < list->num_widgets; i++) {
 
-		if (list->widgets[i]->id != snd_soc_dapm_dai)
+		switch (list->widgets[i]->id) {
+		case snd_soc_dapm_dai_in:
+		case snd_soc_dapm_dai_out:
+			break;
+		default:
 			continue;
+		}
 
 		/* is there a valid BE rtd for this widget */
 		be = dpcm_get_be(card, list->widgets[i], stream);
@@ -1729,20 +1733,16 @@ static int dpcm_run_update_startup(struct snd_soc_pcm_runtime *fe, int stream)
 
 	/* startup must always be called for new BEs */
 	ret = dpcm_be_dai_startup(fe, stream);
-	if (ret < 0) {
+	if (ret < 0)
 		goto disconnect;
-		return ret;
-	}
 
 	/* keep going if FE state is > open */
 	if (fe->dpcm[stream].state == SND_SOC_DPCM_STATE_OPEN)
 		return 0;
 
 	ret = dpcm_be_dai_hw_params(fe, stream);
-	if (ret < 0) {
+	if (ret < 0)
 		goto close;
-		return ret;
-	}
 
 	/* keep going if FE state is > hw_params */
 	if (fe->dpcm[stream].state == SND_SOC_DPCM_STATE_HW_PARAMS)
@@ -1750,10 +1750,8 @@ static int dpcm_run_update_startup(struct snd_soc_pcm_runtime *fe, int stream)
 
 
 	ret = dpcm_be_dai_prepare(fe, stream);
-	if (ret < 0) {
+	if (ret < 0)
 		goto hw_free;
-		return ret;
-	}
 
 	/* run the stream event for each BE */
 	dpcm_dapm_stream_event(fe, stream, SND_SOC_DAPM_STREAM_NOP);
@@ -2018,9 +2016,11 @@ int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 		if (cpu_dai->driver->capture.channels_min)
 			capture = 1;
 	} else {
-		if (codec_dai->driver->playback.channels_min)
+		if (codec_dai->driver->playback.channels_min &&
+		    cpu_dai->driver->playback.channels_min)
 			playback = 1;
-		if (codec_dai->driver->capture.channels_min)
+		if (codec_dai->driver->capture.channels_min &&
+		    cpu_dai->driver->capture.channels_min)
 			capture = 1;
 	}
 

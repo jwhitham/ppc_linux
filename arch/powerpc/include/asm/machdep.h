@@ -30,6 +30,7 @@ struct file;
 struct pci_controller;
 struct kimage;
 struct msi_region;
+struct pci_host_bridge;
 
 struct machdep_calls {
 	char		*name;
@@ -51,7 +52,8 @@ struct machdep_calls {
 				       unsigned long prpn,
 				       unsigned long rflags,
 				       unsigned long vflags,
-				       int psize, int ssize);
+				       int psize, int apsize,
+				       int ssize);
 	long		(*hpte_remove)(unsigned long hpte_group);
 	void            (*hpte_removebolted)(unsigned long ea,
 					     int psize, int ssize);
@@ -108,6 +110,8 @@ struct machdep_calls {
 	void		(*pcibios_fixup)(void);
 	int		(*pci_probe_mode)(struct pci_bus *);
 	void		(*pci_irq_fixup)(struct pci_dev *dev);
+	int		(*pcibios_root_bridge_prepare)(struct pci_host_bridge
+				*bridge);
 
 	/* To setup PHBs when using automatic OF platform driver for PCI */
 	int		(*pci_setup_phb)(struct pci_controller *host);
@@ -187,6 +191,10 @@ struct machdep_calls {
 	/* Set DABR for this platform, leave empty for default implemenation */
 	int		(*set_dabr)(unsigned long dabr,
 				    unsigned long dabrx);
+
+	/* Set DAWR for this platform, leave empty for default implemenation */
+	int		(*set_dawr)(unsigned long dawr,
+				    unsigned long dawrx);
 
 #ifdef CONFIG_PPC32	/* XXX for now */
 	/* A general init function, called by ppc_init in init/main.c.

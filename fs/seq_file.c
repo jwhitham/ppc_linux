@@ -308,27 +308,27 @@ loff_t seq_lseek(struct file *file, loff_t offset, int whence)
 	mutex_lock(&m->lock);
 	m->version = file->f_version;
 	switch (whence) {
-		case 1:
-			offset += file->f_pos;
-		case 0:
-			if (offset < 0)
-				break;
-			retval = offset;
-			if (offset != m->read_pos) {
-				while ((retval=traverse(m, offset)) == -EAGAIN)
-					;
-				if (retval) {
-					/* with extreme prejudice... */
-					file->f_pos = 0;
-					m->read_pos = 0;
-					m->version = 0;
-					m->index = 0;
-					m->count = 0;
-				} else {
-					m->read_pos = offset;
-					retval = file->f_pos = offset;
-				}
+	case SEEK_CUR:
+		offset += file->f_pos;
+	case SEEK_SET:
+		if (offset < 0)
+			break;
+		retval = offset;
+		if (offset != m->read_pos) {
+			while ((retval = traverse(m, offset)) == -EAGAIN)
+				;
+			if (retval) {
+				/* with extreme prejudice... */
+				file->f_pos = 0;
+				m->read_pos = 0;
+				m->version = 0;
+				m->index = 0;
+				m->count = 0;
+			} else {
+				m->read_pos = offset;
+				retval = file->f_pos = offset;
 			}
+		}
 	}
 	file->f_version = m->version;
 	mutex_unlock(&m->lock);
@@ -339,7 +339,7 @@ EXPORT_SYMBOL(seq_lseek);
 /**
  *	seq_release -	free the structures associated with sequential file.
  *	@file: file in question
- *	@inode: file->f_path.dentry->d_inode
+ *	@inode: its inode
  *
  *	Frees the structures associated with sequential file; can be used
  *	as ->f_op->release() if you don't have private data to destroy.
@@ -598,6 +598,24 @@ int single_open(struct file *file, int (*show)(struct seq_file *, void *),
 	return res;
 }
 EXPORT_SYMBOL(single_open);
+
+int single_open_size(struct file *file, int (*show)(struct seq_file *, void *),
+		void *data, size_t size)
+{
+	char *buf = kmalloc(size, GFP_KERNEL);
+	int ret;
+	if (!buf)
+		return -ENOMEM;
+	ret = single_open(file, show, data);
+	if (ret) {
+		kfree(buf);
+		return ret;
+	}
+	((struct seq_file *)file->private_data)->buf = buf;
+	((struct seq_file *)file->private_data)->size = size;
+	return 0;
+}
+EXPORT_SYMBOL(single_open_size);
 
 int single_release(struct inode *inode, struct file *file)
 {

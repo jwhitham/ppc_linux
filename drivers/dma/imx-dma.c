@@ -14,6 +14,7 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
+#include <linux/err.h>
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/mm.h>
@@ -858,8 +859,7 @@ static struct dma_async_tx_descriptor *imxdma_prep_dma_cyclic(
 
 	desc = list_first_entry(&imxdmac->ld_free, struct imxdma_desc, node);
 
-	if (imxdmac->sg_list)
-		kfree(imxdmac->sg_list);
+	kfree(imxdmac->sg_list);
 
 	imxdmac->sg_list = kcalloc(periods + 1,
 			sizeof(struct scatterlist), GFP_KERNEL);
@@ -1010,9 +1010,9 @@ static int __init imxdma_probe(struct platform_device *pdev)
 	imxdma->devtype = pdev->id_entry->driver_data;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	imxdma->base = devm_request_and_ioremap(&pdev->dev, res);
-	if (!imxdma->base)
-		return -EADDRNOTAVAIL;
+	imxdma->base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(imxdma->base))
+		return PTR_ERR(imxdma->base);
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
@@ -1144,7 +1144,7 @@ err:
 	return ret;
 }
 
-static int __exit imxdma_remove(struct platform_device *pdev)
+static int imxdma_remove(struct platform_device *pdev)
 {
 	struct imxdma_engine *imxdma = platform_get_drvdata(pdev);
 
@@ -1161,7 +1161,7 @@ static struct platform_driver imxdma_driver = {
 		.name	= "imx-dma",
 	},
 	.id_table	= imx_dma_devtype,
-	.remove		= __exit_p(imxdma_remove),
+	.remove		= imxdma_remove,
 };
 
 static int __init imxdma_module_init(void)

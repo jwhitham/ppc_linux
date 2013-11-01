@@ -282,8 +282,7 @@ search:
 	spin_unlock(&oi->ip_lock);
 
 out:
-	if (new_emi)
-		kfree(new_emi);
+	kfree(new_emi);
 }
 
 static int ocfs2_last_eb_is_empty(struct inode *inode,
@@ -791,7 +790,7 @@ int ocfs2_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 						 &hole_size, &rec, &is_last);
 		if (ret) {
 			mlog_errno(ret);
-			goto out;
+			goto out_unlock;
 		}
 
 		if (rec.e_blkno == 0ULL) {

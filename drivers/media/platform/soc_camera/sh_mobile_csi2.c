@@ -9,6 +9,7 @@
  */
 
 #include <linux/delay.h>
+#include <linux/err.h>
 #include <linux/i2c.h>
 #include <linux/io.h>
 #include <linux/platform_device.h>
@@ -318,24 +319,15 @@ static int sh_csi2_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	priv = kzalloc(sizeof(struct sh_csi2), GFP_KERNEL);
+	priv = devm_kzalloc(&pdev->dev, sizeof(struct sh_csi2), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
 	priv->irq = irq;
 
-	if (!request_mem_region(res->start, resource_size(res), pdev->name)) {
-		dev_err(&pdev->dev, "CSI2 register region already claimed\n");
-		ret = -EBUSY;
-		goto ereqreg;
-	}
-
-	priv->base = ioremap(res->start, resource_size(res));
-	if (!priv->base) {
-		ret = -ENXIO;
-		dev_err(&pdev->dev, "Unable to ioremap CSI2 registers.\n");
-		goto eremap;
-	}
+	priv->base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(priv->base))
+		return PTR_ERR(priv->base);
 
 	priv->pdev = pdev;
 	platform_set_drvdata(pdev, priv);
@@ -357,11 +349,7 @@ static int sh_csi2_probe(struct platform_device *pdev)
 	return 0;
 
 esdreg:
-	iounmap(priv->base);
-eremap:
-	release_mem_region(res->start, resource_size(res));
-ereqreg:
-	kfree(priv);
+	platform_set_drvdata(pdev, NULL);
 
 	return ret;
 }
@@ -369,14 +357,10 @@ ereqreg:
 static int sh_csi2_remove(struct platform_device *pdev)
 {
 	struct sh_csi2 *priv = platform_get_drvdata(pdev);
-	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
 	v4l2_device_unregister_subdev(&priv->subdev);
 	pm_runtime_disable(&pdev->dev);
-	iounmap(priv->base);
-	release_mem_region(res->start, resource_size(res));
 	platform_set_drvdata(pdev, NULL);
-	kfree(priv);
 
 	return 0;
 }

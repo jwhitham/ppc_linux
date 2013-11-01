@@ -15,7 +15,7 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/user_namespace.h>
-#include <linux/proc_fs.h>
+#include <linux/proc_ns.h>
 
 static struct uts_namespace *create_uts_ns(void)
 {
@@ -30,7 +30,7 @@ static struct uts_namespace *create_uts_ns(void)
 /*
  * Clone a new ns copying an original utsname, setting refcount to 1
  * @old_ns: namespace to clone
- * Return NULL on error (failure to kmalloc), new ns otherwise
+ * Return ERR_PTR(-ENOMEM) on error (failure to kmalloc), new ns otherwise
  */
 static struct uts_namespace *clone_uts_ns(struct user_namespace *user_ns,
 					  struct uts_namespace *old_ns)

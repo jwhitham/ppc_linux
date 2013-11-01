@@ -49,7 +49,6 @@
 
 #include <linux/sctp.h>
 #include <linux/ipv6.h> /* For ipv6hdr. */
-#include <net/sctp/user.h>
 #include <net/tcp_states.h>  /* For TCP states used in sctp_sock_state_t */
 
 /* Value used for stream negotiation. */
@@ -303,7 +302,7 @@ enum { SCTP_MAX_GABS = 16 };
                                          * to which we will raise the P-MTU.
 					 */
 #define SCTP_DEFAULT_MINSEGMENT 512	/* MTU size ... if no mtu disc */
-#define SCTP_HOW_MANY_SECRETS 2		/* How many secrets I keep */
+
 #define SCTP_SECRET_SIZE 32		/* Number of octets in a 256 bits. */
 
 #define SCTP_SIGNATURE_SIZE 20	        /* size of a SLA-1 signature */

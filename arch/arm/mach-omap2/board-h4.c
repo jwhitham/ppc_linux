@@ -34,7 +34,7 @@
 #include <asm/mach/map.h>
 
 #include <video/omapdss.h>
-#include <video/omap-panel-generic-dpi.h>
+#include <video/omap-panel-data.h>
 
 #include "common.h"
 #include "mux.h"
@@ -246,7 +246,7 @@ static u32 is_gpmc_muxed(void)
 		return 0;
 }
 
-#if defined(CONFIG_SMC91X) || defined(CONFIG_SMC91x_MODULE)
+#if IS_ENABLED(CONFIG_SMC91X)
 
 static struct omap_smc91x_platform_data board_smc91x_data = {
 	.cs		= 1,
@@ -342,6 +342,6 @@ MACHINE_START(OMAP_H4, "OMAP2420 H4 board")
 	.handle_irq	= omap2_intc_handle_irq,
 	.init_machine	= omap_h4_init,
 	.init_late	= omap2420_init_late,
-	.timer		= &omap2_timer,
+	.init_time	= omap2_sync32k_timer_init,
 	.restart	= omap2xxx_restart,
 MACHINE_END

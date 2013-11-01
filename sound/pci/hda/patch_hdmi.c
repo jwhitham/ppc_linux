@@ -44,16 +44,6 @@ static bool static_hdmi_pcm;
 module_param(static_hdmi_pcm, bool, 0644);
 MODULE_PARM_DESC(static_hdmi_pcm, "Don't restrict PCM parameters per ELD info");
 
-/*
- * The HDMI/DisplayPort configuration can be highly dynamic. A graphics device
- * could support N independent pipes, each of them can be connected to one or
- * more ports (DVI, HDMI or DisplayPort).
- *
- * The HDA correspondence of pipes/ports are converter/pin nodes.
- */
-#define MAX_HDMI_CVTS	8
-#define MAX_HDMI_PINS	8
-
 struct hdmi_spec_per_cvt {
 	hda_nid_t cvt_nid;
 	int assigned;
@@ -64,6 +54,9 @@ struct hdmi_spec_per_cvt {
 	unsigned int maxbps;
 };
 
+/* max. connections to a widget */
+#define HDA_MAX_CONNECTIONS	32
+
 struct hdmi_spec_per_pin {
 	hda_nid_t pin_nid;
 	int num_mux_nids;
@@ -72,21 +65,25 @@ struct hdmi_spec_per_pin {
 	struct hda_codec *codec;
 	struct hdmi_eld sink_eld;
 	struct delayed_work work;
+	struct snd_kcontrol *eld_ctl;
 	int repoll_count;
 	bool non_pcm;
 	bool chmap_set;		/* channel-map override by ALSA API? */
 	unsigned char chmap[8]; /* ALSA API channel-map */
+	char pcm_name[8];	/* filled in build_pcm callbacks */
 };
 
 struct hdmi_spec {
 	int num_cvts;
-	struct hdmi_spec_per_cvt cvts[MAX_HDMI_CVTS];
+	struct snd_array cvts; /* struct hdmi_spec_per_cvt */
+	hda_nid_t cvt_nids[4]; /* only for haswell fix */
 
 	int num_pins;
-	struct hdmi_spec_per_pin pins[MAX_HDMI_PINS];
-	struct hda_pcm pcm_rec[MAX_HDMI_PINS];
+	struct snd_array pins; /* struct hdmi_spec_per_pin */
+	struct snd_array pcm_rec; /* struct hda_pcm */
 	unsigned int channels_max; /* max over all cvts */
 
+	struct hdmi_eld temp_eld;
 	/*
 	 * Non-generic ATI/NVIDIA specific
 	 */
@@ -298,12 +295,19 @@ static struct cea_channel_speaker_allocation channel_allocations[] = {
  * HDMI routines
  */
 
+#define get_pin(spec, idx) \
+	((struct hdmi_spec_per_pin *)snd_array_elem(&spec->pins, idx))
+#define get_cvt(spec, idx) \
+	((struct hdmi_spec_per_cvt  *)snd_array_elem(&spec->cvts, idx))
+#define get_pcm_rec(spec, idx) \
+	((struct hda_pcm *)snd_array_elem(&spec->pcm_rec, idx))
+
 static int pin_nid_to_pin_index(struct hdmi_spec *spec, hda_nid_t pin_nid)
 {
 	int pin_idx;
 
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++)
-		if (spec->pins[pin_idx].pin_nid == pin_nid)
+		if (get_pin(spec, pin_idx)->pin_nid == pin_nid)
 			return pin_idx;
 
 	snd_printk(KERN_WARNING "HDMI: pin nid %d not registered\n", pin_nid);
@@ -316,7 +320,7 @@ static int hinfo_to_pin_index(struct hdmi_spec *spec,
 	int pin_idx;
 
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++)
-		if (&spec->pcm_rec[pin_idx].stream[0] == hinfo)
+		if (get_pcm_rec(spec, pin_idx)->stream == hinfo)
 			return pin_idx;
 
 	snd_printk(KERN_WARNING "HDMI: hinfo %p not registered\n", hinfo);
@@ -328,7 +332,7 @@ static int cvt_nid_to_cvt_index(struct hdmi_spec *spec, hda_nid_t cvt_nid)
 	int cvt_idx;
 
 	for (cvt_idx = 0; cvt_idx < spec->num_cvts; cvt_idx++)
-		if (spec->cvts[cvt_idx].cvt_nid == cvt_nid)
+		if (get_cvt(spec, cvt_idx)->cvt_nid == cvt_nid)
 			return cvt_idx;
 
 	snd_printk(KERN_WARNING "HDMI: cvt nid %d not registered\n", cvt_nid);
@@ -339,14 +343,18 @@ static int hdmi_eld_ctl_info(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_info *uinfo)
 {
 	struct hda_codec *codec = snd_kcontrol_chip(kcontrol);
-	struct hdmi_spec *spec;
+	struct hdmi_spec *spec = codec->spec;
+	struct hdmi_eld *eld;
 	int pin_idx;
 
-	spec = codec->spec;
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_BYTES;
 
 	pin_idx = kcontrol->private_value;
-	uinfo->count = spec->pins[pin_idx].sink_eld.eld_size;
+	eld = &get_pin(spec, pin_idx)->sink_eld;
+
+	mutex_lock(&eld->lock);
+	uinfo->count = eld->eld_valid ? eld->eld_size : 0;
+	mutex_unlock(&eld->lock);
 
 	return 0;
 }
@@ -355,14 +363,26 @@ static int hdmi_eld_ctl_get(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	struct hda_codec *codec = snd_kcontrol_chip(kcontrol);
-	struct hdmi_spec *spec;
+	struct hdmi_spec *spec = codec->spec;
+	struct hdmi_eld *eld;
 	int pin_idx;
 
-	spec = codec->spec;
 	pin_idx = kcontrol->private_value;
+	eld = &get_pin(spec, pin_idx)->sink_eld;
 
-	memcpy(ucontrol->value.bytes.data,
-		spec->pins[pin_idx].sink_eld.eld_buffer, ELD_MAX_SIZE);
+	mutex_lock(&eld->lock);
+	if (eld->eld_size > ARRAY_SIZE(ucontrol->value.bytes.data)) {
+		mutex_unlock(&eld->lock);
+		snd_BUG();
+		return -EINVAL;
+	}
+
+	memset(ucontrol->value.bytes.data, 0,
+	       ARRAY_SIZE(ucontrol->value.bytes.data));
+	if (eld->eld_valid)
+		memcpy(ucontrol->value.bytes.data, eld->eld_buffer,
+		       eld->eld_size);
+	mutex_unlock(&eld->lock);
 
 	return 0;
 }
@@ -388,10 +408,11 @@ static int hdmi_create_eld_ctl(struct hda_codec *codec, int pin_idx,
 	kctl->private_value = pin_idx;
 	kctl->id.device = device;
 
-	err = snd_hda_ctl_add(codec, spec->pins[pin_idx].pin_nid, kctl);
+	err = snd_hda_ctl_add(codec, get_pin(spec, pin_idx)->pin_nid, kctl);
 	if (err < 0)
 		return err;
 
+	get_pin(spec, pin_idx)->eld_ctl = kctl;
 	return 0;
 }
 
@@ -516,7 +537,7 @@ static int hdmi_channel_allocation(struct hdmi_eld *eld, int channels)
 	 * expand ELD's notions to match the ones used by Audio InfoFrame.
 	 */
 	for (i = 0; i < ARRAY_SIZE(eld_speaker_allocation_bits); i++) {
-		if (eld->spk_alloc & (1 << i))
+		if (eld->info.spk_alloc & (1 << i))
 			spk_mask |= eld_speaker_allocation_bits[i];
 	}
 
@@ -530,7 +551,7 @@ static int hdmi_channel_allocation(struct hdmi_eld *eld, int channels)
 		}
 	}
 
-	snd_print_channel_allocation(eld->spk_alloc, buf, sizeof(buf));
+	snd_print_channel_allocation(eld->info.spk_alloc, buf, sizeof(buf));
 	snd_printdd("HDMI: select CA 0x%x for %d-channel allocation: %s\n",
 		    ca, channels, buf);
 
@@ -714,9 +735,10 @@ static void hdmi_setup_fake_chmap(unsigned char *map, int ca)
 
 static void hdmi_setup_channel_mapping(struct hda_codec *codec,
 				       hda_nid_t pin_nid, bool non_pcm, int ca,
-				       int channels, unsigned char *map)
+				       int channels, unsigned char *map,
+				       bool chmap_set)
 {
-	if (!non_pcm && map) {
+	if (!non_pcm && chmap_set) {
 		hdmi_manual_setup_channel_mapping(codec, pin_nid,
 						  channels, map);
 	} else {
@@ -851,14 +873,14 @@ static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
 				       struct snd_pcm_substream *substream)
 {
 	struct hdmi_spec *spec = codec->spec;
-	struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+	struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 	hda_nid_t pin_nid = per_pin->pin_nid;
 	int channels = substream->runtime->channels;
 	struct hdmi_eld *eld;
 	int ca;
 	union audio_infoframe ai;
 
-	eld = &spec->pins[pin_idx].sink_eld;
+	eld = &per_pin->sink_eld;
 	if (!eld->monitor_present)
 		return;
 
@@ -870,7 +892,7 @@ static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
 		ca = 0;
 
 	memset(&ai, 0, sizeof(ai));
-	if (eld->conn_type == 0) { /* HDMI */
+	if (eld->info.conn_type == 0) { /* HDMI */
 		struct hdmi_audio_infoframe *hdmi_ai = &ai.hdmi;
 
 		hdmi_ai->type		= 0x84;
@@ -879,7 +901,7 @@ static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
 		hdmi_ai->CC02_CT47	= channels - 1;
 		hdmi_ai->CA		= ca;
 		hdmi_checksum_audio_infoframe(hdmi_ai);
-	} else if (eld->conn_type == 1) { /* DisplayPort */
+	} else if (eld->info.conn_type == 1) { /* DisplayPort */
 		struct dp_audio_infoframe *dp_ai = &ai.dp;
 
 		dp_ai->type		= 0x84;
@@ -905,7 +927,8 @@ static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
 			    pin_nid,
 			    channels);
 		hdmi_setup_channel_mapping(codec, pin_nid, non_pcm, ca,
-					   channels, per_pin->chmap);
+					   channels, per_pin->chmap,
+					   per_pin->chmap_set);
 		hdmi_stop_infoframe_trans(codec, pin_nid);
 		hdmi_fill_audio_infoframe(codec, pin_nid,
 					    ai.bytes, sizeof(ai));
@@ -915,7 +938,8 @@ static void hdmi_setup_audio_infoframe(struct hda_codec *codec, int pin_idx,
 		 * accordingly */
 		if (per_pin->non_pcm != non_pcm)
 			hdmi_setup_channel_mapping(codec, pin_nid, non_pcm, ca,
-						   channels, per_pin->chmap);
+						   channels, per_pin->chmap,
+						   per_pin->chmap_set);
 	}
 
 	per_pin->non_pcm = non_pcm;
@@ -951,7 +975,7 @@ static void hdmi_intrinsic_event(struct hda_codec *codec, unsigned int res)
 	if (pin_idx < 0)
 		return;
 
-	hdmi_present_sense(&spec->pins[pin_idx], 1);
+	hdmi_present_sense(get_pin(spec, pin_idx), 1);
 	snd_hda_jack_report_sync(codec);
 }
 
@@ -994,6 +1018,41 @@ static void hdmi_unsol_event(struct hda_codec *codec, unsigned int res)
 		hdmi_non_intrinsic_event(codec, res);
 }
 
+static void haswell_verify_pin_D0(struct hda_codec *codec, hda_nid_t nid)
+{
+	int pwr, lamp, ramp;
+
+	pwr = snd_hda_codec_read(codec, nid, 0, AC_VERB_GET_POWER_STATE, 0);
+	pwr = (pwr & AC_PWRST_ACTUAL) >> AC_PWRST_ACTUAL_SHIFT;
+	if (pwr != AC_PWRST_D0) {
+		snd_hda_codec_write(codec, nid, 0, AC_VERB_SET_POWER_STATE,
+				    AC_PWRST_D0);
+		msleep(40);
+		pwr = snd_hda_codec_read(codec, nid, 0, AC_VERB_GET_POWER_STATE, 0);
+		pwr = (pwr & AC_PWRST_ACTUAL) >> AC_PWRST_ACTUAL_SHIFT;
+		snd_printd("Haswell HDMI audio: Power for pin 0x%x is now D%d\n", nid, pwr);
+	}
+
+	lamp = snd_hda_codec_read(codec, nid, 0,
+				  AC_VERB_GET_AMP_GAIN_MUTE,
+				  AC_AMP_GET_LEFT | AC_AMP_GET_OUTPUT);
+	ramp = snd_hda_codec_read(codec, nid, 0,
+				  AC_VERB_GET_AMP_GAIN_MUTE,
+				  AC_AMP_GET_RIGHT | AC_AMP_GET_OUTPUT);
+	if (lamp != ramp) {
+		snd_hda_codec_write(codec, nid, 0, AC_VERB_SET_AMP_GAIN_MUTE,
+				    AC_AMP_SET_RIGHT | AC_AMP_SET_OUTPUT | lamp);
+
+		lamp = snd_hda_codec_read(codec, nid, 0,
+				  AC_VERB_GET_AMP_GAIN_MUTE,
+				  AC_AMP_GET_LEFT | AC_AMP_GET_OUTPUT);
+		ramp = snd_hda_codec_read(codec, nid, 0,
+				  AC_VERB_GET_AMP_GAIN_MUTE,
+				  AC_AMP_GET_RIGHT | AC_AMP_GET_OUTPUT);
+		snd_printd("Haswell HDMI audio: Mute after set on pin 0x%x: [0x%x 0x%x]\n", nid, lamp, ramp);
+	}
+}
+
 /*
  * Callbacks
  */
@@ -1007,6 +1066,9 @@ static int hdmi_setup_stream(struct hda_codec *codec, hda_nid_t cvt_nid,
 {
 	int pinctl;
 	int new_pinctl = 0;
+
+	if (codec->vendor_id == 0x80862807)
+		haswell_verify_pin_D0(codec, pin_nid);
 
 	if (snd_hda_query_pin_caps(codec, pin_nid) & AC_PINCAP_HBR) {
 		pinctl = snd_hda_codec_read(codec, pin_nid, 0,
@@ -1057,12 +1119,12 @@ static int hdmi_pcm_open(struct hda_pcm_stream *hinfo,
 	pin_idx = hinfo_to_pin_index(spec, hinfo);
 	if (snd_BUG_ON(pin_idx < 0))
 		return -EINVAL;
-	per_pin = &spec->pins[pin_idx];
+	per_pin = get_pin(spec, pin_idx);
 	eld = &per_pin->sink_eld;
 
 	/* Dynamically assign converter to stream */
 	for (cvt_idx = 0; cvt_idx < spec->num_cvts; cvt_idx++) {
-		per_cvt = &spec->cvts[cvt_idx];
+		per_cvt = get_cvt(spec, cvt_idx);
 
 		/* Must not already be assigned */
 		if (per_cvt->assigned)
@@ -1098,10 +1160,14 @@ static int hdmi_pcm_open(struct hda_pcm_stream *hinfo,
 
 	/* Restrict capabilities by ELD if this isn't disabled */
 	if (!static_hdmi_pcm && eld->eld_valid) {
-		snd_hdmi_eld_update_pcm_info(eld, hinfo);
+		snd_hdmi_eld_update_pcm_info(&eld->info, hinfo);
 		if (hinfo->channels_min > hinfo->channels_max ||
-		    !hinfo->rates || !hinfo->formats)
+		    !hinfo->rates || !hinfo->formats) {
+			per_cvt->assigned = 0;
+			hinfo->nid = 0;
+			snd_hda_spdif_ctls_unassign(codec, pin_idx);
 			return -ENODEV;
+		}
 	}
 
 	/* Store the updated parameters */
@@ -1121,7 +1187,7 @@ static int hdmi_pcm_open(struct hda_pcm_stream *hinfo,
 static int hdmi_read_pin_conn(struct hda_codec *codec, int pin_idx)
 {
 	struct hdmi_spec *spec = codec->spec;
-	struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+	struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 	hda_nid_t pin_nid = per_pin->pin_nid;
 
 	if (!(get_wcaps(codec, pin_nid) & AC_WCAP_CONN_LIST)) {
@@ -1142,7 +1208,9 @@ static int hdmi_read_pin_conn(struct hda_codec *codec, int pin_idx)
 static void hdmi_present_sense(struct hdmi_spec_per_pin *per_pin, int repoll)
 {
 	struct hda_codec *codec = per_pin->codec;
-	struct hdmi_eld *eld = &per_pin->sink_eld;
+	struct hdmi_spec *spec = codec->spec;
+	struct hdmi_eld *eld = &spec->temp_eld;
+	struct hdmi_eld *pin_eld = &per_pin->sink_eld;
 	hda_nid_t pin_nid = per_pin->pin_nid;
 	/*
 	 * Always execute a GetPinSense verb here, even when called from
@@ -1153,27 +1221,64 @@ static void hdmi_present_sense(struct hdmi_spec_per_pin *per_pin, int repoll)
 	 * the unsolicited response to avoid custom WARs.
 	 */
 	int present = snd_hda_pin_sense(codec, pin_nid);
-	bool eld_valid = false;
+	bool update_eld = false;
+	bool eld_changed = false;
 
-	memset(eld, 0, offsetof(struct hdmi_eld, eld_buffer));
-
-	eld->monitor_present	= !!(present & AC_PINSENSE_PRESENCE);
-	if (eld->monitor_present)
-		eld_valid	= !!(present & AC_PINSENSE_ELDV);
+	pin_eld->monitor_present = !!(present & AC_PINSENSE_PRESENCE);
+	if (pin_eld->monitor_present)
+		eld->eld_valid  = !!(present & AC_PINSENSE_ELDV);
+	else
+		eld->eld_valid = false;
 
 	_snd_printd(SND_PR_VERBOSE,
 		"HDMI status: Codec=%d Pin=%d Presence_Detect=%d ELD_Valid=%d\n",
-		codec->addr, pin_nid, eld->monitor_present, eld_valid);
+		codec->addr, pin_nid, pin_eld->monitor_present, eld->eld_valid);
 
-	if (eld_valid) {
-		if (!snd_hdmi_get_eld(eld, codec, pin_nid))
-			snd_hdmi_show_eld(eld);
+	if (eld->eld_valid) {
+		if (snd_hdmi_get_eld(codec, pin_nid, eld->eld_buffer,
+						     &eld->eld_size) < 0)
+			eld->eld_valid = false;
+		else {
+			memset(&eld->info, 0, sizeof(struct parsed_hdmi_eld));
+			if (snd_hdmi_parse_eld(&eld->info, eld->eld_buffer,
+						    eld->eld_size) < 0)
+				eld->eld_valid = false;
+		}
+
+		if (eld->eld_valid) {
+			snd_hdmi_show_eld(&eld->info);
+			update_eld = true;
+		}
 		else if (repoll) {
 			queue_delayed_work(codec->bus->workq,
 					   &per_pin->work,
 					   msecs_to_jiffies(300));
+			return;
 		}
 	}
+
+	mutex_lock(&pin_eld->lock);
+	if (pin_eld->eld_valid && !eld->eld_valid) {
+		update_eld = true;
+		eld_changed = true;
+	}
+	if (update_eld) {
+		pin_eld->eld_valid = eld->eld_valid;
+		eld_changed = pin_eld->eld_size != eld->eld_size ||
+			      memcmp(pin_eld->eld_buffer, eld->eld_buffer,
+				     eld->eld_size) != 0;
+		if (eld_changed)
+			memcpy(pin_eld->eld_buffer, eld->eld_buffer,
+			       eld->eld_size);
+		pin_eld->eld_size = eld->eld_size;
+		pin_eld->info = eld->info;
+	}
+	mutex_unlock(&pin_eld->lock);
+
+	if (eld_changed)
+		snd_ctl_notify(codec->bus->card,
+			       SNDRV_CTL_EVENT_MASK_VALUE | SNDRV_CTL_EVENT_MASK_INFO,
+			       &per_pin->eld_ctl->id);
 }
 
 static void hdmi_repoll_eld(struct work_struct *work)
@@ -1186,6 +1291,9 @@ static void hdmi_repoll_eld(struct work_struct *work)
 
 	hdmi_present_sense(per_pin, per_pin->repoll_count);
 }
+
+static void intel_haswell_fixup_connect_list(struct hda_codec *codec,
+					     hda_nid_t nid);
 
 static int hdmi_add_pin(struct hda_codec *codec, hda_nid_t pin_nid)
 {
@@ -1203,11 +1311,13 @@ static int hdmi_add_pin(struct hda_codec *codec, hda_nid_t pin_nid)
 	if (get_defcfg_connect(config) == AC_JACK_PORT_NONE)
 		return 0;
 
-	if (snd_BUG_ON(spec->num_pins >= MAX_HDMI_PINS))
-		return -E2BIG;
+	if (codec->vendor_id == 0x80862807)
+		intel_haswell_fixup_connect_list(codec, pin_nid);
 
 	pin_idx = spec->num_pins;
-	per_pin = &spec->pins[pin_idx];
+	per_pin = snd_array_new(&spec->pins);
+	if (!per_pin)
+		return -ENOMEM;
 
 	per_pin->pin_nid = pin_nid;
 	per_pin->non_pcm = false;
@@ -1224,19 +1334,16 @@ static int hdmi_add_pin(struct hda_codec *codec, hda_nid_t pin_nid)
 static int hdmi_add_cvt(struct hda_codec *codec, hda_nid_t cvt_nid)
 {
 	struct hdmi_spec *spec = codec->spec;
-	int cvt_idx;
 	struct hdmi_spec_per_cvt *per_cvt;
 	unsigned int chans;
 	int err;
 
-	if (snd_BUG_ON(spec->num_cvts >= MAX_HDMI_CVTS))
-		return -E2BIG;
-
 	chans = get_wcaps(codec, cvt_nid);
 	chans = get_wcaps_channels(chans);
 
-	cvt_idx = spec->num_cvts;
-	per_cvt = &spec->cvts[cvt_idx];
+	per_cvt = snd_array_new(&spec->cvts);
+	if (!per_cvt)
+		return -ENOMEM;
 
 	per_cvt->cvt_nid = cvt_nid;
 	per_cvt->channels_min = 2;
@@ -1253,6 +1360,8 @@ static int hdmi_add_cvt(struct hda_codec *codec, hda_nid_t cvt_nid)
 	if (err < 0)
 		return err;
 
+	if (spec->num_cvts < ARRAY_SIZE(spec->cvt_nids))
+		spec->cvt_nids[spec->num_cvts] = cvt_nid;
 	spec->num_cvts++;
 
 	return 0;
@@ -1309,13 +1418,6 @@ static int hdmi_parse_codec(struct hda_codec *codec)
 
 /*
  */
-static char *get_hdmi_pcm_name(int idx)
-{
-	static char names[MAX_HDMI_PINS][8];
-	sprintf(&names[idx][0], "HDMI %d", idx);
-	return &names[idx][0];
-}
-
 static bool check_non_pcm_per_cvt(struct hda_codec *codec, hda_nid_t cvt_nid)
 {
 	struct hda_spdif_out *spdif;
@@ -1342,7 +1444,7 @@ static int generic_hdmi_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 	hda_nid_t cvt_nid = hinfo->nid;
 	struct hdmi_spec *spec = codec->spec;
 	int pin_idx = hinfo_to_pin_index(spec, hinfo);
-	hda_nid_t pin_nid = spec->pins[pin_idx].pin_nid;
+	hda_nid_t pin_nid = get_pin(spec, pin_idx)->pin_nid;
 	bool non_pcm;
 
 	non_pcm = check_non_pcm_per_cvt(codec, cvt_nid);
@@ -1375,7 +1477,7 @@ static int hdmi_pcm_close(struct hda_pcm_stream *hinfo,
 		cvt_idx = cvt_nid_to_cvt_index(spec, hinfo->nid);
 		if (snd_BUG_ON(cvt_idx < 0))
 			return -EINVAL;
-		per_cvt = &spec->cvts[cvt_idx];
+		per_cvt = get_cvt(spec, cvt_idx);
 
 		snd_BUG_ON(!per_cvt->assigned);
 		per_cvt->assigned = 0;
@@ -1384,7 +1486,7 @@ static int hdmi_pcm_close(struct hda_pcm_stream *hinfo,
 		pin_idx = hinfo_to_pin_index(spec, hinfo);
 		if (snd_BUG_ON(pin_idx < 0))
 			return -EINVAL;
-		per_pin = &spec->pins[pin_idx];
+		per_pin = get_pin(spec, pin_idx);
 
 		snd_hda_spdif_ctls_unassign(codec, pin_idx);
 		per_pin->chmap_set = false;
@@ -1478,7 +1580,7 @@ static int hdmi_chmap_ctl_get(struct snd_kcontrol *kcontrol,
 	struct hda_codec *codec = info->private_data;
 	struct hdmi_spec *spec = codec->spec;
 	int pin_idx = kcontrol->private_value;
-	struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+	struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(per_pin->chmap); i++)
@@ -1493,7 +1595,7 @@ static int hdmi_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 	struct hda_codec *codec = info->private_data;
 	struct hdmi_spec *spec = codec->spec;
 	int pin_idx = kcontrol->private_value;
-	struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+	struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 	unsigned int ctl_idx;
 	struct snd_pcm_substream *substream;
 	unsigned char chmap[8];
@@ -1538,9 +1640,14 @@ static int generic_hdmi_build_pcms(struct hda_codec *codec)
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++) {
 		struct hda_pcm *info;
 		struct hda_pcm_stream *pstr;
+		struct hdmi_spec_per_pin *per_pin;
 
-		info = &spec->pcm_rec[pin_idx];
-		info->name = get_hdmi_pcm_name(pin_idx);
+		per_pin = get_pin(spec, pin_idx);
+		sprintf(per_pin->pcm_name, "HDMI %d", pin_idx);
+		info = snd_array_new(&spec->pcm_rec);
+		if (!info)
+			return -ENOMEM;
+		info->name = per_pin->pcm_name;
 		info->pcm_type = HDA_PCM_TYPE_HDMI;
 		info->own_chmap = true;
 
@@ -1551,7 +1658,7 @@ static int generic_hdmi_build_pcms(struct hda_codec *codec)
 	}
 
 	codec->num_pcms = spec->num_pins;
-	codec->pcm_info = spec->pcm_rec;
+	codec->pcm_info = spec->pcm_rec.list;
 
 	return 0;
 }
@@ -1560,11 +1667,14 @@ static int generic_hdmi_build_jack(struct hda_codec *codec, int pin_idx)
 {
 	char hdmi_str[32] = "HDMI/DP";
 	struct hdmi_spec *spec = codec->spec;
-	struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
-	int pcmdev = spec->pcm_rec[pin_idx].device;
+	struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
+	int pcmdev = get_pcm_rec(spec, pin_idx)->device;
 
 	if (pcmdev > 0)
 		sprintf(hdmi_str + strlen(hdmi_str), ",pcm=%d", pcmdev);
+	if (!is_jack_detectable(codec, per_pin->pin_nid))
+		strncat(hdmi_str, " Phantom",
+			sizeof(hdmi_str) - strlen(hdmi_str) - 1);
 
 	return snd_hda_jack_add_kctl(codec, per_pin->pin_nid, hdmi_str, 0);
 }
@@ -1576,7 +1686,7 @@ static int generic_hdmi_build_controls(struct hda_codec *codec)
 	int pin_idx;
 
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++) {
-		struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+		struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 
 		err = generic_hdmi_build_jack(codec, pin_idx);
 		if (err < 0)
@@ -1591,9 +1701,8 @@ static int generic_hdmi_build_controls(struct hda_codec *codec)
 		snd_hda_spdif_ctls_unassign(codec, pin_idx);
 
 		/* add control for ELD Bytes */
-		err = hdmi_create_eld_ctl(codec,
-					pin_idx,
-					spec->pcm_rec[pin_idx].device);
+		err = hdmi_create_eld_ctl(codec, pin_idx,
+					  get_pcm_rec(spec, pin_idx)->device);
 
 		if (err < 0)
 			return err;
@@ -1631,10 +1740,11 @@ static int generic_hdmi_init_per_pins(struct hda_codec *codec)
 	int pin_idx;
 
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++) {
-		struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+		struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 		struct hdmi_eld *eld = &per_pin->sink_eld;
 
 		per_pin->codec = codec;
+		mutex_init(&eld->lock);
 		INIT_DELAYED_WORK(&per_pin->work, hdmi_repoll_eld);
 		snd_hda_eld_proc_new(codec, eld, pin_idx);
 	}
@@ -1647,7 +1757,7 @@ static int generic_hdmi_init(struct hda_codec *codec)
 	int pin_idx;
 
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++) {
-		struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+		struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 		hda_nid_t pin_nid = per_pin->pin_nid;
 
 		hdmi_init_pin(codec, pin_nid);
@@ -1656,13 +1766,27 @@ static int generic_hdmi_init(struct hda_codec *codec)
 	return 0;
 }
 
+static void hdmi_array_init(struct hdmi_spec *spec, int nums)
+{
+	snd_array_init(&spec->pins, sizeof(struct hdmi_spec_per_pin), nums);
+	snd_array_init(&spec->cvts, sizeof(struct hdmi_spec_per_cvt), nums);
+	snd_array_init(&spec->pcm_rec, sizeof(struct hda_pcm), nums);
+}
+
+static void hdmi_array_free(struct hdmi_spec *spec)
+{
+	snd_array_free(&spec->pins);
+	snd_array_free(&spec->cvts);
+	snd_array_free(&spec->pcm_rec);
+}
+
 static void generic_hdmi_free(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
 	int pin_idx;
 
 	for (pin_idx = 0; pin_idx < spec->num_pins; pin_idx++) {
-		struct hdmi_spec_per_pin *per_pin = &spec->pins[pin_idx];
+		struct hdmi_spec_per_pin *per_pin = get_pin(spec, pin_idx);
 		struct hdmi_eld *eld = &per_pin->sink_eld;
 
 		cancel_delayed_work(&per_pin->work);
@@ -1670,6 +1794,7 @@ static void generic_hdmi_free(struct hda_codec *codec)
 	}
 
 	flush_workqueue(codec->bus->workq);
+	hdmi_array_free(spec);
 	kfree(spec);
 }
 
@@ -1681,29 +1806,80 @@ static const struct hda_codec_ops generic_hdmi_patch_ops = {
 	.unsol_event		= hdmi_unsol_event,
 };
 
-static void intel_haswell_fixup_connect_list(struct hda_codec *codec)
+
+static void intel_haswell_fixup_connect_list(struct hda_codec *codec,
+					     hda_nid_t nid)
+{
+	struct hdmi_spec *spec = codec->spec;
+	hda_nid_t conns[4];
+	int nconns;
+
+	nconns = snd_hda_get_connections(codec, nid, conns, ARRAY_SIZE(conns));
+	if (nconns == spec->num_cvts &&
+	    !memcmp(conns, spec->cvt_nids, spec->num_cvts * sizeof(hda_nid_t)))
+		return;
+
+	/* override pins connection list */
+	snd_printdd("hdmi: haswell: override pin connection 0x%x\n", nid);
+	nconns = max(spec->num_cvts, 4);
+	snd_hda_override_conn_list(codec, nid, spec->num_cvts, spec->cvt_nids);
+}
+
+#define INTEL_VENDOR_NID 0x08
+#define INTEL_GET_VENDOR_VERB 0xf81
+#define INTEL_SET_VENDOR_VERB 0x781
+#define INTEL_EN_DP12			0x02 /* enable DP 1.2 features */
+#define INTEL_EN_ALL_PIN_CVTS	0x01 /* enable 2nd & 3rd pins and convertors */
+
+static void intel_haswell_enable_all_pins(struct hda_codec *codec,
+					  bool update_tree)
 {
 	unsigned int vendor_param;
-	hda_nid_t list[3] = {0x2, 0x3, 0x4};
 
-	vendor_param = snd_hda_codec_read(codec, 0x08, 0, 0xf81, 0);
-	if (vendor_param == -1 || vendor_param & 0x02)
+	vendor_param = snd_hda_codec_read(codec, INTEL_VENDOR_NID, 0,
+				INTEL_GET_VENDOR_VERB, 0);
+	if (vendor_param == -1 || vendor_param & INTEL_EN_ALL_PIN_CVTS)
+		return;
+
+	vendor_param |= INTEL_EN_ALL_PIN_CVTS;
+	vendor_param = snd_hda_codec_read(codec, INTEL_VENDOR_NID, 0,
+				INTEL_SET_VENDOR_VERB, vendor_param);
+	if (vendor_param == -1)
+		return;
+
+	if (update_tree)
+		snd_hda_codec_update_widgets(codec);
+}
+
+static void intel_haswell_fixup_enable_dp12(struct hda_codec *codec)
+{
+	unsigned int vendor_param;
+
+	vendor_param = snd_hda_codec_read(codec, INTEL_VENDOR_NID, 0,
+				INTEL_GET_VENDOR_VERB, 0);
+	if (vendor_param == -1 || vendor_param & INTEL_EN_DP12)
 		return;
 
 	/* enable DP1.2 mode */
-	vendor_param |= 0x02;
-	snd_hda_codec_read(codec, 0x08, 0, 0x781, vendor_param);
-
-	vendor_param = snd_hda_codec_read(codec, 0x08, 0, 0xf81, 0);
-	if (vendor_param == -1 || !(vendor_param & 0x02))
-		return;
-
-	/* override 3 pins connection list */
-	snd_hda_override_conn_list(codec, 0x05, 3, list);
-	snd_hda_override_conn_list(codec, 0x06, 3, list);
-	snd_hda_override_conn_list(codec, 0x07, 3, list);
+	vendor_param |= INTEL_EN_DP12;
+	snd_hda_codec_write_cache(codec, INTEL_VENDOR_NID, 0,
+				INTEL_SET_VENDOR_VERB, vendor_param);
 }
 
+/* Haswell needs to re-issue the vendor-specific verbs before turning to D0.
+ * Otherwise you may get severe h/w communication errors.
+ */
+static void haswell_set_power_state(struct hda_codec *codec, hda_nid_t fg,
+				unsigned int power_state)
+{
+	if (power_state == AC_PWRST_D0) {
+		intel_haswell_enable_all_pins(codec, false);
+		intel_haswell_fixup_enable_dp12(codec);
+	}
+
+	snd_hda_codec_read(codec, fg, 0, AC_VERB_SET_POWER_STATE, power_state);
+	snd_hda_codec_set_power_to_all(codec, fg, power_state);
+}
 
 static int patch_generic_hdmi(struct hda_codec *codec)
 {
@@ -1714,9 +1890,12 @@ static int patch_generic_hdmi(struct hda_codec *codec)
 		return -ENOMEM;
 
 	codec->spec = spec;
+	hdmi_array_init(spec, 4);
 
-	if (codec->vendor_id == 0x80862807)
-		intel_haswell_fixup_connect_list(codec);
+	if (codec->vendor_id == 0x80862807) {
+		intel_haswell_enable_all_pins(codec, true);
+		intel_haswell_fixup_enable_dp12(codec);
+	}
 
 	if (hdmi_parse_codec(codec) < 0) {
 		codec->spec = NULL;
@@ -1724,6 +1903,9 @@ static int patch_generic_hdmi(struct hda_codec *codec)
 		return -EINVAL;
 	}
 	codec->patch_ops = generic_hdmi_patch_ops;
+	if (codec->vendor_id == 0x80862807)
+		codec->patch_ops.set_power_state = haswell_set_power_state;
+
 	generic_hdmi_init_per_pins(codec);
 
 	init_channel_allocations();
@@ -1738,23 +1920,29 @@ static int patch_generic_hdmi(struct hda_codec *codec)
 static int simple_playback_build_pcms(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
-	struct hda_pcm *info = spec->pcm_rec;
+	struct hda_pcm *info;
 	unsigned int chans;
 	struct hda_pcm_stream *pstr;
+	struct hdmi_spec_per_cvt *per_cvt;
 
-	codec->num_pcms = 1;
-	codec->pcm_info = info;
-
-	chans = get_wcaps(codec, spec->cvts[0].cvt_nid);
+	per_cvt = get_cvt(spec, 0);
+	chans = get_wcaps(codec, per_cvt->cvt_nid);
 	chans = get_wcaps_channels(chans);
 
-	info->name = get_hdmi_pcm_name(0);
+	info = snd_array_new(&spec->pcm_rec);
+	if (!info)
+		return -ENOMEM;
+	info->name = get_pin(spec, 0)->pcm_name;
+	sprintf(info->name, "HDMI 0");
 	info->pcm_type = HDA_PCM_TYPE_HDMI;
 	pstr = &info->stream[SNDRV_PCM_STREAM_PLAYBACK];
 	*pstr = spec->pcm_playback;
-	pstr->nid = spec->cvts[0].cvt_nid;
+	pstr->nid = per_cvt->cvt_nid;
 	if (pstr->channels_max <= 2 && chans && chans <= 16)
 		pstr->channels_max = chans;
+
+	codec->num_pcms = 1;
+	codec->pcm_info = info;
 
 	return 0;
 }
@@ -1775,11 +1963,12 @@ static void simple_hdmi_unsol_event(struct hda_codec *codec,
 static int simple_playback_build_controls(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
+	struct hdmi_spec_per_cvt *per_cvt;
 	int err;
 
-	err = snd_hda_create_spdif_out_ctls(codec,
-					    spec->cvts[0].cvt_nid,
-					    spec->cvts[0].cvt_nid);
+	per_cvt = get_cvt(spec, 0);
+	err = snd_hda_create_spdif_out_ctls(codec, per_cvt->cvt_nid,
+					    per_cvt->cvt_nid);
 	if (err < 0)
 		return err;
 	return simple_hdmi_build_jack(codec, 0);
@@ -1788,7 +1977,8 @@ static int simple_playback_build_controls(struct hda_codec *codec)
 static int simple_playback_init(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
-	hda_nid_t pin = spec->pins[0].pin_nid;
+	struct hdmi_spec_per_pin *per_pin = get_pin(spec, 0);
+	hda_nid_t pin = per_pin->pin_nid;
 
 	snd_hda_codec_write(codec, pin, 0,
 			    AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_OUT);
@@ -1804,6 +1994,7 @@ static void simple_playback_free(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
 
+	hdmi_array_free(spec);
 	kfree(spec);
 }
 
@@ -1967,20 +2158,29 @@ static int patch_simple_hdmi(struct hda_codec *codec,
 			     hda_nid_t cvt_nid, hda_nid_t pin_nid)
 {
 	struct hdmi_spec *spec;
+	struct hdmi_spec_per_cvt *per_cvt;
+	struct hdmi_spec_per_pin *per_pin;
 
 	spec = kzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec)
 		return -ENOMEM;
 
 	codec->spec = spec;
+	hdmi_array_init(spec, 1);
 
 	spec->multiout.num_dacs = 0;  /* no analog */
 	spec->multiout.max_channels = 2;
 	spec->multiout.dig_out_nid = cvt_nid;
 	spec->num_cvts = 1;
 	spec->num_pins = 1;
-	spec->cvts[0].cvt_nid = cvt_nid;
-	spec->pins[0].pin_nid = pin_nid;
+	per_pin = snd_array_new(&spec->pins);
+	per_cvt = snd_array_new(&spec->cvts);
+	if (!per_pin || !per_cvt) {
+		simple_playback_free(codec);
+		return -ENOMEM;
+	}
+	per_cvt->cvt_nid = cvt_nid;
+	per_pin->pin_nid = pin_nid;
 	spec->pcm_playback = simple_pcm_playback;
 
 	codec->patch_ops = simple_hdmi_patch_ops;
@@ -2057,9 +2257,11 @@ static int nvhdmi_8ch_7x_pcm_prepare(struct hda_pcm_stream *hinfo,
 	int i;
 	struct hdmi_spec *spec = codec->spec;
 	struct hda_spdif_out *spdif;
+	struct hdmi_spec_per_cvt *per_cvt;
 
 	mutex_lock(&codec->spdif_mutex);
-	spdif = snd_hda_spdif_out_of_nid(codec, spec->cvts[0].cvt_nid);
+	per_cvt = get_cvt(spec, 0);
+	spdif = snd_hda_spdif_out_of_nid(codec, per_cvt->cvt_nid);
 
 	chs = substream->runtime->channels;
 
@@ -2181,13 +2383,17 @@ static int nvhdmi_7x_8ch_build_pcms(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
 	int err = simple_playback_build_pcms(codec);
-	spec->pcm_rec[0].own_chmap = true;
+	if (!err) {
+		struct hda_pcm *info = get_pcm_rec(spec, 0);
+		info->own_chmap = true;
+	}
 	return err;
 }
 
 static int nvhdmi_7x_8ch_build_controls(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
+	struct hda_pcm *info;
 	struct snd_pcm_chmap *chmap;
 	int err;
 
@@ -2196,7 +2402,8 @@ static int nvhdmi_7x_8ch_build_controls(struct hda_codec *codec)
 		return err;
 
 	/* add channel maps */
-	err = snd_pcm_add_chmap_ctls(spec->pcm_rec[0].pcm,
+	info = get_pcm_rec(spec, 0);
+	err = snd_pcm_add_chmap_ctls(info->pcm,
 				     SNDRV_PCM_STREAM_PLAYBACK,
 				     snd_pcm_alt_chmaps, 8, 0, &chmap);
 	if (err < 0)
@@ -2251,6 +2458,7 @@ static int atihdmi_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 					struct snd_pcm_substream *substream)
 {
 	struct hdmi_spec *spec = codec->spec;
+	struct hdmi_spec_per_cvt *per_cvt = get_cvt(spec, 0);
 	int chans = substream->runtime->channels;
 	int i, err;
 
@@ -2258,11 +2466,11 @@ static int atihdmi_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 					  substream);
 	if (err < 0)
 		return err;
-	snd_hda_codec_write(codec, spec->cvts[0].cvt_nid, 0,
+	snd_hda_codec_write(codec, per_cvt->cvt_nid, 0,
 			    AC_VERB_SET_CVT_CHAN_COUNT, chans - 1);
 	/* FIXME: XXX */
 	for (i = 0; i < chans; i++) {
-		snd_hda_codec_write(codec, spec->cvts[0].cvt_nid, 0,
+		snd_hda_codec_write(codec, per_cvt->cvt_nid, 0,
 				    AC_VERB_SET_HDMI_CHAN_SLOT,
 				    (i << 4) | i);
 	}

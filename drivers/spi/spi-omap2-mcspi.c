@@ -285,8 +285,12 @@ static int mcspi_wait_for_reg_bit(void __iomem *reg, unsigned long bit)
 
 	timeout = jiffies + msecs_to_jiffies(1000);
 	while (!(__raw_readl(reg) & bit)) {
-		if (time_after(jiffies, timeout))
-			return -1;
+		if (time_after(jiffies, timeout)) {
+			if (!(__raw_readl(reg) & bit))
+				return -ETIMEDOUT;
+			else
+				return 0;
+		}
 		cpu_relax();
 	}
 	return 0;
@@ -298,10 +302,10 @@ static void omap2_mcspi_rx_callback(void *data)
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
 	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select];
 
-	complete(&mcspi_dma->dma_rx_completion);
-
 	/* We must disable the DMA RX request */
 	omap2_mcspi_set_dma_req(spi, 1, 0);
+
+	complete(&mcspi_dma->dma_rx_completion);
 }
 
 static void omap2_mcspi_tx_callback(void *data)
@@ -310,10 +314,10 @@ static void omap2_mcspi_tx_callback(void *data)
 	struct omap2_mcspi *mcspi = spi_master_get_devdata(spi->master);
 	struct omap2_mcspi_dma *mcspi_dma = &mcspi->dma_channels[spi->chip_select];
 
-	complete(&mcspi_dma->dma_tx_completion);
-
 	/* We must disable the DMA TX request */
 	omap2_mcspi_set_dma_req(spi, 0, 0);
+
+	complete(&mcspi_dma->dma_tx_completion);
 }
 
 static void omap2_mcspi_tx_dma(struct spi_device *spi,
@@ -805,6 +809,10 @@ static int omap2_mcspi_setup_transfer(struct spi_device *spi,
 	return 0;
 }
 
+/*
+ * Note that we currently allow DMA only if we get a channel
+ * for both rx and tx. Otherwise we'll do PIO for both rx and tx.
+ */
 static int omap2_mcspi_request_dma(struct spi_device *spi)
 {
 	struct spi_master	*master = spi->master;
@@ -823,21 +831,22 @@ static int omap2_mcspi_request_dma(struct spi_device *spi)
 	dma_cap_set(DMA_SLAVE, mask);
 	sig = mcspi_dma->dma_rx_sync_dev;
 	mcspi_dma->dma_rx = dma_request_channel(mask, omap_dma_filter_fn, &sig);
-	if (!mcspi_dma->dma_rx) {
-		dev_err(&spi->dev, "no RX DMA engine channel for McSPI\n");
-		return -EAGAIN;
-	}
+	if (!mcspi_dma->dma_rx)
+		goto no_dma;
 
 	sig = mcspi_dma->dma_tx_sync_dev;
 	mcspi_dma->dma_tx = dma_request_channel(mask, omap_dma_filter_fn, &sig);
 	if (!mcspi_dma->dma_tx) {
-		dev_err(&spi->dev, "no TX DMA engine channel for McSPI\n");
 		dma_release_channel(mcspi_dma->dma_rx);
 		mcspi_dma->dma_rx = NULL;
-		return -EAGAIN;
+		goto no_dma;
 	}
 
 	return 0;
+
+no_dma:
+	dev_warn(&spi->dev, "not using DMA for McSPI\n");
+	return -EAGAIN;
 }
 
 static int omap2_mcspi_setup(struct spi_device *spi)
@@ -870,7 +879,7 @@ static int omap2_mcspi_setup(struct spi_device *spi)
 
 	if (!mcspi_dma->dma_rx || !mcspi_dma->dma_tx) {
 		ret = omap2_mcspi_request_dma(spi);
-		if (ret < 0)
+		if (ret < 0 && ret != -EAGAIN)
 			return ret;
 	}
 
@@ -927,6 +936,8 @@ static void omap2_mcspi_work(struct omap2_mcspi *mcspi, struct spi_message *m)
 
 	struct spi_device		*spi;
 	struct spi_transfer		*t = NULL;
+	struct spi_master		*master;
+	struct omap2_mcspi_dma		*mcspi_dma;
 	int				cs_active = 0;
 	struct omap2_mcspi_cs		*cs;
 	struct omap2_mcspi_device_config *cd;
@@ -935,6 +946,8 @@ static void omap2_mcspi_work(struct omap2_mcspi *mcspi, struct spi_message *m)
 	u32				chconf;
 
 	spi = m->spi;
+	master = spi->master;
+	mcspi_dma = mcspi->dma_channels + spi->chip_select;
 	cs = spi->controller_state;
 	cd = spi->controller_data;
 
@@ -952,6 +965,14 @@ static void omap2_mcspi_work(struct omap2_mcspi *mcspi, struct spi_message *m)
 			if (!t->speed_hz && !t->bits_per_word)
 				par_override = 0;
 		}
+		if (cd && cd->cs_per_word) {
+			chconf = mcspi->ctx.modulctrl;
+			chconf &= ~OMAP2_MCSPI_MODULCTRL_SINGLE;
+			mcspi_write_reg(master, OMAP2_MCSPI_MODULCTRL, chconf);
+			mcspi->ctx.modulctrl =
+				mcspi_read_cs_reg(spi, OMAP2_MCSPI_MODULCTRL);
+		}
+
 
 		if (!cs_active) {
 			omap2_mcspi_force_cs(spi, 1);
@@ -983,7 +1004,8 @@ static void omap2_mcspi_work(struct omap2_mcspi *mcspi, struct spi_message *m)
 				__raw_writel(0, cs->base
 						+ OMAP2_MCSPI_TX0);
 
-			if (m->is_dma_mapped || t->len >= DMA_MIN_BYTES)
+			if ((mcspi_dma->dma_rx && mcspi_dma->dma_tx) &&
+			    (m->is_dma_mapped || t->len >= DMA_MIN_BYTES))
 				count = omap2_mcspi_txrx_dma(spi, t);
 			else
 				count = omap2_mcspi_txrx_pio(spi, t);
@@ -1013,6 +1035,14 @@ static void omap2_mcspi_work(struct omap2_mcspi *mcspi, struct spi_message *m)
 	if (cs_active)
 		omap2_mcspi_force_cs(spi, 0);
 
+	if (cd && cd->cs_per_word) {
+		chconf = mcspi->ctx.modulctrl;
+		chconf |= OMAP2_MCSPI_MODULCTRL_SINGLE;
+		mcspi_write_reg(master, OMAP2_MCSPI_MODULCTRL, chconf);
+		mcspi->ctx.modulctrl =
+			mcspi_read_cs_reg(spi, OMAP2_MCSPI_MODULCTRL);
+	}
+
 	omap2_mcspi_set_enable(spi, 0);
 
 	m->status = status;
@@ -1020,12 +1050,16 @@ static void omap2_mcspi_work(struct omap2_mcspi *mcspi, struct spi_message *m)
 }
 
 static int omap2_mcspi_transfer_one_message(struct spi_master *master,
-						struct spi_message *m)
+		struct spi_message *m)
 {
+	struct spi_device	*spi;
 	struct omap2_mcspi	*mcspi;
+	struct omap2_mcspi_dma	*mcspi_dma;
 	struct spi_transfer	*t;
 
+	spi = m->spi;
 	mcspi = spi_master_get_devdata(master);
+	mcspi_dma = mcspi->dma_channels + spi->chip_select;
 	m->actual_length = 0;
 	m->status = 0;
 
@@ -1041,7 +1075,7 @@ static int omap2_mcspi_transfer_one_message(struct spi_master *master,
 				|| (len && !(rx_buf || tx_buf))
 				|| (t->bits_per_word &&
 					(  t->bits_per_word < 4
-					|| t->bits_per_word > 32))) {
+					   || t->bits_per_word > 32))) {
 			dev_dbg(mcspi->dev, "transfer: %d Hz, %d %s%s, %d bpw\n",
 					t->speed_hz,
 					len,
@@ -1052,15 +1086,15 @@ static int omap2_mcspi_transfer_one_message(struct spi_master *master,
 		}
 		if (t->speed_hz && t->speed_hz < (OMAP2_MCSPI_MAX_FREQ >> 15)) {
 			dev_dbg(mcspi->dev, "speed_hz %d below minimum %d Hz\n",
-				t->speed_hz,
-				OMAP2_MCSPI_MAX_FREQ >> 15);
+					t->speed_hz,
+					OMAP2_MCSPI_MAX_FREQ >> 15);
 			return -EINVAL;
 		}
 
 		if (m->is_dma_mapped || len < DMA_MIN_BYTES)
 			continue;
 
-		if (tx_buf != NULL) {
+		if (mcspi_dma->dma_tx && tx_buf != NULL) {
 			t->tx_dma = dma_map_single(mcspi->dev, (void *) tx_buf,
 					len, DMA_TO_DEVICE);
 			if (dma_mapping_error(mcspi->dev, t->tx_dma)) {
@@ -1069,7 +1103,7 @@ static int omap2_mcspi_transfer_one_message(struct spi_master *master,
 				return -EINVAL;
 			}
 		}
-		if (rx_buf != NULL) {
+		if (mcspi_dma->dma_rx && rx_buf != NULL) {
 			t->rx_dma = dma_map_single(mcspi->dev, rx_buf, t->len,
 					DMA_FROM_DEVICE);
 			if (dma_mapping_error(mcspi->dev, t->rx_dma)) {
@@ -1099,7 +1133,7 @@ static int omap2_mcspi_master_setup(struct omap2_mcspi *mcspi)
 		return ret;
 
 	mcspi_write_reg(master, OMAP2_MCSPI_WAKEUPENABLE,
-				OMAP2_MCSPI_WAKEUPENABLE_WKEN);
+			OMAP2_MCSPI_WAKEUPENABLE_WKEN);
 	ctx->wakeupenable = OMAP2_MCSPI_WAKEUPENABLE_WKEN;
 
 	omap2_mcspi_set_master_mode(master);
@@ -1204,10 +1238,9 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 	r->end += regs_offset;
 	mcspi->phys = r->start;
 
-	mcspi->base = devm_request_and_ioremap(&pdev->dev, r);
-	if (!mcspi->base) {
-		dev_dbg(&pdev->dev, "can't ioremap MCSPI\n");
-		status = -ENOMEM;
+	mcspi->base = devm_ioremap_resource(&pdev->dev, r);
+	if (IS_ERR(mcspi->base)) {
+		status = PTR_ERR(mcspi->base);
 		goto free_master;
 	}
 
@@ -1228,7 +1261,7 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 
 		sprintf(dma_ch_name, "rx%d", i);
 		dma_res = platform_get_resource_byname(pdev, IORESOURCE_DMA,
-							dma_ch_name);
+				dma_ch_name);
 		if (!dma_res) {
 			dev_dbg(&pdev->dev, "cannot get DMA RX channel\n");
 			status = -ENODEV;
@@ -1238,7 +1271,7 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 		mcspi->dma_channels[i].dma_rx_sync_dev = dma_res->start;
 		sprintf(dma_ch_name, "tx%d", i);
 		dma_res = platform_get_resource_byname(pdev, IORESOURCE_DMA,
-							dma_ch_name);
+				dma_ch_name);
 		if (!dma_res) {
 			dev_dbg(&pdev->dev, "cannot get DMA TX channel\n");
 			status = -ENODEV;
@@ -1254,13 +1287,14 @@ static int omap2_mcspi_probe(struct platform_device *pdev)
 	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
 	if (IS_ERR(pinctrl))
 		dev_warn(&pdev->dev,
-			"pins are not configured from the driver\n");
+				"pins are not configured from the driver\n");
 
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_set_autosuspend_delay(&pdev->dev, SPI_AUTOSUSPEND_TIMEOUT);
 	pm_runtime_enable(&pdev->dev);
 
-	if (status || omap2_mcspi_master_setup(mcspi) < 0)
+	status = omap2_mcspi_master_setup(mcspi);
+	if (status < 0)
 		goto disable_pm;
 
 	status = spi_register_master(master);

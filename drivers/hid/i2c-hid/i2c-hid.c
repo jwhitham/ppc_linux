@@ -34,6 +34,7 @@
 #include <linux/kernel.h>
 #include <linux/hid.h>
 #include <linux/mutex.h>
+#include <linux/acpi.h>
 
 #include <linux/i2c/i2c-hid.h>
 
@@ -139,6 +140,8 @@ struct i2c_hid {
 	unsigned long		flags;		/* device flags */
 
 	wait_queue_head_t	wait;		/* For waiting the interrupt */
+
+	struct i2c_hid_platform_data pdata;
 };
 
 static int __i2c_hid_command(struct i2c_client *client,
@@ -560,6 +563,36 @@ static int i2c_hid_output_raw_report(struct hid_device *hid, __u8 *buf,
 	return ret;
 }
 
+static void i2c_hid_request(struct hid_device *hid, struct hid_report *rep,
+		int reqtype)
+{
+	struct i2c_client *client = hid->driver_data;
+	char *buf;
+	int ret;
+	int len = i2c_hid_get_report_length(rep) - 2;
+
+	buf = kzalloc(len, GFP_KERNEL);
+	if (!buf)
+		return;
+
+	switch (reqtype) {
+	case HID_REQ_GET_REPORT:
+		ret = i2c_hid_get_raw_report(hid, rep->id, buf, len, rep->type);
+		if (ret < 0)
+			dev_err(&client->dev, "%s: unable to get report: %d\n",
+				__func__, ret);
+		else
+			hid_input_report(hid, rep->type, buf, ret, 0);
+		break;
+	case HID_REQ_SET_REPORT:
+		hid_output_report(rep, buf);
+		i2c_hid_output_raw_report(hid, buf, len, rep->type);
+		break;
+	}
+
+	kfree(buf);
+}
+
 static int i2c_hid_parse(struct hid_device *hid)
 {
 	struct i2c_client *client = hid->driver_data;
@@ -739,6 +772,7 @@ static struct hid_ll_driver i2c_hid_ll_driver = {
 	.open = i2c_hid_open,
 	.close = i2c_hid_close,
 	.power = i2c_hid_power,
+	.request = i2c_hid_request,
 	.hidinput_input_event = i2c_hid_hidinput_input_event,
 };
 
@@ -821,6 +855,70 @@ static int i2c_hid_fetch_hid_descriptor(struct i2c_hid *ihid)
 	return 0;
 }
 
+#ifdef CONFIG_ACPI
+static int i2c_hid_acpi_pdata(struct i2c_client *client,
+		struct i2c_hid_platform_data *pdata)
+{
+	static u8 i2c_hid_guid[] = {
+		0xF7, 0xF6, 0xDF, 0x3C, 0x67, 0x42, 0x55, 0x45,
+		0xAD, 0x05, 0xB3, 0x0A, 0x3D, 0x89, 0x38, 0xDE,
+	};
+	struct acpi_buffer buf = { ACPI_ALLOCATE_BUFFER, NULL };
+	union acpi_object params[4], *obj;
+	struct acpi_object_list input;
+	struct acpi_device *adev;
+	acpi_handle handle;
+
+	handle = ACPI_HANDLE(&client->dev);
+	if (!handle || acpi_bus_get_device(handle, &adev))
+		return -ENODEV;
+
+	input.count = ARRAY_SIZE(params);
+	input.pointer = params;
+
+	params[0].type = ACPI_TYPE_BUFFER;
+	params[0].buffer.length = sizeof(i2c_hid_guid);
+	params[0].buffer.pointer = i2c_hid_guid;
+	params[1].type = ACPI_TYPE_INTEGER;
+	params[1].integer.value = 1;
+	params[2].type = ACPI_TYPE_INTEGER;
+	params[2].integer.value = 1; /* HID function */
+	params[3].type = ACPI_TYPE_INTEGER;
+	params[3].integer.value = 0;
+
+	if (ACPI_FAILURE(acpi_evaluate_object(handle, "_DSM", &input, &buf))) {
+		dev_err(&client->dev, "device _DSM execution failed\n");
+		return -ENODEV;
+	}
+
+	obj = (union acpi_object *)buf.pointer;
+	if (obj->type != ACPI_TYPE_INTEGER) {
+		dev_err(&client->dev, "device _DSM returned invalid type: %d\n",
+			obj->type);
+		kfree(buf.pointer);
+		return -EINVAL;
+	}
+
+	pdata->hid_descriptor_address = obj->integer.value;
+
+	kfree(buf.pointer);
+	return 0;
+}
+
+static const struct acpi_device_id i2c_hid_acpi_match[] = {
+	{"ACPI0C50", 0 },
+	{"PNP0C50", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, i2c_hid_acpi_match);
+#else
+static inline int i2c_hid_acpi_pdata(struct i2c_client *client,
+		struct i2c_hid_platform_data *pdata)
+{
+	return -ENODEV;
+}
+#endif
+
 static int i2c_hid_probe(struct i2c_client *client,
 			 const struct i2c_device_id *dev_id)
 {
@@ -832,11 +930,6 @@ static int i2c_hid_probe(struct i2c_client *client,
 
 	dbg_hid("HID probe called for i2c 0x%02x\n", client->addr);
 
-	if (!platform_data) {
-		dev_err(&client->dev, "HID register address not provided\n");
-		return -EINVAL;
-	}
-
 	if (!client->irq) {
 		dev_err(&client->dev,
 			"HID over i2c has not been provided an Int IRQ\n");
@@ -847,11 +940,22 @@ static int i2c_hid_probe(struct i2c_client *client,
 	if (!ihid)
 		return -ENOMEM;
 
+	if (!platform_data) {
+		ret = i2c_hid_acpi_pdata(client, &ihid->pdata);
+		if (ret) {
+			dev_err(&client->dev,
+				"HID register address not provided\n");
+			goto err;
+		}
+	} else {
+		ihid->pdata = *platform_data;
+	}
+
 	i2c_set_clientdata(client, ihid);
 
 	ihid->client = client;
 
-	hidRegister = platform_data->hid_descriptor_address;
+	hidRegister = ihid->pdata.hid_descriptor_address;
 	ihid->wHIDDescRegister = cpu_to_le16(hidRegister);
 
 	init_waitqueue_head(&ihid->wait);
@@ -884,6 +988,7 @@ static int i2c_hid_probe(struct i2c_client *client,
 	hid->hid_get_raw_report = i2c_hid_get_raw_report;
 	hid->hid_output_raw_report = i2c_hid_output_raw_report;
 	hid->dev.parent = &client->dev;
+	ACPI_HANDLE_SET(&hid->dev, ACPI_HANDLE(&client->dev));
 	hid->bus = BUS_I2C;
 	hid->version = le16_to_cpu(ihid->hdesc.bcdVersion);
 	hid->vendor = le16_to_cpu(ihid->hdesc.wVendorID);
@@ -975,6 +1080,7 @@ static struct i2c_driver i2c_hid_driver = {
 		.name	= "i2c_hid",
 		.owner	= THIS_MODULE,
 		.pm	= &i2c_hid_pm,
+		.acpi_match_table = ACPI_PTR(i2c_hid_acpi_match),
 	},
 
 	.probe		= i2c_hid_probe,

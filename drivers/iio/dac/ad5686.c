@@ -117,18 +117,13 @@ static int ad5686_spi_read(struct ad5686_state *st, u8 addr)
 			.len = 3,
 		},
 	};
-	struct spi_message m;
 	int ret;
-
-	spi_message_init(&m);
-	spi_message_add_tail(&t[0], &m);
-	spi_message_add_tail(&t[1], &m);
 
 	st->data[0].d32 = cpu_to_be32(AD5686_CMD(AD5686_CMD_READBACK_ENABLE) |
 			      AD5686_ADDR(addr));
 	st->data[1].d32 = cpu_to_be32(AD5686_CMD(AD5686_CMD_NOOP));
 
-	ret = spi_sync(st->spi, &m);
+	ret = spi_sync_transfer(st->spi, t, ARRAY_SIZE(t));
 	if (ret < 0)
 		return ret;
 
@@ -281,9 +276,9 @@ static const struct iio_chan_spec_ext_info ad5686_ext_info[] = {
 		.indexed = 1,					\
 		.output = 1,					\
 		.channel = chan,				\
-		.info_mask = IIO_CHAN_INFO_RAW_SEPARATE_BIT |	\
-		IIO_CHAN_INFO_SCALE_SHARED_BIT,			\
-		.address = AD5686_ADDR_DAC(chan),			\
+		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),	\
+		.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE),\
+		.address = AD5686_ADDR_DAC(chan),		\
 		.scan_type = IIO_ST('u', bits, 16, shift),	\
 		.ext_info = ad5686_ext_info,			\
 }

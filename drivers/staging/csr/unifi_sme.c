@@ -15,7 +15,7 @@
 #include "unifi_priv.h"
 #include "csr_wifi_hip_unifi.h"
 #include "csr_wifi_hip_conversions.h"
-
+#include <linux/sched/rt.h>
 
 
 
@@ -876,6 +876,8 @@ int unifi_cfg_get_info(unifi_priv_t *priv, unsigned char *arg)
             {
 #ifdef CSR_SUPPORT_WEXT_AP
                 uf_cfg_ap_config_t cfg_ap_config;
+
+		memset(&cfg_ap_config, 0, sizeof(cfg_ap_config));
                 cfg_ap_config.channel = priv->ap_config.channel;
                 cfg_ap_config.beaconInterval = priv->ap_mac_config.beaconInterval;
                 cfg_ap_config.wmmEnabled = priv->ap_mac_config.wmmEnabled;
@@ -1196,7 +1198,6 @@ void uf_send_pkt_to_encrypt(struct work_struct *work)
 
         if (pktBulkDataLength > 0) {
 		    pktBulkData = kmalloc(pktBulkDataLength, GFP_KERNEL);
-		    memset(pktBulkData, 0, pktBulkDataLength);
 	    } else {
 		    unifi_error(priv, "uf_send_pkt_to_encrypt() : invalid buffer\n");
 		    return;

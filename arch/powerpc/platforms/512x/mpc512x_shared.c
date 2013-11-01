@@ -172,12 +172,9 @@ static struct fsl_diu_shared_fb __attribute__ ((__aligned__(8))) diu_shared_fb;
 
 static inline void mpc512x_free_bootmem(struct page *page)
 {
-	__ClearPageReserved(page);
 	BUG_ON(PageTail(page));
 	BUG_ON(atomic_read(&page->_count) > 1);
-	atomic_set(&page->_count, 1);
-	__free_page(page);
-	totalram_pages++;
+	free_reserved_page(page);
 }
 
 void mpc512x_release_bootmem(void)
@@ -330,25 +327,33 @@ void __init mpc512x_init_IRQ(void)
 static struct of_device_id __initdata of_bus_ids[] = {
 	{ .compatible = "fsl,mpc5121-immr", },
 	{ .compatible = "fsl,mpc5121-localbus", },
+	{ .compatible = "fsl,mpc5121-mbx", },
+	{ .compatible = "fsl,mpc5121-nfc", },
+	{ .compatible = "fsl,mpc5121-sram", },
+	{ .compatible = "fsl,mpc5121-pci", },
+	{ .compatible = "gpio-leds", },
 	{},
 };
 
 void __init mpc512x_declare_of_platform_devices(void)
 {
-	struct device_node *np;
-
 	if (of_platform_bus_probe(NULL, of_bus_ids, NULL))
 		printk(KERN_ERR __FILE__ ": "
 			"Error while probing of_platform bus\n");
-
-	np = of_find_compatible_node(NULL, NULL, "fsl,mpc5121-nfc");
-	if (np) {
-		of_platform_device_create(np, NULL, NULL);
-		of_node_put(np);
-	}
 }
 
 #define DEFAULT_FIFO_SIZE 16
+
+const char *mpc512x_select_psc_compat(void)
+{
+	if (of_machine_is_compatible("fsl,mpc5121"))
+		return "fsl,mpc5121-psc";
+
+	if (of_machine_is_compatible("fsl,mpc5125"))
+		return "fsl,mpc5125-psc";
+
+	return NULL;
+}
 
 static unsigned int __init get_fifo_size(struct device_node *np,
 					 char *prop_name)
@@ -375,9 +380,16 @@ void __init mpc512x_psc_fifo_init(void)
 	void __iomem *psc;
 	unsigned int tx_fifo_size;
 	unsigned int rx_fifo_size;
+	const char *psc_compat;
 	int fifobase = 0; /* current fifo address in 32 bit words */
 
-	for_each_compatible_node(np, NULL, "fsl,mpc5121-psc") {
+	psc_compat = mpc512x_select_psc_compat();
+	if (!psc_compat) {
+		pr_err("%s: no compatible devices found\n", __func__);
+		return;
+	}
+
+	for_each_compatible_node(np, NULL, psc_compat) {
 		tx_fifo_size = get_fifo_size(np, "fsl,tx-fifo-size");
 		rx_fifo_size = get_fifo_size(np, "fsl,rx-fifo-size");
 
@@ -426,8 +438,38 @@ void __init mpc512x_psc_fifo_init(void)
 
 void __init mpc512x_init(void)
 {
-	mpc512x_declare_of_platform_devices();
 	mpc5121_clk_init();
+	mpc512x_declare_of_platform_devices();
 	mpc512x_restart_init();
 	mpc512x_psc_fifo_init();
 }
+
+/**
+ * mpc512x_cs_config - Setup chip select configuration
+ * @cs: chip select number
+ * @val: chip select configuration value
+ *
+ * Perform chip select configuration for devices on LocalPlus Bus.
+ * Intended to dynamically reconfigure the chip select parameters
+ * for configurable devices on the bus.
+ */
+int mpc512x_cs_config(unsigned int cs, u32 val)
+{
+	static struct mpc512x_lpc __iomem *lpc;
+	struct device_node *np;
+
+	if (cs > 7)
+		return -EINVAL;
+
+	if (!lpc) {
+		np = of_find_compatible_node(NULL, NULL, "fsl,mpc5121-lpc");
+		lpc = of_iomap(np, 0);
+		of_node_put(np);
+		if (!lpc)
+			return -ENOMEM;
+	}
+
+	out_be32(&lpc->cs_cfg[cs], val);
+	return 0;
+}
+EXPORT_SYMBOL(mpc512x_cs_config);

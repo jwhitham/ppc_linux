@@ -291,16 +291,17 @@ struct qdisc_rate_table *qdisc_get_rtab(struct tc_ratespec *r, struct nlattr *ta
 {
 	struct qdisc_rate_table *rtab;
 
+	if (tab == NULL || r->rate == 0 || r->cell_log == 0 ||
+	    nla_len(tab) != TC_RTAB_SIZE)
+		return NULL;
+
 	for (rtab = qdisc_rtab_list; rtab; rtab = rtab->next) {
-		if (memcmp(&rtab->rate, r, sizeof(struct tc_ratespec)) == 0) {
+		if (!memcmp(&rtab->rate, r, sizeof(struct tc_ratespec)) &&
+		    !memcmp(&rtab->data, nla_data(tab), 1024)) {
 			rtab->refcnt++;
 			return rtab;
 		}
 	}
-
-	if (tab == NULL || r->rate == 0 || r->cell_log == 0 ||
-	    nla_len(tab) != TC_RTAB_SIZE)
-		return NULL;
 
 	rtab = kmalloc(sizeof(*rtab), GFP_KERNEL);
 	if (rtab) {
@@ -493,7 +494,7 @@ void qdisc_watchdog_init(struct qdisc_watchdog *wd, struct Qdisc *qdisc)
 }
 EXPORT_SYMBOL(qdisc_watchdog_init);
 
-void qdisc_watchdog_schedule(struct qdisc_watchdog *wd, psched_time_t expires)
+void qdisc_watchdog_schedule_ns(struct qdisc_watchdog *wd, u64 expires)
 {
 	if (test_bit(__QDISC_STATE_DEACTIVATED,
 		     &qdisc_root_sleeping(wd->qdisc)->state))
@@ -502,10 +503,10 @@ void qdisc_watchdog_schedule(struct qdisc_watchdog *wd, psched_time_t expires)
 	qdisc_throttled(wd->qdisc);
 
 	hrtimer_start(&wd->timer,
-		      ns_to_ktime(PSCHED_TICKS2NS(expires)),
+		      ns_to_ktime(expires),
 		      HRTIMER_MODE_ABS);
 }
-EXPORT_SYMBOL(qdisc_watchdog_schedule);
+EXPORT_SYMBOL(qdisc_watchdog_schedule_ns);
 
 void qdisc_watchdog_cancel(struct qdisc_watchdog *wd)
 {
@@ -545,7 +546,7 @@ static void qdisc_class_hash_free(struct hlist_head *h, unsigned int n)
 void qdisc_class_hash_grow(struct Qdisc *sch, struct Qdisc_class_hash *clhash)
 {
 	struct Qdisc_class_common *cl;
-	struct hlist_node *n, *next;
+	struct hlist_node *next;
 	struct hlist_head *nhash, *ohash;
 	unsigned int nsize, nmask, osize;
 	unsigned int i, h;
@@ -564,7 +565,7 @@ void qdisc_class_hash_grow(struct Qdisc *sch, struct Qdisc_class_hash *clhash)
 
 	sch_tree_lock(sch);
 	for (i = 0; i < osize; i++) {
-		hlist_for_each_entry_safe(cl, n, next, &ohash[i], hnode) {
+		hlist_for_each_entry_safe(cl, next, &ohash[i], hnode) {
 			h = qdisc_class_hash(cl->classid, nmask);
 			hlist_add_head(&cl->hnode, &nhash[h]);
 		}
@@ -971,13 +972,13 @@ check_loop_fn(struct Qdisc *q, unsigned long cl, struct qdisc_walker *w)
  * Delete/get qdisc.
  */
 
-static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
+static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n)
 {
 	struct net *net = sock_net(skb->sk);
 	struct tcmsg *tcm = nlmsg_data(n);
 	struct nlattr *tca[TCA_MAX + 1];
 	struct net_device *dev;
-	u32 clid = tcm->tcm_parent;
+	u32 clid;
 	struct Qdisc *q = NULL;
 	struct Qdisc *p = NULL;
 	int err;
@@ -985,14 +986,15 @@ static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 	if ((n->nlmsg_type != RTM_GETQDISC) && !capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-	dev = __dev_get_by_index(net, tcm->tcm_ifindex);
-	if (!dev)
-		return -ENODEV;
-
 	err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
 	if (err < 0)
 		return err;
 
+	dev = __dev_get_by_index(net, tcm->tcm_ifindex);
+	if (!dev)
+		return -ENODEV;
+
+	clid = tcm->tcm_parent;
 	if (clid) {
 		if (clid != TC_H_ROOT) {
 			if (TC_H_MAJ(clid) != TC_H_MAJ(TC_H_INGRESS)) {
@@ -1038,7 +1040,7 @@ static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
  * Create/change qdisc.
  */
 
-static int tc_modify_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
+static int tc_modify_qdisc(struct sk_buff *skb, struct nlmsghdr *n)
 {
 	struct net *net = sock_net(skb->sk);
 	struct tcmsg *tcm;
@@ -1053,6 +1055,10 @@ static int tc_modify_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 
 replay:
 	/* Reinit, just in case something touches this. */
+	err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
+	if (err < 0)
+		return err;
+
 	tcm = nlmsg_data(n);
 	clid = tcm->tcm_parent;
 	q = p = NULL;
@@ -1061,9 +1067,6 @@ replay:
 	if (!dev)
 		return -ENODEV;
 
-	err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
-	if (err < 0)
-		return err;
 
 	if (clid) {
 		if (clid != TC_H_ROOT) {
@@ -1372,7 +1375,7 @@ done:
 
 
 
-static int tc_ctl_tclass(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
+static int tc_ctl_tclass(struct sk_buff *skb, struct nlmsghdr *n)
 {
 	struct net *net = sock_net(skb->sk);
 	struct tcmsg *tcm = nlmsg_data(n);
@@ -1382,21 +1385,21 @@ static int tc_ctl_tclass(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 	const struct Qdisc_class_ops *cops;
 	unsigned long cl = 0;
 	unsigned long new_cl;
-	u32 portid = tcm->tcm_parent;
-	u32 clid = tcm->tcm_handle;
-	u32 qid = TC_H_MAJ(clid);
+	u32 portid;
+	u32 clid;
+	u32 qid;
 	int err;
 
 	if ((n->nlmsg_type != RTM_GETTCLASS) && !capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-	dev = __dev_get_by_index(net, tcm->tcm_ifindex);
-	if (!dev)
-		return -ENODEV;
-
 	err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
 	if (err < 0)
 		return err;
+
+	dev = __dev_get_by_index(net, tcm->tcm_ifindex);
+	if (!dev)
+		return -ENODEV;
 
 	/*
 	   parent == TC_H_UNSPEC - unspecified parent.
@@ -1412,6 +1415,10 @@ static int tc_ctl_tclass(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 	 */
 
 	/* Step 1. Determine qdisc handle X:0 */
+
+	portid = tcm->tcm_parent;
+	clid = tcm->tcm_handle;
+	qid = TC_H_MAJ(clid);
 
 	if (portid != TC_H_ROOT) {
 		u32 qid1 = TC_H_MAJ(portid);
@@ -1636,7 +1643,7 @@ static int tc_dump_tclass(struct sk_buff *skb, struct netlink_callback *cb)
 	struct net_device *dev;
 	int t, s_t;
 
-	if (cb->nlh->nlmsg_len < NLMSG_LENGTH(sizeof(*tcm)))
+	if (nlmsg_len(cb->nlh) < sizeof(*tcm))
 		return 0;
 	dev = dev_get_by_index(net, tcm->tcm_ifindex);
 	if (!dev)
@@ -1768,7 +1775,7 @@ static int __net_init psched_net_init(struct net *net)
 {
 	struct proc_dir_entry *e;
 
-	e = proc_net_fops_create(net, "psched", 0, &psched_fops);
+	e = proc_create("psched", 0, net->proc_net, &psched_fops);
 	if (e == NULL)
 		return -ENOMEM;
 
@@ -1777,7 +1784,7 @@ static int __net_init psched_net_init(struct net *net)
 
 static void __net_exit psched_net_exit(struct net *net)
 {
-	proc_net_remove(net, "psched");
+	remove_proc_entry("psched", net->proc_net);
 }
 #else
 static int __net_init psched_net_init(struct net *net)

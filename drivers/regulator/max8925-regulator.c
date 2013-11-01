@@ -246,13 +246,12 @@ static struct max8925_regulator_info max8925_regulator_info[] = {
 
 #ifdef CONFIG_OF
 static int max8925_regulator_dt_init(struct platform_device *pdev,
-				    struct max8925_regulator_info *info,
 				    struct regulator_config *config,
 				    int ridx)
 {
 	struct device_node *nproot, *np;
 	int rcount;
-	nproot = pdev->dev.parent->of_node;
+	nproot = of_node_get(pdev->dev.parent->of_node);
 	if (!nproot)
 		return -ENODEV;
 	np = of_find_node_by_name(nproot, "regulators");
@@ -263,6 +262,7 @@ static int max8925_regulator_dt_init(struct platform_device *pdev,
 
 	rcount = of_regulator_match(&pdev->dev, np,
 				&max8925_regulator_matches[ridx], 1);
+	of_node_put(np);
 	if (rcount < 0)
 		return -ENODEV;
 	config->init_data =	max8925_regulator_matches[ridx].init_data;
@@ -271,7 +271,7 @@ static int max8925_regulator_dt_init(struct platform_device *pdev,
 	return 0;
 }
 #else
-#define max8925_regulator_dt_init(w, x, y, z)	(-1)
+#define max8925_regulator_dt_init(x, y, z)	(-1)
 #endif
 
 static int max8925_regulator_probe(struct platform_device *pdev)
@@ -308,7 +308,7 @@ static int max8925_regulator_probe(struct platform_device *pdev)
 	config.dev = &pdev->dev;
 	config.driver_data = ri;
 
-	if (max8925_regulator_dt_init(pdev, ri, &config, regulator_idx))
+	if (max8925_regulator_dt_init(pdev, &config, regulator_idx))
 		if (pdata)
 			config.init_data = pdata;
 

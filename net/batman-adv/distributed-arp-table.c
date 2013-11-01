@@ -1,4 +1,4 @@
-/* Copyright (C) 2011-2012 B.A.T.M.A.N. contributors:
+/* Copyright (C) 2011-2013 B.A.T.M.A.N. contributors:
  *
  * Antonio Quartulli
  *
@@ -83,7 +83,7 @@ static void __batadv_dat_purge(struct batadv_priv *bat_priv,
 {
 	spinlock_t *list_lock; /* protects write access to the hash lists */
 	struct batadv_dat_entry *dat_entry;
-	struct hlist_node *node, *node_tmp;
+	struct hlist_node *node_tmp;
 	struct hlist_head *head;
 	uint32_t i;
 
@@ -95,7 +95,7 @@ static void __batadv_dat_purge(struct batadv_priv *bat_priv,
 		list_lock = &bat_priv->dat.hash->list_locks[i];
 
 		spin_lock_bh(list_lock);
-		hlist_for_each_entry_safe(dat_entry, node, node_tmp, head,
+		hlist_for_each_entry_safe(dat_entry, node_tmp, head,
 					  hash_entry) {
 			/* if an helper function has been passed as parameter,
 			 * ask it if the entry has to be purged or not
@@ -103,7 +103,7 @@ static void __batadv_dat_purge(struct batadv_priv *bat_priv,
 			if (to_purge && !to_purge(dat_entry))
 				continue;
 
-			hlist_del_rcu(node);
+			hlist_del_rcu(&dat_entry->hash_entry);
 			batadv_dat_entry_free_ref(dat_entry);
 		}
 		spin_unlock_bh(list_lock);
@@ -235,7 +235,6 @@ static struct batadv_dat_entry *
 batadv_dat_entry_hash_find(struct batadv_priv *bat_priv, __be32 ip)
 {
 	struct hlist_head *head;
-	struct hlist_node *node;
 	struct batadv_dat_entry *dat_entry, *dat_entry_tmp = NULL;
 	struct batadv_hashtable *hash = bat_priv->dat.hash;
 	uint32_t index;
@@ -247,7 +246,7 @@ batadv_dat_entry_hash_find(struct batadv_priv *bat_priv, __be32 ip)
 	head = &hash->table[index];
 
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(dat_entry, node, head, hash_entry) {
+	hlist_for_each_entry_rcu(dat_entry, head, hash_entry) {
 		if (dat_entry->ip != ip)
 			continue;
 
@@ -465,7 +464,6 @@ static void batadv_choose_next_candidate(struct batadv_priv *bat_priv,
 	batadv_dat_addr_t max = 0, tmp_max = 0;
 	struct batadv_orig_node *orig_node, *max_orig_node = NULL;
 	struct batadv_hashtable *hash = bat_priv->orig_hash;
-	struct hlist_node *node;
 	struct hlist_head *head;
 	int i;
 
@@ -481,7 +479,7 @@ static void batadv_choose_next_candidate(struct batadv_priv *bat_priv,
 		head = &hash->table[i];
 
 		rcu_read_lock();
-		hlist_for_each_entry_rcu(orig_node, node, head, hash_entry) {
+		hlist_for_each_entry_rcu(orig_node, head, hash_entry) {
 			/* the dht space is a ring and addresses are unsigned */
 			tmp_max = BATADV_DAT_ADDR_MAX - orig_node->dat_addr +
 				  ip_key;
@@ -686,7 +684,6 @@ int batadv_dat_cache_seq_print_text(struct seq_file *seq, void *offset)
 	struct batadv_hashtable *hash = bat_priv->dat.hash;
 	struct batadv_dat_entry *dat_entry;
 	struct batadv_hard_iface *primary_if;
-	struct hlist_node *node;
 	struct hlist_head *head;
 	unsigned long last_seen_jiffies;
 	int last_seen_msecs, last_seen_secs, last_seen_mins;
@@ -704,7 +701,7 @@ int batadv_dat_cache_seq_print_text(struct seq_file *seq, void *offset)
 		head = &hash->table[i];
 
 		rcu_read_lock();
-		hlist_for_each_entry_rcu(dat_entry, node, head, hash_entry) {
+		hlist_for_each_entry_rcu(dat_entry, head, hash_entry) {
 			last_seen_jiffies = jiffies - dat_entry->last_update;
 			last_seen_msecs = jiffies_to_msecs(last_seen_jiffies);
 			last_seen_mins = last_seen_msecs / 60000;
@@ -819,7 +816,6 @@ bool batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,
 	bool ret = false;
 	struct batadv_dat_entry *dat_entry = NULL;
 	struct sk_buff *skb_new;
-	struct batadv_hard_iface *primary_if = NULL;
 
 	if (!atomic_read(&bat_priv->distributed_arp_table))
 		goto out;
@@ -841,22 +837,31 @@ bool batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,
 
 	dat_entry = batadv_dat_entry_hash_find(bat_priv, ip_dst);
 	if (dat_entry) {
-		primary_if = batadv_primary_if_get_selected(bat_priv);
-		if (!primary_if)
+		/* If the ARP request is destined for a local client the local
+		 * client will answer itself. DAT would only generate a
+		 * duplicate packet.
+		 *
+		 * Moreover, if the soft-interface is enslaved into a bridge, an
+		 * additional DAT answer may trigger kernel warnings about
+		 * a packet coming from the wrong port.
+		 */
+		if (batadv_is_my_client(bat_priv, dat_entry->mac_addr)) {
+			ret = true;
 			goto out;
+		}
 
 		skb_new = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_src,
-				     primary_if->soft_iface, ip_dst, hw_src,
+				     bat_priv->soft_iface, ip_dst, hw_src,
 				     dat_entry->mac_addr, hw_src);
 		if (!skb_new)
 			goto out;
 
 		skb_reset_mac_header(skb_new);
 		skb_new->protocol = eth_type_trans(skb_new,
-						   primary_if->soft_iface);
+						   bat_priv->soft_iface);
 		bat_priv->stats.rx_packets++;
 		bat_priv->stats.rx_bytes += skb->len + ETH_HLEN;
-		primary_if->soft_iface->last_rx = jiffies;
+		bat_priv->soft_iface->last_rx = jiffies;
 
 		netif_rx(skb_new);
 		batadv_dbg(BATADV_DBG_DAT, bat_priv, "ARP request replied locally\n");
@@ -869,8 +874,6 @@ bool batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,
 out:
 	if (dat_entry)
 		batadv_dat_entry_free_ref(dat_entry);
-	if (primary_if)
-		batadv_hardif_free_ref(primary_if);
 	return ret;
 }
 
@@ -890,7 +893,6 @@ bool batadv_dat_snoop_incoming_arp_request(struct batadv_priv *bat_priv,
 	__be32 ip_src, ip_dst;
 	uint8_t *hw_src;
 	struct sk_buff *skb_new;
-	struct batadv_hard_iface *primary_if = NULL;
 	struct batadv_dat_entry *dat_entry = NULL;
 	bool ret = false;
 	int err;
@@ -915,12 +917,8 @@ bool batadv_dat_snoop_incoming_arp_request(struct batadv_priv *bat_priv,
 	if (!dat_entry)
 		goto out;
 
-	primary_if = batadv_primary_if_get_selected(bat_priv);
-	if (!primary_if)
-		goto out;
-
 	skb_new = arp_create(ARPOP_REPLY, ETH_P_ARP, ip_src,
-			     primary_if->soft_iface, ip_dst, hw_src,
+			     bat_priv->soft_iface, ip_dst, hw_src,
 			     dat_entry->mac_addr, hw_src);
 
 	if (!skb_new)
@@ -944,8 +942,6 @@ bool batadv_dat_snoop_incoming_arp_request(struct batadv_priv *bat_priv,
 out:
 	if (dat_entry)
 		batadv_dat_entry_free_ref(dat_entry);
-	if (primary_if)
-		batadv_hardif_free_ref(primary_if);
 	if (ret)
 		kfree_skb(skb);
 	return ret;

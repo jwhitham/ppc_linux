@@ -1788,7 +1788,8 @@ void kvmppc_mpic_disconnect_vcpu(struct openpic *opp, struct kvm_vcpu *vcpu)
  *  > 0   Number of CPUs interrupt was delivered to
  */
 static int mpic_set_irq(struct kvm_kernel_irq_routing_entry *e,
-			struct kvm *kvm, int irq_source_id, int level)
+			struct kvm *kvm, int irq_source_id, int level,
+			bool line_status)
 {
 	u32 irq = e->irqchip.pin;
 	struct openpic *opp = kvm->arch.mpic;
@@ -1803,7 +1804,7 @@ static int mpic_set_irq(struct kvm_kernel_irq_routing_entry *e,
 }
 
 int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
-		struct kvm *kvm, int irq_source_id, int level)
+		struct kvm *kvm, int irq_source_id, int level, bool line_status)
 {
 	struct openpic *opp = kvm->arch.mpic;
 	unsigned long flags;

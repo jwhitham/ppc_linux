@@ -1,6 +1,6 @@
 /* bnx2x_stats.h: Broadcom Everest network driver.
  *
- * Copyright (c) 2007-2012 Broadcom Corporation
+ * Copyright (c) 2007-2013 Broadcom Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -421,16 +421,19 @@ struct bnx2x_fw_port_stats_old {
 			      new->s); \
 	} while (0)
 
-#define UPDATE_EXTEND_TSTAT(s, t) \
+#define UPDATE_EXTEND_TSTAT_X(s, t, size) \
 	do { \
-		diff = le32_to_cpu(tclient->s) - le32_to_cpu(old_tclient->s); \
+		diff = le##size##_to_cpu(tclient->s) - \
+		       le##size##_to_cpu(old_tclient->s); \
 		old_tclient->s = tclient->s; \
 		ADD_EXTEND_64(qstats->t##_hi, qstats->t##_lo, diff); \
 	} while (0)
 
-#define UPDATE_EXTEND_E_TSTAT(s, t) \
+#define UPDATE_EXTEND_TSTAT(s, t) UPDATE_EXTEND_TSTAT_X(s, t, 32)
+
+#define UPDATE_EXTEND_E_TSTAT(s, t, size) \
 	do { \
-		UPDATE_EXTEND_TSTAT(s, t); \
+		UPDATE_EXTEND_TSTAT_X(s, t, size); \
 		ADD_EXTEND_64(estats->t##_hi, estats->t##_lo, diff); \
 	} while (0)
 
@@ -456,8 +459,9 @@ struct bnx2x_fw_port_stats_old {
 
 #define UPDATE_QSTAT(s, t) \
 	do { \
-		qstats->t##_hi = qstats_old->t##_hi + le32_to_cpu(s.hi); \
 		qstats->t##_lo = qstats_old->t##_lo + le32_to_cpu(s.lo); \
+		qstats->t##_hi = qstats_old->t##_hi + le32_to_cpu(s.hi) \
+			+ ((qstats->t##_lo < qstats_old->t##_lo) ? 1 : 0); \
 	} while (0)
 
 #define UPDATE_QSTAT_OLD(f) \
@@ -536,8 +540,8 @@ struct bnx2x_fw_port_stats_old {
 /* forward */
 struct bnx2x;
 
+void bnx2x_memset_stats(struct bnx2x *bp);
 void bnx2x_stats_init(struct bnx2x *bp);
-
 void bnx2x_stats_handle(struct bnx2x *bp, enum bnx2x_stats_event event);
 
 /**

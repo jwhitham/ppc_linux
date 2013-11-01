@@ -30,7 +30,7 @@ void kirkwood_init(void);
 void kirkwood_init_early(void);
 void kirkwood_init_irq(void);
 
-void kirkwood_setup_cpu_mbus(void);
+void kirkwood_setup_wins(void);
 
 void kirkwood_enable_pcie(void);
 void kirkwood_pcie_id(u32 *dev, u32 *rev);
@@ -50,6 +50,7 @@ void kirkwood_nand_init(struct mtd_partition *parts, int nr_parts, int delay);
 void kirkwood_nand_init_rnb(struct mtd_partition *parts, int nr_parts,
 			    int (*dev_ready)(struct mtd_info *));
 void kirkwood_audio_init(void);
+void kirkwood_cpuidle_init(void);
 void kirkwood_restart(char, const char *);
 void kirkwood_clk_init(void);
 
@@ -58,6 +59,11 @@ void kirkwood_clk_init(void);
 void dreamplug_init(void);
 #else
 static inline void dreamplug_init(void) {};
+#endif
+#ifdef CONFIG_MACH_GURUPLUG_DT
+void guruplug_dt_init(void);
+#else
+static inline void guruplug_dt_init(void) {};
 #endif
 #ifdef CONFIG_MACH_TS219_DT
 void qnap_dt_ts219_init(void);
@@ -129,22 +135,28 @@ void ns2_init(void);
 static inline void ns2_init(void) {};
 #endif
 
-#ifdef CONFIG_MACH_NSA310_DT
-void nsa310_init(void);
-#else
-static inline void nsa310_init(void) {};
-#endif
-
 #ifdef CONFIG_MACH_OPENBLOCKS_A6_DT
 void openblocks_a6_init(void);
 #else
 static inline void openblocks_a6_init(void) {};
 #endif
 
+#ifdef CONFIG_MACH_READYNAS_DT
+void netgear_readynas_init(void);
+#else
+static inline void netgear_readynas_init(void) {};
+#endif
+
 #ifdef CONFIG_MACH_TOPKICK_DT
 void usi_topkick_init(void);
 #else
 static inline void usi_topkick_init(void) {};
+#endif
+
+#ifdef CONFIG_MACH_CLOUDBOX_DT
+void cloudbox_init(void);
+#else
+static inline void cloudbox_init(void) {};
 #endif
 
 /* early init functions not converted to fdt yet */
@@ -156,7 +168,7 @@ void kirkwood_xor1_init(void);
 void kirkwood_crypto_init(void);
 
 extern int kirkwood_tclk;
-extern struct sys_timer kirkwood_timer;
+extern void kirkwood_timer_init(void);
 
 #define ARRAY_AND_SIZE(x)	(x), ARRAY_SIZE(x)
 

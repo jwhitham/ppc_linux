@@ -1200,7 +1200,7 @@ static int uhci_result_common(struct uhci_hcd *uhci, struct urb *urb)
 				if (debug > 1 && errbuf) {
 					/* Print the chain for debugging */
 					uhci_show_qh(uhci, urbp->qh, errbuf,
-							ERRBUF_LEN, 0);
+						ERRBUF_LEN - EXTRA_SPACE, 0);
 					lprintk(errbuf);
 				}
 			}
@@ -1287,7 +1287,7 @@ static int uhci_submit_isochronous(struct uhci_hcd *uhci, struct urb *urb,
 		return -EINVAL;		/* Can't change the period */
 
 	} else {
-		next = uhci->frame_number + 2;
+		next = uhci->frame_number + 1;
 
 		/* Find the next unused frame */
 		if (list_empty(&qh->queue)) {

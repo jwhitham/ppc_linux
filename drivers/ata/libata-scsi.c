@@ -1,7 +1,7 @@
 /*
  *  libata-scsi.c - helper library for ATA
  *
- *  Maintained by:  Jeff Garzik <jgarzik@pobox.com>
+ *  Maintained by:  Tejun Heo <tj@kernel.org>
  *    		    Please ALWAYS copy linux-ide@vger.kernel.org
  *		    on emails.
  *
@@ -49,6 +49,7 @@
 #include <linux/hdreg.h>
 #include <linux/uaccess.h>
 #include <linux/suspend.h>
+#include <linux/pm_qos.h>
 #include <asm/unaligned.h>
 
 #include "libata.h"
@@ -532,8 +533,8 @@ int ata_cmd_ioctl(struct scsi_device *scsidev, void __user *arg)
 			struct scsi_sense_hdr sshdr;
 			scsi_normalize_sense(sensebuf, SCSI_SENSE_BUFFERSIZE,
 					     &sshdr);
-			if (sshdr.sense_key == 0 &&
-			    sshdr.asc == 0 && sshdr.ascq == 0)
+			if (sshdr.sense_key == RECOVERED_ERROR &&
+			    sshdr.asc == 0 && sshdr.ascq == 0x1d)
 				cmd_result &= ~SAM_STAT_CHECK_CONDITION;
 		}
 
@@ -618,8 +619,8 @@ int ata_task_ioctl(struct scsi_device *scsidev, void __user *arg)
 			struct scsi_sense_hdr sshdr;
 			scsi_normalize_sense(sensebuf, SCSI_SENSE_BUFFERSIZE,
 						&sshdr);
-			if (sshdr.sense_key == 0 &&
-				sshdr.asc == 0 && sshdr.ascq == 0)
+			if (sshdr.sense_key == RECOVERED_ERROR &&
+			    sshdr.asc == 0 && sshdr.ascq == 0x1d)
 				cmd_result &= ~SAM_STAT_CHECK_CONDITION;
 		}
 
@@ -933,7 +934,11 @@ static void ata_to_sense_error(unsigned id, u8 drv_stat, u8 drv_err, u8 *sk,
  *	block specified for the ATA pass through commands.  Regardless
  *	of whether the command errored or not, return a sense
  *	block. Copy all controller registers into the sense
- *	block. Clear sense key, ASC & ASCQ if there is no error.
+ *	block. If there was no error, we get the request from an ATA
+ *	passthrough command, so we use the following sense data:
+ *	sk = RECOVERED ERROR
+ *	asc,ascq = ATA PASS-THROUGH INFORMATION AVAILABLE
+ *      
  *
  *	LOCKING:
  *	None.
@@ -959,6 +964,10 @@ static void ata_gen_passthru_sense(struct ata_queued_cmd *qc)
 		ata_to_sense_error(qc->ap->print_id, tf->command, tf->feature,
 				   &sb[1], &sb[2], &sb[3], verbose);
 		sb[1] &= 0x0f;
+	} else {
+		sb[1] = RECOVERED_ERROR;
+		sb[2] = 0;
+		sb[3] = 0x1D;
 	}
 
 	/*
@@ -1733,10 +1742,12 @@ static void ata_scsi_qc_complete(struct ata_queued_cmd *qc)
 
 	/* For ATA pass thru (SAT) commands, generate a sense block if
 	 * user mandated it or if there's an error.  Note that if we
-	 * generate because the user forced us to, a check condition
-	 * is generated and the ATA register values are returned
+	 * generate because the user forced us to [CK_COND =1], a check
+	 * condition is generated and the ATA register values are returned
 	 * whether the command completed successfully or not. If there
-	 * was no error, SK, ASC and ASCQ will all be zero.
+	 * was no error, we use the following sense data:
+	 * sk = RECOVERED ERROR
+	 * asc,ascq = ATA PASS-THROUGH INFORMATION AVAILABLE
 	 */
 	if (((cdb[0] == ATA_16) || (cdb[0] == ATA_12)) &&
 	    ((cdb[2] & 0x20) || need_sense)) {
@@ -2116,7 +2127,6 @@ static unsigned int ata_scsiop_inq_89(struct ata_scsi_args *args, u8 *rbuf)
 	memcpy(&rbuf[8], "linux   ", 8);
 	memcpy(&rbuf[16], "libata          ", 16);
 	memcpy(&rbuf[32], DRV_VERSION, 4);
-	ata_id_string(args->id, &rbuf[32], ATA_ID_FW_REV, 4);
 
 	/* we don't store the ATA device signature, so we fake it */
 
@@ -3658,7 +3668,9 @@ void ata_scsi_scan_host(struct ata_port *ap, int sync)
 			if (!IS_ERR(sdev)) {
 				dev->sdev = sdev;
 				scsi_device_put(sdev);
-				ata_acpi_bind(dev);
+				if (zpodd_dev_enabled(dev))
+					dev_pm_qos_expose_flags(
+							&sdev->sdev_gendev, 0);
 			} else {
 				dev->sdev = NULL;
 			}
@@ -3755,7 +3767,8 @@ static void ata_scsi_remove_dev(struct ata_device *dev)
 	mutex_lock(&ap->scsi_host->scan_mutex);
 	spin_lock_irqsave(ap->lock, flags);
 
-	ata_acpi_unbind(dev);
+	if (zpodd_dev_enabled(dev))
+		zpodd_exit(dev);
 
 	/* clearing dev->sdev is protected by host lock */
 	sdev = dev->sdev;

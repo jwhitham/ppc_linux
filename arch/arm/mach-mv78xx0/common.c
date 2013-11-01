@@ -334,17 +334,21 @@ void __init mv78xx0_uart3_init(void)
 void __init mv78xx0_init_early(void)
 {
 	orion_time_set_base(TIMER_VIRT_BASE);
+	if (mv78xx0_core_index() == 0)
+		mvebu_mbus_init("marvell,mv78xx0-mbus",
+				BRIDGE_WINS_CPU0_BASE, BRIDGE_WINS_SZ,
+				DDR_WINDOW_CPU0_BASE, DDR_WINDOW_CPU_SZ);
+	else
+		mvebu_mbus_init("marvell,mv78xx0-mbus",
+				BRIDGE_WINS_CPU1_BASE, BRIDGE_WINS_SZ,
+				DDR_WINDOW_CPU1_BASE, DDR_WINDOW_CPU_SZ);
 }
 
-static void __init_refok mv78xx0_timer_init(void)
+void __init_refok mv78xx0_timer_init(void)
 {
 	orion_time_init(BRIDGE_VIRT_BASE, BRIDGE_INT_TIMER1_CLR,
 			IRQ_MV78XX0_TIMER_1, get_tclk());
 }
-
-struct sys_timer mv78xx0_timer = {
-	.init = mv78xx0_timer_init,
-};
 
 
 /*****************************************************************************
@@ -400,8 +404,6 @@ void __init mv78xx0_init(void)
 	printk("L2 = %dMHz, ", (l2clk + 499999) / 1000000);
 	printk("HCLK = %dMHz, ", (hclk + 499999) / 1000000);
 	printk("TCLK = %dMHz\n", (get_tclk() + 499999) / 1000000);
-
-	mv78xx0_setup_cpu_mbus();
 
 #ifdef CONFIG_CACHE_FEROCEON_L2
 	feroceon_l2_init(is_l2_writethrough());

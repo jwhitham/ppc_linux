@@ -162,6 +162,7 @@ struct xfrm_state {
 		xfrm_address_t	saddr;
 		int		header_len;
 		int		trailer_len;
+		u32		extra_flags;
 	} props;
 
 	struct xfrm_lifetime_cfg lft;
@@ -504,6 +505,12 @@ struct xfrm_policy_walk {
 	u32 seq;
 };
 
+struct xfrm_policy_queue {
+	struct sk_buff_head	hold_queue;
+	struct timer_list	hold_timer;
+	unsigned long		timeout;
+};
+
 struct xfrm_policy {
 #ifdef CONFIG_NET_NS
 	struct net		*xp_net;
@@ -525,6 +532,7 @@ struct xfrm_policy {
 	struct xfrm_lifetime_cfg lft;
 	struct xfrm_lifetime_cur curlft;
 	struct xfrm_policy_walk_entry walk;
+	struct xfrm_policy_queue polq;
 #ifdef CONFIG_AS_FASTPATH
 	u32			asf_cookie;
 #endif
@@ -563,10 +571,6 @@ struct xfrm_migrate {
 };
 
 #define XFRM_KM_TIMEOUT                30
-/* which seqno */
-#define XFRM_REPLAY_SEQ		1
-#define XFRM_REPLAY_OSEQ	2
-#define XFRM_REPLAY_SEQ_MASK	3
 /* what happened */
 #define XFRM_REPLAY_UPDATE	XFRM_AE_CR
 #define XFRM_REPLAY_TIMEOUT	XFRM_AE_CE
@@ -1042,7 +1046,7 @@ static inline int
 __xfrm6_state_addr_cmp(const struct xfrm_tmpl *tmpl, const struct xfrm_state *x)
 {
 	return	(!ipv6_addr_any((struct in6_addr*)&tmpl->saddr) &&
-		 ipv6_addr_cmp((struct in6_addr *)&tmpl->saddr, (struct in6_addr*)&x->props.saddr));
+		 !ipv6_addr_equal((struct in6_addr *)&tmpl->saddr, (struct in6_addr*)&x->props.saddr));
 }
 
 static inline int
@@ -1162,6 +1166,8 @@ static inline void xfrm_sk_free_policy(struct sock *sk)
 	}
 }
 
+extern void xfrm_garbage_collect(struct net *net);
+
 #else
 
 static inline void xfrm_sk_free_policy(struct sock *sk) {}
@@ -1195,6 +1201,9 @@ static inline int xfrm6_policy_check_reverse(struct sock *sk, int dir,
 					     struct sk_buff *skb)
 {
 	return 1;
+}
+static inline void xfrm_garbage_collect(struct net *net)
+{
 }
 #endif
 
@@ -1253,9 +1262,9 @@ static __inline__ int
 __xfrm6_state_addr_check(const struct xfrm_state *x,
 			 const xfrm_address_t *daddr, const xfrm_address_t *saddr)
 {
-	if (!ipv6_addr_cmp((struct in6_addr *)daddr, (struct in6_addr *)&x->id.daddr) &&
-	    (!ipv6_addr_cmp((struct in6_addr *)saddr, (struct in6_addr *)&x->props.saddr)||
-	     ipv6_addr_any((struct in6_addr *)saddr) ||
+	if (ipv6_addr_equal((struct in6_addr *)daddr, (struct in6_addr *)&x->id.daddr) &&
+	    (ipv6_addr_equal((struct in6_addr *)saddr, (struct in6_addr *)&x->props.saddr) ||
+	     ipv6_addr_any((struct in6_addr *)saddr) || 
 	     ipv6_addr_any((struct in6_addr *)&x->props.saddr)))
 		return 1;
 	return 0;
@@ -1330,6 +1339,7 @@ struct xfrm_algo_desc {
 	char *name;
 	char *compat;
 	u8 available:1;
+	u8 pfkey_supported:1;
 	union {
 		struct xfrm_algo_aead_info aead;
 		struct xfrm_algo_auth_info auth;
@@ -1571,8 +1581,8 @@ extern void xfrm_input_init(void);
 extern int xfrm_parse_spi(struct sk_buff *skb, u8 nexthdr, __be32 *spi, __be32 *seq);
 
 extern void xfrm_probe_algs(void);
-extern int xfrm_count_auth_supported(void);
-extern int xfrm_count_enc_supported(void);
+extern int xfrm_count_pfkey_auth_supported(void);
+extern int xfrm_count_pfkey_enc_supported(void);
 extern struct xfrm_algo_desc *xfrm_aalg_get_byidx(unsigned int idx);
 extern struct xfrm_algo_desc *xfrm_ealg_get_byidx(unsigned int idx);
 extern struct xfrm_algo_desc *xfrm_aalg_get_byid(int alg_id);
@@ -1584,17 +1594,23 @@ extern struct xfrm_algo_desc *xfrm_calg_get_byname(const char *name, int probe);
 extern struct xfrm_algo_desc *xfrm_aead_get_byname(const char *name, int icv_len,
 						   int probe);
 
-static inline int xfrm_addr_cmp(const xfrm_address_t *a,
-				const xfrm_address_t *b,
-				int family)
+static inline bool xfrm6_addr_equal(const xfrm_address_t *a,
+				    const xfrm_address_t *b)
+{
+	return ipv6_addr_equal((const struct in6_addr *)a,
+			       (const struct in6_addr *)b);
+}
+
+static inline bool xfrm_addr_equal(const xfrm_address_t *a,
+				   const xfrm_address_t *b,
+				   sa_family_t family)
 {
 	switch (family) {
 	default:
 	case AF_INET:
-		return (__force u32)a->a4 - (__force u32)b->a4;
+		return ((__force u32)a->a4 ^ (__force u32)b->a4) == 0;
 	case AF_INET6:
-		return ipv6_addr_cmp((const struct in6_addr *)a,
-				     (const struct in6_addr *)b);
+		return xfrm6_addr_equal(a, b);
 	}
 }
 

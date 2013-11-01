@@ -4085,7 +4085,7 @@ static int cnic_cm_alloc_mem(struct cnic_dev *dev)
 	if (!cp->csk_tbl)
 		return -ENOMEM;
 
-	port_id = random32();
+	port_id = prandom_u32();
 	port_id %= CNIC_LOCAL_PORT_RANGE;
 	if (cnic_init_id_tbl(&cp->csk_port_tbl, CNIC_LOCAL_PORT_RANGE,
 			     CNIC_LOCAL_PORT_MIN, port_id)) {
@@ -4145,7 +4145,7 @@ static int cnic_cm_init_bnx2_hw(struct cnic_dev *dev)
 {
 	u32 seed;
 
-	seed = random32();
+	seed = prandom_u32();
 	cnic_ctx_wr(dev, 45, 0, seed);
 	return 0;
 }
@@ -4816,6 +4816,8 @@ static int cnic_start_bnx2_hw(struct cnic_dev *dev)
 		return err;
 	}
 
+	ethdev->drv_state |= CNIC_DRV_STATE_HANDLES_IRQ;
+
 	return 0;
 }
 
@@ -5136,6 +5138,7 @@ static int cnic_start_bnx2x_hw(struct cnic_dev *dev)
 	if (ret)
 		return ret;
 
+	ethdev->drv_state |= CNIC_DRV_STATE_HANDLES_IRQ;
 	return 0;
 }
 
@@ -5387,6 +5390,7 @@ static void cnic_stop_hw(struct cnic_dev *dev)
 		}
 		cnic_shutdown_rings(dev);
 		cp->stop_cm(dev);
+		cp->ethdev->drv_state &= ~CNIC_DRV_STATE_HANDLES_IRQ;
 		clear_bit(CNIC_F_CNIC_UP, &dev->flags);
 		RCU_INIT_POINTER(cp->ulp_ops[CNIC_ULP_L4], NULL);
 		synchronize_rcu();
@@ -5421,11 +5425,9 @@ static struct cnic_dev *cnic_alloc_dev(struct net_device *dev,
 
 	alloc_size = sizeof(struct cnic_dev) + sizeof(struct cnic_local);
 
-	cdev = kzalloc(alloc_size , GFP_KERNEL);
-	if (cdev == NULL) {
-		netdev_err(dev, "allocate dev struct failure\n");
+	cdev = kzalloc(alloc_size, GFP_KERNEL);
+	if (cdev == NULL)
 		return NULL;
-	}
 
 	cdev->netdev = dev;
 	cdev->cnic_priv = (char *)cdev + sizeof(struct cnic_dev);
@@ -5542,8 +5544,10 @@ static struct cnic_dev *init_bnx2x_cnic(struct net_device *dev)
 
 	if (!(ethdev->drv_state & CNIC_DRV_STATE_NO_ISCSI))
 		cdev->max_iscsi_conn = ethdev->max_iscsi_conn;
-	if (CNIC_SUPPORTS_FCOE(cp))
+	if (CNIC_SUPPORTS_FCOE(cp)) {
 		cdev->max_fcoe_conn = ethdev->max_fcoe_conn;
+		cdev->max_fcoe_exchanges = ethdev->max_fcoe_exchanges;
+	}
 
 	if (cdev->max_fcoe_conn > BNX2X_FCOE_NUM_CONNECTIONS)
 		cdev->max_fcoe_conn = BNX2X_FCOE_NUM_CONNECTIONS;

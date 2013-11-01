@@ -166,7 +166,7 @@ static irqreturn_t atmel_isi_handle_streaming(struct atmel_isi *isi)
 		struct frame_buffer *buf = isi->active;
 
 		list_del_init(&buf->list);
-		do_gettimeofday(&vb->v4l2_buf.timestamp);
+		v4l2_get_timestamp(&vb->v4l2_buf.timestamp);
 		vb->v4l2_buf.sequence = isi->sequence++;
 		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
 	}
@@ -514,6 +514,7 @@ static int isi_camera_init_videobuf(struct vb2_queue *q,
 	q->buf_struct_size = sizeof(struct frame_buffer);
 	q->ops = &isi_video_qops;
 	q->mem_ops = &vb2_dma_contig_memops;
+	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	return vb2_queue_init(q);
 }
@@ -745,7 +746,7 @@ static int isi_camera_get_formats(struct soc_camera_device *icd,
 	return formats;
 }
 
-/* Called with .video_lock held */
+/* Called with .host_lock held */
 static int isi_camera_add_device(struct soc_camera_device *icd)
 {
 	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
@@ -770,7 +771,7 @@ static int isi_camera_add_device(struct soc_camera_device *icd)
 		 icd->devnum);
 	return 0;
 }
-/* Called with .video_lock held */
+/* Called with .host_lock held */
 static void isi_camera_remove_device(struct soc_camera_device *icd)
 {
 	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
@@ -1020,7 +1021,7 @@ static int atmel_isi_probe(struct platform_device *pdev)
 	isi_writel(isi, ISI_CTRL, ISI_CTRL_DIS);
 
 	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
+	if (IS_ERR_VALUE(irq)) {
 		ret = irq;
 		goto err_req_irq;
 	}
@@ -1073,7 +1074,6 @@ err_clk_prepare_pclk:
 }
 
 static struct platform_driver atmel_isi_driver = {
-	.probe		= atmel_isi_probe,
 	.remove		= atmel_isi_remove,
 	.driver		= {
 		.name = "atmel_isi",
@@ -1081,17 +1081,7 @@ static struct platform_driver atmel_isi_driver = {
 	},
 };
 
-static int __init atmel_isi_init_module(void)
-{
-	return  platform_driver_probe(&atmel_isi_driver, &atmel_isi_probe);
-}
-
-static void __exit atmel_isi_exit(void)
-{
-	platform_driver_unregister(&atmel_isi_driver);
-}
-module_init(atmel_isi_init_module);
-module_exit(atmel_isi_exit);
+module_platform_driver_probe(atmel_isi_driver, atmel_isi_probe);
 
 MODULE_AUTHOR("Josh Wu <josh.wu@atmel.com>");
 MODULE_DESCRIPTION("The V4L2 driver for Atmel Linux");

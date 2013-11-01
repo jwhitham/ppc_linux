@@ -197,7 +197,6 @@ error_0:
 EXPORT_SYMBOL_GPL(nfs_alloc_client);
 
 #if IS_ENABLED(CONFIG_NFS_V4)
-/* idr_remove_all is not needed as all id's are removed by nfs_put_client */
 void nfs_cleanup_cb_ident_idr(struct net *net)
 {
 	struct nfs_net *nn = net_generic(net, nfs_net_id);
@@ -594,6 +593,8 @@ int nfs_create_rpc_client(struct nfs_client *clp,
 		args.flags |= RPC_CLNT_CREATE_DISCRTRY;
 	if (test_bit(NFS_CS_NORESVPORT, &clp->cl_flags))
 		args.flags |= RPC_CLNT_CREATE_NONPRIVPORT;
+	if (test_bit(NFS_CS_INFINITE_SLOTS, &clp->cl_flags))
+		args.flags |= RPC_CLNT_CREATE_INFINITE_SLOTS;
 
 	if (!IS_ERR(clp->cl_rpcclient))
 		return 0;

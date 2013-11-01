@@ -22,7 +22,7 @@
 #include <linux/pid_namespace.h>
 #include <net/net_namespace.h>
 #include <linux/ipc_namespace.h>
-#include <linux/proc_fs.h>
+#include <linux/proc_ns.h>
 #include <linux/file.h>
 #include <linux/syscalls.h>
 
@@ -153,8 +153,7 @@ int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 		goto out;
 	}
 
-	new_ns = create_new_namespaces(flags, tsk,
-				       task_cred_xxx(tsk, user_ns), tsk->fs);
+	new_ns = create_new_namespaces(flags, tsk, user_ns, tsk->fs);
 	if (IS_ERR(new_ns)) {
 		err = PTR_ERR(new_ns);
 		goto out;
@@ -242,7 +241,7 @@ SYSCALL_DEFINE2(setns, int, fd, int, nstype)
 	const struct proc_ns_operations *ops;
 	struct task_struct *tsk = current;
 	struct nsproxy *new_nsproxy;
-	struct proc_inode *ei;
+	struct proc_ns *ei;
 	struct file *file;
 	int err;
 
@@ -251,7 +250,7 @@ SYSCALL_DEFINE2(setns, int, fd, int, nstype)
 		return PTR_ERR(file);
 
 	err = -EINVAL;
-	ei = PROC_I(file->f_dentry->d_inode);
+	ei = get_proc_ns(file_inode(file));
 	ops = ei->ns_ops;
 	if (nstype && (ops->type != nstype))
 		goto out;

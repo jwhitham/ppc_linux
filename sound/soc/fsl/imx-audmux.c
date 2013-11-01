@@ -176,7 +176,7 @@ static inline void audmux_debugfs_remove(void)
 }
 #endif
 
-enum imx_audmux_type {
+static enum imx_audmux_type {
 	IMX21_AUDMUX,
 	IMX31_AUDMUX,
 } audmux_type;
@@ -252,9 +252,9 @@ static int imx_audmux_probe(struct platform_device *pdev)
 			of_match_device(imx_audmux_dt_ids, &pdev->dev);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	audmux_base = devm_request_and_ioremap(&pdev->dev, res);
-	if (!audmux_base)
-		return -EADDRNOTAVAIL;
+	audmux_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(audmux_base))
+		return PTR_ERR(audmux_base);
 
 	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
 	if (IS_ERR(pinctrl)) {
@@ -262,7 +262,7 @@ static int imx_audmux_probe(struct platform_device *pdev)
 		return PTR_ERR(pinctrl);
 	}
 
-	audmux_clk = clk_get(&pdev->dev, "audmux");
+	audmux_clk = devm_clk_get(&pdev->dev, "audmux");
 	if (IS_ERR(audmux_clk)) {
 		dev_dbg(&pdev->dev, "cannot get clock: %ld\n",
 				PTR_ERR(audmux_clk));
@@ -282,7 +282,6 @@ static int imx_audmux_remove(struct platform_device *pdev)
 {
 	if (audmux_type == IMX31_AUDMUX)
 		audmux_debugfs_remove();
-	clk_put(audmux_clk);
 
 	return 0;
 }

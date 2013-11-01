@@ -1475,9 +1475,9 @@ static int perf_sched__read_events(struct perf_sched *sched, bool destroy,
 			goto out_delete;
 		}
 
-		sched->nr_events      = session->hists.stats.nr_events[0];
-		sched->nr_lost_events = session->hists.stats.total_lost;
-		sched->nr_lost_chunks = session->hists.stats.nr_events[PERF_RECORD_LOST];
+		sched->nr_events      = session->stats.nr_events[0];
+		sched->nr_lost_events = session->stats.total_lost;
+		sched->nr_lost_chunks = session->stats.nr_events[PERF_RECORD_LOST];
 	}
 
 	if (destroy)
@@ -1671,7 +1671,6 @@ int cmd_sched(int argc, const char **argv, const char *prefix __maybe_unused)
 			.sample		 = perf_sched__process_tracepoint_sample,
 			.comm		 = perf_event__process_comm,
 			.lost		 = perf_event__process_lost,
-			.exit		 = perf_event__process_exit,
 			.fork		 = perf_event__process_fork,
 			.ordered_samples = true,
 		},

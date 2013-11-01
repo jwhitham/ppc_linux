@@ -133,24 +133,24 @@ static int r_tpu_enable(struct r_tpu_priv *p, enum led_brightness brightness)
 	rate = clk_get_rate(p->clk);
 
 	/* pick the lowest acceptable rate */
-	for (k = 0; k < ARRAY_SIZE(prescaler); k++)
-		if ((rate / prescaler[k]) < p->min_rate)
+	for (k = ARRAY_SIZE(prescaler) - 1; k >= 0; k--)
+		if ((rate / prescaler[k]) >= p->min_rate)
 			break;
 
-	if (!k) {
+	if (k < 0) {
 		dev_err(&p->pdev->dev, "clock rate mismatch\n");
 		goto err0;
 	}
 	dev_dbg(&p->pdev->dev, "rate = %lu, prescaler %u\n",
-		rate, prescaler[k - 1]);
+		rate, prescaler[k]);
 
 	/* clear TCNT on TGRB match, count on rising edge, set prescaler */
-	r_tpu_write(p, TCR, 0x0040 | (k - 1));
+	r_tpu_write(p, TCR, 0x0040 | k);
 
 	/* output 0 until TGRA, output 1 until TGRB */
 	r_tpu_write(p, TIOR, 0x0002);
 
-	rate /= prescaler[k - 1] * p->refresh_rate;
+	rate /= prescaler[k] * p->refresh_rate;
 	r_tpu_write(p, TGRB, rate);
 	dev_dbg(&p->pdev->dev, "TRGB = 0x%04lx\n", rate);
 
@@ -205,7 +205,8 @@ static void r_tpu_set_pin(struct r_tpu_priv *p, enum r_tpu_pin new_state,
 		gpio_free(cfg->pin_gpio_fn);
 
 	if (new_state == R_TPU_PIN_GPIO)
-		gpio_request_one(cfg->pin_gpio, GPIOF_DIR_OUT | !!brightness,
+		gpio_request_one(cfg->pin_gpio, !!brightness ?
+				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
 				cfg->name);
 
 	if (new_state == R_TPU_PIN_GPIO_FN)

@@ -30,6 +30,7 @@
 #include <linux/fs_struct.h>
 #include <linux/ima.h>
 #include <linux/dnotify.h>
+#include <linux/compat.h>
 
 #include "internal.h"
 
@@ -140,6 +141,13 @@ SYSCALL_DEFINE2(truncate, const char __user *, path, long, length)
 	return do_sys_truncate(path, length);
 }
 
+#ifdef CONFIG_COMPAT
+COMPAT_SYSCALL_DEFINE2(truncate, const char __user *, path, compat_off_t, length)
+{
+	return do_sys_truncate(path, length);
+}
+#endif
+
 static long do_sys_ftruncate(unsigned int fd, loff_t length, int small)
 {
 	struct inode *inode;
@@ -189,46 +197,33 @@ out:
 
 SYSCALL_DEFINE2(ftruncate, unsigned int, fd, unsigned long, length)
 {
-	long ret = do_sys_ftruncate(fd, length, 1);
-	/* avoid REGPARM breakage on x86: */
-	asmlinkage_protect(2, ret, fd, length);
-	return ret;
+	return do_sys_ftruncate(fd, length, 1);
 }
+
+#ifdef CONFIG_COMPAT
+COMPAT_SYSCALL_DEFINE2(ftruncate, unsigned int, fd, compat_ulong_t, length)
+{
+	return do_sys_ftruncate(fd, length, 1);
+}
+#endif
 
 /* LFS versions of truncate are only needed on 32 bit machines */
 #if BITS_PER_LONG == 32
-SYSCALL_DEFINE(truncate64)(const char __user * path, loff_t length)
+SYSCALL_DEFINE2(truncate64, const char __user *, path, loff_t, length)
 {
 	return do_sys_truncate(path, length);
 }
-#ifdef CONFIG_HAVE_SYSCALL_WRAPPERS
-asmlinkage long SyS_truncate64(long path, loff_t length)
-{
-	return SYSC_truncate64((const char __user *) path, length);
-}
-SYSCALL_ALIAS(sys_truncate64, SyS_truncate64);
-#endif
 
-SYSCALL_DEFINE(ftruncate64)(unsigned int fd, loff_t length)
+SYSCALL_DEFINE2(ftruncate64, unsigned int, fd, loff_t, length)
 {
-	long ret = do_sys_ftruncate(fd, length, 0);
-	/* avoid REGPARM breakage on x86: */
-	asmlinkage_protect(2, ret, fd, length);
-	return ret;
+	return do_sys_ftruncate(fd, length, 0);
 }
-#ifdef CONFIG_HAVE_SYSCALL_WRAPPERS
-asmlinkage long SyS_ftruncate64(long fd, loff_t length)
-{
-	return SYSC_ftruncate64((unsigned int) fd, length);
-}
-SYSCALL_ALIAS(sys_ftruncate64, SyS_ftruncate64);
-#endif
 #endif /* BITS_PER_LONG == 32 */
 
 
 int do_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	long ret;
 
 	if (offset < 0 || len <= 0)
@@ -284,7 +279,7 @@ int do_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 	return ret;
 }
 
-SYSCALL_DEFINE(fallocate)(int fd, int mode, loff_t offset, loff_t len)
+SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
 {
 	struct fd f = fdget(fd);
 	int error = -EBADF;
@@ -295,14 +290,6 @@ SYSCALL_DEFINE(fallocate)(int fd, int mode, loff_t offset, loff_t len)
 	}
 	return error;
 }
-
-#ifdef CONFIG_HAVE_SYSCALL_WRAPPERS
-asmlinkage long SyS_fallocate(long fd, long mode, loff_t offset, loff_t len)
-{
-	return SYSC_fallocate((int)fd, (int)mode, offset, len);
-}
-SYSCALL_ALIAS(sys_fallocate, SyS_fallocate);
-#endif
 
 /*
  * access() needs to use the real uid/gid, not the effective uid/gid.
@@ -426,7 +413,7 @@ SYSCALL_DEFINE1(fchdir, unsigned int, fd)
 	if (!f.file)
 		goto out;
 
-	inode = f.file->f_path.dentry->d_inode;
+	inode = file_inode(f.file);
 
 	error = -ENOTDIR;
 	if (!S_ISDIR(inode->i_mode))
@@ -689,7 +676,7 @@ static int do_dentry_open(struct file *f,
 		f->f_mode = FMODE_PATH;
 
 	path_get(&f->f_path);
-	inode = f->f_path.dentry->d_inode;
+	inode = f->f_inode = f->f_path.dentry->d_inode;
 	if (f->f_mode & FMODE_WRITE) {
 		error = __get_file_write_access(inode, f->f_path.mnt);
 		if (error)
@@ -699,7 +686,6 @@ static int do_dentry_open(struct file *f,
 	}
 
 	f->f_mapping = inode->i_mapping;
-	f->f_pos = 0;
 	file_sb_list_add(f, inode->i_sb);
 
 	if (unlikely(f->f_mode & FMODE_PATH)) {
@@ -753,6 +739,7 @@ cleanup_file:
 	path_put(&f->f_path);
 	f->f_path.mnt = NULL;
 	f->f_path.dentry = NULL;
+	f->f_inode = NULL;
 	return error;
 }
 
@@ -810,23 +797,22 @@ struct file *dentry_open(const struct path *path, int flags,
 	/* We must always pass in a valid mount pointer. */
 	BUG_ON(!path->mnt);
 
-	error = -ENFILE;
 	f = get_empty_filp();
-	if (f == NULL)
-		return ERR_PTR(error);
-
-	f->f_flags = flags;
-	f->f_path = *path;
-	error = do_dentry_open(f, NULL, cred);
-	if (!error) {
-		error = open_check_o_direct(f);
-		if (error) {
-			fput(f);
+	if (!IS_ERR(f)) {
+		f->f_flags = flags;
+		f->f_path = *path;
+		error = do_dentry_open(f, NULL, cred);
+		if (!error) {
+			/* from now on we need fput() to dispose of f */
+			error = open_check_o_direct(f);
+			if (error) {
+				fput(f);
+				f = ERR_PTR(error);
+			}
+		} else { 
+			put_filp(f);
 			f = ERR_PTR(error);
 		}
-	} else { 
-		put_filp(f);
-		f = ERR_PTR(error);
 	}
 	return f;
 }
@@ -969,29 +955,19 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 
 SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)
 {
-	long ret;
-
 	if (force_o_largefile())
 		flags |= O_LARGEFILE;
 
-	ret = do_sys_open(AT_FDCWD, filename, flags, mode);
-	/* avoid REGPARM breakage on x86: */
-	asmlinkage_protect(3, ret, filename, flags, mode);
-	return ret;
+	return do_sys_open(AT_FDCWD, filename, flags, mode);
 }
 
 SYSCALL_DEFINE4(openat, int, dfd, const char __user *, filename, int, flags,
 		umode_t, mode)
 {
-	long ret;
-
 	if (force_o_largefile())
 		flags |= O_LARGEFILE;
 
-	ret = do_sys_open(dfd, filename, flags, mode);
-	/* avoid REGPARM breakage on x86: */
-	asmlinkage_protect(4, ret, dfd, filename, flags, mode);
-	return ret;
+	return do_sys_open(dfd, filename, flags, mode);
 }
 
 #ifndef __alpha__

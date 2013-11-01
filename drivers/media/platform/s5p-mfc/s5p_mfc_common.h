@@ -138,6 +138,7 @@ enum s5p_mfc_inst_state {
 	MFCINST_INIT = 100,
 	MFCINST_GOT_INST,
 	MFCINST_HEAD_PARSED,
+	MFCINST_HEAD_PRODUCED,
 	MFCINST_BUFS_SET,
 	MFCINST_RUNNING,
 	MFCINST_FINISHING,
@@ -145,6 +146,7 @@ enum s5p_mfc_inst_state {
 	MFCINST_RETURN_INST,
 	MFCINST_ERROR,
 	MFCINST_ABORT,
+	MFCINST_FLUSH,
 	MFCINST_RES_CHANGE_INIT,
 	MFCINST_RES_CHANGE_FLUSH,
 	MFCINST_RES_CHANGE_END,
@@ -230,7 +232,6 @@ struct s5p_mfc_variant {
 	unsigned int port_num;
 	struct s5p_mfc_buf_size *buf_size;
 	struct s5p_mfc_buf_align *buf_align;
-	char	*mclk_name;
 	char	*fw_name;
 };
 
@@ -277,8 +278,9 @@ struct s5p_mfc_priv_buf {
  * @int_err:		error number for last interrupt
  * @queue:		waitqueue for waiting for completion of device commands
  * @fw_size:		size of firmware
- * @bank1:		address of the beggining of bank 1 memory
- * @bank2:		address of the beggining of bank 2 memory
+ * @fw_virt_addr:	virtual firmware address
+ * @bank1:		address of the beginning of bank 1 memory
+ * @bank2:		address of the beginning of bank 2 memory
  * @hw_lock:		used for hardware locking
  * @ctx:		array of driver contexts
  * @curr_ctx:		number of the currently running context
@@ -317,8 +319,9 @@ struct s5p_mfc_dev {
 	unsigned int int_err;
 	wait_queue_head_t queue;
 	size_t fw_size;
-	size_t bank1;
-	size_t bank2;
+	void *fw_virt_addr;
+	dma_addr_t bank1;
+	dma_addr_t bank2;
 	unsigned long hw_lock;
 	struct s5p_mfc_ctx *ctx[MFC_NUM_CONTEXTS];
 	int curr_ctx;
@@ -435,7 +438,7 @@ struct s5p_mfc_enc_params {
 	u32 rc_framerate_num;
 	u32 rc_framerate_denom;
 
-	union {
+	struct {
 		struct s5p_mfc_h264_enc_params h264;
 		struct s5p_mfc_mpeg4_enc_params mpeg4;
 	} codec;
@@ -493,15 +496,9 @@ struct s5p_mfc_codec_ops {
  *			flushed
  * @head_processed:	flag mentioning whether the header data is processed
  *			completely or not
- * @bank1_buf:		handle to memory allocated for temporary buffers from
+ * @bank1:		handle to memory allocated for temporary buffers from
  *			memory bank 1
- * @bank1_phys:		address of the temporary buffers from memory bank 1
- * @bank1_size:		size of the memory allocated for temporary buffers from
- *			memory bank 1
- * @bank2_buf:		handle to memory allocated for temporary buffers from
- *			memory bank 2
- * @bank2_phys:		address of the temporary buffers from memory bank 2
- * @bank2_size:		size of the memory allocated for temporary buffers from
+ * @bank2:		handle to memory allocated for temporary buffers from
  *			memory bank 2
  * @capture_state:	state of the capture buffers queue
  * @output_state:	state of the output buffers queue
@@ -581,14 +578,8 @@ struct s5p_mfc_ctx {
 	unsigned int dpb_flush_flag;
 	unsigned int head_processed;
 
-	/* Buffers */
-	void *bank1_buf;
-	size_t bank1_phys;
-	size_t bank1_size;
-
-	void *bank2_buf;
-	size_t bank2_phys;
-	size_t bank2_size;
+	struct s5p_mfc_priv_buf bank1;
+	struct s5p_mfc_priv_buf bank2;
 
 	enum s5p_mfc_queue_state capture_state;
 	enum s5p_mfc_queue_state output_state;
@@ -611,7 +602,7 @@ struct s5p_mfc_ctx {
 	int after_packed_pb;
 	int sei_fp_parse;
 
-	int dpb_count;
+	int pb_count;
 	int total_dpb_count;
 	int mv_count;
 	/* Buffers */

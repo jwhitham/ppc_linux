@@ -69,7 +69,7 @@ extern void __mnt_drop_write_file(struct file *);
 /*
  * fs_struct.c
  */
-extern void chroot_fs_refs(struct path *, struct path *);
+extern void chroot_fs_refs(const struct path *, const struct path *);
 
 /*
  * file_table.c
@@ -125,3 +125,19 @@ extern int invalidate_inodes(struct super_block *, bool);
  * dcache.c
  */
 extern struct dentry *__d_alloc(struct super_block *, const struct qstr *);
+
+/*
+ * read_write.c
+ */
+extern ssize_t __kernel_write(struct file *, const char *, size_t, loff_t *);
+
+/*
+ * splice.c
+ */
+extern long do_splice_direct(struct file *in, loff_t *ppos, struct file *out,
+		loff_t *opos, size_t len, unsigned int flags);
+
+/*
+ * pipe.c
+ */
+extern const struct file_operations pipefifo_fops;

@@ -156,7 +156,7 @@ static void mx3_cam_dma_done(void *arg)
 		struct mx3_camera_buffer *buf = to_mx3_vb(vb);
 
 		list_del_init(&buf->queue);
-		do_gettimeofday(&vb->v4l2_buf.timestamp);
+		v4l2_get_timestamp(&vb->v4l2_buf.timestamp);
 		vb->v4l2_buf.field = mx3_cam->field;
 		vb->v4l2_buf.sequence = mx3_cam->sequence++;
 		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
@@ -455,6 +455,7 @@ static int mx3_camera_init_videobuf(struct vb2_queue *q,
 	q->ops = &mx3_videobuf_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct mx3_camera_buffer);
+	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	return vb2_queue_init(q);
 }
@@ -510,7 +511,7 @@ static void mx3_camera_activate(struct mx3_camera_dev *mx3_cam,
 		clk_set_rate(mx3_cam->clk, rate);
 }
 
-/* Called with .video_lock held */
+/* Called with .host_lock held */
 static int mx3_camera_add_device(struct soc_camera_device *icd)
 {
 	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
@@ -530,7 +531,7 @@ static int mx3_camera_add_device(struct soc_camera_device *icd)
 	return 0;
 }
 
-/* Called with .video_lock held */
+/* Called with .host_lock held */
 static void mx3_camera_remove_device(struct soc_camera_device *icd)
 {
 	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
@@ -1275,7 +1276,7 @@ static int mx3_camera_remove(struct platform_device *pdev)
 }
 
 static struct platform_driver mx3_camera_driver = {
-	.driver 	= {
+	.driver		= {
 		.name	= MX3_CAM_DRV_NAME,
 	},
 	.probe		= mx3_camera_probe,

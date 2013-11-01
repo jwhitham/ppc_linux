@@ -35,13 +35,25 @@ struct inode;
 # include <asm/uprobes.h>
 #endif
 
+#define UPROBE_HANDLER_REMOVE		1
+#define UPROBE_HANDLER_MASK		1
+
+#define MAX_URETPROBE_DEPTH		64
+
+enum uprobe_filter_ctx {
+	UPROBE_FILTER_REGISTER,
+	UPROBE_FILTER_UNREGISTER,
+	UPROBE_FILTER_MMAP,
+};
+
 struct uprobe_consumer {
 	int (*handler)(struct uprobe_consumer *self, struct pt_regs *regs);
-	/*
-	 * filter is optional; If a filter exists, handler is run
-	 * if and only if filter returns true.
-	 */
-	bool (*filter)(struct uprobe_consumer *self, struct task_struct *task);
+	int (*ret_handler)(struct uprobe_consumer *self,
+				unsigned long func,
+				struct pt_regs *regs);
+	bool (*filter)(struct uprobe_consumer *self,
+				enum uprobe_filter_ctx ctx,
+				struct mm_struct *mm);
 
 	struct uprobe_consumer *next;
 };
@@ -61,6 +73,8 @@ struct uprobe_task {
 	enum uprobe_task_state		state;
 	struct arch_uprobe_task		autask;
 
+	struct return_instance		*return_instances;
+	unsigned int			depth;
 	struct uprobe			*active_uprobe;
 
 	unsigned long			xol_vaddr;
@@ -93,7 +107,9 @@ struct uprobes_state {
 extern int __weak set_swbp(struct arch_uprobe *aup, struct mm_struct *mm, unsigned long vaddr);
 extern int __weak set_orig_insn(struct arch_uprobe *aup, struct mm_struct *mm, unsigned long vaddr);
 extern bool __weak is_swbp_insn(uprobe_opcode_t *insn);
+extern bool __weak is_trap_insn(uprobe_opcode_t *insn);
 extern int uprobe_register(struct inode *inode, loff_t offset, struct uprobe_consumer *uc);
+extern int uprobe_apply(struct inode *inode, loff_t offset, struct uprobe_consumer *uc, bool);
 extern void uprobe_unregister(struct inode *inode, loff_t offset, struct uprobe_consumer *uc);
 extern int uprobe_mmap(struct vm_area_struct *vma);
 extern void uprobe_munmap(struct vm_area_struct *vma, unsigned long start, unsigned long end);
@@ -114,6 +130,11 @@ struct uprobes_state {
 };
 static inline int
 uprobe_register(struct inode *inode, loff_t offset, struct uprobe_consumer *uc)
+{
+	return -ENOSYS;
+}
+static inline int
+uprobe_apply(struct inode *inode, loff_t offset, struct uprobe_consumer *uc, bool add)
 {
 	return -ENOSYS;
 }

@@ -193,12 +193,6 @@ static inline unsigned short ext_depth(struct inode *inode)
 	return le16_to_cpu(ext_inode_hdr(inode)->eh_depth);
 }
 
-static inline void
-ext4_ext_invalidate_cache(struct inode *inode)
-{
-	EXT4_I(inode)->i_cached_extent.ec_len = 0;
-}
-
 static inline void ext4_ext_mark_uninitialized(struct ext4_extent *ext)
 {
 	/* We can not have an uninitialized extent of zero length! */
@@ -275,6 +269,11 @@ static inline void ext4_idx_store_pblock(struct ext4_extent_idx *ix,
 	ix->ei_leaf_hi = cpu_to_le16((unsigned long) ((pb >> 31) >> 1) &
 				     0xffff);
 }
+
+#define ext4_ext_dirty(handle, inode, path) \
+		__ext4_ext_dirty(__func__, __LINE__, (handle), (inode), (path))
+int __ext4_ext_dirty(const char *where, unsigned int line, handle_t *handle,
+		     struct inode *inode, struct ext4_ext_path *path);
 
 #endif /* _EXT4_EXTENTS */
 

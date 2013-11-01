@@ -4,7 +4,6 @@
 
 menuconfig PHYLIB
 	tristate "PHY Device support and infrastructure"
-	depends on !S390
 	depends on NETDEVICES
 	help
 	  Ethernet controllers are usually attached to PHY
@@ -137,7 +136,7 @@ config MDIO_BITBANG
 
 config MDIO_GPIO
 	tristate "Support for GPIO lib-based bitbanged MDIO buses"
-	depends on MDIO_BITBANG && GENERIC_GPIO
+	depends on MDIO_BITBANG && GPIOLIB
 	---help---
 	  Supports GPIO lib-based MDIO busses.
 

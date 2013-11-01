@@ -38,7 +38,6 @@
 
 struct mxs_pwm_chip {
 	struct pwm_chip chip;
-	struct device *dev;
 	struct clk *clk;
 	void __iomem *base;
 };
@@ -139,9 +138,9 @@ static int mxs_pwm_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	mxs->base = devm_request_and_ioremap(&pdev->dev, res);
-	if (!mxs->base)
-		return -EADDRNOTAVAIL;
+	mxs->base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(mxs->base))
+		return PTR_ERR(mxs->base);
 
 	pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
 	if (IS_ERR(pinctrl))
@@ -166,7 +165,6 @@ static int mxs_pwm_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	mxs->dev = &pdev->dev;
 	platform_set_drvdata(pdev, mxs);
 
 	stmp_reset_block(mxs->base);
@@ -181,7 +179,7 @@ static int mxs_pwm_remove(struct platform_device *pdev)
 	return pwmchip_remove(&mxs->chip);
 }
 
-static struct of_device_id mxs_pwm_dt_ids[] = {
+static const struct of_device_id mxs_pwm_dt_ids[] = {
 	{ .compatible = "fsl,imx23-pwm", },
 	{ /* sentinel */ }
 };

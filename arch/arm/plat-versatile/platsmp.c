@@ -17,7 +17,6 @@
 
 #include <asm/cacheflush.h>
 #include <asm/smp_plat.h>
-#include <asm/hardware/gic.h>
 
 /*
  * Write pen_release in a way that is guaranteed to be visible to all
@@ -36,13 +35,6 @@ static DEFINE_SPINLOCK(boot_lock);
 
 void __cpuinit versatile_secondary_init(unsigned int cpu)
 {
-	/*
-	 * if any interrupts are already enabled for the primary
-	 * core (e.g. timer irq), then they will not have been enabled
-	 * for us: do so
-	 */
-	gic_secondary_init(0);
-
 	/*
 	 * let the primary processor know we're out of the
 	 * pen, then head off into the C entry point
@@ -79,7 +71,7 @@ int __cpuinit versatile_boot_secondary(unsigned int cpu, struct task_struct *idl
 	 * the boot monitor to read the system wide flags register,
 	 * and branch to the address found there.
 	 */
-	gic_raise_softirq(cpumask_of(cpu), 0);
+	arch_send_wakeup_ipi_mask(cpumask_of(cpu));
 
 	timeout = jiffies + (1 * HZ);
 	while (time_before(jiffies, timeout)) {

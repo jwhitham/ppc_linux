@@ -465,7 +465,7 @@
 #define	SD_RSP_TYPE_R6			0x01
 #define	SD_RSP_TYPE_R7			0x01
 
-/* SD_CONFIURE3 */
+/* SD_CONFIGURE3 */
 #define	SD_RSP_80CLK_TIMEOUT_EN		0x01
 
 /* Card Transfer Reset Register */
@@ -500,6 +500,8 @@
 #define BPP_POWER_15_PERCENT_ON		0x08
 #define BPP_POWER_ON			0x00
 #define BPP_POWER_MASK			0x0F
+#define SD_VCC_PARTIAL_POWER_ON		0x02
+#define SD_VCC_POWER_ON			0x00
 
 /* PWR_GATE_CTRL */
 #define PWR_GATE_EN			0x01
@@ -581,8 +583,11 @@
 #define CARD_GPIO_DIR			0xFD57
 #define CARD_GPIO			0xFD58
 #define CARD_DATA_SOURCE		0xFD5B
+#define SD30_CLK_DRIVE_SEL		0xFD5A
 #define CARD_SELECT			0xFD5C
 #define SD30_DRIVE_SEL			0xFD5E
+#define SD30_CMD_DRIVE_SEL		0xFD5E
+#define SD30_DAT_DRIVE_SEL		0xFD5F
 #define CARD_CLK_EN			0xFD69
 #define SDIO_CTRL			0xFD6B
 #define CD_PAD_CTL			0xFD73
@@ -655,6 +660,8 @@
 #define MSGTXDATA3			0xFE47
 #define MSGTXCTL			0xFE48
 #define PETXCFG				0xFE49
+#define LTR_CTL				0xFE4A
+#define OBFF_CFG			0xFE4C
 
 #define CDRESUMECTL			0xFE52
 #define WAKE_SEL_CTL			0xFE54
@@ -683,6 +690,40 @@
 #define PPBUF_BASE2			0xFA00
 #define IMAGE_FLAG_ADDR0		0xCE80
 #define IMAGE_FLAG_ADDR1		0xCE81
+
+/* Phy register */
+#define PHY_PCR				0x00
+#define PHY_RCR0			0x01
+#define PHY_RCR1			0x02
+#define PHY_RCR2			0x03
+#define PHY_RTCR			0x04
+#define PHY_RDR				0x05
+#define PHY_TCR0			0x06
+#define PHY_TCR1			0x07
+#define PHY_TUNE			0x08
+#define PHY_IMR				0x09
+#define PHY_BPCR			0x0A
+#define PHY_BIST			0x0B
+#define PHY_RAW_L			0x0C
+#define PHY_RAW_H			0x0D
+#define PHY_RAW_DATA			0x0E
+#define PHY_HOST_CLK_CTRL		0x0F
+#define PHY_DMR				0x10
+#define PHY_BACR			0x11
+#define PHY_IER				0x12
+#define PHY_BCSR			0x13
+#define PHY_BPR				0x14
+#define PHY_BPNR2			0x15
+#define PHY_BPNR			0x16
+#define PHY_BRNR2			0x17
+#define PHY_BENR			0x18
+#define PHY_REG_REV			0x19
+#define PHY_FLD0			0x1A
+#define PHY_FLD1			0x1B
+#define PHY_FLD2			0x1C
+#define PHY_FLD3			0x1D
+#define PHY_FLD4			0x1E
+#define PHY_DUM_REG			0x1F
 
 #define rtsx_pci_init_cmd(pcr)		((pcr)->ci = 0)
 
@@ -735,6 +776,7 @@ struct rtsx_pcr {
 
 	unsigned int			card_inserted;
 	unsigned int			card_removed;
+	unsigned int			card_exist;
 
 	struct delayed_work		carddet_work;
 	struct delayed_work		idle_work;
@@ -799,6 +841,7 @@ int rtsx_pci_switch_clock(struct rtsx_pcr *pcr, unsigned int card_clock,
 		u8 ssc_depth, bool initial_mode, bool double_clk, bool vpclk);
 int rtsx_pci_card_power_on(struct rtsx_pcr *pcr, int card);
 int rtsx_pci_card_power_off(struct rtsx_pcr *pcr, int card);
+int rtsx_pci_card_exclusive_check(struct rtsx_pcr *pcr, int card);
 int rtsx_pci_switch_output_voltage(struct rtsx_pcr *pcr, u8 voltage);
 unsigned int rtsx_pci_card_exist(struct rtsx_pcr *pcr);
 void rtsx_pci_complete_unfinished_transfer(struct rtsx_pcr *pcr);

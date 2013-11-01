@@ -222,7 +222,7 @@ static struct class video_class = {
 
 struct video_device *video_devdata(struct file *file)
 {
-	return video_device[iminor(file->f_path.dentry->d_inode)];
+	return video_device[iminor(file_inode(file))];
 }
 EXPORT_SYMBOL(video_devdata);
 
@@ -568,11 +568,6 @@ static void determine_valid_ioctls(struct video_device *vdev)
 	if (ops->vidioc_s_priority ||
 			test_bit(V4L2_FL_USE_FH_PRIO, &vdev->flags))
 		set_bit(_IOC_NR(VIDIOC_S_PRIORITY), valid_ioctls);
-	SET_VALID_IOCTL(ops, VIDIOC_REQBUFS, vidioc_reqbufs);
-	SET_VALID_IOCTL(ops, VIDIOC_QUERYBUF, vidioc_querybuf);
-	SET_VALID_IOCTL(ops, VIDIOC_QBUF, vidioc_qbuf);
-	SET_VALID_IOCTL(ops, VIDIOC_EXPBUF, vidioc_expbuf);
-	SET_VALID_IOCTL(ops, VIDIOC_DQBUF, vidioc_dqbuf);
 	SET_VALID_IOCTL(ops, VIDIOC_STREAMON, vidioc_streamon);
 	SET_VALID_IOCTL(ops, VIDIOC_STREAMOFF, vidioc_streamoff);
 	/* Note: the control handler can also be passed through the filehandle,
@@ -597,16 +592,15 @@ static void determine_valid_ioctls(struct video_device *vdev)
 	SET_VALID_IOCTL(ops, VIDIOC_S_FREQUENCY, vidioc_s_frequency);
 	SET_VALID_IOCTL(ops, VIDIOC_LOG_STATUS, vidioc_log_status);
 #ifdef CONFIG_VIDEO_ADV_DEBUG
-	SET_VALID_IOCTL(ops, VIDIOC_DBG_G_REGISTER, vidioc_g_register);
-	SET_VALID_IOCTL(ops, VIDIOC_DBG_S_REGISTER, vidioc_s_register);
+	set_bit(_IOC_NR(VIDIOC_DBG_G_CHIP_INFO), valid_ioctls);
+	set_bit(_IOC_NR(VIDIOC_DBG_G_REGISTER), valid_ioctls);
+	set_bit(_IOC_NR(VIDIOC_DBG_S_REGISTER), valid_ioctls);
 #endif
 	SET_VALID_IOCTL(ops, VIDIOC_DBG_G_CHIP_IDENT, vidioc_g_chip_ident);
 	/* yes, really vidioc_subscribe_event */
 	SET_VALID_IOCTL(ops, VIDIOC_DQEVENT, vidioc_subscribe_event);
 	SET_VALID_IOCTL(ops, VIDIOC_SUBSCRIBE_EVENT, vidioc_subscribe_event);
 	SET_VALID_IOCTL(ops, VIDIOC_UNSUBSCRIBE_EVENT, vidioc_unsubscribe_event);
-	SET_VALID_IOCTL(ops, VIDIOC_CREATE_BUFS, vidioc_create_bufs);
-	SET_VALID_IOCTL(ops, VIDIOC_PREPARE_BUF, vidioc_prepare_buf);
 	if (ops->vidioc_enum_freq_bands || ops->vidioc_g_tuner || ops->vidioc_g_modulator)
 		set_bit(_IOC_NR(VIDIOC_ENUM_FREQ_BANDS), valid_ioctls);
 
@@ -672,6 +666,13 @@ static void determine_valid_ioctls(struct video_device *vdev)
 	}
 	if (!is_radio) {
 		/* ioctls valid for video or vbi */
+		SET_VALID_IOCTL(ops, VIDIOC_REQBUFS, vidioc_reqbufs);
+		SET_VALID_IOCTL(ops, VIDIOC_QUERYBUF, vidioc_querybuf);
+		SET_VALID_IOCTL(ops, VIDIOC_QBUF, vidioc_qbuf);
+		SET_VALID_IOCTL(ops, VIDIOC_EXPBUF, vidioc_expbuf);
+		SET_VALID_IOCTL(ops, VIDIOC_DQBUF, vidioc_dqbuf);
+		SET_VALID_IOCTL(ops, VIDIOC_CREATE_BUFS, vidioc_create_bufs);
+		SET_VALID_IOCTL(ops, VIDIOC_PREPARE_BUF, vidioc_prepare_buf);
 		if (ops->vidioc_s_std)
 			set_bit(_IOC_NR(VIDIOC_ENUMSTD), valid_ioctls);
 		if (ops->vidioc_g_std || vdev->current_norm)
@@ -685,7 +686,6 @@ static void determine_valid_ioctls(struct video_device *vdev)
 			SET_VALID_IOCTL(ops, VIDIOC_ENUMAUDIO, vidioc_enumaudio);
 			SET_VALID_IOCTL(ops, VIDIOC_G_AUDIO, vidioc_g_audio);
 			SET_VALID_IOCTL(ops, VIDIOC_S_AUDIO, vidioc_s_audio);
-			SET_VALID_IOCTL(ops, VIDIOC_QUERY_DV_PRESET, vidioc_query_dv_preset);
 			SET_VALID_IOCTL(ops, VIDIOC_QUERY_DV_TIMINGS, vidioc_query_dv_timings);
 		}
 		if (is_tx) {
@@ -708,9 +708,6 @@ static void determine_valid_ioctls(struct video_device *vdev)
 					(ops->vidioc_g_std || vdev->current_norm)))
 			set_bit(_IOC_NR(VIDIOC_G_PARM), valid_ioctls);
 		SET_VALID_IOCTL(ops, VIDIOC_S_PARM, vidioc_s_parm);
-		SET_VALID_IOCTL(ops, VIDIOC_ENUM_DV_PRESETS, vidioc_enum_dv_presets);
-		SET_VALID_IOCTL(ops, VIDIOC_S_DV_PRESET, vidioc_s_dv_preset);
-		SET_VALID_IOCTL(ops, VIDIOC_G_DV_PRESET, vidioc_g_dv_preset);
 		SET_VALID_IOCTL(ops, VIDIOC_S_DV_TIMINGS, vidioc_s_dv_timings);
 		SET_VALID_IOCTL(ops, VIDIOC_G_DV_TIMINGS, vidioc_g_dv_timings);
 		SET_VALID_IOCTL(ops, VIDIOC_ENUM_DV_TIMINGS, vidioc_enum_dv_timings);

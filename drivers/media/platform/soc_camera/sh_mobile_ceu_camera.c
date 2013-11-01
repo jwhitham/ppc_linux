@@ -20,6 +20,7 @@
 #include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
+#include <linux/err.h>
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/interrupt.h>
@@ -516,7 +517,7 @@ static irqreturn_t sh_mobile_ceu_irq(int irq, void *data)
 		pcdev->active = NULL;
 
 	ret = sh_mobile_ceu_capture(pcdev);
-	do_gettimeofday(&vb->v4l2_buf.timestamp);
+	v4l2_get_timestamp(&vb->v4l2_buf.timestamp);
 	if (!ret) {
 		vb->v4l2_buf.field = pcdev->field;
 		vb->v4l2_buf.sequence = pcdev->sequence++;
@@ -543,7 +544,7 @@ static struct v4l2_subdev *find_csi2(struct sh_mobile_ceu_dev *pcdev)
 	return NULL;
 }
 
-/* Called with .video_lock held */
+/* Called with .host_lock held */
 static int sh_mobile_ceu_add_device(struct soc_camera_device *icd)
 {
 	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
@@ -572,7 +573,7 @@ static int sh_mobile_ceu_add_device(struct soc_camera_device *icd)
 
 	ret = v4l2_subdev_call(csi2_sd, core, s_power, 1);
 	if (ret < 0 && ret != -ENOIOCTLCMD && ret != -ENODEV) {
-		pm_runtime_put_sync(ici->v4l2_dev.dev);
+		pm_runtime_put(ici->v4l2_dev.dev);
 		return ret;
 	}
 
@@ -587,7 +588,7 @@ static int sh_mobile_ceu_add_device(struct soc_camera_device *icd)
 	return 0;
 }
 
-/* Called with .video_lock held */
+/* Called with .host_lock held */
 static void sh_mobile_ceu_remove_device(struct soc_camera_device *icd)
 {
 	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
@@ -612,7 +613,7 @@ static void sh_mobile_ceu_remove_device(struct soc_camera_device *icd)
 	}
 	spin_unlock_irq(&pcdev->lock);
 
-	pm_runtime_put_sync(ici->v4l2_dev.dev);
+	pm_runtime_put(ici->v4l2_dev.dev);
 
 	dev_info(icd->parent,
 		 "SuperH Mobile CEU driver detached from camera %d\n",
@@ -1064,7 +1065,7 @@ static int sh_mobile_ceu_get_formats(struct soc_camera_device *icd, unsigned int
 
 		/* Add our control */
 		v4l2_ctrl_new_std(&icd->ctrl_handler, &sh_mobile_ceu_ctrl_ops,
-				  V4L2_CID_SHARPNESS, 0, 1, 1, 0);
+				  V4L2_CID_SHARPNESS, 0, 1, 1, 1);
 		if (icd->ctrl_handler.error)
 			return icd->ctrl_handler.error;
 
@@ -2026,6 +2027,7 @@ static int sh_mobile_ceu_init_videobuf(struct vb2_queue *q,
 	q->ops = &sh_mobile_ceu_videobuf_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct sh_mobile_ceu_buffer);
+	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 
 	return vb2_queue_init(q);
 }
@@ -2088,15 +2090,13 @@ static int sh_mobile_ceu_probe(struct platform_device *pdev)
 	irq = platform_get_irq(pdev, 0);
 	if (!res || (int)irq <= 0) {
 		dev_err(&pdev->dev, "Not enough CEU platform resources.\n");
-		err = -ENODEV;
-		goto exit;
+		return -ENODEV;
 	}
 
-	pcdev = kzalloc(sizeof(*pcdev), GFP_KERNEL);
+	pcdev = devm_kzalloc(&pdev->dev, sizeof(*pcdev), GFP_KERNEL);
 	if (!pcdev) {
 		dev_err(&pdev->dev, "Could not allocate pcdev\n");
-		err = -ENOMEM;
-		goto exit;
+		return -ENOMEM;
 	}
 
 	INIT_LIST_HEAD(&pcdev->capture);
@@ -2105,20 +2105,16 @@ static int sh_mobile_ceu_probe(struct platform_device *pdev)
 
 	pcdev->pdata = pdev->dev.platform_data;
 	if (!pcdev->pdata) {
-		err = -EINVAL;
 		dev_err(&pdev->dev, "CEU platform data not set.\n");
-		goto exit_kfree;
+		return -EINVAL;
 	}
 
 	pcdev->max_width = pcdev->pdata->max_width ? : 2560;
 	pcdev->max_height = pcdev->pdata->max_height ? : 1920;
 
-	base = ioremap_nocache(res->start, resource_size(res));
-	if (!base) {
-		err = -ENXIO;
-		dev_err(&pdev->dev, "Unable to ioremap CEU registers.\n");
-		goto exit_kfree;
-	}
+	base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(base))
+		return PTR_ERR(base);
 
 	pcdev->irq = irq;
 	pcdev->base = base;
@@ -2133,16 +2129,15 @@ static int sh_mobile_ceu_probe(struct platform_device *pdev)
 						  DMA_MEMORY_EXCLUSIVE);
 		if (!err) {
 			dev_err(&pdev->dev, "Unable to declare CEU memory.\n");
-			err = -ENXIO;
-			goto exit_iounmap;
+			return -ENXIO;
 		}
 
 		pcdev->video_limit = resource_size(res);
 	}
 
 	/* request irq */
-	err = request_irq(pcdev->irq, sh_mobile_ceu_irq, IRQF_DISABLED,
-			  dev_name(&pdev->dev), pcdev);
+	err = devm_request_irq(&pdev->dev, pcdev->irq, sh_mobile_ceu_irq,
+			       IRQF_DISABLED, dev_name(&pdev->dev), pcdev);
 	if (err) {
 		dev_err(&pdev->dev, "Unable to register CEU interrupt.\n");
 		goto exit_release_mem;
@@ -2246,15 +2241,9 @@ exit_free_ctx:
 	vb2_dma_contig_cleanup_ctx(pcdev->alloc_ctx);
 exit_free_clk:
 	pm_runtime_disable(&pdev->dev);
-	free_irq(pcdev->irq, pcdev);
 exit_release_mem:
 	if (platform_get_resource(pdev, IORESOURCE_MEM, 1))
 		dma_release_declared_memory(&pdev->dev);
-exit_iounmap:
-	iounmap(base);
-exit_kfree:
-	kfree(pcdev);
-exit:
 	return err;
 }
 
@@ -2267,10 +2256,8 @@ static int sh_mobile_ceu_remove(struct platform_device *pdev)
 
 	soc_camera_host_unregister(soc_host);
 	pm_runtime_disable(&pdev->dev);
-	free_irq(pcdev->irq, pcdev);
 	if (platform_get_resource(pdev, IORESOURCE_MEM, 1))
 		dma_release_declared_memory(&pdev->dev);
-	iounmap(pcdev->base);
 	vb2_dma_contig_cleanup_ctx(pcdev->alloc_ctx);
 	if (csi2_pdev && csi2_pdev->dev.driver) {
 		struct module *csi2_drv = csi2_pdev->dev.driver->owner;
@@ -2279,7 +2266,6 @@ static int sh_mobile_ceu_remove(struct platform_device *pdev)
 		platform_device_put(csi2_pdev);
 		module_put(csi2_drv);
 	}
-	kfree(pcdev);
 
 	return 0;
 }
@@ -2302,7 +2288,7 @@ static const struct dev_pm_ops sh_mobile_ceu_dev_pm_ops = {
 };
 
 static struct platform_driver sh_mobile_ceu_driver = {
-	.driver 	= {
+	.driver		= {
 		.name	= "sh_mobile_ceu",
 		.pm	= &sh_mobile_ceu_dev_pm_ops,
 	},

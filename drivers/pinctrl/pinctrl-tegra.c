@@ -201,6 +201,7 @@ static const struct cfg_param {
 	{"nvidia,open-drain",		TEGRA_PINCONF_PARAM_OPEN_DRAIN},
 	{"nvidia,lock",			TEGRA_PINCONF_PARAM_LOCK},
 	{"nvidia,io-reset",		TEGRA_PINCONF_PARAM_IORESET},
+	{"nvidia,rcv-sel",		TEGRA_PINCONF_PARAM_RCV_SEL},
 	{"nvidia,high-speed-mode",	TEGRA_PINCONF_PARAM_HIGH_SPEED_MODE},
 	{"nvidia,schmitt",		TEGRA_PINCONF_PARAM_SCHMITT},
 	{"nvidia,low-power-mode",	TEGRA_PINCONF_PARAM_LOW_POWER_MODE},
@@ -208,6 +209,7 @@ static const struct cfg_param {
 	{"nvidia,pull-up-strength",	TEGRA_PINCONF_PARAM_DRIVE_UP_STRENGTH},
 	{"nvidia,slew-rate-falling",	TEGRA_PINCONF_PARAM_SLEW_RATE_FALLING},
 	{"nvidia,slew-rate-rising",	TEGRA_PINCONF_PARAM_SLEW_RATE_RISING},
+	{"nvidia,drive-type",		TEGRA_PINCONF_PARAM_DRIVE_TYPE},
 };
 
 static int tegra_pinctrl_dt_subnode_to_map(struct device *dev,
@@ -314,7 +316,7 @@ static int tegra_pinctrl_dt_node_to_map(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
-static struct pinctrl_ops tegra_pinctrl_ops = {
+static const struct pinctrl_ops tegra_pinctrl_ops = {
 	.get_groups_count = tegra_pinctrl_get_groups_count,
 	.get_group_name = tegra_pinctrl_get_group_name,
 	.get_group_pins = tegra_pinctrl_get_group_pins,
@@ -399,7 +401,7 @@ static void tegra_pinctrl_disable(struct pinctrl_dev *pctldev,
 	pmx_writel(pmx, val, g->mux_bank, g->mux_reg);
 }
 
-static struct pinmux_ops tegra_pinmux_ops = {
+static const struct pinmux_ops tegra_pinmux_ops = {
 	.get_functions_count = tegra_pinctrl_get_funcs_count,
 	.get_function_name = tegra_pinctrl_get_func_name,
 	.get_function_groups = tegra_pinctrl_get_func_groups,
@@ -450,6 +452,12 @@ static int tegra_pinconf_reg(struct tegra_pmx *pmx,
 		*bit = g->ioreset_bit;
 		*width = 1;
 		break;
+	case TEGRA_PINCONF_PARAM_RCV_SEL:
+		*bank = g->rcv_sel_bank;
+		*reg = g->rcv_sel_reg;
+		*bit = g->rcv_sel_bit;
+		*width = 1;
+		break;
 	case TEGRA_PINCONF_PARAM_HIGH_SPEED_MODE:
 		*bank = g->drv_bank;
 		*reg = g->drv_reg;
@@ -491,6 +499,12 @@ static int tegra_pinconf_reg(struct tegra_pmx *pmx,
 		*reg = g->drv_reg;
 		*bit = g->slwr_bit;
 		*width = g->slwr_width;
+		break;
+	case TEGRA_PINCONF_PARAM_DRIVE_TYPE:
+		*bank = g->drvtype_bank;
+		*reg = g->drvtype_reg;
+		*bit = g->drvtype_bit;
+		*width = 2;
 		break;
 	default:
 		dev_err(pmx->dev, "Invalid config param %04x\n", param);
@@ -662,7 +676,7 @@ static void tegra_pinconf_config_dbg_show(struct pinctrl_dev *pctldev,
 }
 #endif
 
-static struct pinconf_ops tegra_pinconf_ops = {
+static const struct pinconf_ops tegra_pinconf_ops = {
 	.pin_config_get = tegra_pinconf_get,
 	.pin_config_set = tegra_pinconf_set,
 	.pin_config_group_get = tegra_pinconf_group_get,

@@ -311,24 +311,12 @@ static int max8998_set_voltage_buck_sel(struct regulator_dev *rdev,
 		dev_get_platdata(max8998->iodev->dev);
 	struct i2c_client *i2c = max8998->iodev->i2c;
 	int buck = rdev_get_id(rdev);
-	int reg, shift = 0, mask, ret;
-	int j, previous_sel;
+	int reg, shift = 0, mask, ret, j;
 	static u8 buck1_last_val;
 
 	ret = max8998_get_voltage_register(rdev, &reg, &shift, &mask);
 	if (ret)
 		return ret;
-
-	previous_sel = max8998_get_voltage_sel(rdev);
-
-	/* Check if voltage needs to be changed */
-	/* if previous_voltage equal new voltage, return */
-	if (previous_sel == selector) {
-		dev_dbg(max8998->dev, "No voltage change, old:%d, new:%d\n",
-			regulator_list_voltage_linear(rdev, previous_sel),
-			regulator_list_voltage_linear(rdev, selector));
-		return ret;
-	}
 
 	switch (buck) {
 	case MAX8998_BUCK1:
@@ -677,14 +665,16 @@ static int max8998_pmic_probe(struct platform_device *pdev)
 	    gpio_is_valid(pdata->buck1_set2)) {
 		/* Check if SET1 is not equal to 0 */
 		if (!pdata->buck1_set1) {
-			printk(KERN_ERR "MAX8998 SET1 GPIO defined as 0 !\n");
+			dev_err(&pdev->dev,
+				"MAX8998 SET1 GPIO defined as 0 !\n");
 			WARN_ON(!pdata->buck1_set1);
 			ret = -EIO;
 			goto err_out;
 		}
 		/* Check if SET2 is not equal to 0 */
 		if (!pdata->buck1_set2) {
-			printk(KERN_ERR "MAX8998 SET2 GPIO defined as 0 !\n");
+			dev_err(&pdev->dev,
+				"MAX8998 SET2 GPIO defined as 0 !\n");
 			WARN_ON(!pdata->buck1_set2);
 			ret = -EIO;
 			goto err_out;
@@ -750,7 +740,8 @@ static int max8998_pmic_probe(struct platform_device *pdev)
 	if (gpio_is_valid(pdata->buck2_set3)) {
 		/* Check if SET3 is not equal to 0 */
 		if (!pdata->buck2_set3) {
-			printk(KERN_ERR "MAX8998 SET3 GPIO defined as 0 !\n");
+			dev_err(&pdev->dev,
+				"MAX8998 SET3 GPIO defined as 0 !\n");
 			WARN_ON(!pdata->buck2_set3);
 			ret = -EIO;
 			goto err_out;

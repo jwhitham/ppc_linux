@@ -540,8 +540,8 @@ static int lpc32xx_write_page_lowlevel(struct mtd_info *mtd,
 }
 
 static int lpc32xx_write_page(struct mtd_info *mtd, struct nand_chip *chip,
-			      const uint8_t *buf, int oob_required, int page,
-			      int cached, int raw)
+			uint32_t offset, int data_len, const uint8_t *buf,
+			int oob_required, int page, int cached, int raw)
 {
 	int res;
 
@@ -672,16 +672,10 @@ static int lpc32xx_nand_probe(struct platform_device *pdev)
 	}
 
 	rc = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (rc == NULL) {
-		dev_err(&pdev->dev, "No memory resource found for device!\r\n");
-		return -ENXIO;
-	}
-
-	host->io_base = devm_request_and_ioremap(&pdev->dev, rc);
-	if (host->io_base == NULL) {
-		dev_err(&pdev->dev, "ioremap failed\n");
-		return -EIO;
-	}
+	host->io_base = devm_ioremap_resource(&pdev->dev, rc);
+	if (IS_ERR(host->io_base))
+		return PTR_ERR(host->io_base);
+	
 	host->io_base_phy = rc->start;
 
 	mtd = &host->mtd;

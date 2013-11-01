@@ -21,7 +21,6 @@
 #include <linux/hid.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/usb.h>
 
 #include "hid-ids.h"
 
@@ -390,10 +389,6 @@ static void apple_remove(struct hid_device *hdev)
 }
 
 static const struct hid_device_id apple_devices[] = {
-	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_ATV_IRCONTROL),
-		.driver_data = APPLE_HIDDEV | APPLE_IGNORE_HIDINPUT },
-	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_IRCONTROL4),
-		.driver_data = APPLE_HIDDEV | APPLE_IGNORE_HIDINPUT },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_MIGHTYMOUSE),
 		.driver_data = APPLE_MIGHTYMOUSE | APPLE_INVERT_HWHEEL },
 
@@ -555,23 +550,6 @@ static struct hid_driver apple_driver = {
 	.input_mapping = apple_input_mapping,
 	.input_mapped = apple_input_mapped,
 };
+module_hid_driver(apple_driver);
 
-static int __init apple_init(void)
-{
-	int ret;
-
-	ret = hid_register_driver(&apple_driver);
-	if (ret)
-		pr_err("can't register apple driver\n");
-
-	return ret;
-}
-
-static void __exit apple_exit(void)
-{
-	hid_unregister_driver(&apple_driver);
-}
-
-module_init(apple_init);
-module_exit(apple_exit);
 MODULE_LICENSE("GPL");

@@ -1649,11 +1649,7 @@ struct caam_alg_template {
 };
 
 static struct caam_alg_template driver_algs[] = {
-	/*
-	 * single-pass ipsec_esp descriptor
-	 * authencesn(*,*) is also registered, although not present
-	 * explicitly here.
-	 */
+	/* single-pass ipsec_esp descriptor */
 	{
 		.name = "authenc(hmac(md5),cbc(aes))",
 		.driver_name = "authenc-hmac-md5-cbc-aes-caam",
@@ -2179,7 +2175,6 @@ static int __init caam_algapi_init(void)
 	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {
 		/* TODO: check if h/w supports alg */
 		struct caam_crypto_alg *t_alg;
-		bool done = false;
 
 		t_alg = caam_alg_alloc(&driver_algs[i]);
 		if (IS_ERR(t_alg)) {

@@ -115,7 +115,7 @@ static void __init process_switch(char c)
 			break;
 		}
 		cheetah_pcache_forced_on = 1;
-		add_taint(TAINT_MACHINE_CHECK);
+		add_taint(TAINT_MACHINE_CHECK, LOCKDEP_NOW_UNRELIABLE);
 		cheetah_enable_pcache();
 		break;
 
@@ -555,7 +555,7 @@ void __init setup_arch(char **cmdline_p)
 {
 	/* Initialize PROM console and command line. */
 	*cmdline_p = prom_getbootargs();
-	strcpy(boot_command_line, *cmdline_p);
+	strlcpy(boot_command_line, *cmdline_p, COMMAND_LINE_SIZE);
 	parse_early_param();
 
 	boot_flags_init(*cmdline_p);

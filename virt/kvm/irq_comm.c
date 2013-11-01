@@ -22,6 +22,7 @@
 
 #include <linux/kvm_host.h>
 #include <linux/slab.h>
+#include <linux/export.h>
 #include <trace/events/kvm.h>
 
 #include <asm/msidef.h>
@@ -34,7 +35,8 @@
 #include "ioapic.h"
 
 static int kvm_set_pic_irq(struct kvm_kernel_irq_routing_entry *e,
-			   struct kvm *kvm, int irq_source_id, int level)
+			   struct kvm *kvm, int irq_source_id, int level,
+			   bool line_status)
 {
 #ifdef CONFIG_X86
 	struct kvm_pic *pic = pic_irqchip(kvm);
@@ -45,10 +47,12 @@ static int kvm_set_pic_irq(struct kvm_kernel_irq_routing_entry *e,
 }
 
 static int kvm_set_ioapic_irq(struct kvm_kernel_irq_routing_entry *e,
-			      struct kvm *kvm, int irq_source_id, int level)
+			      struct kvm *kvm, int irq_source_id, int level,
+			      bool line_status)
 {
 	struct kvm_ioapic *ioapic = kvm->arch.vioapic;
-	return kvm_ioapic_set_irq(ioapic, e->irqchip.pin, irq_source_id, level);
+	return kvm_ioapic_set_irq(ioapic, e->irqchip.pin, irq_source_id, level,
+				line_status);
 }
 
 inline static bool kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
@@ -62,7 +66,7 @@ inline static bool kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
 }
 
 int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
-		struct kvm_lapic_irq *irq)
+		struct kvm_lapic_irq *irq, unsigned long *dest_map)
 {
 	int i, r = -1;
 	struct kvm_vcpu *vcpu, *lowest = NULL;
@@ -73,7 +77,7 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 		irq->delivery_mode = APIC_DM_FIXED;
 	}
 
-	if (kvm_irq_delivery_to_apic_fast(kvm, src, irq, &r))
+	if (kvm_irq_delivery_to_apic_fast(kvm, src, irq, &r, dest_map))
 		return r;
 
 	kvm_for_each_vcpu(i, vcpu, kvm) {
@@ -87,7 +91,7 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 		if (!kvm_is_dm_lowest_prio(irq)) {
 			if (r < 0)
 				r = 0;
-			r += kvm_apic_set_irq(vcpu, irq);
+			r += kvm_apic_set_irq(vcpu, irq, dest_map);
 		} else if (kvm_lapic_enabled(vcpu)) {
 			if (!lowest)
 				lowest = vcpu;
@@ -97,7 +101,7 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 	}
 
 	if (lowest)
-		r = kvm_apic_set_irq(lowest, irq);
+		r = kvm_apic_set_irq(lowest, irq, dest_map);
 
 	return r;
 }
@@ -120,7 +124,7 @@ static inline void kvm_set_msi_irq(struct kvm_kernel_irq_routing_entry *e,
 }
 
 int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
-		struct kvm *kvm, int irq_source_id, int level)
+		struct kvm *kvm, int irq_source_id, int level, bool line_status)
 {
 	struct kvm_lapic_irq irq;
 
@@ -129,7 +133,7 @@ int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
 
 	kvm_set_msi_irq(e, &irq);
 
-	return kvm_irq_delivery_to_apic(kvm, NULL, &irq);
+	return kvm_irq_delivery_to_apic(kvm, NULL, &irq, NULL);
 }
 
 
@@ -141,7 +145,7 @@ static int kvm_set_msi_inatomic(struct kvm_kernel_irq_routing_entry *e,
 
 	kvm_set_msi_irq(e, &irq);
 
-	if (kvm_irq_delivery_to_apic_fast(kvm, NULL, &irq, &r))
+	if (kvm_irq_delivery_to_apic_fast(kvm, NULL, &irq, &r, NULL))
 		return r;
 	else
 		return -EWOULDBLOCK;
@@ -159,7 +163,6 @@ int kvm_set_irq_inatomic(struct kvm *kvm, int irq_source_id, u32 irq, int level)
 	struct kvm_kernel_irq_routing_entry *e;
 	int ret = -EINVAL;
 	struct kvm_irq_routing_table *irq_rt;
-	struct hlist_node *n;
 
 	trace_kvm_set_irq(irq, level, irq_source_id);
 
@@ -174,7 +177,7 @@ int kvm_set_irq_inatomic(struct kvm *kvm, int irq_source_id, u32 irq, int level)
 	rcu_read_lock();
 	irq_rt = rcu_dereference(kvm->irq_routing);
 	if (irq < irq_rt->nr_rt_entries)
-		hlist_for_each_entry(e, n, &irq_rt->map[irq], link) {
+		hlist_for_each_entry(e, &irq_rt->map[irq], link) {
 			if (likely(e->type == KVM_IRQ_ROUTING_MSI))
 				ret = kvm_set_msi_inatomic(e, kvm);
 			else
@@ -257,13 +260,12 @@ void kvm_fire_mask_notifiers(struct kvm *kvm, unsigned irqchip, unsigned pin,
 			     bool mask)
 {
 	struct kvm_irq_mask_notifier *kimn;
-	struct hlist_node *n;
 	int gsi;
 
 	rcu_read_lock();
 	gsi = rcu_dereference(kvm->irq_routing)->chip[irqchip][pin];
 	if (gsi != -1)
-		hlist_for_each_entry_rcu(kimn, n, &kvm->mask_notifier_list, link)
+		hlist_for_each_entry_rcu(kimn, &kvm->mask_notifier_list, link)
 			if (kimn->irq == gsi)
 				kimn->func(kimn, mask);
 	rcu_read_unlock();

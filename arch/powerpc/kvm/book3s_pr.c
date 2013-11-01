@@ -34,6 +34,8 @@
 #include <asm/kvm_book3s.h>
 #include <asm/mmu_context.h>
 #include <asm/switch_to.h>
+#include <asm/firmware.h>
+#include <asm/hvcall.h>
 #include <linux/gfp.h>
 #include <linux/sched.h>
 #include <linux/vmalloc.h>
@@ -1032,7 +1034,7 @@ struct kvm_vcpu *kvmppc_core_vcpu_create(struct kvm *kvm, unsigned int id)
 	if (!vcpu_book3s)
 		goto out;
 
-	vcpu_book3s->shadow_vcpu = (struct kvmppc_book3s_shadow_vcpu *)
+	vcpu_book3s->shadow_vcpu =
 		kzalloc(sizeof(*vcpu_book3s->shadow_vcpu), GFP_KERNEL);
 	if (!vcpu_book3s->shadow_vcpu)
 		goto free_vcpu;
@@ -1273,7 +1275,7 @@ int kvmppc_core_prepare_memory_region(struct kvm *kvm,
 
 void kvmppc_core_commit_memory_region(struct kvm *kvm,
 				struct kvm_userspace_memory_region *mem,
-				struct kvm_memory_slot old)
+				const struct kvm_memory_slot *old)
 {
 }
 
@@ -1281,12 +1283,22 @@ void kvmppc_core_flush_memslot(struct kvm *kvm, struct kvm_memory_slot *memslot)
 {
 }
 
+static unsigned int kvm_global_user_count = 0;
+static DEFINE_SPINLOCK(kvm_global_user_count_lock);
+
 int kvmppc_core_init_vm(struct kvm *kvm)
 {
 #ifdef CONFIG_PPC64
 	INIT_LIST_HEAD(&kvm->arch.spapr_tce_tables);
+	INIT_LIST_HEAD(&kvm->arch.rtas_tokens);
 #endif
 
+	if (firmware_has_feature(FW_FEATURE_SET_MODE)) {
+		spin_lock(&kvm_global_user_count_lock);
+		if (++kvm_global_user_count == 1)
+			pSeries_disable_reloc_on_exc();
+		spin_unlock(&kvm_global_user_count_lock);
+	}
 	return 0;
 }
 
@@ -1295,6 +1307,14 @@ void kvmppc_core_destroy_vm(struct kvm *kvm)
 #ifdef CONFIG_PPC64
 	WARN_ON(!list_empty(&kvm->arch.spapr_tce_tables));
 #endif
+
+	if (firmware_has_feature(FW_FEATURE_SET_MODE)) {
+		spin_lock(&kvm_global_user_count_lock);
+		BUG_ON(kvm_global_user_count == 0);
+		if (--kvm_global_user_count == 0)
+			pSeries_enable_reloc_on_exc();
+		spin_unlock(&kvm_global_user_count_lock);
+	}
 }
 
 static int kvmppc_book3s_init(void)

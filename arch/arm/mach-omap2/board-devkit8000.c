@@ -29,6 +29,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/nand.h>
 #include <linux/mmc/host.h>
+#include <linux/usb/phy.h>
 
 #include <linux/regulator/machine.h>
 #include <linux/i2c/twl.h>
@@ -42,8 +43,7 @@
 #include "gpmc.h"
 #include <linux/platform_data/mtd-nand-omap2.h>
 #include <video/omapdss.h>
-#include <video/omap-panel-generic-dpi.h>
-#include <video/omap-panel-tfp410.h>
+#include <video/omap-panel-data.h>
 
 #include <linux/platform_data/spi-omap2-mcspi.h>
 #include <linux/input/matrix_keypad.h>
@@ -103,19 +103,6 @@ static struct omap2_hsmmc_info mmc[] = {
 	{}	/* Terminator */
 };
 
-static int devkit8000_panel_enable_lcd(struct omap_dss_device *dssdev)
-{
-	if (gpio_is_valid(dssdev->reset_gpio))
-		gpio_set_value_cansleep(dssdev->reset_gpio, 1);
-	return 0;
-}
-
-static void devkit8000_panel_disable_lcd(struct omap_dss_device *dssdev)
-{
-	if (gpio_is_valid(dssdev->reset_gpio))
-		gpio_set_value_cansleep(dssdev->reset_gpio, 0);
-}
-
 static struct regulator_consumer_supply devkit8000_vmmc1_supply[] = {
 	REGULATOR_SUPPLY("vmmc", "omap_hsmmc.0"),
 };
@@ -127,8 +114,7 @@ static struct regulator_consumer_supply devkit8000_vio_supply[] = {
 
 static struct panel_generic_dpi_data lcd_panel = {
 	.name			= "innolux_at070tn83",
-	.platform_enable        = devkit8000_panel_enable_lcd,
-	.platform_disable       = devkit8000_panel_disable_lcd,
+	/* gpios filled in code */
 };
 
 static struct omap_dss_device devkit8000_lcd_device = {
@@ -210,8 +196,6 @@ static struct gpio_led gpio_leds[];
 static int devkit8000_twl_gpio_setup(struct device *dev,
 		unsigned gpio, unsigned ngpio)
 {
-	int ret;
-
 	/* gpio + 0 is "mmc0_cd" (input/IRQ) */
 	mmc[0].gpio_cd = gpio + 0;
 	omap_hsmmc_late_init(mmc);
@@ -220,13 +204,8 @@ static int devkit8000_twl_gpio_setup(struct device *dev,
 	gpio_leds[2].gpio = gpio + TWL4030_GPIO_MAX + 1;
 
 	/* TWL4030_GPIO_MAX + 0 is "LCD_PWREN" (out, active high) */
-	devkit8000_lcd_device.reset_gpio = gpio + TWL4030_GPIO_MAX + 0;
-	ret = gpio_request_one(devkit8000_lcd_device.reset_gpio,
-			       GPIOF_OUT_INIT_LOW, "LCD_PWREN");
-	if (ret < 0) {
-		devkit8000_lcd_device.reset_gpio = -EINVAL;
-		printk(KERN_ERR "Failed to request GPIO for LCD_PWRN\n");
-	}
+	lcd_panel.num_gpios = 1;
+	lcd_panel.gpios[0] = gpio + TWL4030_GPIO_MAX + 0;
 
 	/* gpio + 7 is "DVI_PD" (out, active low) */
 	dvi_panel.power_down_gpio = gpio + 7;
@@ -435,16 +414,8 @@ static struct platform_device *devkit8000_devices[] __initdata = {
 	&omap_dm9000_dev,
 };
 
-static const struct usbhs_omap_board_data usbhs_bdata __initconst = {
-
+static struct usbhs_omap_platform_data usbhs_bdata __initdata = {
 	.port_mode[0] = OMAP_EHCI_PORT_MODE_PHY,
-	.port_mode[1] = OMAP_USBHS_PORT_MODE_UNUSED,
-	.port_mode[2] = OMAP_USBHS_PORT_MODE_UNUSED,
-
-	.phy_reset  = true,
-	.reset_gpio_port[0]  = -EINVAL,
-	.reset_gpio_port[1]  = -EINVAL,
-	.reset_gpio_port[2]  = -EINVAL
 };
 
 #ifdef CONFIG_OMAP_MUX
@@ -622,12 +593,13 @@ static void __init devkit8000_init(void)
 
 	omap_ads7846_init(2, OMAP3_DEVKIT_TS_GPIO, 0, NULL);
 
+	usb_bind_phy("musb-hdrc.0.auto", 0, "twl4030_usb");
 	usb_musb_init(NULL);
 	usbhs_init(&usbhs_bdata);
 	board_nand_init(devkit8000_nand_partitions,
 			ARRAY_SIZE(devkit8000_nand_partitions), NAND_CS,
 			NAND_BUSWIDTH_16, NULL);
-	omap_twl4030_audio_init("omap3beagle");
+	omap_twl4030_audio_init("omap3beagle", NULL);
 
 	/* Ensure SDRC pins are mux'd for self-refresh */
 	omap_mux_init_signal("sdrc_cke0", OMAP_PIN_OUTPUT);
@@ -643,6 +615,6 @@ MACHINE_START(DEVKIT8000, "OMAP3 Devkit8000")
 	.handle_irq	= omap3_intc_handle_irq,
 	.init_machine	= devkit8000_init,
 	.init_late	= omap35xx_init_late,
-	.timer		= &omap3_secure_timer,
+	.init_time	= omap3_secure_sync32k_timer_init,
 	.restart	= omap3xxx_restart,
 MACHINE_END

@@ -1,4 +1,4 @@
-/* Copyright (C) 2010-2012 B.A.T.M.A.N. contributors:
+/* Copyright (C) 2010-2013 B.A.T.M.A.N. contributors:
  *
  * Andreas Langer
  *
@@ -122,7 +122,7 @@ batadv_frag_search_packet(struct list_head *head,
 {
 	struct batadv_frag_packet_list_entry *tfp;
 	struct batadv_unicast_frag_packet *tmp_up = NULL;
-	int is_head_tmp, is_head;
+	bool is_head_tmp, is_head;
 	uint16_t search_seqno;
 
 	if (up->flags & BATADV_UNI_FRAG_HEAD)
@@ -130,10 +130,9 @@ batadv_frag_search_packet(struct list_head *head,
 	else
 		search_seqno = ntohs(up->seqno)-1;
 
-	is_head = !!(up->flags & BATADV_UNI_FRAG_HEAD);
+	is_head = up->flags & BATADV_UNI_FRAG_HEAD;
 
 	list_for_each_entry(tfp, head, list) {
-
 		if (!tfp->skb)
 			continue;
 
@@ -143,7 +142,7 @@ batadv_frag_search_packet(struct list_head *head,
 		tmp_up = (struct batadv_unicast_frag_packet *)tfp->skb->data;
 
 		if (tfp->seqno == search_seqno) {
-			is_head_tmp = !!(tmp_up->flags & BATADV_UNI_FRAG_HEAD);
+			is_head_tmp = tmp_up->flags & BATADV_UNI_FRAG_HEAD;
 			if (is_head_tmp != is_head)
 				return tfp;
 			else
@@ -162,7 +161,6 @@ void batadv_frag_list_free(struct list_head *head)
 	struct batadv_frag_packet_list_entry *pf, *tmp_pf;
 
 	if (!list_empty(head)) {
-
 		list_for_each_entry_safe(pf, tmp_pf, head, list) {
 			kfree_skb(pf->skb);
 			list_del(&pf->list);

@@ -20,6 +20,7 @@
 #include <linux/swap.h>
 #include <linux/gfs2_ondisk.h>
 #include <linux/backing-dev.h>
+#include <linux/aio.h>
 
 #include "gfs2.h"
 #include "incore.h"
@@ -51,7 +52,7 @@ static void gfs2_page_add_databufs(struct gfs2_inode *ip, struct page *page,
 			continue;
 		if (gfs2_is_jdata(ip))
 			set_buffer_uptodate(bh);
-		gfs2_trans_add_bh(ip->i_gl, bh, 0);
+		gfs2_trans_add_data(ip->i_gl, bh);
 	}
 }
 
@@ -230,16 +231,14 @@ out_ignore:
 }
 
 /**
- * gfs2_writeback_writepages - Write a bunch of dirty pages back to disk
+ * gfs2_writepages - Write a bunch of dirty pages back to disk
  * @mapping: The mapping to write
  * @wbc: Write-back control
  *
- * For the data=writeback case we can already ignore buffer heads
- * and write whole extents at once. This is a big reduction in the
- * number of I/O requests we send and the bmap calls we make in this case.
+ * Used for both ordered and writeback modes.
  */
-static int gfs2_writeback_writepages(struct address_space *mapping,
-				     struct writeback_control *wbc)
+static int gfs2_writepages(struct address_space *mapping,
+			   struct writeback_control *wbc)
 {
 	return mpage_writepages(mapping, wbc, gfs2_get_block_noalloc);
 }
@@ -852,7 +851,7 @@ static int gfs2_write_end(struct file *file, struct address_space *mapping,
 		goto failed;
 	}
 
-	gfs2_trans_add_bh(ip->i_gl, dibh, 1);
+	gfs2_trans_add_meta(ip->i_gl, dibh);
 
 	if (gfs2_is_stuffed(ip))
 		return gfs2_stuffed_write_end(inode, dibh, pos, len, copied, page);
@@ -1057,7 +1056,7 @@ int gfs2_releasepage(struct page *page, gfp_t gfp_mask)
 		if (atomic_read(&bh->b_count))
 			goto cannot_release;
 		bd = bh->b_private;
-		if (bd && bd->bd_ail)
+		if (bd && bd->bd_tr)
 			goto cannot_release;
 		if (buffer_pinned(bh) || buffer_dirty(bh))
 			goto not_possible;
@@ -1102,7 +1101,7 @@ cannot_release:
 
 static const struct address_space_operations gfs2_writeback_aops = {
 	.writepage = gfs2_writeback_writepage,
-	.writepages = gfs2_writeback_writepages,
+	.writepages = gfs2_writepages,
 	.readpage = gfs2_readpage,
 	.readpages = gfs2_readpages,
 	.write_begin = gfs2_write_begin,
@@ -1118,6 +1117,7 @@ static const struct address_space_operations gfs2_writeback_aops = {
 
 static const struct address_space_operations gfs2_ordered_aops = {
 	.writepage = gfs2_ordered_writepage,
+	.writepages = gfs2_writepages,
 	.readpage = gfs2_readpage,
 	.readpages = gfs2_readpages,
 	.write_begin = gfs2_write_begin,

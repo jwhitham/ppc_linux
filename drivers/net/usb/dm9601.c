@@ -118,7 +118,7 @@ static int dm_read_shared_word(struct usbnet *dev, int phy, u8 reg, __le16 *valu
 	dm_write_reg(dev, DM_SHARED_CTRL, phy ? 0xc : 0x4);
 
 	for (i = 0; i < DM_TIMEOUT; i++) {
-		u8 tmp;
+		u8 tmp = 0;
 
 		udelay(1);
 		ret = dm_read_reg(dev, DM_SHARED_CTRL, &tmp);
@@ -161,7 +161,7 @@ static int dm_write_shared_word(struct usbnet *dev, int phy, u8 reg, __le16 valu
 	dm_write_reg(dev, DM_SHARED_CTRL, phy ? 0x1a : 0x12);
 
 	for (i = 0; i < DM_TIMEOUT; i++) {
-		u8 tmp;
+		u8 tmp = 0;
 
 		udelay(1);
 		ret = dm_read_reg(dev, DM_SHARED_CTRL, &tmp);
@@ -524,12 +524,7 @@ static void dm9601_status(struct usbnet *dev, struct urb *urb)
 
 	link = !!(buf[0] & 0x40);
 	if (netif_carrier_ok(dev->net) != link) {
-		if (link) {
-			netif_carrier_on(dev->net);
-			usbnet_defer_kevent (dev, EVENT_LINK_RESET);
-		}
-		else
-			netif_carrier_off(dev->net);
+		usbnet_link_change(dev, link, 1);
 		netdev_dbg(dev->net, "Link Status is: %d\n", link);
 	}
 }

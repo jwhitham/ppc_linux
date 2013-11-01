@@ -13,31 +13,32 @@
 #include <linux/err.h>
 #include <linux/delay.h>
 #include <linux/pci.h>
+#include <asm/pci_debug.h>
 #include <asm/pci_clp.h>
 
 /*
  * Call Logical Processor
  * Retry logic is handled by the caller.
  */
-static inline u8 clp_instr(void *req)
+static inline u8 clp_instr(void *data)
 {
-	u64 ilpm;
+	struct { u8 _[CLP_BLK_SIZE]; } *req = data;
+	u64 ignored;
 	u8 cc;
 
 	asm volatile (
-		"	.insn	rrf,0xb9a00000,%[ilpm],%[req],0x0,0x2\n"
+		"	.insn	rrf,0xb9a00000,%[ign],%[req],0x0,0x2\n"
 		"	ipm	%[cc]\n"
 		"	srl	%[cc],28\n"
-		: [cc] "=d" (cc), [ilpm] "=d" (ilpm)
+		: [cc] "=d" (cc), [ign] "=d" (ignored), "+m" (*req)
 		: [req] "a" (req)
-		: "cc", "memory");
+		: "cc");
 	return cc;
 }
 
 static void *clp_alloc_block(void)
 {
-	struct page *page = alloc_pages(GFP_KERNEL, get_order(CLP_BLK_SIZE));
-	return (page) ? page_address(page) : NULL;
+	return (void *) __get_free_pages(GFP_KERNEL, get_order(CLP_BLK_SIZE));
 }
 
 static void clp_free_block(void *ptr)
@@ -144,6 +145,7 @@ int clp_add_pci_device(u32 fid, u32 fh, int configured)
 	struct zpci_dev *zdev;
 	int rc;
 
+	zpci_dbg(3, "add fid:%x, fh:%x, c:%d\n", fid, fh, configured);
 	zdev = zpci_alloc_device();
 	if (IS_ERR(zdev))
 		return PTR_ERR(zdev);
@@ -204,8 +206,8 @@ static int clp_set_pci_fn(u32 *fh, u8 nr_dma_as, u8 command)
 	if (!rc && rrb->response.hdr.rsp == CLP_RC_OK)
 		*fh = rrb->response.fh;
 	else {
-		pr_err("Set PCI FN failed with response: %x  cc: %d\n",
-			rrb->response.hdr.rsp, rc);
+		zpci_dbg(0, "SPF fh:%x, cc:%d, resp:%x\n", *fh, rc,
+			 rrb->response.hdr.rsp);
 		rc = -EIO;
 	}
 	clp_free_block(rrb);
@@ -221,6 +223,8 @@ int clp_enable_fh(struct zpci_dev *zdev, u8 nr_dma_as)
 	if (!rc)
 		/* Success -> store enabled handle in zdev */
 		zdev->fh = fh;
+
+	zpci_dbg(3, "ena fid:%x, fh:%x, rc:%d\n", zdev->fid, zdev->fh, rc);
 	return rc;
 }
 
@@ -237,9 +241,8 @@ int clp_disable_fh(struct zpci_dev *zdev)
 	if (!rc)
 		/* Success -> store disabled handle in zdev */
 		zdev->fh = fh;
-	else
-		dev_err(&zdev->pdev->dev,
-			"Failed to disable fn handle: 0x%x\n", fh);
+
+	zpci_dbg(3, "dis fid:%x, fh:%x, rc:%d\n", zdev->fid, zdev->fh, rc);
 	return rc;
 }
 

@@ -265,9 +265,9 @@ static int spi_gpio_setup(struct spi_device *spi)
 		}
 	}
 	if (!status) {
-		status = spi_bitbang_setup(spi);
 		/* in case it was initialized from static board data */
 		spi_gpio->cs_gpios[spi->chip_select] = cs;
+		status = spi_bitbang_setup(spi);
 	}
 
 	if (status) {
@@ -365,9 +365,26 @@ static int spi_gpio_probe_dt(struct platform_device *pdev)
 	if (!pdata)
 		return -ENOMEM;
 
-	pdata->sck = of_get_named_gpio(np, "gpio-sck", 0);
-	pdata->miso = of_get_named_gpio(np, "gpio-miso", 0);
-	pdata->mosi = of_get_named_gpio(np, "gpio-mosi", 0);
+	ret = of_get_named_gpio(np, "gpio-sck", 0);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "gpio-sck property not found\n");
+		goto error_free;
+	}
+	pdata->sck = ret;
+
+	ret = of_get_named_gpio(np, "gpio-miso", 0);
+	if (ret < 0) {
+		dev_info(&pdev->dev, "gpio-miso property not found, switching to no-rx mode\n");
+		pdata->miso = SPI_GPIO_NO_MISO;
+	} else
+		pdata->miso = ret;
+
+	ret = of_get_named_gpio(np, "gpio-mosi", 0);
+	if (ret < 0) {
+		dev_info(&pdev->dev, "gpio-mosi property not found, switching to no-tx mode\n");
+		pdata->mosi = SPI_GPIO_NO_MOSI;
+	} else
+		pdata->mosi = ret;
 
 	ret = of_property_read_u32(np, "num-chipselects", &tmp);
 	if (ret < 0) {

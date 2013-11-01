@@ -27,7 +27,7 @@
 #define   BCMA_CC_FLASHT_NONE		0x00000000	/* No flash */
 #define   BCMA_CC_FLASHT_STSER		0x00000100	/* ST serial flash */
 #define   BCMA_CC_FLASHT_ATSER		0x00000200	/* Atmel serial flash */
-#define   BCMA_CC_FLASHT_NFLASH		0x00000200	/* NAND flash */
+#define   BCMA_CC_FLASHT_NAND		0x00000300	/* NAND flash */
 #define	  BCMA_CC_FLASHT_PARA		0x00000700	/* Parallel flash */
 #define  BCMA_CC_CAP_PLLT		0x00038000	/* PLL Type */
 #define   BCMA_PLLTYPE_NONE		0x00000000
@@ -104,6 +104,7 @@
 #define  BCMA_CC_CHIPST_4706_MIPS_BENDIAN	BIT(3) /* 0: little, 1: big endian */
 #define  BCMA_CC_CHIPST_4706_PCIE1_DISABLE	BIT(5) /* PCIE1 enable strap pin */
 #define  BCMA_CC_CHIPST_5357_NAND_BOOT		BIT(4) /* NAND boot, valid for CC rev 38 and/or BCM5357 */
+#define  BCMA_CC_CHIPST_4360_XTAL_40MZ		0x00000001
 #define BCMA_CC_JCMD			0x0030		/* Rev >= 10 only */
 #define  BCMA_CC_JCMD_START		0x80000000
 #define  BCMA_CC_JCMD_BUSY		0x80000000
@@ -315,6 +316,9 @@
 #define BCMA_CC_PMU_CTL			0x0600 /* PMU control */
 #define  BCMA_CC_PMU_CTL_ILP_DIV	0xFFFF0000 /* ILP div mask */
 #define  BCMA_CC_PMU_CTL_ILP_DIV_SHIFT	16
+#define  BCMA_CC_PMU_CTL_RES		0x00006000 /* reset control mask */
+#define  BCMA_CC_PMU_CTL_RES_SHIFT	13
+#define  BCMA_CC_PMU_CTL_RES_RELOAD	0x2	/* reload POR values */
 #define  BCMA_CC_PMU_CTL_PLL_UPD	0x00000400
 #define  BCMA_CC_PMU_CTL_NOILPONW	0x00000200 /* No ILP on wait */
 #define  BCMA_CC_PMU_CTL_HTREQEN	0x00000100 /* HT req enable */
@@ -528,6 +532,7 @@ struct bcma_sflash {
 	u32 size;
 
 	struct mtd_info *mtd;
+	void *priv;
 };
 #endif
 
@@ -606,6 +611,8 @@ void bcma_chipco_bcm4331_ext_pa_lines_ctl(struct bcma_drv_cc *cc, bool enable);
 
 extern u32 bcma_chipco_watchdog_timer_set(struct bcma_drv_cc *cc, u32 ticks);
 
+extern u32 bcma_chipco_get_alp_clock(struct bcma_drv_cc *cc);
+
 void bcma_chipco_irq_mask(struct bcma_drv_cc *cc, u32 mask, u32 value);
 
 u32 bcma_chipco_irq_status(struct bcma_drv_cc *cc, u32 mask);
@@ -633,5 +640,7 @@ extern void bcma_chipco_chipctl_maskset(struct bcma_drv_cc *cc,
 extern void bcma_chipco_regctl_maskset(struct bcma_drv_cc *cc,
 				       u32 offset, u32 mask, u32 set);
 extern void bcma_pmu_spuravoid_pllupdate(struct bcma_drv_cc *cc, int spuravoid);
+
+extern u32 bcma_pmu_get_bus_clock(struct bcma_drv_cc *cc);
 
 #endif /* LINUX_BCMA_DRIVER_CC_H_ */

@@ -66,13 +66,6 @@ static void sctp_assoc_bh_rcv(struct work_struct *work);
 static void sctp_assoc_free_asconf_acks(struct sctp_association *asoc);
 static void sctp_assoc_free_asconf_queue(struct sctp_association *asoc);
 
-/* Keep track of the new idr low so that we don't re-use association id
- * numbers too fast.  It is protected by they idr spin lock is in the
- * range of 1 - INT_MAX.
- */
-static u32 idr_low = 1;
-
-
 /* 1st Level Abstractions. */
 
 /* Initialize a new association from provided memory. */
@@ -104,8 +97,7 @@ static struct sctp_association *sctp_association_init(struct sctp_association *a
 
 	/* Initialize the object handling fields.  */
 	atomic_set(&asoc->base.refcnt, 1);
-	asoc->base.dead = 0;
-	asoc->base.malloced = 0;
+	asoc->base.dead = false;
 
 	/* Initialize the bind addr area.  */
 	sctp_bind_addr_init(&asoc->base.bind_addr, ep->base.bind_addr.port);
@@ -371,7 +363,6 @@ struct sctp_association *sctp_association_new(const struct sctp_endpoint *ep,
 	if (!sctp_association_init(asoc, ep, sk, scope, gfp))
 		goto fail_init;
 
-	asoc->base.malloced = 1;
 	SCTP_DBG_OBJCNT_INC(assoc);
 	SCTP_DEBUG_PRINTK("Created asoc %p\n", asoc);
 
@@ -409,7 +400,7 @@ void sctp_association_free(struct sctp_association *asoc)
 	/* Mark as dead, so other users can know this structure is
 	 * going away.
 	 */
-	asoc->base.dead = 1;
+	asoc->base.dead = true;
 
 	/* Dispose of any data lying around in the outqueue. */
 	sctp_outq_free(&asoc->outqueue);
@@ -434,8 +425,7 @@ void sctp_association_free(struct sctp_association *asoc)
 	 * on our state.
 	 */
 	for (i = SCTP_EVENT_TIMEOUT_NONE; i < SCTP_NUM_TIMEOUT_TYPES; ++i) {
-		if (timer_pending(&asoc->timers[i]) &&
-		    del_timer(&asoc->timers[i]))
+		if (del_timer(&asoc->timers[i]))
 			sctp_association_put(asoc);
 	}
 
@@ -485,10 +475,8 @@ static void sctp_association_destroy(struct sctp_association *asoc)
 
 	WARN_ON(atomic_read(&asoc->rmem_alloc));
 
-	if (asoc->base.malloced) {
-		kfree(asoc);
-		SCTP_DBG_OBJCNT_DEC(assoc);
-	}
+	kfree(asoc);
+	SCTP_DBG_OBJCNT_DEC(assoc);
 }
 
 /* Change the primary destination address for the peer. */
@@ -1080,7 +1068,7 @@ struct sctp_transport *sctp_assoc_lookup_tsn(struct sctp_association *asoc,
 			transports) {
 
 		if (transport == active)
-			break;
+			continue;
 		list_for_each_entry(chunk, &transport->transmitted,
 				transmitted_list) {
 			if (key == chunk->subh.data_hdr->tsn) {
@@ -1497,7 +1485,7 @@ void sctp_assoc_rwnd_increase(struct sctp_association *asoc, unsigned int len)
 
 		/* Stop the SACK timer.  */
 		timer = &asoc->timers[SCTP_EVENT_TIMEOUT_SACK];
-		if (timer_pending(timer) && del_timer(timer))
+		if (del_timer(timer))
 			sctp_association_put(asoc);
 	}
 }
@@ -1592,32 +1580,26 @@ int sctp_assoc_lookup_laddr(struct sctp_association *asoc,
 /* Set an association id for a given association */
 int sctp_assoc_set_id(struct sctp_association *asoc, gfp_t gfp)
 {
-	int assoc_id;
-	int error = 0;
+	bool preload = gfp & __GFP_WAIT;
+	int ret;
 
 	/* If the id is already assigned, keep it. */
 	if (asoc->assoc_id)
-		return error;
-retry:
-	if (unlikely(!idr_pre_get(&sctp_assocs_id, gfp)))
-		return -ENOMEM;
+		return 0;
 
+	if (preload)
+		idr_preload(gfp);
 	spin_lock_bh(&sctp_assocs_id_lock);
-	error = idr_get_new_above(&sctp_assocs_id, (void *)asoc,
-				    idr_low, &assoc_id);
-	if (!error) {
-		idr_low = assoc_id + 1;
-		if (idr_low == INT_MAX)
-			idr_low = 1;
-	}
+	/* 0 is not a valid assoc_id, must be >= 1 */
+	ret = idr_alloc_cyclic(&sctp_assocs_id, asoc, 1, 0, GFP_NOWAIT);
 	spin_unlock_bh(&sctp_assocs_id_lock);
-	if (error == -EAGAIN)
-		goto retry;
-	else if (error)
-		return error;
+	if (preload)
+		idr_preload_end();
+	if (ret < 0)
+		return ret;
 
-	asoc->assoc_id = (sctp_assoc_t) assoc_id;
-	return error;
+	asoc->assoc_id = (sctp_assoc_t)ret;
+	return 0;
 }
 
 /* Free the ASCONF queue */

@@ -94,15 +94,16 @@ struct sdhci_host {
 #define SDHCI_QUIRK2_HOST_NO_CMD23			(1<<1)
 /* The system physically doesn't support 1.8v, even if the host does */
 #define SDHCI_QUIRK2_NO_1_8_V				(1<<2)
+#define SDHCI_QUIRK2_PRESET_VALUE_BROKEN		(1<<3)
 /* Controller can't perform reset all successfully */
-#define SDHCI_QUIRK2_BROKEN_RESET_ALL			(1<<3)
+#define SDHCI_QUIRK2_BROKEN_RESET_ALL			(1<<4)
 /* Controller need long time to generate command complete interrupt */
-#define SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ		(1<<4)
+#define SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ		(1<<5)
 /* Controller can only supports 1.8V, but the peripheral hardware
  * circuit has capability to support 3.3V
  */
-#define SDHCI_QUIRK2_CIRCUIT_SUPPORT_VS33		(1<<5)
-#define SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD		(1<<6)
+#define SDHCI_QUIRK2_CIRCUIT_SUPPORT_VS33		(1<<6)
+#define SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD		(1<<7)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */

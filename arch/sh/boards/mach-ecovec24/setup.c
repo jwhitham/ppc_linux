@@ -254,11 +254,13 @@ static int usbhs_get_id(struct platform_device *pdev)
 	return gpio_get_value(GPIO_PTB3);
 }
 
-static void usbhs_phy_reset(struct platform_device *pdev)
+static int usbhs_phy_reset(struct platform_device *pdev)
 {
 	/* enable vbus if HOST */
 	if (!gpio_get_value(GPIO_PTB3))
 		gpio_set_value(GPIO_PTB5, 1);
+
+	return 0;
 }
 
 static struct renesas_usbhs_platform_info usbhs_info = {
@@ -887,12 +889,6 @@ static struct platform_device camera_devices[] = {
 };
 
 /* FSI */
-static struct sh_fsi_platform_info fsi_info = {
-	.port_b = {
-		.flags = SH_FSI_BRS_INV,
-	},
-};
-
 static struct resource fsi_resources[] = {
 	[0] = {
 		.name	= "FSI",
@@ -911,25 +907,22 @@ static struct platform_device fsi_device = {
 	.id		= 0,
 	.num_resources	= ARRAY_SIZE(fsi_resources),
 	.resource	= fsi_resources,
-	.dev	= {
-		.platform_data	= &fsi_info,
-	},
-};
-
-static struct asoc_simple_dai_init_info fsi_da7210_init_info = {
-	.fmt		= SND_SOC_DAIFMT_I2S,
-	.codec_daifmt	= SND_SOC_DAIFMT_CBM_CFM,
-	.cpu_daifmt	= SND_SOC_DAIFMT_CBS_CFS,
 };
 
 static struct asoc_simple_card_info fsi_da7210_info = {
 	.name		= "DA7210",
 	.card		= "FSIB-DA7210",
-	.cpu_dai	= "fsib-dai",
 	.codec		= "da7210.0-001a",
 	.platform	= "sh_fsi.0",
-	.codec_dai	= "da7210-hifi",
-	.init		= &fsi_da7210_init_info,
+	.daifmt		= SND_SOC_DAIFMT_I2S,
+	.cpu_dai = {
+		.name	= "fsib-dai",
+		.fmt	= SND_SOC_DAIFMT_CBS_CFS | SND_SOC_DAIFMT_IB_NF,
+	},
+	.codec_dai = {
+		.name	= "da7210-hifi",
+		.fmt	= SND_SOC_DAIFMT_CBM_CFM,
+	},
 };
 
 static struct platform_device fsi_da7210_device = {

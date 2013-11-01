@@ -1,6 +1,12 @@
 #ifndef TESTS_H
 #define TESTS_H
 
+enum {
+	TEST_OK   =  0,
+	TEST_FAIL = -1,
+	TEST_SKIP = -2,
+};
+
 /* Tests */
 int test__vmlinux_matches_kallsyms(void);
 int test__open_syscall_event(void);
@@ -15,8 +21,11 @@ int test__pmu(void);
 int test__attr(void);
 int test__dso_data(void);
 int test__parse_events(void);
-
-/* Util */
-int trace_event__id(const char *evname);
+int test__hists_link(void);
+int test__python_use(void);
+int test__bp_signal(void);
+int test__bp_signal_overflow(void);
+int test__task_exit(void);
+int test__sw_clock_freq(void);
 
 #endif /* TESTS_H */

@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2013, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -113,9 +113,10 @@ struct acpi_pkg_info {
 	u32 num_packages;
 };
 
+/* Object reference counts */
+
 #define REF_INCREMENT       (u16) 0
 #define REF_DECREMENT       (u16) 1
-#define REF_FORCE_DELETE    (u16) 2
 
 /* acpi_ut_dump_buffer */
 
@@ -421,7 +422,7 @@ acpi_ut_get_object_size(union acpi_operand_object *obj, acpi_size * obj_length);
  */
 acpi_status acpi_ut_initialize_interfaces(void);
 
-void acpi_ut_interface_terminate(void);
+acpi_status acpi_ut_interface_terminate(void);
 
 acpi_status acpi_ut_install_interface(acpi_string interface_name);
 
@@ -430,6 +431,26 @@ acpi_status acpi_ut_remove_interface(acpi_string interface_name);
 struct acpi_interface_info *acpi_ut_get_interface(acpi_string interface_name);
 
 acpi_status acpi_ut_osi_implementation(struct acpi_walk_state *walk_state);
+
+/*
+ * utpredef - support for predefined names
+ */
+const union acpi_predefined_info *acpi_ut_get_next_predefined_method(const union
+								     acpi_predefined_info
+								     *this_name);
+
+const union acpi_predefined_info *acpi_ut_match_predefined_method(char *name);
+
+const union acpi_predefined_info *acpi_ut_match_resource_name(char *name);
+
+void
+acpi_ut_display_predefined_method(char *buffer,
+				  const union acpi_predefined_info *this_name,
+				  u8 multi_line);
+
+void acpi_ut_get_expected_return_types(char *buffer, u32 expected_btypes);
+
+u32 acpi_ut_get_resource_bit_width(char *buffer, u16 types);
 
 /*
  * utstate - Generic state creation/cache routines
@@ -483,38 +504,17 @@ acpi_ut_short_divide(u64 in_dividend,
 /*
  * utmisc
  */
-void ut_convert_backslashes(char *pathname);
-
-const char *acpi_ut_validate_exception(acpi_status status);
+const struct acpi_exception_info *acpi_ut_validate_exception(acpi_status
+							     status);
 
 u8 acpi_ut_is_pci_root_bridge(char *id);
 
 u8 acpi_ut_is_aml_table(struct acpi_table_header *table);
 
-acpi_status acpi_ut_allocate_owner_id(acpi_owner_id * owner_id);
-
-void acpi_ut_release_owner_id(acpi_owner_id * owner_id);
-
 acpi_status
 acpi_ut_walk_package_tree(union acpi_operand_object *source_object,
 			  void *target_object,
 			  acpi_pkg_callback walk_callback, void *context);
-
-void acpi_ut_strupr(char *src_string);
-
-void acpi_ut_strlwr(char *src_string);
-
-int acpi_ut_stricmp(char *string1, char *string2);
-
-void acpi_ut_print_string(char *string, u8 max_length);
-
-u8 acpi_ut_valid_acpi_name(u32 name);
-
-void acpi_ut_repair_name(char *name);
-
-u8 acpi_ut_valid_acpi_char(char character, u32 position);
-
-acpi_status acpi_ut_strtoul64(char *string, u32 base, u64 *ret_integer);
 
 /* Values for Base above (16=Hex, 10=Decimal) */
 
@@ -532,15 +532,25 @@ acpi_ut_display_init_pathname(u8 type,
 #endif
 
 /*
+ * utownerid - Support for Table/Method Owner IDs
+ */
+acpi_status acpi_ut_allocate_owner_id(acpi_owner_id * owner_id);
+
+void acpi_ut_release_owner_id(acpi_owner_id * owner_id);
+
+/*
  * utresrc
  */
 acpi_status
-acpi_ut_walk_aml_resources(u8 *aml,
+acpi_ut_walk_aml_resources(struct acpi_walk_state *walk_state,
+			   u8 *aml,
 			   acpi_size aml_length,
 			   acpi_walk_aml_callback user_function,
 			   void **context);
 
-acpi_status acpi_ut_validate_resource(void *aml, u8 *return_index);
+acpi_status
+acpi_ut_validate_resource(struct acpi_walk_state *walk_state,
+			  void *aml, u8 *return_index);
 
 u32 acpi_ut_get_descriptor_length(void *aml);
 
@@ -552,6 +562,27 @@ u8 acpi_ut_get_resource_type(void *aml);
 
 acpi_status
 acpi_ut_get_resource_end_tag(union acpi_operand_object *obj_desc, u8 **end_tag);
+
+/*
+ * utstring - String and character utilities
+ */
+void acpi_ut_strupr(char *src_string);
+
+void acpi_ut_strlwr(char *src_string);
+
+int acpi_ut_stricmp(char *string1, char *string2);
+
+acpi_status acpi_ut_strtoul64(char *string, u32 base, u64 *ret_integer);
+
+void acpi_ut_print_string(char *string, u8 max_length);
+
+void ut_convert_backslashes(char *pathname);
+
+u8 acpi_ut_valid_acpi_name(u32 name);
+
+u8 acpi_ut_valid_acpi_char(char character, u32 position);
+
+void acpi_ut_repair_name(char *name);
 
 /*
  * utmutex - mutex support

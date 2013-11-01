@@ -107,11 +107,12 @@ Configuration options: not applicable, uses PCI auto config
 
  */
 
-#include "../comedidev.h"
-
+#include <linux/pci.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/firmware.h>
+
+#include "../comedidev.h"
 
 #include "8255.h"
 
@@ -461,9 +462,9 @@ static void daqboard2000_resetLocalBus(struct comedi_device *dev)
 	struct daqboard2000_private *devpriv = dev->private;
 
 	writel(DAQBOARD2000_SECRLocalBusHi, devpriv->plx + 0x6c);
-	udelay(10000);
+	mdelay(10);
 	writel(DAQBOARD2000_SECRLocalBusLo, devpriv->plx + 0x6c);
-	udelay(10000);
+	mdelay(10);
 }
 
 static void daqboard2000_reloadPLX(struct comedi_device *dev)
@@ -471,11 +472,11 @@ static void daqboard2000_reloadPLX(struct comedi_device *dev)
 	struct daqboard2000_private *devpriv = dev->private;
 
 	writel(DAQBOARD2000_SECRReloadLo, devpriv->plx + 0x6c);
-	udelay(10000);
+	mdelay(10);
 	writel(DAQBOARD2000_SECRReloadHi, devpriv->plx + 0x6c);
-	udelay(10000);
+	mdelay(10);
 	writel(DAQBOARD2000_SECRReloadLo, devpriv->plx + 0x6c);
-	udelay(10000);
+	mdelay(10);
 }
 
 static void daqboard2000_pulseProgPin(struct comedi_device *dev)
@@ -483,9 +484,9 @@ static void daqboard2000_pulseProgPin(struct comedi_device *dev)
 	struct daqboard2000_private *devpriv = dev->private;
 
 	writel(DAQBOARD2000_SECRProgPinHi, devpriv->plx + 0x6c);
-	udelay(10000);
+	mdelay(10);
 	writel(DAQBOARD2000_SECRProgPinLo, devpriv->plx + 0x6c);
-	udelay(10000);		/* Not in the original code, but I like symmetry... */
+	mdelay(10);	/* Not in the original code, but I like symmetry... */
 }
 
 static int daqboard2000_pollCPLD(struct comedi_device *dev, int mask)
@@ -708,15 +709,12 @@ static int daqboard2000_auto_attach(struct comedi_device *dev,
 		return -ENOMEM;
 	dev->private = devpriv;
 
-	result = comedi_pci_enable(pcidev, dev->driver->driver_name);
-	if (result < 0)
+	result = comedi_pci_enable(dev);
+	if (result)
 		return result;
-	dev->iobase = 1;	/* the "detach" needs this */
 
-	devpriv->plx = ioremap(pci_resource_start(pcidev, 0),
-			       pci_resource_len(pcidev, 0));
-	devpriv->daq = ioremap(pci_resource_start(pcidev, 2),
-			       pci_resource_len(pcidev, 2));
+	devpriv->plx = pci_ioremap_bar(pcidev, 0);
+	devpriv->daq = pci_ioremap_bar(pcidev, 2);
 	if (!devpriv->plx || !devpriv->daq)
 		return -ENOMEM;
 
@@ -766,11 +764,9 @@ static int daqboard2000_auto_attach(struct comedi_device *dev,
 
 static void daqboard2000_detach(struct comedi_device *dev)
 {
-	struct pci_dev *pcidev = comedi_to_pci_dev(dev);
 	struct daqboard2000_private *devpriv = dev->private;
 
-	if (dev->subdevices)
-		subdev_8255_cleanup(dev, &dev->subdevices[2]);
+	comedi_spriv_free(dev, 2);
 	if (dev->irq)
 		free_irq(dev->irq, dev);
 	if (devpriv) {
@@ -779,11 +775,7 @@ static void daqboard2000_detach(struct comedi_device *dev)
 		if (devpriv->plx)
 			iounmap(devpriv->plx);
 	}
-	if (pcidev) {
-		if (dev->iobase)
-			comedi_pci_disable(pcidev);
-		pci_dev_put(pcidev);
-	}
+	comedi_pci_disable(dev);
 }
 
 static struct comedi_driver daqboard2000_driver = {
@@ -794,14 +786,10 @@ static struct comedi_driver daqboard2000_driver = {
 };
 
 static int daqboard2000_pci_probe(struct pci_dev *dev,
-					    const struct pci_device_id *ent)
+				  const struct pci_device_id *id)
 {
-	return comedi_pci_auto_config(dev, &daqboard2000_driver);
-}
-
-static void daqboard2000_pci_remove(struct pci_dev *dev)
-{
-	comedi_pci_auto_unconfig(dev);
+	return comedi_pci_auto_config(dev, &daqboard2000_driver,
+				      id->driver_data);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(daqboard2000_pci_table) = {
@@ -814,7 +802,7 @@ static struct pci_driver daqboard2000_pci_driver = {
 	.name		= "daqboard2000",
 	.id_table	= daqboard2000_pci_table,
 	.probe		= daqboard2000_pci_probe,
-	.remove		= daqboard2000_pci_remove,
+	.remove		= comedi_pci_auto_unconfig,
 };
 module_comedi_pci_driver(daqboard2000_driver, daqboard2000_pci_driver);
 

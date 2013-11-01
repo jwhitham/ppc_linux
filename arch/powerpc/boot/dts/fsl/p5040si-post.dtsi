@@ -416,6 +416,7 @@
 		phy_type = "utmi";
 		port0;
 	};
+
 /include/ "qoriq-usb2-dr-0.dtsi"
 	usb1: usb@211000 {
 		compatible = "fsl-usb2-dr-v1.6", "fsl,mpc85xx-usb2-dr", "fsl-usb2-dr";
@@ -424,16 +425,19 @@
 		dr_mode = "host";
 		phy_type = "utmi";
 	};
+
 /include/ "qoriq-sata2-0.dtsi"
 	sata@220000 {
 		fsl,iommu-parent = <&pamu4>;
 		fsl,liodn-reg = <&guts 0x550>; /* SATA1LIODNR */
 	};
+
 /include/ "qoriq-sata2-1.dtsi"
 	sata@221000 {
 		fsl,iommu-parent = <&pamu4>;
 		fsl,liodn-reg = <&guts 0x554>; /* SATA2LIODNR */
 	};
+
 /include/ "qoriq-sec5.2-0.dtsi"
 	crypto@300000 {
 		fsl,iommu-parent = <&pamu4>;

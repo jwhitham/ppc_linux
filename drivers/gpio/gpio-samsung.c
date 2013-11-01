@@ -38,7 +38,6 @@
 #include <plat/gpio-core.h>
 #include <plat/gpio-cfg.h>
 #include <plat/gpio-cfg-helpers.h>
-#include <plat/gpio-fns.h>
 #include <plat/pm.h>
 
 int samsung_gpio_setpull_updown(struct samsung_gpio_chip *chip,
@@ -1123,8 +1122,12 @@ int samsung_gpiolib_to_irq(struct gpio_chip *chip, unsigned int offset)
 #ifdef CONFIG_PLAT_S3C24XX
 static int s3c24xx_gpiolib_fbank_to_irq(struct gpio_chip *chip, unsigned offset)
 {
-	if (offset < 4)
-		return IRQ_EINT0 + offset;
+	if (offset < 4) {
+		if (soc_is_s3c2412())
+			return IRQ_EINT0_2412 + offset;
+		else
+			return IRQ_EINT0 + offset;
+	}
 
 	if (offset < 8)
 		return IRQ_EINT4 + offset - 4;
@@ -3023,9 +3026,11 @@ static __init int samsung_gpiolib_init(void)
 	*/
 	struct device_node *pctrl_np;
 	static const struct of_device_id exynos_pinctrl_ids[] = {
-		{ .compatible = "samsung,pinctrl-exynos4210", },
-		{ .compatible = "samsung,pinctrl-exynos4x12", },
-		{ .compatible = "samsung,pinctrl-exynos5440", },
+		{ .compatible = "samsung,exynos4210-pinctrl", },
+		{ .compatible = "samsung,exynos4x12-pinctrl", },
+		{ .compatible = "samsung,exynos5250-pinctrl", },
+		{ .compatible = "samsung,exynos5440-pinctrl", },
+		{ }
 	};
 	for_each_matching_node(pctrl_np, exynos_pinctrl_ids)
 		if (pctrl_np && of_device_is_available(pctrl_np))

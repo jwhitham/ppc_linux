@@ -45,6 +45,7 @@
 #include <linux/cpuidle.h>
 #include <linux/slab.h>
 #include <linux/acpi.h>
+#include <linux/memory_hotplug.h>
 
 #include <asm/io.h>
 #include <asm/cpu.h>
@@ -81,7 +82,7 @@ MODULE_DESCRIPTION("ACPI Processor Driver");
 MODULE_LICENSE("GPL");
 
 static int acpi_processor_add(struct acpi_device *device);
-static int acpi_processor_remove(struct acpi_device *device, int type);
+static int acpi_processor_remove(struct acpi_device *device);
 static void acpi_processor_notify(struct acpi_device *device, u32 event);
 static acpi_status acpi_processor_hotadd_init(struct acpi_processor *pr);
 static int acpi_processor_handle_eject(struct acpi_processor *pr);
@@ -94,9 +95,6 @@ static const struct acpi_device_id processor_device_ids[] = {
 };
 MODULE_DEVICE_TABLE(acpi, processor_device_ids);
 
-static SIMPLE_DEV_PM_OPS(acpi_processor_pm,
-			 acpi_processor_suspend, acpi_processor_resume);
-
 static struct acpi_driver acpi_processor_driver = {
 	.name = "processor",
 	.class = ACPI_PROCESSOR_CLASS,
@@ -106,7 +104,6 @@ static struct acpi_driver acpi_processor_driver = {
 		.remove = acpi_processor_remove,
 		.notify = acpi_processor_notify,
 		},
-	.drv.pm = &acpi_processor_pm,
 };
 
 #define INSTALL_NOTIFY_HANDLER		1
@@ -558,7 +555,7 @@ static int __cpuinit acpi_processor_add(struct acpi_device *device)
 		return 0;
 #endif
 
-	BUG_ON((pr->id >= nr_cpu_ids) || (pr->id < 0));
+	BUG_ON(pr->id >= nr_cpu_ids);
 
 	/*
 	 * Buggy BIOS check
@@ -610,7 +607,7 @@ err_free_pr:
 	return result;
 }
 
-static int acpi_processor_remove(struct acpi_device *device, int type)
+static int acpi_processor_remove(struct acpi_device *device)
 {
 	struct acpi_processor *pr = NULL;
 
@@ -623,7 +620,7 @@ static int acpi_processor_remove(struct acpi_device *device, int type)
 	if (pr->id >= nr_cpu_ids)
 		goto free;
 
-	if (type == ACPI_BUS_REMOVAL_EJECT) {
+	if (device->removal_type == ACPI_BUS_REMOVAL_EJECT) {
 		if (acpi_processor_handle_eject(pr))
 			return -EINVAL;
 	}
@@ -641,6 +638,7 @@ static int acpi_processor_remove(struct acpi_device *device, int type)
 
 	per_cpu(processors, pr->id) = NULL;
 	per_cpu(processor_device_array, pr->id) = NULL;
+	try_offline_node(cpu_to_node(pr->id));
 
 free:
 	free_cpumask_var(pr->throttling.shared_cpu_map);
@@ -677,35 +675,16 @@ static int is_processor_present(acpi_handle handle)
 	return 0;
 }
 
-static
-int acpi_processor_device_add(acpi_handle handle, struct acpi_device **device)
-{
-	acpi_handle phandle;
-	struct acpi_device *pdev;
-
-
-	if (acpi_get_parent(handle, &phandle)) {
-		return -ENODEV;
-	}
-
-	if (acpi_bus_get_device(phandle, &pdev)) {
-		return -ENODEV;
-	}
-
-	if (acpi_bus_add(device, pdev, handle, ACPI_BUS_TYPE_PROCESSOR)) {
-		return -ENODEV;
-	}
-
-	return 0;
-}
-
 static void acpi_processor_hotplug_notify(acpi_handle handle,
 					  u32 event, void *data)
 {
 	struct acpi_device *device = NULL;
 	struct acpi_eject_event *ej_event = NULL;
 	u32 ost_code = ACPI_OST_SC_NON_SPECIFIC_FAILURE; /* default */
+	acpi_status status;
 	int result;
+
+	acpi_scan_lock_acquire();
 
 	switch (event) {
 	case ACPI_NOTIFY_BUS_CHECK:
@@ -721,12 +700,16 @@ static void acpi_processor_hotplug_notify(acpi_handle handle,
 		if (!acpi_bus_get_device(handle, &device))
 			break;
 
-		result = acpi_processor_device_add(handle, &device);
+		result = acpi_bus_scan(handle);
 		if (result) {
 			acpi_handle_err(handle, "Unable to add the device\n");
 			break;
 		}
-
+		result = acpi_bus_get_device(handle, &device);
+		if (result) {
+			acpi_handle_err(handle, "Missing device object\n");
+			break;
+		}
 		ost_code = ACPI_OST_SC_SUCCESS;
 		break;
 
@@ -751,25 +734,32 @@ static void acpi_processor_hotplug_notify(acpi_handle handle,
 			break;
 		}
 
-		ej_event->handle = handle;
+		get_device(&device->dev);
+		ej_event->device = device;
 		ej_event->event = ACPI_NOTIFY_EJECT_REQUEST;
-		acpi_os_hotplug_execute(acpi_bus_hot_remove_device,
-					(void *)ej_event);
-
-		/* eject is performed asynchronously */
-		return;
+		/* The eject is carried out asynchronously. */
+		status = acpi_os_hotplug_execute(acpi_bus_hot_remove_device,
+						 ej_event);
+		if (ACPI_FAILURE(status)) {
+			put_device(&device->dev);
+			kfree(ej_event);
+			break;
+		}
+		goto out;
 
 	default:
 		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 				  "Unsupported event [0x%x]\n", event));
 
 		/* non-hotplug event; possibly handled by other handler */
-		return;
+		goto out;
 	}
 
 	/* Inform firmware that the hotplug operation has completed */
 	(void) acpi_evaluate_hotplug_ost(handle, event, ost_code, NULL);
-	return;
+
+ out:
+	acpi_scan_lock_release();
 }
 
 static acpi_status is_processor_device(acpi_handle handle)
@@ -940,6 +930,8 @@ static int __init acpi_processor_init(void)
 	if (result < 0)
 		return result;
 
+	acpi_processor_syscore_init();
+
 	acpi_processor_install_hotplug_notify();
 
 	acpi_thermal_cpufreq_init();
@@ -961,6 +953,8 @@ static void __exit acpi_processor_exit(void)
 	acpi_thermal_cpufreq_exit();
 
 	acpi_processor_uninstall_hotplug_notify();
+
+	acpi_processor_syscore_exit();
 
 	acpi_bus_unregister_driver(&acpi_processor_driver);
 

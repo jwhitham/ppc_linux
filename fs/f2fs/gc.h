@@ -8,29 +8,19 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#define GC_THREAD_NAME	"f2fs_gc_task"
 #define GC_THREAD_MIN_WB_PAGES		1	/*
 						 * a threshold to determine
 						 * whether IO subsystem is idle
 						 * or not
 						 */
-#define GC_THREAD_MIN_SLEEP_TIME	10000 /* milliseconds */
-#define GC_THREAD_MAX_SLEEP_TIME	30000
-#define GC_THREAD_NOGC_SLEEP_TIME	10000
+#define GC_THREAD_MIN_SLEEP_TIME	30000	/* milliseconds */
+#define GC_THREAD_MAX_SLEEP_TIME	60000
+#define GC_THREAD_NOGC_SLEEP_TIME	300000	/* wait 5 min */
 #define LIMIT_INVALID_BLOCK	40 /* percentage over total user space */
 #define LIMIT_FREE_BLOCK	40 /* percentage over invalid + free space */
 
 /* Search max. number of dirty segments to select a victim segment */
 #define MAX_VICTIM_SEARCH	20
-
-enum {
-	GC_NONE = 0,
-	GC_ERROR,
-	GC_OK,
-	GC_NEXT,
-	GC_BLOCKED,
-	GC_DONE,
-};
 
 struct f2fs_gc_kthread {
 	struct task_struct *f2fs_gc_task;
@@ -68,6 +58,9 @@ static inline block_t limit_free_user_blocks(struct f2fs_sb_info *sbi)
 
 static inline long increase_sleep_time(long wait)
 {
+	if (wait == GC_THREAD_NOGC_SLEEP_TIME)
+		return wait;
+
 	wait += GC_THREAD_MIN_SLEEP_TIME;
 	if (wait > GC_THREAD_MAX_SLEEP_TIME)
 		wait = GC_THREAD_MAX_SLEEP_TIME;
@@ -76,6 +69,9 @@ static inline long increase_sleep_time(long wait)
 
 static inline long decrease_sleep_time(long wait)
 {
+	if (wait == GC_THREAD_NOGC_SLEEP_TIME)
+		wait = GC_THREAD_MAX_SLEEP_TIME;
+
 	wait -= GC_THREAD_MIN_SLEEP_TIME;
 	if (wait <= GC_THREAD_MIN_SLEEP_TIME)
 		wait = GC_THREAD_MIN_SLEEP_TIME;
@@ -103,15 +99,4 @@ static inline int is_idle(struct f2fs_sb_info *sbi)
 	struct request_queue *q = bdev_get_queue(bdev);
 	struct request_list *rl = &q->root_rl;
 	return !(rl->count[BLK_RW_SYNC]) && !(rl->count[BLK_RW_ASYNC]);
-}
-
-static inline bool should_do_checkpoint(struct f2fs_sb_info *sbi)
-{
-	unsigned int pages_per_sec = sbi->segs_per_sec *
-					(1 << sbi->log_blocks_per_seg);
-	int node_secs = ((get_pages(sbi, F2FS_DIRTY_NODES) + pages_per_sec - 1)
-			>> sbi->log_blocks_per_seg) / sbi->segs_per_sec;
-	int dent_secs = ((get_pages(sbi, F2FS_DIRTY_DENTS) + pages_per_sec - 1)
-			>> sbi->log_blocks_per_seg) / sbi->segs_per_sec;
-	return free_sections(sbi) <= (node_secs + 2 * dent_secs + 2);
 }

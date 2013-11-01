@@ -49,7 +49,6 @@
 #include <net/udp.h>
 #include <net/udplite.h>
 #include <net/tcp.h>
-#include <net/ipip.h>
 #include <net/protocol.h>
 #include <net/inet_common.h>
 #include <net/route.h>
@@ -323,7 +322,7 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			struct net_device *dev = NULL;
 
 			rcu_read_lock();
-			if (addr_type & IPV6_ADDR_LINKLOCAL) {
+			if (__ipv6_addr_needs_scope_id(addr_type)) {
 				if (addr_len >= sizeof(struct sockaddr_in6) &&
 				    addr->sin6_scope_id) {
 					/* Override any existing binding, if another one
@@ -471,8 +470,8 @@ int inet6_getname(struct socket *sock, struct sockaddr *uaddr,
 
 		sin->sin6_port = inet->inet_sport;
 	}
-	if (ipv6_addr_type(&sin->sin6_addr) & IPV6_ADDR_LINKLOCAL)
-		sin->sin6_scope_id = sk->sk_bound_dev_if;
+	sin->sin6_scope_id = ipv6_iface_scope_id(&sin->sin6_addr,
+						 sk->sk_bound_dev_if);
 	*uaddr_len = sizeof(*sin);
 	return 0;
 }
@@ -811,11 +810,10 @@ static struct pernet_operations inet6_net_ops = {
 
 static int __init inet6_init(void)
 {
-	struct sk_buff *dummy_skb;
 	struct list_head *r;
 	int err = 0;
 
-	BUILD_BUG_ON(sizeof(struct inet6_skb_parm) > sizeof(dummy_skb->cb));
+	BUILD_BUG_ON(sizeof(struct inet6_skb_parm) > FIELD_SIZEOF(struct sk_buff, cb));
 
 	/* Register the socket-side information for inet6_create.  */
 	for (r = &inetsw6[0]; r < &inetsw6[SOCK_MAX]; ++r)

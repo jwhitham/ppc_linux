@@ -125,18 +125,6 @@ void __init smp_init_cpus(void)
 		smp_ops.smp_init_cpus();
 }
 
-static void __init platform_smp_prepare_cpus(unsigned int max_cpus)
-{
-	if (smp_ops.smp_prepare_cpus)
-		smp_ops.smp_prepare_cpus(max_cpus);
-}
-
-static void __cpuinit platform_secondary_init(unsigned int cpu)
-{
-	if (smp_ops.smp_secondary_init)
-		smp_ops.smp_secondary_init(cpu);
-}
-
 int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	if (smp_ops.smp_boot_secondary)
@@ -152,12 +140,6 @@ static int platform_cpu_kill(unsigned int cpu)
 	if (smp_ops.cpu_kill)
 		return smp_ops.cpu_kill(cpu);
 	return 1;
-}
-
-static void platform_cpu_die(unsigned int cpu)
-{
-	if (smp_ops.cpu_die)
-		smp_ops.cpu_die(cpu);
 }
 
 static int platform_cpu_disable(unsigned int cpu)
@@ -229,6 +211,13 @@ void __cpuinit __cpu_die(unsigned int cpu)
 	}
 	printk(KERN_NOTICE "CPU%u: shutdown\n", cpu);
 
+	/*
+	 * platform_cpu_kill() is generally expected to do the powering off
+	 * and/or cutting of clocks to the dying CPU.  Optionally, this may
+	 * be done by the CPU which is dying in preference to supporting
+	 * this call, but that means there is _no_ synchronisation between
+	 * the requesting CPU and the dying CPU actually losing power.
+	 */
 	if (!platform_cpu_kill(cpu))
 		printk("CPU%u: unable to kill\n", cpu);
 }
@@ -248,16 +237,44 @@ void __ref cpu_die(void)
 	idle_task_exit();
 
 	local_irq_disable();
-	mb();
-
-	/* Tell __cpu_die() that this CPU is now safe to dispose of */
-	RCU_NONIDLE(complete(&cpu_died));
 
 	/*
-	 * actual CPU shutdown procedure is at least platform (if not
-	 * CPU) specific.
+	 * Flush the data out of the L1 cache for this CPU.  This must be
+	 * before the completion to ensure that data is safely written out
+	 * before platform_cpu_kill() gets called - which may disable
+	 * *this* CPU and power down its cache.
 	 */
-	platform_cpu_die(cpu);
+	flush_cache_louis();
+
+	/*
+	 * Tell __cpu_die() that this CPU is now safe to dispose of.  Once
+	 * this returns, power and/or clocks can be removed at any point
+	 * from this CPU and its cache by platform_cpu_kill().
+	 */
+	complete(&cpu_died);
+
+	/*
+	 * Ensure that the cache lines associated with that completion are
+	 * written out.  This covers the case where _this_ CPU is doing the
+	 * powering down, to ensure that the completion is visible to the
+	 * CPU waiting for this one.
+	 */
+	flush_cache_louis();
+
+	/*
+	 * The actual CPU shutdown procedure is at least platform (if not
+	 * CPU) specific.  This may remove power, or it may simply spin.
+	 *
+	 * Platforms are generally expected *NOT* to return from this call,
+	 * although there are some which do because they have no way to
+	 * power down the CPU.  These platforms are the _only_ reason we
+	 * have a return path which uses the fragment of assembly below.
+	 *
+	 * The return path should not be used for platforms which can
+	 * power off the CPU.
+	 */
+	if (smp_ops.cpu_die)
+		smp_ops.cpu_die(cpu);
 
 	/*
 	 * Do not return to the idle loop - jump back to the secondary
@@ -302,6 +319,7 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	 * switch away from it before attempting any exclusive accesses.
 	 */
 	cpu_switch_mm(mm->pgd, mm);
+	local_flush_bp_all();
 	enter_lazy_tlb(mm, current);
 	local_flush_tlb_all();
 
@@ -324,7 +342,8 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	/*
 	 * Give the platform a chance to do its own initialisation.
 	 */
-	platform_secondary_init(cpu);
+	if (smp_ops.smp_secondary_init)
+		smp_ops.smp_secondary_init(cpu);
 
 	notify_cpu_starting(cpu);
 
@@ -351,7 +370,7 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	/*
 	 * OK, it's off to the idle thread for us
 	 */
-	cpu_idle();
+	cpu_startup_entry(CPUHP_ONLINE);
 }
 
 void __init smp_cpus_done(unsigned int max_cpus)
@@ -399,8 +418,8 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 		/*
 		 * Initialise the present map, which describes the set of CPUs
 		 * actually populated at the present time. A platform should
-		 * re-initialize the map in platform_smp_prepare_cpus() if
-		 * present != possible (e.g. physical hotplug).
+		 * re-initialize the map in the platforms smp_prepare_cpus()
+		 * if present != possible (e.g. physical hotplug).
 		 */
 		init_cpu_present(cpu_possible_mask);
 
@@ -408,7 +427,8 @@ void __init smp_prepare_cpus(unsigned int max_cpus)
 		 * Initialise the SCU if there are more than one CPU
 		 * and let them know where to start.
 		 */
-		platform_smp_prepare_cpus(max_cpus);
+		if (smp_ops.smp_prepare_cpus)
+			smp_ops.smp_prepare_cpus(max_cpus);
 	}
 }
 
@@ -416,7 +436,8 @@ static void (*smp_cross_call)(const struct cpumask *, unsigned int);
 
 void __init set_smp_cross_call(void (*fn)(const struct cpumask *, unsigned int))
 {
-	smp_cross_call = fn;
+	if (!smp_cross_call)
+		smp_cross_call = fn;
 }
 
 void arch_send_call_function_ipi_mask(const struct cpumask *mask)
@@ -475,19 +496,11 @@ u64 smp_irq_stat_cpu(unsigned int cpu)
  */
 static DEFINE_PER_CPU(struct clock_event_device, percpu_clockevent);
 
-static void ipi_timer(void)
-{
-	struct clock_event_device *evt = &__get_cpu_var(percpu_clockevent);
-	evt->event_handler(evt);
-}
-
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
-static void smp_timer_broadcast(const struct cpumask *mask)
+void tick_broadcast(const struct cpumask *mask)
 {
 	smp_cross_call(mask, IPI_TIMER);
 }
-#else
-#define smp_timer_broadcast	NULL
 #endif
 
 static void broadcast_timer_set_mode(enum clock_event_mode mode,
@@ -501,7 +514,7 @@ static void __cpuinit broadcast_timer_setup(struct clock_event_device *evt)
 	evt->features	= CLOCK_EVT_FEAT_ONESHOT |
 			  CLOCK_EVT_FEAT_PERIODIC |
 			  CLOCK_EVT_FEAT_DUMMY;
-	evt->rating	= 400;
+	evt->rating	= 100;
 	evt->mult	= 1;
 	evt->set_mode	= broadcast_timer_set_mode;
 
@@ -530,7 +543,6 @@ static void __cpuinit percpu_timer_setup(void)
 	struct clock_event_device *evt = &per_cpu(percpu_clockevent, cpu);
 
 	evt->cpumask = cpumask_of(cpu);
-	evt->broadcast = smp_timer_broadcast;
 
 	if (!lt_ops || lt_ops->setup(evt))
 		broadcast_timer_setup(evt);
@@ -596,11 +608,13 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	case IPI_WAKEUP:
 		break;
 
+#ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
 	case IPI_TIMER:
 		irq_enter();
-		ipi_timer();
+		tick_receive_broadcast();
 		irq_exit();
 		break;
+#endif
 
 	case IPI_RESCHEDULE:
 		scheduler_ipi();
@@ -637,17 +651,6 @@ void smp_send_reschedule(int cpu)
 	smp_cross_call(cpumask_of(cpu), IPI_RESCHEDULE);
 }
 
-#ifdef CONFIG_HOTPLUG_CPU
-static void smp_kill_cpus(cpumask_t *mask)
-{
-	unsigned int cpu;
-	for_each_cpu(cpu, mask)
-		platform_cpu_kill(cpu);
-}
-#else
-static void smp_kill_cpus(cpumask_t *mask) { }
-#endif
-
 void smp_send_stop(void)
 {
 	unsigned long timeout;
@@ -665,8 +668,6 @@ void smp_send_stop(void)
 
 	if (num_online_cpus() > 1)
 		pr_warning("SMP: failed to stop secondary CPUs\n");
-
-	smp_kill_cpus(&mask);
 }
 
 /*

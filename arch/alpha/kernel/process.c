@@ -46,25 +46,6 @@
 void (*pm_power_off)(void) = machine_power_off;
 EXPORT_SYMBOL(pm_power_off);
 
-void
-cpu_idle(void)
-{
-	current_thread_info()->status |= TS_POLLING;
-
-	while (1) {
-		/* FIXME -- EV6 and LCA45 know how to power down
-		   the CPU.  */
-
-		rcu_idle_enter();
-		while (!need_resched())
-			cpu_relax();
-
-		rcu_idle_exit();
-		schedule_preempt_disabled();
-	}
-}
-
-
 struct halt_info {
 	int mode;
 	char *restart_cmd;
@@ -194,6 +175,7 @@ machine_power_off(void)
 void
 show_regs(struct pt_regs *regs)
 {
+	show_regs_print_info(KERN_DEFAULT);
 	dik_show_regs(regs, NULL);
 }
 
@@ -250,7 +232,6 @@ copy_thread(unsigned long clone_flags, unsigned long usp,
 	struct pt_regs *childregs = task_pt_regs(p);
 	struct pt_regs *regs = current_pt_regs();
 	struct switch_stack *childstack, *stack;
-	unsigned long settls;
 
 	childstack = ((struct switch_stack *) childregs) - 1;
 	childti->pcb.ksp = (unsigned long) childstack;

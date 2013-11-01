@@ -14,14 +14,13 @@ config IIO_PERIODIC_RTC_TRIGGER
 
 config IIO_GPIO_TRIGGER
 	tristate "GPIO trigger"
-	depends on GENERIC_GPIO
+	depends on GPIOLIB
 	help
 	  Provides support for using GPIO pins as IIO triggers.
 
 config IIO_SYSFS_TRIGGER
 	tristate "SYSFS trigger"
 	depends on SYSFS
-	depends on HAVE_IRQ_WORK
 	select IRQ_WORK
 	help
 	  Provides support for using SYSFS entry as IIO triggers.

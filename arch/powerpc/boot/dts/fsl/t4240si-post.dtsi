@@ -6,13 +6,13 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
- *	 notice, this list of conditions and the following disclaimer.
+ *       notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above copyright
- *	 notice, this list of conditions and the following disclaimer in the
- *	 documentation and/or other materials provided with the distribution.
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of Freescale Semiconductor nor the
- *	 names of its contributors may be used to endorse or promote products
- *	 derived from this software without specific prior written permission.
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
  *
  *
  * ALTERNATIVELY, this software may be distributed under the terms of the
@@ -48,11 +48,11 @@
 	bus-range = <0x0 0xff>;
 	interrupts = <20 2 0 0>;
 	pcie@0 {
-		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
 		device_type = "pci";
+		reg = <0 0 0 0 0>;
 		interrupts = <20 2 0 0>;
 		interrupt-map-mask = <0xf800 0 0 7>;
 		interrupt-map = <
@@ -74,11 +74,11 @@
 	bus-range = <0 0xff>;
 	interrupts = <21 2 0 0>;
 	pcie@0 {
-		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
 		device_type = "pci";
+		reg = <0 0 0 0 0>;
 		interrupts = <21 2 0 0>;
 		interrupt-map-mask = <0xf800 0 0 7>;
 		interrupt-map = <
@@ -100,11 +100,11 @@
 	bus-range = <0x0 0xff>;
 	interrupts = <22 2 0 0>;
 	pcie@0 {
-		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
 		device_type = "pci";
+		reg = <0 0 0 0 0>;
 		interrupts = <22 2 0 0>;
 		interrupt-map-mask = <0xf800 0 0 7>;
 		interrupt-map = <
@@ -126,11 +126,11 @@
 	bus-range = <0x0 0xff>;
 	interrupts = <23 2 0 0>;
 	pcie@0 {
-		reg = <0 0 0 0 0>;
 		#interrupt-cells = <1>;
 		#size-cells = <2>;
 		#address-cells = <3>;
 		device_type = "pci";
+		reg = <0 0 0 0 0>;
 		interrupts = <23 2 0 0>;
 		interrupt-map-mask = <0xf800 0 0 7>;
 		interrupt-map = <
@@ -1058,7 +1058,7 @@
 	};
 
 	corenet-cf@18000 {
-		compatible = "fsl,corenet2-cf";
+		compatible = "fsl,corenet-cf";
 		reg = <0x18000 0x1000>;
 		interrupts = <16 2 1 31>;
 		fsl,ccf-num-csdids = <32>;

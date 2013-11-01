@@ -614,10 +614,9 @@ struct vnet_port *__tx_port_find(struct vnet *vp, struct sk_buff *skb)
 {
 	unsigned int hash = vnet_hashfn(skb->data);
 	struct hlist_head *hp = &vp->port_hash[hash];
-	struct hlist_node *n;
 	struct vnet_port *port;
 
-	hlist_for_each_entry(port, n, hp, hash) {
+	hlist_for_each_entry(port, hp, hash) {
 		if (ether_addr_equal(port->raddr, skb->data))
 			return port;
 	}
@@ -1031,8 +1030,6 @@ static struct vnet *vnet_new(const u64 *local_mac)
 
 	for (i = 0; i < ETH_ALEN; i++)
 		dev->dev_addr[i] = (*local_mac >> (5 - i) * 8) & 0xff;
-
-	memcpy(dev->perm_addr, dev->dev_addr, dev->addr_len);
 
 	vp = netdev_priv(dev);
 

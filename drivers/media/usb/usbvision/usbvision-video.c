@@ -483,7 +483,7 @@ static int vidioc_g_register(struct file *file, void *priv,
 }
 
 static int vidioc_s_register(struct file *file, void *priv,
-				struct v4l2_dbg_register *reg)
+				const struct v4l2_dbg_register *reg)
 {
 	struct usb_usbvision *usbvision = video_drvdata(file);
 	int err_code;
@@ -595,11 +595,11 @@ static int vidioc_s_input(struct file *file, void *priv, unsigned int input)
 	return 0;
 }
 
-static int vidioc_s_std(struct file *file, void *priv, v4l2_std_id *id)
+static int vidioc_s_std(struct file *file, void *priv, v4l2_std_id id)
 {
 	struct usb_usbvision *usbvision = video_drvdata(file);
 
-	usbvision->tvnorm_id = *id;
+	usbvision->tvnorm_id = id;
 
 	call_all(usbvision, core, s_std, usbvision->tvnorm_id);
 	/* propagate the change to the decoder */
@@ -628,7 +628,7 @@ static int vidioc_g_tuner(struct file *file, void *priv,
 }
 
 static int vidioc_s_tuner(struct file *file, void *priv,
-				struct v4l2_tuner *vt)
+				const struct v4l2_tuner *vt)
 {
 	struct usb_usbvision *usbvision = video_drvdata(file);
 
@@ -657,7 +657,7 @@ static int vidioc_g_frequency(struct file *file, void *priv,
 }
 
 static int vidioc_s_frequency(struct file *file, void *priv,
-				struct v4l2_frequency *freq)
+				const struct v4l2_frequency *freq)
 {
 	struct usb_usbvision *usbvision = video_drvdata(file);
 
@@ -761,7 +761,7 @@ static int vidioc_querybuf(struct file *file,
 	if (vb->index >= usbvision->num_frames)
 		return -EINVAL;
 	/* Updating the corresponding frame state */
-	vb->flags = 0;
+	vb->flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	frame = &usbvision->frame[vb->index];
 	if (frame->grabstate >= frame_state_ready)
 		vb->flags |= V4L2_BUF_FLAG_QUEUED;
@@ -843,7 +843,8 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *vb)
 	vb->memory = V4L2_MEMORY_MMAP;
 	vb->flags = V4L2_BUF_FLAG_MAPPED |
 		V4L2_BUF_FLAG_QUEUED |
-		V4L2_BUF_FLAG_DONE;
+		V4L2_BUF_FLAG_DONE |
+		V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	vb->index = f->index;
 	vb->sequence = f->sequence;
 	vb->timestamp = f->timestamp;

@@ -1,6 +1,6 @@
 /* bnx2x_cmn.h: Broadcom Everest network driver.
  *
- * Copyright (c) 2007-2012 Broadcom Corporation
+ * Copyright (c) 2007-2013 Broadcom Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 
 
 #include "bnx2x.h"
+#include "bnx2x_sriov.h"
 
 /* This is used as a replacement for an MCP if it's not present */
 extern int load_count[2][3]; /* per-path: 0-common, 1-port0, 2-port1 */
@@ -49,13 +50,13 @@ extern int int_mode;
 		} \
 	} while (0)
 
-#define BNX2X_PCI_ALLOC(x, y, size) \
-	do { \
-		x = dma_alloc_coherent(&bp->pdev->dev, size, y, GFP_KERNEL); \
-		if (x == NULL) \
-			goto alloc_mem_err; \
-		memset((void *)x, 0, size); \
-	} while (0)
+#define BNX2X_PCI_ALLOC(x, y, size)				\
+do {								\
+	x = dma_alloc_coherent(&bp->pdev->dev, size, y,		\
+			       GFP_KERNEL | __GFP_ZERO);	\
+	if (x == NULL)						\
+		goto alloc_mem_err;				\
+} while (0)
 
 #define BNX2X_ALLOC(x, size) \
 	do { \
@@ -196,6 +197,7 @@ void bnx2x_igu_ack_sb(struct bnx2x *bp, u8 igu_sb_id, u8 segment,
 
 /* Disable transactions from chip to host */
 void bnx2x_pf_disable(struct bnx2x *bp);
+int bnx2x_pretend_func(struct bnx2x *bp, u16 pretend_func_val);
 
 /**
  * bnx2x__link_status_update - handles link status change.
@@ -293,16 +295,29 @@ void bnx2x_int_disable_sync(struct bnx2x *bp, int disable_hw);
 void bnx2x_nic_init_cnic(struct bnx2x *bp);
 
 /**
- * bnx2x_nic_init - init driver internals.
+ * bnx2x_preirq_nic_init - init driver internals.
  *
  * @bp:		driver handle
  *
  * Initializes:
- *  - rings
+ *  - fastpath object
+ *  - fastpath rings
+ *  etc.
+ */
+void bnx2x_pre_irq_nic_init(struct bnx2x *bp);
+
+/**
+ * bnx2x_postirq_nic_init - init driver internals.
+ *
+ * @bp:		driver handle
+ * @load_code:	COMMON, PORT or FUNCTION
+ *
+ * Initializes:
  *  - status blocks
+ *  - slowpath rings
  *  - etc.
  */
-void bnx2x_nic_init(struct bnx2x *bp, u32 load_code);
+void bnx2x_post_irq_nic_init(struct bnx2x *bp, u32 load_code);
 /**
  * bnx2x_alloc_mem_cnic - allocate driver's memory for cnic.
  *
@@ -401,7 +416,7 @@ void bnx2x_set_rx_mode(struct net_device *dev);
  * If bp->state is OPEN, should be called with
  * netif_addr_lock_bh().
  */
-void bnx2x_set_storm_rx_mode(struct bnx2x *bp);
+int bnx2x_set_storm_rx_mode(struct bnx2x *bp);
 
 /**
  * bnx2x_set_q_rx_mode - configures rx_mode for a single queue.
@@ -413,11 +428,11 @@ void bnx2x_set_storm_rx_mode(struct bnx2x *bp);
  * @tx_accept_flags:	tx accept configuration (tx switch)
  * @ramrod_flags:	ramrod configuration
  */
-void bnx2x_set_q_rx_mode(struct bnx2x *bp, u8 cl_id,
-			 unsigned long rx_mode_flags,
-			 unsigned long rx_accept_flags,
-			 unsigned long tx_accept_flags,
-			 unsigned long ramrod_flags);
+int bnx2x_set_q_rx_mode(struct bnx2x *bp, u8 cl_id,
+			unsigned long rx_mode_flags,
+			unsigned long rx_accept_flags,
+			unsigned long tx_accept_flags,
+			unsigned long ramrod_flags);
 
 /* Parity errors related */
 void bnx2x_set_pf_load(struct bnx2x *bp);
@@ -477,8 +492,6 @@ int bnx2x_set_power_state(struct bnx2x *bp, pci_power_t state);
  */
 void bnx2x_update_max_mf_config(struct bnx2x *bp, u32 value);
 /* Error handling */
-void bnx2x_panic_dump(struct bnx2x *bp);
-
 void bnx2x_fw_dump_lvl(struct bnx2x *bp, const char *lvl);
 
 /* validate currect fw is loaded */
@@ -496,8 +509,46 @@ netdev_tx_t bnx2x_start_xmit(struct sk_buff *skb, struct net_device *dev);
 /* setup_tc callback */
 int bnx2x_setup_tc(struct net_device *dev, u8 num_tc);
 
+int bnx2x_get_vf_config(struct net_device *dev, int vf,
+			struct ifla_vf_info *ivi);
+int bnx2x_set_vf_mac(struct net_device *dev, int queue, u8 *mac);
+int bnx2x_set_vf_vlan(struct net_device *netdev, int vf, u16 vlan, u8 qos);
+
 /* select_queue callback */
 u16 bnx2x_select_queue(struct net_device *dev, struct sk_buff *skb);
+
+static inline void bnx2x_update_rx_prod(struct bnx2x *bp,
+					struct bnx2x_fastpath *fp,
+					u16 bd_prod, u16 rx_comp_prod,
+					u16 rx_sge_prod)
+{
+	struct ustorm_eth_rx_producers rx_prods = {0};
+	u32 i;
+
+	/* Update producers */
+	rx_prods.bd_prod = bd_prod;
+	rx_prods.cqe_prod = rx_comp_prod;
+	rx_prods.sge_prod = rx_sge_prod;
+
+	/* Make sure that the BD and SGE data is updated before updating the
+	 * producers since FW might read the BD/SGE right after the producer
+	 * is updated.
+	 * This is only applicable for weak-ordered memory model archs such
+	 * as IA-64. The following barrier is also mandatory since FW will
+	 * assumes BDs must have buffers.
+	 */
+	wmb();
+
+	for (i = 0; i < sizeof(rx_prods)/4; i++)
+		REG_WR(bp, fp->ustorm_rx_prods_offset + i*4,
+		       ((u32 *)&rx_prods)[i]);
+
+	mmiowb(); /* keep prod updates ordered */
+
+	DP(NETIF_MSG_RX_STATUS,
+	   "queue[%d]:  wrote  bd_prod %u  cqe_prod %u  sge_prod %u\n",
+	   fp->index, bd_prod, rx_comp_prod, rx_sge_prod);
+}
 
 /* reload helper */
 int bnx2x_reload_if_running(struct net_device *dev);
@@ -506,9 +557,6 @@ int bnx2x_change_mac_addr(struct net_device *dev, void *p);
 
 /* NAPI poll Rx part */
 int bnx2x_rx_int(struct bnx2x_fastpath *fp, int budget);
-
-void bnx2x_update_rx_prod(struct bnx2x *bp, struct bnx2x_fastpath *fp,
-			u16 bd_prod, u16 rx_comp_prod, u16 rx_sge_prod);
 
 /* NAPI poll Tx part */
 int bnx2x_tx_int(struct bnx2x *bp, struct bnx2x_fp_txdata *txdata);
@@ -610,38 +658,6 @@ static inline void bnx2x_update_fpsb_idx(struct bnx2x_fastpath *fp)
 {
 	barrier(); /* status block is written to by the chip */
 	fp->fp_hc_idx = fp->sb_running_index[SM_RX_ID];
-}
-
-static inline void bnx2x_update_rx_prod_gen(struct bnx2x *bp,
-			struct bnx2x_fastpath *fp, u16 bd_prod,
-			u16 rx_comp_prod, u16 rx_sge_prod, u32 start)
-{
-	struct ustorm_eth_rx_producers rx_prods = {0};
-	u32 i;
-
-	/* Update producers */
-	rx_prods.bd_prod = bd_prod;
-	rx_prods.cqe_prod = rx_comp_prod;
-	rx_prods.sge_prod = rx_sge_prod;
-
-	/*
-	 * Make sure that the BD and SGE data is updated before updating the
-	 * producers since FW might read the BD/SGE right after the producer
-	 * is updated.
-	 * This is only applicable for weak-ordered memory model archs such
-	 * as IA-64. The following barrier is also mandatory since FW will
-	 * assumes BDs must have buffers.
-	 */
-	wmb();
-
-	for (i = 0; i < sizeof(rx_prods)/4; i++)
-		REG_WR(bp, start + i*4, ((u32 *)&rx_prods)[i]);
-
-	mmiowb(); /* keep prod updates ordered */
-
-	DP(NETIF_MSG_RX_STATUS,
-	   "queue[%d]:  wrote  bd_prod %u  cqe_prod %u  sge_prod %u\n",
-	   fp->index, bd_prod, rx_comp_prod, rx_sge_prod);
 }
 
 static inline void bnx2x_igu_ack_sb_gen(struct bnx2x *bp, u8 igu_sb_id,
@@ -819,7 +835,7 @@ static inline void bnx2x_free_rx_sge(struct bnx2x *bp,
 		return;
 
 	dma_unmap_page(&bp->pdev->dev, dma_unmap_addr(sw_buf, mapping),
-		       SGE_PAGE_SIZE*PAGES_PER_SGE, DMA_FROM_DEVICE);
+		       SGE_PAGES, DMA_FROM_DEVICE);
 	__free_pages(page, PAGES_PER_SGE_SHIFT);
 
 	sw_buf->page = NULL;
@@ -834,7 +850,7 @@ static inline void bnx2x_add_all_napi_cnic(struct bnx2x *bp)
 	/* Add NAPI objects */
 	for_each_rx_queue_cnic(bp, i)
 		netif_napi_add(bp->dev, &bnx2x_fp(bp, i, napi),
-			       bnx2x_poll, BNX2X_NAPI_WEIGHT);
+			       bnx2x_poll, NAPI_POLL_WEIGHT);
 }
 
 static inline void bnx2x_add_all_napi(struct bnx2x *bp)
@@ -844,7 +860,7 @@ static inline void bnx2x_add_all_napi(struct bnx2x *bp)
 	/* Add NAPI objects */
 	for_each_eth_queue(bp, i)
 		netif_napi_add(bp->dev, &bnx2x_fp(bp, i, napi),
-			       bnx2x_poll, BNX2X_NAPI_WEIGHT);
+			       bnx2x_poll, NAPI_POLL_WEIGHT);
 }
 
 static inline void bnx2x_del_all_napi_cnic(struct bnx2x *bp)
@@ -863,7 +879,7 @@ static inline void bnx2x_del_all_napi(struct bnx2x *bp)
 		netif_napi_del(&bnx2x_fp(bp, i, napi));
 }
 
-void bnx2x_set_int_mode(struct bnx2x *bp);
+int bnx2x_set_int_mode(struct bnx2x *bp);
 
 static inline void bnx2x_disable_msi(struct bnx2x *bp)
 {
@@ -970,9 +986,11 @@ static inline int bnx2x_func_start(struct bnx2x *bp)
 	else /* CHIP_IS_E1X */
 		start_params->network_cos_mode = FW_WRR;
 
+	start_params->gre_tunnel_mode = IPGRE_TUNNEL;
+	start_params->gre_tunnel_rss = GRE_INNER_HEADERS_RSS;
+
 	return bnx2x_func_state_change(bp, &func_params);
 }
-
 
 /**
  * bnx2x_set_fw_mac_addr - fill in a MAC address in FW format
@@ -982,8 +1000,8 @@ static inline int bnx2x_func_start(struct bnx2x *bp)
  * @fw_lo:	pointer to lower part
  * @mac:	pointer to MAC address
  */
-static inline void bnx2x_set_fw_mac_addr(u16 *fw_hi, u16 *fw_mid, u16 *fw_lo,
-					 u8 *mac)
+static inline void bnx2x_set_fw_mac_addr(__le16 *fw_hi, __le16 *fw_mid,
+					 __le16 *fw_lo, u8 *mac)
 {
 	((u8 *)fw_hi)[0]  = mac[1];
 	((u8 *)fw_hi)[1]  = mac[0];
@@ -1108,6 +1126,9 @@ static inline void bnx2x_init_bp_objs(struct bnx2x *bp)
 	bnx2x_init_mac_credit_pool(bp, &bp->macs_pool, BP_FUNC(bp),
 				   bnx2x_get_path_func_num(bp));
 
+	bnx2x_init_vlan_credit_pool(bp, &bp->vlans_pool, BP_ABS_FUNC(bp)>>1,
+				    bnx2x_get_path_func_num(bp));
+
 	/* RSS configuration object */
 	bnx2x_init_rss_config_obj(bp, &bp->rss_conf_obj, bp->fp->cl_id,
 				  bp->fp->cid, BP_FUNC(bp), BP_FUNC(bp),
@@ -1125,15 +1146,7 @@ static inline u8 bnx2x_fp_qzone_id(struct bnx2x_fastpath *fp)
 		return fp->cl_id;
 }
 
-static inline u32 bnx2x_rx_ustorm_prods_offset(struct bnx2x_fastpath *fp)
-{
-	struct bnx2x *bp = fp->bp;
-
-	if (!CHIP_IS_E1x(bp))
-		return USTORM_RX_PRODS_E2_OFFSET(fp->cl_qzone_id);
-	else
-		return USTORM_RX_PRODS_E1X_OFFSET(BP_PORT(bp), fp->cl_id);
-}
+u32 bnx2x_rx_ustorm_prods_offset(struct bnx2x_fastpath *fp);
 
 static inline void bnx2x_init_txdata(struct bnx2x *bp,
 				     struct bnx2x_fp_txdata *txdata, u32 cid,
@@ -1228,7 +1241,7 @@ static inline int bnx2x_clean_tx_queue(struct bnx2x *bp,
 #endif
 		}
 		cnt--;
-		usleep_range(1000, 1000);
+		usleep_range(1000, 2000);
 	}
 
 	return 0;
@@ -1263,7 +1276,7 @@ static inline bool bnx2x_wait_sp_comp(struct bnx2x *bp, unsigned long mask)
 		}
 		netif_addr_unlock_bh(bp->dev);
 
-		usleep_range(1000, 1000);
+		usleep_range(1000, 2000);
 	}
 
 	smp_mb();
@@ -1392,5 +1405,18 @@ static inline bool bnx2x_is_valid_ether_addr(struct bnx2x *bp, u8 *addr)
 
 	return false;
 }
+
+/**
+ * bnx2x_fill_fw_str - Fill buffer with FW version string
+ *
+ * @bp:        driver handle
+ * @buf:       character buffer to fill with the fw name
+ * @buf_len:   length of the above buffer
+ *
+ */
+void bnx2x_fill_fw_str(struct bnx2x *bp, char *buf, size_t buf_len);
+
+int bnx2x_drain_tx_queues(struct bnx2x *bp);
+void bnx2x_squeeze_objects(struct bnx2x *bp);
 
 #endif /* BNX2X_CMN_H */

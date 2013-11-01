@@ -570,7 +570,6 @@ static int w5100_set_macaddr(struct net_device *ndev, void *addr)
 	if (!is_valid_ether_addr(sock_addr->sa_data))
 		return -EADDRNOTAVAIL;
 	memcpy(ndev->dev_addr, sock_addr->sa_data, ETH_ALEN);
-	ndev->addr_assign_type &= ~NET_ADDR_RANDOM;
 	w5100_write_macaddr(priv);
 	return 0;
 }
@@ -755,7 +754,7 @@ static int w5100_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static int w5100_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -788,7 +787,7 @@ static int w5100_resume(struct device *dev)
 	}
 	return 0;
 }
-#endif /* CONFIG_PM */
+#endif /* CONFIG_PM_SLEEP */
 
 static SIMPLE_DEV_PM_OPS(w5100_pm_ops, w5100_suspend, w5100_resume);
 

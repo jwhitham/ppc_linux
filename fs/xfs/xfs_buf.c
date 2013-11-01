@@ -513,6 +513,7 @@ _xfs_buf_find(
 		xfs_alert(btp->bt_mount,
 			  "%s: Block out of range: block 0x%llx, EOFS 0x%llx ",
 			  __func__, blkno, eofs);
+		WARN_ON(1);
 		return NULL;
 	}
 
@@ -951,8 +952,6 @@ xfs_buf_trylock(
 	locked = down_trylock(&bp->b_sema) == 0;
 	if (locked)
 		XB_SET_OWNER(bp);
-	else if (atomic_read(&bp->b_pin_count) && (bp->b_flags & XBF_STALE))
-		xfs_log_force(bp->b_target->bt_mount, 0);
 
 	trace_xfs_buf_trylock(bp, _RET_IP_);
 	return locked;
@@ -1024,7 +1023,9 @@ xfs_buf_iodone_work(
 	bool			read = !!(bp->b_flags & XBF_READ);
 
 	bp->b_flags &= ~(XBF_READ | XBF_WRITE | XBF_READ_AHEAD);
-	if (read && bp->b_ops)
+
+	/* only validate buffers that were read without errors */
+	if (read && bp->b_ops && !bp->b_error && (bp->b_flags & XBF_DONE))
 		bp->b_ops->verify_read(bp);
 
 	if (bp->b_iodone)
@@ -1336,6 +1337,12 @@ _xfs_buf_ioapply(
 	int		size;
 	int		i;
 
+	/*
+	 * Make sure we capture only current IO errors rather than stale errors
+	 * left over from previous use of the buffer (e.g. failed readahead).
+	 */
+	bp->b_error = 0;
+
 	if (bp->b_flags & XBF_WRITE) {
 		if (bp->b_flags & XBF_SYNCIO)
 			rw = WRITE_SYNC;
@@ -1643,7 +1650,7 @@ xfs_alloc_buftarg(
 {
 	xfs_buftarg_t		*btp;
 
-	btp = kmem_zalloc(sizeof(*btp), KM_SLEEP);
+	btp = kmem_zalloc(sizeof(*btp), KM_SLEEP | KM_NOFS);
 
 	btp->bt_mount = mp;
 	btp->bt_dev =  bdev->bd_dev;

@@ -37,10 +37,8 @@
 
 #define KVM_MAX_VCPUS		NR_CPUS
 #define KVM_MAX_VCORES		NR_CPUS
-#define KVM_MEMORY_SLOTS 32
-/* memory slots that does not exposed to userspace */
-#define KVM_PRIVATE_MEM_SLOTS 4
-#define KVM_MEM_SLOTS_NUM (KVM_MEMORY_SLOTS + KVM_PRIVATE_MEM_SLOTS)
+#define KVM_USER_MEM_SLOTS 32
+#define KVM_MEM_SLOTS_NUM KVM_USER_MEM_SLOTS
 
 #ifdef CONFIG_KVM_MMIO
 #define KVM_COALESCED_MMIO_PAGE_OFFSET 1
@@ -195,6 +193,10 @@ struct kvmppc_linear_info {
 	int		 type;
 };
 
+/* XICS components, defined in book3s_xics.c */
+struct kvmppc_xics;
+struct kvmppc_icp;
+
 /*
  * The reverse mapping array has one entry for each HPTE,
  * which stores the guest's view of the second word of the HPTE
@@ -266,9 +268,13 @@ struct kvm_arch {
 #endif /* CONFIG_KVM_BOOK3S_64_HV */
 #ifdef CONFIG_PPC_BOOK3S_64
 	struct list_head spapr_tce_tables;
+	struct list_head rtas_tokens;
 #endif
 #ifdef CONFIG_KVM_MPIC
 	struct openpic *mpic;
+#endif
+#ifdef CONFIG_KVM_XICS
+	struct kvmppc_xics *xics;
 #endif
 };
 
@@ -315,11 +321,13 @@ struct kvmppc_vcore {
  * that a guest can register.
  */
 struct kvmppc_vpa {
+	unsigned long gpa;	/* Current guest phys addr */
 	void *pinned_addr;	/* Address in kernel linear mapping */
 	void *pinned_end;	/* End of region */
 	unsigned long next_gpa;	/* Guest phys addr for update */
 	unsigned long len;	/* Number of bytes required */
 	u8 update_pending;	/* 1 => update pinned_addr from next_gpa */
+	bool dirty;		/* true => area has been modified by kernel */
 };
 
 struct kvmppc_pte {
@@ -391,6 +399,7 @@ struct kvmppc_booke_debug_reg {
 
 #define KVMPPC_IRQ_DEFAULT	0
 #define KVMPPC_IRQ_MPIC		1
+#define KVMPPC_IRQ_XICS		2
 
 struct openpic;
 
@@ -464,6 +473,7 @@ struct kvm_vcpu_arch {
 	ulong uamor;
 	u32 ctrl;
 	ulong dabr;
+	ulong cfar;
 #endif
 	u32 vrsave; /* also USPRG0 */
 	u32 mmucr;
@@ -587,6 +597,9 @@ struct kvm_vcpu_arch {
 	int irq_type;		/* one of KVM_IRQ_* */
 	int irq_cpu_id;
 	struct openpic *mpic;	/* KVM_IRQ_MPIC */
+#ifdef CONFIG_KVM_XICS
+	struct kvmppc_icp *icp; /* XICS presentation controller */
+#endif
 
 #ifdef CONFIG_KVM_BOOK3S_64_HV
 	struct kvm_vcpu_arch_shared shregs;

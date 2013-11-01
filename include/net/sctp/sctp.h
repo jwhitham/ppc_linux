@@ -576,7 +576,7 @@ for (pos = chunk->subh.fwdtsn_hdr->skip;\
 #define WORD_ROUND(s) (((s)+3)&~3)
 
 /* Make a new instance of type.  */
-#define t_new(type, flags)	(type *)kzalloc(sizeof(type), flags)
+#define t_new(type, flags)	kzalloc(sizeof(type), flags)
 
 /* Compare two timevals.  */
 #define tv_lt(s, t) \
@@ -675,8 +675,8 @@ static inline int sctp_vtag_hashfn(__u16 lport, __u16 rport, __u32 vtag)
 	return h & (sctp_assoc_hashsize - 1);
 }
 
-#define sctp_for_each_hentry(epb, node, head) \
-	hlist_for_each_entry(epb, node, head, node)
+#define sctp_for_each_hentry(epb, head) \
+	hlist_for_each_entry(epb, head, node)
 
 /* Is a socket of this style? */
 #define sctp_style(sk, style) __sctp_style((sk), (SCTP_SOCKET_##style))

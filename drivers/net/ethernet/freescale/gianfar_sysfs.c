@@ -511,5 +511,5 @@ void gfar_init_sysfs(struct net_device *dev)
 	rc |= device_create_file(&dev->dev, &dev_attr_recycle_target);
 	rc |= device_create_file(&dev->dev, &dev_attr_ptp_1588);
 	if (rc)
-		dev_err(&dev->dev, "Error creating gianfar sysfs files.\n");
+		dev_err(&dev->dev, "Error creating gianfar sysfs files\n");
 }

@@ -405,6 +405,10 @@ struct snd_soc_dai_driver mmp_sspa_dai = {
 	.ops = &mmp_sspa_dai_ops,
 };
 
+static const struct snd_soc_component_driver mmp_sspa_component = {
+	.name		= "mmp-sspa",
+};
+
 static int asoc_mmp_sspa_probe(struct platform_device *pdev)
 {
 	struct sspa_priv *priv;
@@ -429,9 +433,9 @@ static int asoc_mmp_sspa_probe(struct platform_device *pdev)
 	if (res == NULL)
 		return -ENOMEM;
 
-	priv->sspa->mmio_base = devm_request_and_ioremap(&pdev->dev, res);
-	if (priv->sspa->mmio_base == NULL)
-		return -ENODEV;
+	priv->sspa->mmio_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(priv->sspa->mmio_base))
+		return PTR_ERR(priv->sspa->mmio_base);
 
 	priv->sspa->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(priv->sspa->clk))
@@ -450,7 +454,8 @@ static int asoc_mmp_sspa_probe(struct platform_device *pdev)
 	priv->dai_fmt = (unsigned int) -1;
 	platform_set_drvdata(pdev, priv);
 
-	return snd_soc_register_dai(&pdev->dev, &mmp_sspa_dai);
+	return snd_soc_register_component(&pdev->dev, &mmp_sspa_component,
+					  &mmp_sspa_dai, 1);
 }
 
 static int asoc_mmp_sspa_remove(struct platform_device *pdev)
@@ -460,7 +465,7 @@ static int asoc_mmp_sspa_remove(struct platform_device *pdev)
 	clk_disable(priv->audio_clk);
 	clk_put(priv->audio_clk);
 	clk_put(priv->sysclk);
-	snd_soc_unregister_dai(&pdev->dev);
+	snd_soc_unregister_component(&pdev->dev);
 	return 0;
 }
 

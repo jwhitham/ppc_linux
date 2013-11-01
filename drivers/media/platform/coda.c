@@ -14,6 +14,7 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/firmware.h>
+#include <linux/genalloc.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/irq.h>
@@ -23,7 +24,7 @@
 #include <linux/slab.h>
 #include <linux/videodev2.h>
 #include <linux/of.h>
-#include <linux/platform_data/imx-iram.h>
+#include <linux/platform_data/coda.h>
 
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -43,6 +44,7 @@
 #define CODA7_WORK_BUF_SIZE	(512 * 1024 + CODA_FMO_BUF_SIZE * 8 * 1024)
 #define CODA_PARA_BUF_SIZE	(10 * 1024)
 #define CODA_ISRAM_SIZE	(2048 * 2)
+#define CODADX6_IRAM_SIZE	0xb000
 #define CODA7_IRAM_SIZE		0x14000 /* 81920 bytes */
 
 #define CODA_MAX_FRAMEBUFFERS	2
@@ -128,7 +130,10 @@ struct coda_dev {
 
 	struct coda_aux_buf	codebuf;
 	struct coda_aux_buf	workbuf;
+	struct gen_pool		*iram_pool;
+	long unsigned int	iram_vaddr;
 	long unsigned int	iram_paddr;
+	unsigned long		iram_size;
 
 	spinlock_t		irqlock;
 	struct mutex		dev_mutex;
@@ -177,6 +182,10 @@ struct coda_ctx {
 	int				num_internal_frames;
 	int				idx;
 };
+
+static const u8 coda_filler_nal[14] = { 0x00, 0x00, 0x00, 0x01, 0x0c, 0xff,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x80 };
+static const u8 coda_filler_size[8] = { 0, 7, 14, 13, 12, 11, 10, 9 };
 
 static inline void coda_write(struct coda_dev *dev, u32 data, u32 reg)
 {
@@ -567,6 +576,14 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 	return v4l2_m2m_dqbuf(file, ctx->m2m_ctx, buf);
 }
 
+static int vidioc_create_bufs(struct file *file, void *priv,
+			      struct v4l2_create_buffers *create)
+{
+	struct coda_ctx *ctx = fh_to_ctx(priv);
+
+	return v4l2_m2m_create_bufs(file, ctx->m2m_ctx, create);
+}
+
 static int vidioc_streamon(struct file *file, void *priv,
 			   enum v4l2_buf_type type)
 {
@@ -601,6 +618,7 @@ static const struct v4l2_ioctl_ops coda_ioctl_ops = {
 
 	.vidioc_qbuf		= vidioc_qbuf,
 	.vidioc_dqbuf		= vidioc_dqbuf,
+	.vidioc_create_bufs	= vidioc_create_bufs,
 
 	.vidioc_streamon	= vidioc_streamon,
 	.vidioc_streamoff	= vidioc_streamoff,
@@ -944,6 +962,24 @@ static int coda_alloc_framebuffers(struct coda_ctx *ctx, struct coda_q_data *q_d
 	return 0;
 }
 
+static int coda_h264_padding(int size, char *p)
+{
+	int nal_size;
+	int diff;
+
+	diff = size - (size & ~0x7);
+	if (diff == 0)
+		return 0;
+
+	nal_size = coda_filler_size[diff];
+	memcpy(p, coda_filler_nal, nal_size);
+
+	/* Add rbsp stop bit and trailing at the end */
+	*(p + nal_size - 1) = 0x80;
+
+	return nal_size;
+}
+
 static int coda_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct coda_ctx *ctx = vb2_get_drv_priv(q);
@@ -1171,7 +1207,15 @@ static int coda_start_streaming(struct vb2_queue *q, unsigned int count)
 				coda_read(dev, CODA_CMD_ENC_HEADER_BB_START);
 		memcpy(&ctx->vpu_header[1][0], vb2_plane_vaddr(buf, 0),
 		       ctx->vpu_header_size[1]);
-		ctx->vpu_header_size[2] = 0;
+		/*
+		 * Length of H.264 headers is variable and thus it might not be
+		 * aligned for the coda to append the encoded frame. In that is
+		 * the case a filler NAL must be added to header 2.
+		 */
+		ctx->vpu_header_size[2] = coda_h264_padding(
+					(ctx->vpu_header_size[0] +
+					 ctx->vpu_header_size[1]),
+					 ctx->vpu_header[2]);
 		break;
 	case V4L2_PIX_FMT_MPEG4:
 		/*
@@ -1392,6 +1436,7 @@ static int coda_queue_init(void *priv, struct vb2_queue *src_vq,
 	src_vq->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
 	src_vq->ops = &coda_qops;
 	src_vq->mem_ops = &vb2_dma_contig_memops;
+	src_vq->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 
 	ret = vb2_queue_init(src_vq);
 	if (ret)
@@ -1403,6 +1448,7 @@ static int coda_queue_init(void *priv, struct vb2_queue *src_vq,
 	dst_vq->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
 	dst_vq->ops = &coda_qops;
 	dst_vq->mem_ops = &vb2_dma_contig_memops;
+	dst_vq->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 
 	return vb2_queue_init(dst_vq);
 }
@@ -1597,6 +1643,9 @@ static irqreturn_t coda_irq_handler(int irq, void *data)
 		dst_buf->v4l2_buf.flags |= V4L2_BUF_FLAG_PFRAME;
 		dst_buf->v4l2_buf.flags &= ~V4L2_BUF_FLAG_KEYFRAME;
 	}
+
+	dst_buf->v4l2_buf.timestamp = src_buf->v4l2_buf.timestamp;
+	dst_buf->v4l2_buf.timecode = src_buf->v4l2_buf.timecode;
 
 	v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_DONE);
 	v4l2_m2m_buf_done(dst_buf, VB2_BUF_STATE_DONE);
@@ -1896,6 +1945,9 @@ static int coda_probe(struct platform_device *pdev)
 	const struct of_device_id *of_id =
 			of_match_device(of_match_ptr(coda_dt_ids), &pdev->dev);
 	const struct platform_device_id *pdev_id;
+	struct coda_platform_data *pdata = pdev->dev.platform_data;
+	struct device_node *np = pdev->dev.of_node;
+	struct gen_pool *pool;
 	struct coda_dev *dev;
 	struct resource *res;
 	int ret, irq;
@@ -1958,6 +2010,16 @@ static int coda_probe(struct platform_device *pdev)
 		return -ENOENT;
 	}
 
+	/* Get IRAM pool from device tree or platform data */
+	pool = of_get_named_gen_pool(np, "iram", 0);
+	if (!pool && pdata)
+		pool = dev_get_gen_pool(pdata->iram_dev);
+	if (!pool) {
+		dev_err(&pdev->dev, "iram pool not available\n");
+		return -ENOMEM;
+	}
+	dev->iram_pool = pool;
+
 	ret = v4l2_device_register(&pdev->dev, &dev->v4l2_dev);
 	if (ret)
 		return ret;
@@ -1992,18 +2054,17 @@ static int coda_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	if (dev->devtype->product == CODA_DX6) {
-		dev->iram_paddr = 0xffff4c00;
-	} else {
-		void __iomem *iram_vaddr;
-
-		iram_vaddr = iram_alloc(CODA7_IRAM_SIZE,
-					&dev->iram_paddr);
-		if (!iram_vaddr) {
-			dev_err(&pdev->dev, "unable to alloc iram\n");
-			return -ENOMEM;
-		}
+	if (dev->devtype->product == CODA_DX6)
+		dev->iram_size = CODADX6_IRAM_SIZE;
+	else
+		dev->iram_size = CODA7_IRAM_SIZE;
+	dev->iram_vaddr = gen_pool_alloc(dev->iram_pool, dev->iram_size);
+	if (!dev->iram_vaddr) {
+		dev_err(&pdev->dev, "unable to alloc iram\n");
+		return -ENOMEM;
 	}
+	dev->iram_paddr = gen_pool_virt_to_phys(dev->iram_pool,
+						dev->iram_vaddr);
 
 	platform_set_drvdata(pdev, dev);
 
@@ -2020,8 +2081,8 @@ static int coda_remove(struct platform_device *pdev)
 	if (dev->alloc_ctx)
 		vb2_dma_contig_cleanup_ctx(dev->alloc_ctx);
 	v4l2_device_unregister(&dev->v4l2_dev);
-	if (dev->iram_paddr)
-		iram_free(dev->iram_paddr, CODA7_IRAM_SIZE);
+	if (dev->iram_vaddr)
+		gen_pool_free(dev->iram_pool, dev->iram_vaddr, dev->iram_size);
 	if (dev->codebuf.vaddr)
 		dma_free_coherent(&pdev->dev, dev->codebuf.size,
 				  &dev->codebuf.vaddr, dev->codebuf.paddr);
