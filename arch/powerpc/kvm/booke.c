@@ -386,12 +386,10 @@ static int kvmppc_booke_irqprio_deliver(struct kvm_vcpu *vcpu,
 	case BOOKE_IRQPRIO_ITLB_MISS:
 	case BOOKE_IRQPRIO_SYSCALL:
 	case BOOKE_IRQPRIO_FP_UNAVAIL:
-	case BOOKE_IRQPRIO_SPE_UNAVAIL:
-	case BOOKE_IRQPRIO_SPE_FP_DATA:
+	case BOOKE_IRQPRIO_SPE_ALTIVEC_UNAVAIL:
+	case BOOKE_IRQPRIO_SPE_FP_DATA_ALTIVEC_ASSIST:
 	case BOOKE_IRQPRIO_SPE_FP_ROUND:
 	case BOOKE_IRQPRIO_AP_UNAVAIL:
-	case BOOKE_IRQPRIO_ALTIVEC_UNAVAIL:
-	case BOOKE_IRQPRIO_ALTIVEC_ASSIST:
 		allowed = 1;
 		msr_mask = MSR_CE | MSR_ME | MSR_DE;
 		int_class = INT_CLASS_NONCRIT;
@@ -1099,70 +1097,51 @@ int kvmppc_handle_exit(struct kvm_run *run, struct kvm_vcpu *vcpu,
 		r = RESUME_GUEST;
 		break;
 
+	case BOOKE_INTERRUPT_SPE_ALTIVEC_UNAVAIL:
 #ifdef CONFIG_SPE
-	case BOOKE_INTERRUPT_SPE_UNAVAIL: {
 		if (vcpu->arch.shared->msr & MSR_SPE)
 			kvmppc_vcpu_enable_spe(vcpu);
 		else
 			kvmppc_booke_queue_irqprio(vcpu,
-						   BOOKE_IRQPRIO_SPE_UNAVAIL);
-		r = RESUME_GUEST;
-		break;
-	}
-
-	case BOOKE_INTERRUPT_SPE_FP_DATA:
-		kvmppc_booke_queue_irqprio(vcpu, BOOKE_IRQPRIO_SPE_FP_DATA);
-		r = RESUME_GUEST;
-		break;
-
-	case BOOKE_INTERRUPT_SPE_FP_ROUND:
-		kvmppc_booke_queue_irqprio(vcpu, BOOKE_IRQPRIO_SPE_FP_ROUND);
-		r = RESUME_GUEST;
-		break;
+					BOOKE_IRQPRIO_SPE_ALTIVEC_UNAVAIL);
+#elif defined(CONFIG_ALTIVEC)
+		kvmppc_booke_queue_irqprio(vcpu,
+					   BOOKE_IRQPRIO_SPE_ALTIVEC_UNAVAIL);
 #else
-	case BOOKE_INTERRUPT_SPE_UNAVAIL:
 		/*
-		 * Guest wants SPE, but host kernel doesn't support it.  Send
-		 * an "unimplemented operation" program check to the guest.
+		 * Guest wants SPE/Altivec, but host kernel doesn't support
+		 * it.  Send an "unimplemented operation" program check to
+		 * the guest.
 		 */
 		kvmppc_core_queue_program(vcpu, ESR_PUO | ESR_SPV);
+#endif
 		r = RESUME_GUEST;
 		break;
 
-	/*
-	 * These really should never happen without CONFIG_SPE,
-	 * as we should never enable the real MSR[SPE] in the guest.
-	 */
-	case BOOKE_INTERRUPT_SPE_FP_DATA:
+	case BOOKE_INTERRUPT_SPE_FP_DATA_ALTIVEC_ASSIST:
+#if defined(CONFIG_SPE) || defined(CONFIG_ALTIVEC)
+		kvmppc_booke_queue_irqprio(vcpu,
+				BOOKE_IRQPRIO_SPE_FP_DATA_ALTIVEC_ASSIST);
+		r = RESUME_GUEST;
+#else
+		printk(KERN_CRIT "%s: unexpected SPE/Altivec interrupt %u at %08lx\n",
+		       __func__, exit_nr, vcpu->arch.pc);
+		run->hw.hardware_exit_reason = exit_nr;
+		r = RESUME_HOST;
+#endif
+		break;
+
 	case BOOKE_INTERRUPT_SPE_FP_ROUND:
+#ifdef CONFIG_SPE
+		kvmppc_booke_queue_irqprio(vcpu, BOOKE_IRQPRIO_SPE_FP_ROUND);
+		r = RESUME_GUEST;
+#else
 		printk(KERN_CRIT "%s: unexpected SPE interrupt %u at %08lx\n",
 		       __func__, exit_nr, vcpu->arch.pc);
 		run->hw.hardware_exit_reason = exit_nr;
 		r = RESUME_HOST;
-		break;
 #endif
-
-#ifdef CONFIG_ALTIVEC
-	case BOOKE_INTERRUPT_ALTIVEC_UNAVAIL:
-		kvmppc_booke_queue_irqprio(vcpu,
-					   BOOKE_IRQPRIO_ALTIVEC_UNAVAIL);
-		r = RESUME_GUEST;
 		break;
-
-	case BOOKE_INTERRUPT_ALTIVEC_ASSIST:
-		kvmppc_booke_queue_irqprio(vcpu,
-					   BOOKE_IRQPRIO_ALTIVEC_ASSIST);
-		r = RESUME_GUEST;
-		break;
-#else
-	case BOOKE_INTERRUPT_ALTIVEC_UNAVAIL:
-	case BOOKE_INTERRUPT_ALTIVEC_ASSIST:
-		printk(KERN_CRIT "%s: unexpected AltiVec interrupt %u \
-			at %08lx\n", __func__, exit_nr, vcpu->arch.pc);
-		run->hw.hardware_exit_reason = exit_nr;
-		r = RESUME_HOST;
-		break;
-#endif
 
 	case BOOKE_INTERRUPT_DATA_STORAGE:
 		kvmppc_core_queue_data_storage(vcpu, vcpu->arch.fault_dear,

@@ -380,8 +380,10 @@ void kvmppc_core_get_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 	sregs->u.e.impl.fsl.hid0 = vcpu_e500->hid0;
 	sregs->u.e.impl.fsl.mcar = vcpu_e500->mcar;
 
-	sregs->u.e.ivor_high[0] = vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_UNAVAIL];
-	sregs->u.e.ivor_high[1] = vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA];
+	sregs->u.e.ivor_high[0] =
+		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_ALTIVEC_UNAVAIL];
+	sregs->u.e.ivor_high[1] =
+		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA_ALTIVEC_ASSIST];
 	sregs->u.e.ivor_high[2] = vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_ROUND];
 	sregs->u.e.ivor_high[3] =
 		vcpu->arch.ivor[BOOKE_IRQPRIO_PERFORMANCE_MONITOR];
@@ -409,9 +411,9 @@ int kvmppc_core_set_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 		return 0;
 
 	if (sregs->u.e.features & KVM_SREGS_E_SPE) {
-		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_UNAVAIL] =
+		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_ALTIVEC_UNAVAIL] =
 			sregs->u.e.ivor_high[0];
-		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA] =
+		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_DATA_ALTIVEC_ASSIST] =
 			sregs->u.e.ivor_high[1];
 		vcpu->arch.ivor[BOOKE_IRQPRIO_SPE_FP_ROUND] =
 			sregs->u.e.ivor_high[2];
