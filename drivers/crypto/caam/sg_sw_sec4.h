@@ -62,7 +62,7 @@ static inline int __sg_count(struct scatterlist *sg_list, int nbytes,
 	struct scatterlist *sg = sg_list;
 	int sg_nents = 0;
 
-	while (nbytes > 0) {
+	while (nbytes > 0 && sg) {
 		sg_nents++;
 		nbytes -= sg->length;
 		if (!sg_is_last(sg) && (sg + 1)->length == 0)
