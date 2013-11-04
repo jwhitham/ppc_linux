@@ -52,29 +52,57 @@ static uint8_t debug = -1;
 module_param(debug, byte, S_IRUGO);
 MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
 
-/* forward declarations */
-static int dpaa_eth_proxy_probe(struct platform_device *_of_dev);
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev);
-
-static const struct of_device_id dpa_proxy_match[] = {
-	{
-		.compatible	= "fsl,dpa-ethernet-init"
-	},
-	{}
-};
-MODULE_DEVICE_TABLE(of, dpa_proxy_match);
-
-static struct platform_driver dpa_proxy_driver = {
-	.driver = {
-		.name		= KBUILD_MODNAME"-proxy",
-		.of_match_table	= dpa_proxy_match,
-		.owner		= THIS_MODULE,
-	},
-	.probe		= dpaa_eth_proxy_probe,
-	.remove		= dpa_eth_proxy_remove
-};
-
 static struct proxy_device *proxy_dev;
+
+#ifdef CONFIG_PM
+
+static int proxy_suspend_noirq(struct device *dev)
+{
+	struct mac_device	*mac_dev = proxy_dev->mac_dev;
+	int			err = 0;
+
+	err = fm_port_suspend(mac_dev->port_dev[RX]);
+	if (err)
+		goto port_suspend_failed;
+
+	err = fm_port_suspend(mac_dev->port_dev[TX]);
+	if (err)
+		err = fm_port_resume(mac_dev->port_dev[RX]);
+
+port_suspend_failed:
+	return err;
+}
+
+static int proxy_resume_noirq(struct device *dev)
+{
+	struct mac_device	*mac_dev = proxy_dev->mac_dev;
+	int			err = 0;
+
+	err = fm_port_resume(mac_dev->port_dev[TX]);
+	if (err)
+		goto port_resume_failed;
+
+	err = fm_port_resume(mac_dev->port_dev[RX]);
+	if (err)
+		err = fm_port_suspend(mac_dev->port_dev[TX]);
+
+port_resume_failed:
+	return err;
+}
+
+static const struct dev_pm_ops proxy_pm_ops = {
+	.suspend_noirq = proxy_suspend_noirq,
+	.resume_noirq = proxy_resume_noirq,
+};
+
+#define PROXY_PM_OPS (&proxy_pm_ops)
+
+#else /* CONFIG_PM */
+
+#define PROXY_PM_OPS NULL
+
+#endif /* CONFIG_PM */
 
 static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 {
@@ -281,6 +309,25 @@ static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev)
 
 	return 0;
 }
+
+static const struct of_device_id dpa_proxy_match[] = {
+	{
+		.compatible	= "fsl,dpa-ethernet-init"
+	},
+	{}
+};
+MODULE_DEVICE_TABLE(of, dpa_proxy_match);
+
+static struct platform_driver dpa_proxy_driver = {
+	.driver = {
+		.name		= KBUILD_MODNAME"-proxy",
+		.of_match_table	= dpa_proxy_match,
+		.owner		= THIS_MODULE,
+		.pm		= PROXY_PM_OPS,
+	},
+	.probe		= dpaa_eth_proxy_probe,
+	.remove		= dpa_eth_proxy_remove
+};
 
 static int __init __cold dpa_proxy_load(void)
 {
