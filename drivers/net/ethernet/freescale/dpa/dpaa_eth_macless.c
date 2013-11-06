@@ -217,21 +217,26 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 
 	net_dev->netdev_ops = &dpa_macless_ops;
 
-	/* Get the MAC address */
-	mac_addr = of_get_mac_address(dpa_node);
-	if (mac_addr == NULL) {
-		if (netif_msg_probe(priv))
-			dev_err(dev, "No MAC address found!\n");
-		return -EINVAL;
-	}
-
 	if (proxy_dev) {
 		struct mac_device *mac_dev = proxy_dev->mac_dev;
 		net_dev->mem_start = mac_dev->res->start;
 		net_dev->mem_end = mac_dev->res->end;
-	}
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
+		return dpa_netdev_init(dpa_node, net_dev, mac_dev->addr,
+				tx_timeout);
+	} else {
+		/* Get the MAC address from device tree */
+		mac_addr = of_get_mac_address(dpa_node);
+
+		if (mac_addr == NULL) {
+			if (netif_msg_probe(priv))
+				dev_err(dev, "No MAC address found!\n");
+			return -EINVAL;
+		}
+
+		return dpa_netdev_init(dpa_node, net_dev, mac_addr,
+				tx_timeout);
+	}
 }
 
 /* Probing of FQs for MACless ports */
