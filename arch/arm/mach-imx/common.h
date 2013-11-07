@@ -122,6 +122,7 @@ extern void v7_secondary_startup(void);
 extern void imx_scu_map_io(void);
 extern void imx_smp_prepare(void);
 extern void imx_scu_standby_enable(void);
+extern void secondary_startup(void);
 #else
 static inline void imx_scu_map_io(void) {}
 static inline void imx_smp_prepare(void) {}
@@ -165,5 +166,6 @@ static inline void imx_init_l2cache(void) {}
 #endif
 
 extern struct smp_operations imx_smp_ops;
+extern struct smp_operations ls1021a_smp_ops;
 
 #endif

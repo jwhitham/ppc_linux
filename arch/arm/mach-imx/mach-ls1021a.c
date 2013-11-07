@@ -27,6 +27,7 @@ DT_MACHINE_START(LS1021A, "Freescale LS1021A")
 #ifdef CONFIG_ZONE_DMA
 	.dma_zone_size	= SZ_128M,
 #endif
+	.smp		= smp_ops(ls1021a_smp_ops),
 	.init_machine   = ls1021a_init_machine,
 	.dt_compat	= ls1021a_dt_compat,
 	.restart	= mxc_restart,
