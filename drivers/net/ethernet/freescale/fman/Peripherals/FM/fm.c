@@ -47,6 +47,7 @@
 #include "fm_common.h"
 #include "fm_ipc.h"
 #include "fm.h"
+#include <asm/mpc85xx.h>
 
 
 /****************************************/
@@ -4347,9 +4348,15 @@ t_Error FM_Init(t_Handle h_Fm)
     /* Reset the FM if required. */
     if (p_FmDriverParam->resetOnInit)
     {
-        WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rstc, FPM_RSTC_FM_RESET);
-        CORE_MemoryBarrier();
-        XX_UDelay(100);
+	u32 svr = mfspr(SPRN_SVR);
+
+	if (SVR_SOC_VER(svr) == SVR_T4240 && SVR_REV(svr) > 0x10) {
+		DBG(WARNING, ("Hack: No FM reset!\n"));
+	} else {
+		WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rstc, FPM_RSTC_FM_RESET);
+		CORE_MemoryBarrier();
+		XX_UDelay(100);
+	}
 
         if (GET_UINT32(p_Fm->p_FmQmiRegs->fmqm_gs) & QMI_GS_HALT_NOT_BUSY)
         {
