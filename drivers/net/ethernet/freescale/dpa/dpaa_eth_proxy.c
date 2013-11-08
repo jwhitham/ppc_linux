@@ -181,7 +181,6 @@ int dpa_proxy_set_rx_mode(struct proxy_device *proxy_dev,
 		       struct net_device *net_dev)
 {
 	struct mac_device *mac_dev = proxy_dev->mac_dev;
-	const struct dpa_priv_s	*priv = netdev_priv(net_dev);
 	int _errno;
 
 	_errno = mac_dev->set_multi(net_dev, mac_dev);
@@ -205,7 +204,9 @@ int dpa_proxy_start(struct net_device *net_dev)
 
 	_errno = mac_dev->init_phy(net_dev, mac_dev);
 	if (_errno < 0) {
-		pr_alert("init_phy() = %d\n", _errno);
+		if (netif_msg_drv(priv))
+			netdev_err(net_dev, "init_phy() = %d\n",
+					_errno);
 		return _errno;
 	}
 
@@ -214,7 +215,9 @@ int dpa_proxy_start(struct net_device *net_dev)
 
 	_errno = mac_dev->start(mac_dev);
 	if (_errno < 0) {
-		pr_alert("mac_dev->start() = %d\n", _errno);
+		if (netif_msg_drv(priv))
+			netdev_err(net_dev, "mac_dev->start() = %d\n",
+					_errno);
 		return _errno;
 	}
 
@@ -223,15 +226,15 @@ int dpa_proxy_start(struct net_device *net_dev)
 
 int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
 {
-	struct mac_device	*mac_dev;
-	int			 _errno;
-	int			i;
-
-	mac_dev = proxy_dev->mac_dev;
+	struct mac_device *mac_dev = proxy_dev->mac_dev;
+	const struct dpa_priv_s	*priv = netdev_priv(net_dev);
+	int _errno, i;
 
 	_errno = mac_dev->stop(mac_dev);
 	if (_errno < 0) {
-		pr_alert("mac_dev->stop() = %d\n", _errno);
+		if (netif_msg_drv(priv))
+			netdev_err(net_dev, "mac_dev->stop() = %d\n",
+					_errno);
 		return _errno;
 	}
 
