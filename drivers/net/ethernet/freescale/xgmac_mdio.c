@@ -180,6 +180,8 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 			return ret;
 	}
 
+	out_be32(&regs->mdio_addr, regnum);
+
 	/* Initiate the read */
 	out_be32(&regs->mdio_ctl, mdio_ctl | MDIO_CTL_READ);
 
