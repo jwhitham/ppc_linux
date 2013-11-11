@@ -250,9 +250,7 @@ static uint32_t get_largest_buf_size(uint32_t max_rx_frame_size, uint32_t buf_si
 	uint32_t bp_size = bp_head + max_rx_frame_size
 		+ NET_IP_ALIGN;			/* DPA_BP_SIZE */
 
-	bp_size = CEIL_DIV(bp_size, 16);	/* frame split in 16 frags */
-
-	return max((uint32_t)16, CEIL_DIV(bp_size, buf_size));
+	return CEIL_DIV(bp_size, buf_size);
 }
 
 /* Calculate the fifosize based on MURAM allocation, number of ports, dpde
