@@ -50,8 +50,11 @@ static unsigned long kvm_psci_vcpu_on(struct kvm_vcpu *source_vcpu)
 
 	vcpu = kvm_get_vcpu(kvm, cpu_id);
 
-	wq = kvm_arch_vcpu_wq(vcpu);
-	if (!waitqueue_active(wq))
+	/*
+	 * Make sure the caller requested a valid CPU and that the CPU is
+	 * turned off.
+	 */
+	if (!vcpu || !vcpu->arch.pause)
 		return KVM_PSCI_RET_INVAL;
 
 	kvm_reset_vcpu(vcpu);
@@ -66,6 +69,7 @@ static unsigned long kvm_psci_vcpu_on(struct kvm_vcpu *source_vcpu)
 	vcpu->arch.pause = false;
 	smp_mb();		/* Make sure the above is visible */
 
+	wq = kvm_arch_vcpu_wq(vcpu);
 	wake_up_interruptible(wq);
 
 	return KVM_PSCI_RET_SUCCESS;
