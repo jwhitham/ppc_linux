@@ -688,3 +688,5 @@
 
 /include/ "fsl/t4240si-post.dtsi"
 /include/ "fsl/qoriq-dpaa-res3.dtsi"
+/include/ "fsl/qoriq-qman-ceetm0.dtsi"
+/include/ "fsl/qoriq-qman-ceetm1.dtsi"
