@@ -1290,18 +1290,18 @@ EXPORT_SYMBOL(fm_get_tx_port_channel);
 int fm_port_enable (struct fm_port *port)
 {
     t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev*)port;
+    t_Error err = FM_PORT_Enable(p_LnxWrpFmPortDev->h_Dev);
 
-    FM_PORT_Enable(p_LnxWrpFmPortDev->h_Dev);
-
-    return 0;
+    return GET_ERROR_TYPE(err);
 }
 EXPORT_SYMBOL(fm_port_enable);
 
-void fm_port_disable(struct fm_port *port)
+int fm_port_disable(struct fm_port *port)
 {
     t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev*)port;
+    t_Error err = FM_PORT_Disable(p_LnxWrpFmPortDev->h_Dev);
 
-    FM_PORT_Disable(p_LnxWrpFmPortDev->h_Dev);
+    return GET_ERROR_TYPE(err);
 }
 EXPORT_SYMBOL(fm_port_disable);
 

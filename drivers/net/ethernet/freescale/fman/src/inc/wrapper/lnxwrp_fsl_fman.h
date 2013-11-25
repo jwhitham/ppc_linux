@@ -278,7 +278,7 @@ int fm_port_enable(struct fm_port *port);
 
  @Cautions	Allowed only after the port is initialized.
 *//***************************************************************************/
-void fm_port_disable(struct fm_port *port);
+int fm_port_disable(struct fm_port *port);
 
 void *fm_port_get_handle(const struct fm_port *port);
 
