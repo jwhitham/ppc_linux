@@ -218,8 +218,14 @@ int dpa_proxy_start(struct net_device *net_dev)
 		if (netif_msg_drv(priv))
 			netdev_err(net_dev, "mac_dev->start() = %d\n",
 					_errno);
-		return _errno;
+		goto port_enable_fail;
 	}
+
+	return _errno;
+
+port_enable_fail:
+	for_each_port_device(i, mac_dev->port_dev)
+		fm_port_disable(mac_dev->port_dev[i]);
 
 	return _errno;
 }
