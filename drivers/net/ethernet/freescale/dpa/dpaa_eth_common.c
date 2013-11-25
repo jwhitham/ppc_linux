@@ -1458,11 +1458,11 @@ void dpa_release_sgt(struct qm_sg_entry *sgt, struct bm_buffer *bmb)
 
 	do {
 		dpa_bp = dpa_bpid2pool(sgt[i].bpid);
-		BUG_ON(!dpa_bp);
+		DPA_BUG_ON(!dpa_bp);
 
 		j = 0;
 		do {
-			BUG_ON(sgt[i].extension);
+			DPA_BUG_ON(sgt[i].extension);
 
 			bmb[j].hi       = sgt[i].addr_hi;
 			bmb[j].lo       = sgt[i].addr_lo;
@@ -1488,7 +1488,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 	_bmb.lo	= fd->addr_lo;
 
 	_dpa_bp = dpa_bpid2pool(fd->bpid);
-	BUG_ON(!_dpa_bp);
+	DPA_BUG_ON(!_dpa_bp);
 
 	if (fd->format == qm_fd_sg) {
 		sgt = (phys_to_virt(bm_buf_addr(&_bmb)) + dpa_fd_offset(fd));
@@ -1581,13 +1581,13 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	case ETH_P_IP:
 		parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
 		iph = ip_hdr(skb);
-		BUG_ON(iph == NULL);
+		DPA_BUG_ON(iph == NULL);
 		l4_proto = ntohs(iph->protocol);
 		break;
 	case ETH_P_IPV6:
 		parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
 		ipv6h = ipv6_hdr(skb);
-		BUG_ON(ipv6h == NULL);
+		DPA_BUG_ON(ipv6h == NULL);
 		l4_proto = ntohs(ipv6h->nexthdr);
 		break;
 	default:

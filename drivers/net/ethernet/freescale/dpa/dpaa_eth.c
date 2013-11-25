@@ -271,7 +271,7 @@ static int dpaa_eth_poll(struct napi_struct *napi, int budget)
 		int tmp;
 		napi_complete(napi);
 		tmp = qman_p_irqsource_add(np->p, QM_PIRQ_DQRI);
-		BUG_ON(tmp);
+		DPA_BUG_ON(tmp);
 	}
 
 	return cleaned;
