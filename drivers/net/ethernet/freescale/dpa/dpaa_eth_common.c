@@ -151,8 +151,11 @@ int __cold dpa_start(struct net_device *net_dev)
 		return err;
 	}
 
-	for_each_port_device(i, mac_dev->port_dev)
-		fm_port_enable(mac_dev->port_dev[i]);
+	for_each_port_device(i, mac_dev->port_dev) {
+		err = fm_port_enable(mac_dev->port_dev[i]);
+		if (err)
+			goto mac_start_failed;
+	}
 
 	err = priv->mac_dev->start(mac_dev);
 	if (err < 0) {
@@ -174,7 +177,7 @@ mac_start_failed:
 
 int __cold dpa_stop(struct net_device *net_dev)
 {
-	int _errno, i;
+	int _errno, i, err;
 	struct dpa_priv_s *priv;
 	struct mac_device *mac_dev;
 
@@ -193,8 +196,10 @@ int __cold dpa_stop(struct net_device *net_dev)
 			netdev_err(net_dev, "mac_dev->stop() = %d\n",
 					_errno);
 
-	for_each_port_device(i, mac_dev->port_dev)
-		fm_port_disable(mac_dev->port_dev[i]);
+	for_each_port_device(i, mac_dev->port_dev) {
+		err = fm_port_disable(mac_dev->port_dev[i]);
+		_errno = err ? err : _errno;
+	}
 
 	if (mac_dev->phy_dev)
 		phy_disconnect(mac_dev->phy_dev);

@@ -155,10 +155,20 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	devm_kfree(dev, port_fqs.tx_defq);
 	devm_kfree(dev, port_fqs.tx_errq);
 
-	for_each_port_device(i, mac_dev->port_dev)
-		fm_port_enable(mac_dev->port_dev[i]);
+	for_each_port_device(i, mac_dev->port_dev) {
+		err = fm_port_enable(mac_dev->port_dev[i]);
+		if (err)
+			goto port_enable_fail;
+	}
 
 	return 0; /* Proxy interface initialization ended */
+
+port_enable_fail:
+	for_each_port_device(i, mac_dev->port_dev)
+		fm_port_disable(mac_dev->port_dev[i]);
+	dpa_eth_proxy_remove(_of_dev);
+
+	return err;
 }
 
 int dpa_proxy_set_mac_address(struct proxy_device *proxy_dev,
@@ -210,8 +220,11 @@ int dpa_proxy_start(struct net_device *net_dev)
 		return _errno;
 	}
 
-	for_each_port_device(i, mac_dev->port_dev)
-		fm_port_enable(mac_dev->port_dev[i]);
+	for_each_port_device(i, mac_dev->port_dev) {
+		_errno = fm_port_enable(mac_dev->port_dev[i]);
+		if (_errno)
+			goto port_enable_fail;
+	}
 
 	_errno = mac_dev->start(mac_dev);
 	if (_errno < 0) {
@@ -234,7 +247,7 @@ int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
 {
 	struct mac_device *mac_dev = proxy_dev->mac_dev;
 	const struct dpa_priv_s	*priv = netdev_priv(net_dev);
-	int _errno, i;
+	int _errno, i, err;
 
 	_errno = mac_dev->stop(mac_dev);
 	if (_errno < 0) {
@@ -244,8 +257,10 @@ int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
 		return _errno;
 	}
 
-	for_each_port_device(i, mac_dev->port_dev)
-		fm_port_disable(mac_dev->port_dev[i]);
+	for_each_port_device(i, mac_dev->port_dev) {
+		err = fm_port_disable(mac_dev->port_dev[i]);
+		_errno = err ? err : _errno;
+	}
 
 	if (mac_dev->phy_dev)
 		phy_disconnect(mac_dev->phy_dev);

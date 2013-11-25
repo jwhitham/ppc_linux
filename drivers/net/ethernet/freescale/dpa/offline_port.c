@@ -534,7 +534,10 @@ init_port:
 	dev_set_drvdata(dpa_oh_dev, oh_config);
 
 	/* Enable the OH port */
-	fm_port_enable(oh_config->oh_port);
+	_errno = fm_port_enable(oh_config->oh_port);
+	if (_errno)
+		goto return_kfree;
+
 	dev_info(dpa_oh_dev, "OH port %s enabled.\n", oh_node->full_name);
 
 	return 0;
@@ -578,7 +581,7 @@ static int __cold oh_port_remove(struct platform_device *_of_dev)
 		goto free_egress_fqs;
 	}
 
-	fm_port_disable(oh_config->oh_port);
+	_errno = fm_port_disable(oh_config->oh_port);
 
 free_egress_fqs:
 	if (oh_config->egress_fqs)
