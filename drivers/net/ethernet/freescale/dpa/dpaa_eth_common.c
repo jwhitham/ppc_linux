@@ -167,6 +167,10 @@ int __cold dpa_stop(struct net_device *net_dev)
 	mac_dev = priv->mac_dev;
 
 	netif_tx_stop_all_queues(net_dev);
+	/* Allow the Fman (Tx) port to process in-flight frames before we
+	 * try switching it off.
+	 */
+	usleep_range(5000, 10000);
 
 	_errno = mac_dev->stop(mac_dev);
 	if (unlikely(_errno < 0))
