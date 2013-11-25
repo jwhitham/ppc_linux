@@ -516,6 +516,12 @@ static int __cold dpa_eth_priv_stop(struct net_device *net_dev)
 	struct dpa_priv_s *priv;
 
 	_errno = dpa_stop(net_dev);
+	/* Allow NAPI to consume any frame still in the Rx/TxConfirm
+	 * ingress queues. This is to avoid a race between the current
+	 * context and ksoftirqd which could leave NAPI disabled while
+	 * in fact there's still Rx traffic to be processed.
+	 */
+	usleep_range(5000, 10000);
 
 	priv = netdev_priv(net_dev);
 	dpaa_eth_napi_disable(priv);
