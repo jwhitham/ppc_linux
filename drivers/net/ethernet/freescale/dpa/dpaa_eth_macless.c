@@ -376,7 +376,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	priv->mac_dev = NULL;
 
-	priv->channel = dpa_get_channel(dev, dpa_node);
+	priv->channel = dpa_get_channel();
 
 	if (priv->channel < 0) {
 		err = priv->channel;

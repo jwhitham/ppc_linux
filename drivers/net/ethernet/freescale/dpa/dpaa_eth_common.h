@@ -177,7 +177,7 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 		     struct fm_port_fqs *port_fqs,
 		     bool tx_conf_fqs_per_core,
 		     enum port_type ptype);
-int dpa_get_channel(struct device *dev, struct device_node *dpa_node);
+int dpa_get_channel(void);
 int dpaa_eth_add_channel(void *__arg);
 int dpaa_eth_cgr_init(struct dpa_priv_s *priv);
 void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,

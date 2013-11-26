@@ -799,7 +799,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	priv->mac_dev = mac_dev;
 
-	priv->channel = dpa_get_channel(dev, dpa_node);
+	priv->channel = dpa_get_channel();
 
 	if (priv->channel < 0) {
 		err = priv->channel;

@@ -939,7 +939,7 @@ invalid_error_queue:
 static u32 rx_pool_channel;
 static DEFINE_SPINLOCK(rx_pool_channel_init);
 
-int dpa_get_channel(struct device *dev, struct device_node *dpa_node)
+int dpa_get_channel()
 {
 	spin_lock(&rx_pool_channel_init);
 	if (!rx_pool_channel) {
