@@ -529,10 +529,10 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	int use_gro = net_dev->features & NETIF_F_GRO;
 	int *count_ptr;
 
-	if (unlikely(fd_status & FM_FD_STAT_ERRORS) != 0) {
+	if (unlikely(fd_status & FM_FD_STAT_RX_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_warn(net_dev, "FD status = 0x%08x\n",
-					fd_status & FM_FD_STAT_ERRORS);
+					fd_status & FM_FD_STAT_RX_ERRORS);
 
 		percpu_stats->rx_errors++;
 		goto _release_frame;

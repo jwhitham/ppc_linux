@@ -243,10 +243,10 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 	dpa_bp = dpa_bpid2pool(fd->bpid);
 	BUG_ON(!dpa_bp);
 
-	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
+	if (unlikely(fd->status & FM_FD_STAT_RX_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_warn(net_dev, "FD status = 0x%08x\n",
-					fd->status & FM_FD_STAT_ERRORS);
+					fd->status & FM_FD_STAT_RX_ERRORS);
 
 		percpu_priv->stats.rx_errors++;
 
@@ -376,7 +376,7 @@ shared_tx_error_dqrr(struct qman_portal                *portal,
 
 	if (netif_msg_hw(priv) && net_ratelimit())
 		netdev_warn(net_dev, "FD status = 0x%08x\n",
-				fd->status & FM_FD_STAT_ERRORS);
+				fd->status & FM_FD_STAT_TX_ERRORS);
 
 	if ((fd->format == qm_fd_sg) && (!dpa_bp->vaddr))
 		dpa_fd_release_sg(net_dev, fd);
@@ -407,10 +407,10 @@ shared_tx_default_dqrr(struct qman_portal              *portal,
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
+	if (unlikely(fd->status & FM_FD_STAT_TX_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_warn(net_dev, "FD status = 0x%08x\n",
-					fd->status & FM_FD_STAT_ERRORS);
+					fd->status & FM_FD_STAT_TX_ERRORS);
 
 		percpu_priv->stats.tx_errors++;
 	}

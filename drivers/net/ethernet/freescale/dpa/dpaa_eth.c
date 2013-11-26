@@ -157,7 +157,7 @@ static void _dpa_rx_error(struct net_device *net_dev,
 	else
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_err(net_dev, "Err FD status = 0x%08x\n",
-					fd->status & FM_FD_STAT_ERRORS);
+					fd->status & FM_FD_STAT_RX_ERRORS);
 
 	if (dpaa_eth_hooks.rx_error &&
 		dpaa_eth_hooks.rx_error(net_dev, fd, fqid) == DPAA_ETH_STOLEN)
@@ -190,7 +190,7 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 
 	if (netif_msg_hw(priv) && net_ratelimit())
 		netdev_warn(net_dev, "FD status = 0x%08x\n",
-				fd->status & FM_FD_STAT_ERRORS);
+				fd->status & FM_FD_STAT_TX_ERRORS);
 
 	if (dpaa_eth_hooks.tx_error &&
 		dpaa_eth_hooks.tx_error(net_dev, fd, fqid) == DPAA_ETH_STOLEN)
@@ -287,10 +287,10 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 
 	/* do we need the timestamp for the error frames? */
 
-	if (unlikely(fd->status & FM_FD_STAT_ERRORS) != 0) {
+	if (unlikely(fd->status & FM_FD_STAT_TX_ERRORS) != 0) {
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_warn(net_dev, "FD status = 0x%08x\n",
-					fd->status & FM_FD_STAT_ERRORS);
+					fd->status & FM_FD_STAT_TX_ERRORS);
 
 		percpu_priv->stats.tx_errors++;
 	}
