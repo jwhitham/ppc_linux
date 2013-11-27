@@ -209,7 +209,16 @@ int fman_memac_init(struct memac_regs *regs,
             tmp |= IF_MODE_RGMII | IF_MODE_RGMII_AUTO;
     }
     iowrite32be(tmp, &regs->if_mode);
-
+    
+    /* from RM: For 10G rate mac tx_fifo_sections[TX_AVAIL] should be 0x19 */
+    if (enet_interface == E_ENET_IF_XGMII || 
+        enet_interface == E_ENET_IF_XFI) {
+        tmp = ioread32be(&regs->tx_fifo_sections);
+        tmp &= 0xffff0000;
+        tmp |= 0x00000019;
+        iowrite32be(tmp, &regs->tx_fifo_sections);
+    }
+    
     /* clear all pending events and set-up interrupts */
     fman_memac_ack_event(regs, 0xffffffff);
     fman_memac_set_exception(regs, exceptions, TRUE);

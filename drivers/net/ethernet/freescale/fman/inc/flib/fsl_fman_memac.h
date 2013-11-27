@@ -168,7 +168,10 @@ struct memac_regs {
 	uint32_t command_config;	/* 0x008 Ctrl and cfg */
 	struct mac_addr mac_addr0;	/* 0x00C-0x010 MAC_ADDR_0...1 */
 	uint32_t maxfrm;		/* 0x014 Max frame length */
-	uint32_t res0018[5];
+	uint32_t res0018[1];
+	uint32_t rx_fifo_sections;	/* Receive FIFO configuration reg */
+	uint32_t tx_fifo_sections;	/* Transmit FIFO configuration reg */
+	uint32_t res0024[2];
 	uint32_t hashtable_ctrl;	/* 0x02C Hash table control */
 	uint32_t res0030[4];
 	uint32_t ievent;		/* 0x040 Interrupt event */
