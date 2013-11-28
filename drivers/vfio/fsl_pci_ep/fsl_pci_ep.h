@@ -27,6 +27,9 @@
 #define PCI_EP_PF_OFFSET 0x2000
 #define FSL_PCI_EP_BAR_NUM 4
 #define FSL_PCI_EP_OW_NUM 5
+#define FSL_PCI_EP_MSIX_OW_SIZE (4 * 1024) /* 4k */
+#define FSL_PCI_EP_MSIX_IW_SIZE (8 * 1024) /* 8k */
+#define FSL_PCI_MSIX_IW_ATTR 0x80f44000
 
 #define PCI_EP_WIN_INDEX_SHIFT 36
 #define PCI_EP_WIN_INDEX_MASK 0xf
@@ -67,6 +70,7 @@ struct pci_pf_dev {
 	struct ccsr_pci __iomem	*regs;
 	u8			iw_num;
 	u8			ow_num;
+	bool			msix_enable;
 	resource_size_t pci_mem_offset;
 	struct resource mem_resources[3];
 	/* VF info */

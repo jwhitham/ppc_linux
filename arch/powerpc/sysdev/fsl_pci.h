@@ -32,6 +32,22 @@ struct platform_device;
 #define PIWAR_WRITE_SNOOP	0x00005000
 #define PIWAR_SZ_MASK          0x0000003f
 
+#define PAOR_LIODON_MODE 1	/* To access LIODN permission table */
+#define PAOR_MSIX_VECTOR_MODE 2	/* To access MSI-X table structure */
+#define PAOR_MSIX_PBA_MODE 3	/* To access MSI-X PBA structure */
+#define PAOR_MSIX_PF_TYPE 0	/* Access physical function MSIX */
+#define PAOR_MSIX_VF_TYPE 1	/* Access virtual function MSIX */
+#define PAOR_MSIX_TYPE_SHIFT 31
+#define PAOR_MSIX_PF_SHIFT 26
+#define PAOR_MSIX_VF_SHIFT 16
+#define PAOR_MSIX_ENTRY_IDX_SHIFT 8
+#define PAOR_MSIX_ENTRY_EIDX_SHIFT 4
+#define PAOR_MSIX_CONTROL_IDX 3
+#define PAOR_MSIX_MSG_DATA_IDX 2
+#define PAOR_MSIX_MSG_UADDR_IDX 1
+#define PAOR_MSIX_MSG_LADDR_IDX 0
+#define PCIE_MSIX_VECTOR_MAX_NUM 8
+
 /* PCI/PCI Express outbound window reg */
 struct pci_outbound_window_regs {
 	__be32	potar;	/* 0x.0 - Outbound translation address register */
@@ -91,6 +107,14 @@ struct pcie_err_regs {
 	u8	res24[4];
 };
 
+/* PCI Express Utility Registers */
+struct pcie_utility_regs {
+	__be32	pex_aor;	/* 0x050 - PCIE address offset register */
+	u8	res_0x054[4];
+	__be32	pex_udr;	/* 0x058 - PCIE upper data register */
+	__be32	pex_ldr;	/* 0x05c - PCIE lower data register */
+};
+
 /* PCI/PCI Express IO block registers for 85xx/86xx */
 struct ccsr_pci {
 	__be32	config_addr;		/* 0x.000 - PCI/PCIE Configuration Address Register */
@@ -105,7 +129,9 @@ struct ccsr_pci {
 	__be32	pex_pme_mes_disr;	/* 0x.024 - PCIE PME and message disable register */
 	__be32	pex_pme_mes_ier;	/* 0x.028 - PCIE PME and message interrupt enable register */
 	__be32	pex_pmcr;		/* 0x.02c - PCIE power management command register */
-	u8	res3[3016];
+	u8	res_030[32];
+	struct pcie_utility_regs putil;
+	u8	res_060[2968];
 	__be32	block_rev1;	/* 0x.bf8 - PCIE Block Revision register 1 */
 	__be32	block_rev2;	/* 0x.bfc - PCIE Block Revision register 2 */
 
@@ -115,7 +141,10 @@ struct ccsr_pci {
  * in all of the other outbound windows.
  */
 	struct pci_outbound_window_regs pow[5];
-	u8	res14[96];
+	u8	res_ca0[32];
+	/* 0xcc0 - 0xcdc MSI-X Trap Outbound Window Address Registers */
+	struct pci_outbound_window_regs msixow;
+	u8	res_ce0[32];
 	struct pci_inbound_window_regs	pmit;	/* 0xd00 - 0xd9c Inbound MSI */
 	u8	res6[96];
 /* PCI/PCI Express inbound window 3-0

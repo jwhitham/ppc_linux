@@ -36,6 +36,7 @@ enum PCI_EP_REGION_TYPE {
 	PCI_EP_REGION_REGS,
 	PCI_EP_REGION_CONFIG,
 	PCI_EP_REGION_MEM,
+	PCI_EP_REGION_MSIX_OBWIN
 };
 
 enum PCI_EP_REGION_INDEX {
@@ -72,6 +73,7 @@ struct pci_ep_info {
 	uint32_t ow_num;
 	uint32_t vf_iw_num;
 	uint32_t vf_ow_num;
+	bool msix_enable;
 };
 
 #endif

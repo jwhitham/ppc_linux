@@ -81,6 +81,7 @@ static long fsl_pci_ep_vfio_ioctl(void *device_data,
 		info.type = ep->type;
 		info.pf_idx = ep->pf->idx;
 		info.vf_idx = ep->idx;
+		info.msix_enable = ep->pf->msix_enable;
 		if (ep->type == PCI_EP_TYPE_PF) {
 			info.vf_iw_num = ep->pf->vf_iw_num;
 			info.vf_ow_num = ep->pf->vf_iw_num;

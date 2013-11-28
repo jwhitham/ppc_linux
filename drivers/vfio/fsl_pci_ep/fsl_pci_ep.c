@@ -47,6 +47,62 @@ LIST_HEAD(pci_ep_controllers);
 
 static int global_phb_number;	/* Global phb counter */
 
+u32 fsl_pci_msix_vector_read(struct pci_ep_dev *ep, int vector, int eidx)
+{
+	struct pcie_utility_regs *putil;
+	int type, vf_idx, addr, data;
+
+	putil = &ep->pf->regs->putil;
+
+	if (ep->type == PCI_EP_TYPE_PF) {
+		type = PAOR_MSIX_PF_TYPE;
+		vf_idx = 0;
+	} else {
+		type = PAOR_MSIX_VF_TYPE;
+		vf_idx = ep->idx - 1;
+	}
+
+	addr = type << PAOR_MSIX_TYPE_SHIFT |
+	       ep->pf->idx << PAOR_MSIX_PF_SHIFT |
+	       vf_idx << PAOR_MSIX_VF_SHIFT |
+	       vector << PAOR_MSIX_ENTRY_IDX_SHIFT |
+	       eidx << PAOR_MSIX_ENTRY_EIDX_SHIFT |
+	       PAOR_MSIX_VECTOR_MODE;
+
+	iowrite32be(addr, &putil->pex_aor);
+	data = ioread32(&putil->pex_ldr);
+
+	return data;
+}
+
+u32 fsl_pci_msix_pba_read(struct pci_ep_dev *ep, int vector)
+{
+	struct pcie_utility_regs *putil;
+	int type, vf_idx, addr, data;
+
+	putil = &ep->pf->regs->putil;
+
+	if (ep->type == PCI_EP_TYPE_PF) {
+		type = PAOR_MSIX_PF_TYPE;
+		vf_idx = 0;
+	} else {
+		type = PAOR_MSIX_VF_TYPE;
+		vf_idx = ep->idx - 1;
+	}
+
+	addr = type << PAOR_MSIX_TYPE_SHIFT |
+	       ep->pf->idx << PAOR_MSIX_PF_SHIFT |
+	       vf_idx << PAOR_MSIX_VF_SHIFT |
+	       vector << PAOR_MSIX_ENTRY_IDX_SHIFT |
+	       (vector / 32) << PAOR_MSIX_ENTRY_EIDX_SHIFT |
+	       PAOR_MSIX_PBA_MODE;
+
+	iowrite32be(addr, &putil->pex_aor);
+	data = ioread32(&putil->pex_ldr);
+
+	return data;
+}
+
 static inline size_t attr_to_size(u32 attr)
 {
 	int bits = (attr & 0x3f);
@@ -202,6 +258,29 @@ static int fsl_pci_ep_get_obwin(struct pci_ep_dev *ep,
 	return 0;
 }
 
+static int fsl_pci_ep_get_msixobwin(struct pci_ep_dev *ep,
+				    struct pci_ep_win *win)
+{
+	struct pci_pf_dev *pf = ep->pf;
+	struct pci_outbound_window_regs *ow_regs;
+
+
+	if (ep->type != PCI_EP_TYPE_PF)
+		return -EINVAL;
+
+	ow_regs = &pf->regs->msixow;
+
+	spin_lock(&pf->lock);
+	win->cpu_addr = ((u64)in_be32(&ow_regs->powbar)) << 12;
+	win->pci_addr = 0;
+	win->attr = in_be32(&ow_regs->powar);
+	spin_unlock(&pf->lock);
+
+	win->size = attr_to_size(win->attr);
+
+	return 0;
+}
+
 static int fsl_pci_ep_get_vfibwin(struct pci_ep_dev *ep,
 				struct pci_ep_win *win)
 {
@@ -307,7 +386,10 @@ int fsl_pci_ep_get_win(struct pci_ep_dev *ep, struct pci_ep_win *win)
 		break;
 	case PCI_EP_REGION_MEM:
 		ret = fsl_pci_ep_get_mem_win(ep, win);
-
+		break;
+	case PCI_EP_REGION_MSIX_OBWIN:
+		ret = fsl_pci_ep_get_msixobwin(ep, win);
+		break;
 	default:
 		ret = -EINVAL;
 	}
@@ -393,6 +475,32 @@ static int fsl_pci_ep_set_obwin(struct pci_ep_dev *ep,
 	return 0;
 }
 
+static int fsl_pci_ep_set_msixobwin(struct pci_ep_dev *ep,
+				    struct pci_ep_win *win)
+{
+	struct pci_pf_dev *pf = ep->pf;
+	struct pci_outbound_window_regs *ow_regs;
+	u32 flags = 0x8000400b; /* enable 4K MSIX outbound window */
+
+	ow_regs = &pf->regs->msixow;
+
+	if (ep->type != PCI_EP_TYPE_PF)
+		return -EINVAL;
+
+	if (win->size != FSL_PCI_EP_MSIX_OW_SIZE)
+		return -EINVAL;
+
+	spin_lock(&pf->lock);
+	out_be32(&ow_regs->powbar, win->cpu_addr >> 12);
+	if (win->attr) /* use the specific attribute */
+		out_be32(&ow_regs->powar, win->attr);
+	else /* use the default attribute */
+		out_be32(&ow_regs->powar, flags);
+	spin_unlock(&pf->lock);
+
+	return 0;
+}
+
 static int fsl_pci_ep_set_vfibwin(struct pci_ep_dev *ep,
 				struct pci_ep_win *win)
 {
@@ -470,6 +578,9 @@ int fsl_pci_ep_set_win(struct pci_ep_dev *ep, struct pci_ep_win *win)
 		break;
 	case PCI_EP_REGION_VF_OBWIN:
 		ret = fsl_pci_ep_set_vfobwin(ep, win);
+		break;
+	case PCI_EP_REGION_MSIX_OBWIN:
+		ret = fsl_pci_ep_set_msixobwin(ep, win);
 		break;
 	default:
 		ret = -EINVAL;
@@ -659,6 +770,16 @@ outbound_windows_show(struct device *dev,
 
 	if (ep->type == PCI_EP_TYPE_PF) {
 		struct pci_pf_dev *pf = ep->pf;
+		if (pf->msix_enable) {
+			fsl_pci_ep_get_msixobwin(ep, &win);
+				str += sprintf(str, "MSIX Outbound Window:\n"
+						"\tcpu_addr:0x%016llx\n"
+						"\twin_size:0x%016llx"
+						" attribute:0x%08x\n",
+						win.cpu_addr,
+						win.size,
+						win.attr);
+		}
 
 		if (pf->vf_regs) {
 			for (i = 0; i < pf->vf_ow_num; i++) {
@@ -706,12 +827,43 @@ ep_type_show(struct device *dev, struct device_attribute *attr, char *buf)
 		       ep->type == PCI_EP_TYPE_PF ? "PF" : "VF");
 }
 
+static ssize_t
+msix_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct pci_ep_dev *ep = container_of(dev, struct pci_ep_dev, dev);
+	char *str = buf;
+	int i;
+
+	if (!ep->pf->msix_enable) {
+		str += sprintf(str, "Not support MSIX\n");
+		return str - buf;
+	}
+
+	for (i = 0; i < PCIE_MSIX_VECTOR_MAX_NUM; i++) {
+		str += sprintf(str,
+				"MSIX venctor %d:\n"
+				"\tcontrol:0x%x data:0x%08x addr:0x%016llx\n",
+				i,
+				fsl_pci_msix_vector_read(ep, i,
+						PAOR_MSIX_CONTROL_IDX),
+				fsl_pci_msix_vector_read(ep, i,
+						PAOR_MSIX_MSG_DATA_IDX),
+				(u64) fsl_pci_msix_vector_read(ep, i,
+						PAOR_MSIX_MSG_UADDR_IDX) << 32 |
+					fsl_pci_msix_vector_read(ep, i,
+						PAOR_MSIX_MSG_LADDR_IDX));
+	}
+
+	return str - buf;
+}
+
 struct device_attribute pci_ep_attrs[] = {
 	__ATTR_RO(ep_type),
 	__ATTR_RO(pf_idx),
 	__ATTR_RO(vf_idx),
 	__ATTR_RO(inbound_windows),
 	__ATTR_RO(outbound_windows),
+	__ATTR_RO(msix),
 	__ATTR_NULL,
 };
 
@@ -987,7 +1139,7 @@ static int fsl_pci_pf_atmu_init(struct pci_pf_dev *pf)
 	struct pci_ep_win win;
 	int i, bits;
 	int win_idx = 3, start_idx = 1, end_idx = 4;
-	u64 sz;
+	u64 sz, reserve_sz = 0, free_sz;
 
 	if (in_be32(&pf->regs->block_rev1) >= PCIE_IP_REV_2_2) {
 		win_idx = 2;
@@ -1013,6 +1165,17 @@ static int fsl_pci_pf_atmu_init(struct pci_pf_dev *pf)
 		win.attr = 0;
 		win.idx = 0;
 		fsl_pci_ep_set_vfobwin(ep, &win);
+
+		/* Setup VF MSIX inbound windows*/
+		if (pf->msix_enable) {
+			win.cpu_addr = 0;
+			win.pci_addr = 0;
+			win.size = FSL_PCI_EP_MSIX_IW_SIZE;
+			win.attr = FSL_PCI_MSIX_IW_ATTR |
+				   (ilog2(win.size) - 1);
+			win.idx = PCI_EP_MSI_WIN_INDEX;
+			fsl_pci_ep_set_vfibwin(ep, &win);
+		}
 	}
 
 	/* Disable all PF windows (except powar0 since it's ignored) */
@@ -1021,13 +1184,40 @@ static int fsl_pci_pf_atmu_init(struct pci_pf_dev *pf)
 	for (i = start_idx; i < end_idx; i++)
 		out_be32(&pf->regs->piw[i].piwar, 0);
 
+	/* Setup PF MSIX outbound windows */
+	if (pf->msix_enable) {
+		win.cpu_addr = pf->mem_resources[0].end -
+			       FSL_PCI_EP_MSIX_OW_SIZE + 1;
+		win.size = FSL_PCI_EP_MSIX_OW_SIZE;
+		win.attr = 0;
+		win.idx = 0;
+		fsl_pci_ep_set_msixobwin(ep, &win);
+		reserve_sz = FSL_PCI_EP_MSIX_OW_SIZE;
+	}
+
 	/* Setup PF outbound windows */
 	win.cpu_addr = pf->mem_resources[0].start + pf->vf_total * sz;
 	win.pci_addr = win.cpu_addr - pf->pci_mem_offset;
+	free_sz = pf->mem_resources[0].end - win.cpu_addr - reserve_sz + 1;
+	if (free_sz < sz) {
+		bits = ilog2(free_sz);
+		sz = 1ull << bits;
+	}
 	win.size = sz;
 	win.attr = 0;
 	win.idx = 1;
 	fsl_pci_ep_set_obwin(ep, &win);
+
+	/* Setup VF MSIX inbound windows*/
+	if (pf->msix_enable) {
+		win.cpu_addr = 0;
+		win.pci_addr = 0;
+		win.size = FSL_PCI_EP_MSIX_IW_SIZE;
+		win.attr = FSL_PCI_MSIX_IW_ATTR |
+			   (ilog2(win.size) - 1);
+		win.idx = PCI_EP_MSI_WIN_INDEX;
+		fsl_pci_ep_set_ibwin(ep, &win);
+	}
 
 	return 0;
 }
@@ -1159,6 +1349,9 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 			pr_err("Unable to map PF%d ccsr regs\n", pf->idx);
 			goto _err;
 		}
+
+		if (pci_find_capability(pf->pdev, PCI_CAP_ID_MSIX))
+			pf->msix_enable = true;
 
 		pf->pci_mem_offset = host->pci_mem_offset;
 		for (i = 0; i < 3; i++) {
