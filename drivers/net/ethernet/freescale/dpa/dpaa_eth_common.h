@@ -93,7 +93,7 @@ typedef enum dpaa_eth_hook_result (*dpaa_eth_egress_hook_t)(
 		struct sk_buff *skb, struct net_device *net_dev);
 typedef enum dpaa_eth_hook_result (*dpaa_eth_confirm_hook_t)(
 		struct net_device *net_dev, const struct qm_fd *fd, u32 fqid);
-
+#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 /* Various hooks used for unit-testing and/or fastpath optimizations.
  * Currently only one set of such hooks is supported.
  */
@@ -124,7 +124,7 @@ struct dpaa_eth_hooks_s {
 void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 
 extern struct dpaa_eth_hooks_s dpaa_eth_hooks;
-
+#endif
 
 int dpa_netdev_init(struct device_node *dpa_node,
 		struct net_device *net_dev,

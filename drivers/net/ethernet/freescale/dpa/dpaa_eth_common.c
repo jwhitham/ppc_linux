@@ -75,7 +75,7 @@ static const char fsl_qman_frame_queues[][25] = {
 	[RX] = "fsl,qman-frame-queues-rx",
 	[TX] = "fsl,qman-frame-queues-tx"
 };
-
+#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 /* A set of callbacks for hooking into the fastpath at different points. */
 struct dpaa_eth_hooks_s dpaa_eth_hooks;
 /*
@@ -90,7 +90,7 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks)
 		pr_err("NULL pointer to hooks!\n");
 }
 EXPORT_SYMBOL(fsl_dpaa_eth_set_hooks);
-
+#endif
 extern const struct ethtool_ops dpa_ethtool_ops;
 
 int dpa_netdev_init(struct device_node *dpa_node,

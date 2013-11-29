@@ -158,12 +158,12 @@ static void _dpa_rx_error(struct net_device *net_dev,
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_err(net_dev, "Err FD status = 0x%08x\n",
 					fd->status & FM_FD_STAT_RX_ERRORS);
-
+#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 	if (dpaa_eth_hooks.rx_error &&
 		dpaa_eth_hooks.rx_error(net_dev, fd, fqid) == DPAA_ETH_STOLEN)
 		/* it's up to the hook to perform resource cleanup */
 		return;
-
+#endif
 	percpu_priv->stats.rx_errors++;
 
 	if (fd->status & FM_PORT_FRM_ERR_DMA)
@@ -191,12 +191,12 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 	if (netif_msg_hw(priv) && net_ratelimit())
 		netdev_warn(net_dev, "FD status = 0x%08x\n",
 				fd->status & FM_FD_STAT_TX_ERRORS);
-
+#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 	if (dpaa_eth_hooks.tx_error &&
 		dpaa_eth_hooks.tx_error(net_dev, fd, fqid) == DPAA_ETH_STOLEN)
 		/* now the hook must ensure proper cleanup */
 		return;
-
+#endif
 	percpu_priv->stats.tx_errors++;
 
 	/* If we intended the buffers from this frame to go into the bpools
@@ -296,12 +296,12 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 	}
 
 	/* hopefully we need not get the timestamp before the hook */
-
+#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 	if (dpaa_eth_hooks.tx_confirm && dpaa_eth_hooks.tx_confirm(net_dev,
 		fd, fqid) == DPAA_ETH_STOLEN)
 		/* it's the hook that must now perform cleanup */
 		return;
-
+#endif
 	/* This might not perfectly reflect the reality, if the core dequeuing
 	 * the Tx confirmation is different from the one that did the enqueue,
 	 * but at least it'll show up in the total count.
