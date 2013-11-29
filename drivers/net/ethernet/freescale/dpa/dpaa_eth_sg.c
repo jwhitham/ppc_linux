@@ -554,15 +554,18 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	/* The only FD types that we may receive are contig and S/G */
 	DPA_BUG_ON((fd->format != qm_fd_contig) && (fd->format != qm_fd_sg));
 
-	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
 	if (likely(fd->format == qm_fd_contig)) {
 #if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 		/* Execute the Rx processing hook, if it exists. */
 		if (dpaa_eth_hooks.rx_default &&
 			dpaa_eth_hooks.rx_default((void *)fd, net_dev, fqid)
-						== DPAA_ETH_STOLEN)
+						== DPAA_ETH_STOLEN) {
+			/* It's safe to unmap the buffer now */
+			dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size,
+					 DMA_BIDIRECTIONAL);
 			/* won't count the rx bytes in */
 			return;
+		}
 #endif
 		skb = contig_fd_to_skb(priv, fd, &use_gro);
 	} else
@@ -578,6 +581,7 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	 * Also, permanently unmap the buffer.
 	 */
 	(*count_ptr)--;
+	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, DMA_BIDIRECTIONAL);
 
 	skb->protocol = eth_type_trans(skb, net_dev);
 
