@@ -19,4 +19,11 @@ config UCC_TDM_TEST
 	  This UCC TDM test module is a small test module to test
 	  ucc tdm transfer and receive data via ucc1.
 
+config TDM_LOOPBACK_TEST
+        tristate "TDM Loopback test Module"
+	depends on FSL_SOC
+	---help---
+	  This TDM Loopback test module is a small test module which
+	  performs a simple internal loopback testing.
+
 endmenu
