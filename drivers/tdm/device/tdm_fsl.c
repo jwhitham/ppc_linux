@@ -50,6 +50,11 @@
 #define DRV_DESC "Freescale TDM Driver Adapter"
 #define DRV_NAME "fsl_tdm"
 
+int loopback;
+module_param(loopback, int, 0);
+MODULE_PARM_DESC(loopback, "Enable TDM in loopback mode."
+		" Enable=1, Disable=0(default)");
+
 static int tdmen = 1;
 
 module_param(tdmen, int, S_IRUSR);
@@ -418,6 +423,8 @@ static int tdm_fsl_reg_init(struct tdm_priv *priv)
 
 	tx_tcd_init(priv);
 	rx_tcd_init(priv);
+
+	adap->adapt_cfg.loopback = loopback;
 
 	/* TDM RD->TD loopback, Share T/R Fsync,Clock */
 	if (adap->adapt_cfg.loopback)
