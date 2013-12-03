@@ -461,7 +461,7 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	struct caam_ctx *ctx = crypto_aead_ctx(aead);
 	struct device *jrdev = ctx->jrdev;
 	bool keys_fit_inline = false;
-	u32 *key_jump_cmd, *zero_payload_jump_cmd;
+	u32 *key_jump_cmd, *zero_payload_jump_cmd, *skip_zero_jump_cmd;
 	u32 genpad, clrw, jumpback, stidx;
 	u32 *desc;
 	unsigned int blocksize = crypto_aead_blocksize(aead);
@@ -631,10 +631,6 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_OUTFIFO | MOVE_DEST_MATH0 |
 		    blocksize);
 
-	/* compute padding length */
-	append_math_and_imm_u64(desc, REG1, REG1, IMM, 255);
-	append_math_add(desc, REG1, REG1, ONE, 4);
-
 	/* clear cha1 specific registers */
 	clrw = CLRW_CLR_C1MODE | CLRW_CLR_C1DATAS | CLRW_CLR_C1CTX |
 	       CLRW_RESET_CLS1_CHA;
@@ -658,13 +654,13 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	append_cmd(desc, CMD_SEQ_LOAD | LDST_CLASS_1_CCB |
 		   LDST_SRCDST_WORD_CLASS_CTX | tfm->ivsize);
 
+	/* compute (padlen - 1) */
+	append_math_and_imm_u64(desc, REG1, REG1, IMM, 255);
+
+	/* math2 = icvlen + (padlen - 1) + 1 */
+	append_math_add_imm_u32(desc, REG2, REG1, IMM, ctx->authsize + 1);
+
 	append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 1);
-
-	/* math2 = icvlen + padlen */
-	append_math_add_imm_u32(desc, REG2, REG1, IMM, ctx->authsize);
-
-	/* VSIL = (payloadlen + icvlen + padlen) - (icvlen + padlen)*/
-	append_math_sub(desc, VARSEQINLEN, REG3, REG2, 4);
 
 	/* VSOL = payloadlen + icvlen + padlen */
 	append_math_add(desc, VARSEQOUTLEN, ZERO, REG3, 4);
@@ -673,19 +669,33 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	append_math_rshift_imm_u64(desc, REG0, REG0, IMM, 24);
 	append_math_sub(desc, REG0, REG0, REG2, 8);
 
+	/* store decrypted payload, icv and padding */
+	append_seq_fifo_store(desc, 0, FIFOST_TYPE_MESSAGE_DATA | LDST_VLF);
+
+	/* VSIL = (payloadlen + icvlen + padlen) - (icvlen + padlen)*/
+	append_math_sub(desc, VARSEQINLEN, REG3, REG2, 4);
+
+	zero_payload_jump_cmd = append_jump(desc, JUMP_TEST_ALL |
+					    JUMP_COND_MATH_Z);
+
 	/* send Type, Version and Len(pre ICV) fields to authentication */
 	append_move(desc, MOVE_WAITCOMP |
 		    MOVE_SRC_MATH0 | MOVE_DEST_CLASS2INFIFO |
 		    (3 << MOVE_OFFSET_SHIFT) | 5);
 
-	/* store decrypted payload, icv and padding */
-	append_seq_fifo_store(desc, 0, FIFOST_TYPE_MESSAGE_DATA | LDST_VLF);
-
 	/* outsnooping payload */
 	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_BOTH |
 			     FIFOLD_TYPE_MSG1OUT2 | FIFOLD_TYPE_LAST2 |
 			     FIFOLDST_VLF);
+	skip_zero_jump_cmd = append_jump(desc, JUMP_TEST_ALL | 2);
 
+	set_jump_tgt_here(desc, zero_payload_jump_cmd);
+	/* send Type, Version and Len(pre ICV) fields to authentication */
+	append_move(desc, MOVE_WAITCOMP | MOVE_AUX_LS |
+		    MOVE_SRC_MATH0 | MOVE_DEST_CLASS2INFIFO |
+		    (3 << MOVE_OFFSET_SHIFT) | 5);
+
+	set_jump_tgt_here(desc, skip_zero_jump_cmd);
 	append_math_add(desc, VARSEQINLEN, ZERO, REG2, 4);
 
 	/* load icvlen and padlen */
@@ -697,7 +707,7 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 
 	/* move seqoutptr fields into math registers */
 	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF | MOVE_DEST_MATH0 |
-			(53 * 4 << MOVE_OFFSET_SHIFT) | 20);
+			(55 * 4 << MOVE_OFFSET_SHIFT) | 20);
 	/* seqinptr will point to seqoutptr */
 	append_math_and_imm_u32(desc, REG0, REG0, IMM,
 				~(CMD_SEQ_IN_PTR ^ CMD_SEQ_OUT_PTR));
@@ -708,7 +718,7 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 			    (4 << LDST_OFFSET_SHIFT));
 	/* move updated seqinptr fields to JD */
 	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 | MOVE_DEST_DESCBUF |
-			(53 * 4 << MOVE_OFFSET_SHIFT) | 24);
+			(55 * 4 << MOVE_OFFSET_SHIFT) | 24);
 	/* read updated seqinptr */
 	append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 6);
 

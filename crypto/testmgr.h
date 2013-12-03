@@ -113,7 +113,7 @@ static char zeroed_string[48];
  * TLS1.0 synthetic test vectors
  */
 #define TLS_ENC_TEST_VECTORS 2
-#define TLS_DEC_TEST_VECTORS 1
+#define TLS_DEC_TEST_VECTORS 2
 
 static struct tls_testvec tls_enc_tv_template[] = {
 	{
@@ -193,6 +193,29 @@ static struct tls_testvec tls_dec_tv_template[] = {
 		.alen	= 13,
 		.result	= "Single block msg",
 		.rlen	= 16,
+	}, {
+#ifdef __LITTLE_ENDIAN
+		.key	= "\x08\x00"		/* rta length */
+			"\x01\x00"		/* rta type */
+#else
+		.key	= "\x00\x08"		/* rta length */
+			"\x00\x01"		/* rta type */
+#endif
+			"\x00\x00\x00\x10"	/* enc key length */
+			"authenticationkey20b"
+			"enckeyis16_bytes",
+		.klen	= 8 + 20 + 16,
+		.iv	= "iv0123456789abcd",
+		.input = "\x58\x2a\x11\xc\x86\x8e\x4b\x67"
+			"\x2d\x16\x26\x1a\xac\x4b\xe2\x1a"
+			"\xe9\x6a\xcc\x4d\x6f\x79\x8a\x45"
+			"\x1f\x4e\x27\xf2\xa7\x59\xb4\x5a",
+		.ilen	= 20 + 12,
+		.assoc	= "\x00\x01\x02\x03\x04\x05\x06\x07"
+			"\x00\x03\x01\x00\x20",
+		.alen	= 13,
+		.result	= "",
+		.rlen	= 0,
 	}
 };
 
