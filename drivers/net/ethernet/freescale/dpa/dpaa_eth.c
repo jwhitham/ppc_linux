@@ -879,12 +879,12 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	err = dpaa_eth_cgr_init(priv);
 	if (err < 0) {
 		dev_err(dev, "Error initializing CGR\n");
-		goto cgr_init_failed;
+		goto tx_cgr_init_failed;
 	}
 	err = dpaa_eth_priv_ingress_cgr_init(priv);
 	if (err < 0) {
 		dev_err(dev, "Error initializing ingress CGR\n");
-		goto cgr_init_failed;
+		goto rx_cgr_init_failed;
 	}
 
 	/* Add the FQs to the interface, and make them active */
@@ -931,32 +931,29 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	return 0;
 
-napi_add_failed:
 netdev_init_failed:
-	if (net_dev) {
-		dpa_private_napi_del(net_dev);
-		free_percpu(priv->percpu_priv);
-	}
+napi_add_failed:
+	dpa_private_napi_del(net_dev);
+	free_percpu(priv->percpu_priv);
 alloc_percpu_failed:
+	dpa_fq_free(dev, &priv->dpa_fq_list);
 fq_alloc_failed:
-	if (net_dev) {
-		dpa_fq_free(dev, &priv->dpa_fq_list);
-		qman_release_cgrid(priv->cgr_data.cgr.cgrid);
-		qman_delete_cgr(&priv->cgr_data.cgr);
-	}
-cgr_init_failed:
+	qman_release_cgrid(priv->ingress_cgr.cgrid);
+	qman_delete_cgr(&priv->ingress_cgr);
+rx_cgr_init_failed:
+	qman_release_cgrid(priv->cgr_data.cgr.cgrid);
+	qman_delete_cgr(&priv->cgr_data.cgr);
+tx_cgr_init_failed:
 add_channel_failed:
 get_channel_failed:
-	if (net_dev)
-		dpa_bp_free(priv, priv->dpa_bp);
+	dpa_bp_free(priv, priv->dpa_bp);
 bp_create_failed:
 fq_probe_failed:
 	devm_kfree(dev, buf_layout);
 alloc_failed:
 mac_probe_failed:
 	dev_set_drvdata(dev, NULL);
-	if (net_dev)
-		free_netdev(net_dev);
+	free_netdev(net_dev);
 alloc_etherdev_mq_failed:
 	if (atomic_read(&dpa_bp->refs) == 0)
 		devm_kfree(dev, dpa_bp);
