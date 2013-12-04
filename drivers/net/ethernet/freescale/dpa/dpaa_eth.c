@@ -681,6 +681,51 @@ dpa_priv_bp_probe(struct device *dev)
 	return dpa_bp;
 }
 
+/* Place all ingress FQs (Rx Default, Rx Error, PCD FQs) in a dedicated CGR.
+ * We won't be sending congestion notifications to FMan; for now, we just use
+ * this CGR to generate enqueue rejections to FMan in order to drop the frames
+ * before they reach our ingress queues and eat up memory.
+ */
+#define DPA_INGRESS_CS_THRESHOLD	0x10000000
+static int dpaa_eth_priv_ingress_cgr_init(struct dpa_priv_s *priv)
+{
+	struct qm_mcc_initcgr initcgr;
+	u32 cs_th;
+	int err;
+
+	err = qman_alloc_cgrid(&priv->ingress_cgr.cgrid);
+	if (err < 0) {
+		pr_err("Error %d allocating CGR ID\n", err);
+		goto out_error;
+	}
+
+	/* Enable CS TD, but disable Congestion State Change Notifications. */
+	initcgr.we_mask = QM_CGR_WE_CS_THRES;
+	initcgr.cgr.cscn_en = QM_CGR_EN;
+	cs_th = DPA_INGRESS_CS_THRESHOLD;
+	qm_cgr_cs_thres_set64(&initcgr.cgr.cs_thres, cs_th, 1);
+
+	initcgr.we_mask |= QM_CGR_WE_CSTD_EN;
+	initcgr.cgr.cstd_en = QM_CGR_EN;
+
+	/* This is actually a hack, because this CGR will be associated with
+	 * our affine SWP. However, we'll place our ingress FQs in it.
+	 */
+	err = qman_create_cgr(&priv->ingress_cgr, QMAN_CGR_FLAG_USE_INIT,
+		&initcgr);
+	if (err < 0) {
+		pr_err("Error %d creating ingress CGR with ID %d\n", err,
+			priv->ingress_cgr.cgrid);
+		qman_release_cgrid(priv->ingress_cgr.cgrid);
+		goto out_error;
+	}
+	pr_debug("Created ingress CGR %d for netdev with hwaddr %pM\n",
+		 priv->ingress_cgr.cgrid, priv->mac_dev->addr);
+
+out_error:
+	return err;
+}
+
 static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count)
 {
@@ -834,6 +879,11 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	err = dpaa_eth_cgr_init(priv);
 	if (err < 0) {
 		dev_err(dev, "Error initializing CGR\n");
+		goto cgr_init_failed;
+	}
+	err = dpaa_eth_priv_ingress_cgr_init(priv);
+	if (err < 0) {
+		dev_err(dev, "Error initializing ingress CGR\n");
 		goto cgr_init_failed;
 	}
 

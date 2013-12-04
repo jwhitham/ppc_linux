@@ -1302,6 +1302,22 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 		}
 #endif
 
+		/* Put all ingress queues in our "ingress CGR". */
+		if (dpa_fq->fq_type == FQ_TYPE_RX_DEFAULT ||
+				dpa_fq->fq_type == FQ_TYPE_RX_ERROR ||
+				dpa_fq->fq_type == FQ_TYPE_RX_PCD) {
+			initfq.we_mask |= QM_INITFQ_WE_CGID;
+			initfq.fqd.fq_ctrl |= QM_FQCTRL_CGE;
+			initfq.fqd.cgid = priv->ingress_cgr.cgrid;
+			/* Set a fixed overhead accounting, just like for the
+			 * egress CGR.
+			 */
+			initfq.we_mask |= QM_INITFQ_WE_OAC;
+			initfq.fqd.oac_init.oac = QM_OAC_CG;
+			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
+				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL);
+		}
+
 		/* Initialization common to all ingress queues */
 		if (dpa_fq->flags & QMAN_FQ_FLAG_NO_ENQUEUE) {
 			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
