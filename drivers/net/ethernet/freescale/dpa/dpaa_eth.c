@@ -321,16 +321,18 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 	struct net_device		*net_dev;
 	struct dpa_priv_s		*priv;
 	struct dpa_percpu_priv_s	*percpu_priv;
+	int				*count_ptr;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	count_ptr = __this_cpu_ptr(priv->dpa_bp->percpu_count);
 
 	if (dpaa_eth_napi_schedule(percpu_priv, portal))
 		return qman_cb_dqrr_stop;
 
-	if (unlikely(dpaa_eth_refill_bpools(priv->dpa_bp)))
+	if (unlikely(dpaa_eth_refill_bpools(priv->dpa_bp, count_ptr)))
 		/* Unable to refill the buffer pool due to insufficient
 		 * system memory. Just release the frame back into the pool,
 		 * otherwise we'll soon end up with an empty buffer pool.
@@ -351,29 +353,34 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 	struct net_device		*net_dev;
 	struct dpa_priv_s		*priv;
 	struct dpa_percpu_priv_s	*percpu_priv;
+	int                             *count_ptr;
+	struct dpa_bp			*dpa_bp;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
 	priv = netdev_priv(net_dev);
+	dpa_bp = priv->dpa_bp;
 
 	/* Trace the Rx fd */
 	trace_dpa_rx_fd(net_dev, fq, &dq->fd);
 
 	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
+	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 
 	if (unlikely(dpaa_eth_napi_schedule(percpu_priv, portal)))
 		return qman_cb_dqrr_stop;
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
 
-	if (unlikely(dpaa_eth_refill_bpools(priv->dpa_bp)))
+	if (unlikely(dpaa_eth_refill_bpools(dpa_bp, count_ptr)))
 		/* Unable to refill the buffer pool due to insufficient
 		 * system memory. Just release the frame back into the pool,
 		 * otherwise we'll soon end up with an empty buffer pool.
 		 */
 		dpa_fd_release(net_dev, &dq->fd);
 	else
-		_dpa_rx(net_dev, portal, priv, percpu_priv, &dq->fd, fq->fqid);
+		_dpa_rx(net_dev, portal, priv, percpu_priv, &dq->fd, fq->fqid,
+			count_ptr);
 
 	return qman_cb_dqrr_consume;
 }

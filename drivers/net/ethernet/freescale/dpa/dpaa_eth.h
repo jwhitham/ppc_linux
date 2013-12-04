@@ -417,13 +417,14 @@ struct fm_port_fqs {
 
 /* functions with different implementation for SG and non-SG: */
 int dpa_bp_priv_seed(struct dpa_bp *dpa_bp);
-int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp);
+int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp, int *count_ptr);
 void __hot _dpa_rx(struct net_device *net_dev,
 		struct qman_portal *portal,
 		const struct dpa_priv_s *priv,
 		struct dpa_percpu_priv_s *percpu_priv,
 		const struct qm_fd *fd,
-		u32 fqid);
+		u32 fqid,
+		int *count_ptr);
 int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev);
 struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 				   const struct qm_fd *fd);
