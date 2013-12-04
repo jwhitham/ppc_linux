@@ -1,4 +1,4 @@
-config FSL_DPAA_ETH
+menuconfig FSL_DPAA_ETH
 	bool "DPAA Ethernet"
 	depends on FSL_SOC && FSL_BMAN && FSL_QMAN && FSL_FMAN
 	select PHYLIB
@@ -108,6 +108,41 @@ config FSL_DPAA_ETH_REFILL_THRESHOLD
 	  The DPAA-Ethernet driver will start replenishing buffer pools whose count
 	  falls below this threshold. This must be related to DPAA_ETH_MAX_BUF_COUNT. One needn't normally
 	  modify this value unless one has very specific performance reasons.
+
+config FSL_DPAA_CS_THRESHOLD_1G
+	hex "Egress congestion threshold on 1G ports"
+	depends on FSL_DPAA_ETH
+	range 0x1000 0x10000000
+	default "0x06000000"
+	---help---
+	  The size in bytes of the egress Congestion State notification threshold on 1G ports.
+	  The 1G dTSECs can quite easily be flooded by cores doing Tx in a tight loop
+	  (e.g. by sending UDP datagrams at "while(1) speed"),
+	  and the larger the frame size, the more acute the problem.
+	  So we have to find a balance between these factors:
+	       - avoiding the device staying congested for a prolonged time (risking
+                 the netdev watchdog to fire - see also the tx_timeout module param);
+               - affecting performance of protocols such as TCP, which otherwise
+	         behave well under the congestion notification mechanism;
+	       - preventing the Tx cores from tightly-looping (as if the congestion
+	         threshold was too low to be effective);
+	       - running out of memory if the CS threshold is set too high.
+
+config FSL_DPAA_CS_THRESHOLD_10G
+	hex "Egress congestion threshold on 10G ports"
+	depends on FSL_DPAA_ETH
+	range 0x1000 0x20000000
+	default "0x10000000"
+	---help ---
+	  The size in bytes of the egress Congestion State notification threshold on 10G ports.
+
+config FSL_DPAA_INGRESS_CS_THRESHOLD
+	hex "Ingress congestion threshold on FMan ports"
+	depends on FSL_DPAA_ETH
+	default "0x10000000"
+	---help---
+	  The size in bytes of the ingress tail-drop threshold on FMan ports.
+	  Traffic piling up above this value will be rejected by QMan and discarded by FMan.
 
 config FSL_DPAA_ETH_DEBUGFS
 	tristate "DPAA Ethernet debugfs interface"

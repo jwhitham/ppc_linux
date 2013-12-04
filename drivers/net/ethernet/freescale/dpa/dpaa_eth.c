@@ -702,7 +702,7 @@ static int dpaa_eth_priv_ingress_cgr_init(struct dpa_priv_s *priv)
 	/* Enable CS TD, but disable Congestion State Change Notifications. */
 	initcgr.we_mask = QM_CGR_WE_CS_THRES;
 	initcgr.cgr.cscn_en = QM_CGR_EN;
-	cs_th = DPA_INGRESS_CS_THRESHOLD;
+	cs_th = CONFIG_FSL_DPAA_INGRESS_CS_THRESHOLD;
 	qm_cgr_cs_thres_set64(&initcgr.cgr.cs_thres, cs_th, 1);
 
 	initcgr.we_mask |= QM_CGR_WE_CSTD_EN;
