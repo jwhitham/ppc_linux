@@ -408,14 +408,15 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	vaddr = phys_to_virt(addr);
 	DPA_BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 
+	dpa_bp = priv->dpa_bp;
 	/* Iterate through the SGT entries and add data buffers to the skb */
 	sgt = vaddr + fd_off;
 	for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
 		/* Extension bit is not supported */
 		DPA_BUG_ON(sgt[i].extension);
 
-		dpa_bp = dpa_bpid2pool(sgt[i].bpid);
-		DPA_BUG_ON(!dpa_bp);
+		/* We use a single global Rx pool */
+		DPA_BUG_ON(dpa_bp != dpa_bpid2pool(sgt[i].bpid));
 		count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 
 		sg_addr = qm_sg_addr(&sgt[i]);
@@ -507,8 +508,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	WARN_ONCE(i == DPA_SGT_MAX_ENTRIES, "No final bit on SGT\n");
 
 	/* recycle the SGT fragment */
-	dpa_bp = dpa_bpid2pool(fd->bpid);
-	DPA_BUG_ON(!dpa_bp);
+	DPA_BUG_ON(dpa_bp != dpa_bpid2pool(fd->bpid));
 	dpa_bp_recycle_frag(dpa_bp, (unsigned long)vaddr);
 	return skb;
 }
@@ -538,8 +538,8 @@ void __hot _dpa_rx(struct net_device *net_dev,
 		goto _release_frame;
 	}
 
-	dpa_bp = dpa_bpid2pool(fd->bpid);
-	DPA_BUG_ON(!dpa_bp);
+	dpa_bp = priv->dpa_bp;
+	DPA_BUG_ON(dpa_bp != dpa_bpid2pool(fd->bpid));
 	count_ptr = __this_cpu_ptr(dpa_bp->percpu_count);
 	/* Prepare to read from the buffer, but don't unmap it until
 	 * we know the skb allocation succeeded. At this point we already
