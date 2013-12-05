@@ -572,10 +572,11 @@ static int caam_probe(struct platform_device *pdev)
 	/* NOTE: RTIC detection ought to go here, around Si time */
 
 	caam_id = rd_reg64(&topregs->ctrl.perfmon.caam_id);
+	ctrlpriv->era = caam_get_era();
 
 	/* Report "alive" for developer to see */
 	dev_info(dev, "device ID = 0x%016llx (Era %d)\n", caam_id,
-		 caam_get_era());
+		 ctrlpriv->era);
 	dev_info(dev, "job rings = %d, qi = %d\n",
 		 ctrlpriv->total_jobrs, ctrlpriv->qi_present);
 

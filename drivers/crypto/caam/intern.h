@@ -93,6 +93,8 @@ struct caam_drv_private {
 	/* list of registered pkc algorithms */
 	struct list_head pkc_list;
 
+	int era;		/* SEC Era */
+
 #define	RNG4_MAX_HANDLES 2
 	/* RNG4 block */
 	u32 rng4_sh_init;	/* This bitmap shows which of the State
