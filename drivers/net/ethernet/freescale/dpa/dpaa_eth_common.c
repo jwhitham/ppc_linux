@@ -1283,10 +1283,11 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 		}
 #endif
 
-		/* Put all ingress queues in our "ingress CGR". */
-		if (dpa_fq->fq_type == FQ_TYPE_RX_DEFAULT ||
-				dpa_fq->fq_type == FQ_TYPE_RX_ERROR ||
-				dpa_fq->fq_type == FQ_TYPE_RX_PCD) {
+		/* Put all *private* ingress queues in our "ingress CGR". */
+		if (priv->use_ingress_cgr &&
+				(dpa_fq->fq_type == FQ_TYPE_RX_DEFAULT ||
+				 dpa_fq->fq_type == FQ_TYPE_RX_ERROR ||
+				 dpa_fq->fq_type == FQ_TYPE_RX_PCD)) {
 			initfq.we_mask |= QM_INITFQ_WE_CGID;
 			initfq.fqd.fq_ctrl |= QM_FQCTRL_CGE;
 			initfq.fqd.cgid = priv->ingress_cgr.cgrid;

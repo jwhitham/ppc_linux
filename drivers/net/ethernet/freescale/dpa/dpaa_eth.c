@@ -686,7 +686,6 @@ dpa_priv_bp_probe(struct device *dev)
  * this CGR to generate enqueue rejections to FMan in order to drop the frames
  * before they reach our ingress queues and eat up memory.
  */
-#define DPA_INGRESS_CS_THRESHOLD	0x10000000
 static int dpaa_eth_priv_ingress_cgr_init(struct dpa_priv_s *priv)
 {
 	struct qm_mcc_initcgr initcgr;
@@ -721,6 +720,13 @@ static int dpaa_eth_priv_ingress_cgr_init(struct dpa_priv_s *priv)
 	}
 	pr_debug("Created ingress CGR %d for netdev with hwaddr %pM\n",
 		 priv->ingress_cgr.cgrid, priv->mac_dev->addr);
+
+	/* struct qman_cgr allows special cgrid values (i.e. outside the 0..255
+	 * range), but we have no common initialization path between the
+	 * different variants of the DPAA Eth driver, so we do it here rather
+	 * than modifying every other variant than "private Eth".
+	 */
+	priv->use_ingress_cgr = true;
 
 out_error:
 	return err;

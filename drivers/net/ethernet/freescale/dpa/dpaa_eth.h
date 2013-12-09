@@ -396,6 +396,7 @@ struct dpa_priv_s {
 		u32 cgr_congested_count;
 	} cgr_data;
 	/* Use a per-port CGR for ingress traffic. */
+	bool use_ingress_cgr;
 	struct qman_cgr ingress_cgr;
 
 #ifdef CONFIG_FSL_DPAA_TS
