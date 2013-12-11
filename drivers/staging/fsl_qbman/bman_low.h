@@ -187,7 +187,7 @@ static inline void RCR_INC(struct bm_rcr *rcr)
 static inline int bm_rcr_init(struct bm_portal *portal, enum bm_rcr_pmode pmode,
 		__maybe_unused enum bm_rcr_cmode cmode)
 {
-	/* This use of 'register', as well as all other occurances, is because
+	/* This use of 'register', as well as all other occurrences, is because
 	 * it has been observed to generate much faster code with gcc than is
 	 * otherwise the case. */
 	register struct bm_rcr *rcr = &portal->rcr;
@@ -505,7 +505,7 @@ static inline int bm_shutdown_pool(struct bm_portal *p, u32 bpid)
 	int aq_count = 0;
 	bool stop = false;
 	while (!stop) {
-		/* Aquire buffers until empty */
+		/* Acquire buffers until empty */
 		bm_cmd = bm_mc_start(p);
 		bm_cmd->acquire.bpid = bpid;
 		bm_mc_commit(p, BM_MCC_VERB_CMD_ACQUIRE |  1);

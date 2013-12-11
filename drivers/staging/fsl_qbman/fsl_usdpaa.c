@@ -898,7 +898,7 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 		ret = -EINVAL;
 		goto out;
 	}
-	/* Verify there is sufficent space to do the mapping */
+	/* Verify there is sufficient space to do the mapping */
 	down_write(&current->mm->mmap_sem);
 	next_addr = usdpaa_get_unmapped_area(fp, next_addr, i->len, 0, 0);
 	up_write(&current->mm->mmap_sem);

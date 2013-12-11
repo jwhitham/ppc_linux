@@ -42,7 +42,7 @@
  * shuttle a "hot potato" frame around them such that every forwarding action
  * moves it from one cpu to another. (The use of more than one handler per cpu
  * is to allow enough handlers/FQs to truly test the significance of caching -
- * ie. when cache-expiries are occuring.)
+ * ie. when cache-expiries are occurring.)
  *
  * The "hot potato" frame content will be HP_NUM_WORDS*4 bytes in size, and the
  * first and last words of the frame data will undergo a transformation step on

@@ -107,7 +107,7 @@ static inline dma_addr_t bm_buf_addr(const struct bm_buffer *buf)
 	return (dma_addr_t)buf->addr;
 }
 /* Macro, so we compile better if 'v' isn't always 64-bit */
-/* Note: this first version is causing a noticable performance degradation,
+/* Note: this first version is causing a noticeable performance degradation,
  * which needs analysis, so leaving it commented out for now. The second version
  * achieves optimal performance. */
 #if 0
@@ -164,8 +164,8 @@ struct bm_mc_command {
 #define BM_MCC_VERB_CMD_QUERY		0x40
 #define BM_MCC_VERB_ACQUIRE_BUFCOUNT	0x0f	/* values 1..8 go here */
 
-/* See 1.5.3.3: "Acquire Reponse" */
-/* See 1.5.3.4: "Query Reponse" */
+/* See 1.5.3.3: "Acquire Response" */
+/* See 1.5.3.4: "Query Response" */
 struct bm_pool_state {
 	u8 __reserved1[32];
 	/* "availability state" and "depletion state" */
@@ -486,7 +486,7 @@ int bman_acquire(struct bman_pool *pool, struct bm_buffer *bufs, u8 num,
  * @flags: bit-mask of BMAN_RELEASE_FLAG_*** options
  *
  * Adds stockpile buffers to RCR entries until the stockpile is empty.
- * The return value will be a negative error code if a h/w error occured.
+ * The return value will be a negative error code if a h/w error occurred.
  * If BMAN_RELEASE_FLAG_NOW flag is passed and RCR ring is full,
  * -EAGAIN will be returned.
  */

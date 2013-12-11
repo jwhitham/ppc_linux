@@ -3198,7 +3198,7 @@ int qman_ceetm_bps2tokenrate(u32 bps, struct qm_ceetm_rate *token_rate,
 
 	/* token-rate = bytes-per-second * update-reference-period
 	 *
-	 * Where token-rate is N/8192 for a interger N, and
+	 * Where token-rate is N/8192 for a integer N, and
 	 * update-reference-period is (2^22)/(PRES*QHz), where PRES
 	 * is the prescalar value and QHz is the QMan clock frequency.
 	 * So:

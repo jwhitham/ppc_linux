@@ -257,7 +257,7 @@ static inline int qm_eqcr_init(struct qm_portal *portal,
 				unsigned int eq_stash_thresh,
 				int eq_stash_prio)
 {
-	/* This use of 'register', as well as all other occurances, is because
+	/* This use of 'register', as well as all other occurrences, is because
 	 * it has been observed to generate much faster code with gcc than is
 	 * otherwise the case. */
 	register struct qm_eqcr *eqcr = &portal->eqcr;

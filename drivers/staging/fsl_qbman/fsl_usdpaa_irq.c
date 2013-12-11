@@ -31,7 +31,7 @@
  */
 
 /* define a device that allows USPDAA processes to open a file
-   decriptor and specify which IRQ it wants to montior using an ioctl()
+   descriptor and specify which IRQ it wants to montior using an ioctl()
    When an IRQ is received, the device becomes readable so that a process
    can use read() or select() type calls to monitor for IRQs */
 

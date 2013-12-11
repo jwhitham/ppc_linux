@@ -2735,8 +2735,8 @@ int qman_ceetm_lni_get_excess_rate(struct qm_ceetm_lni *lni,
  * of range as indicated above, or -EIO if the configure/query tcfcc command
  * returns error.
  *
- * Refer to the section of QMan CEETM traffic class flow control in the Refernce
- * Manual.
+ * Refer to the section of QMan CEETM traffic class flow control in the
+ * Reference Manual.
  */
 int qman_ceetm_lni_set_tcfcc(struct qm_ceetm_lni *lni,
 			     unsigned int cq_level,
