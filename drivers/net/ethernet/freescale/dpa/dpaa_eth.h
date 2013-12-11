@@ -116,7 +116,7 @@ struct dpa_buffer_layout_s {
  */
 #define DPA_BP_RAW_SIZE		2048
 #else
-/* For jumbo frame optimizations, use buffers large enough to accomodate
+/* For jumbo frame optimizations, use buffers large enough to accommodate
  * 9.6K frames, FD maximum offset, skb sh_info overhead and some extra
  * space to account for further alignments.
  */
@@ -145,7 +145,7 @@ struct dpa_buffer_layout_s {
  *
  * For a requested size, the kernel allocator provides the next power of two
  * sized block, which the stack will use as is, regardless of the actual size
- * it required; since we must acommodate at most 9.6K buffers (L2 maximum
+ * it required; since we must accommodate at most 9.6K buffers (L2 maximum
  * supported frame size), set the recycling upper limit to 16K.
  */
 #define DPA_RECYCLE_MAX_SIZE	16384
@@ -502,7 +502,7 @@ static inline int dpa_check_rx_mtu(struct sk_buff *skb, int mtu)
 static inline uint16_t dpa_get_headroom(struct dpa_buffer_layout_s *bl)
 {
 	uint16_t headroom;
-	/* The frame headroom must accomodate:
+	/* The frame headroom must accommodate:
 	 * - the driver private data area
 	 * - parse results, hash results, timestamp if selected
 	 * - manip extra space

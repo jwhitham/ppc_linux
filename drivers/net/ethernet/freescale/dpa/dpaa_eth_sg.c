@@ -46,7 +46,7 @@
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
 
 /* Convenience macros for storing/retrieving the skb back-pointers. They must
- * accomodate both recycling and confirmation paths - i.e. cases when the buf
+ * accommodate both recycling and confirmation paths - i.e. cases when the buf
  * was allocated by ourselves, respectively by the stack. In the former case,
  * we could store the skb at negative offset; in the latter case, we can't,
  * so we'll use 0 as offset.
@@ -350,7 +350,7 @@ static bool dpa_buf_is_recyclable(struct sk_buff *skb,
 
 /* Build a linear skb around the received buffer.
  * We are guaranteed there is enough room at the end of the data buffer to
- * accomodate the shared info area of the skb.
+ * accommodate the shared info area of the skb.
  */
 static struct sk_buff *__hot contig_fd_to_skb(const struct dpa_priv_s *priv,
 	const struct qm_fd *fd, int *use_gro)
@@ -862,7 +862,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 		err = skb_to_sg_fd(priv, skb, &fd);
 		percpu_priv->tx_frag_skbuffs++;
 	} else {
-		/* Make sure we have enough headroom to accomodate private
+		/* Make sure we have enough headroom to accommodate private
 		 * data, parse results, etc. Normally this shouldn't happen if
 		 * we're here via the standard kernel stack.
 		 */
