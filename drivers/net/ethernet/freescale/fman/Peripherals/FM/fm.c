@@ -3516,7 +3516,10 @@ t_Error FM_Init(t_Handle h_Fm)
     {
 	u32 svr = mfspr(SPRN_SVR);
 
-	if (SVR_SOC_VER(svr) == SVR_T4240 && SVR_REV(svr) > 0x10) {
+	if (((SVR_SOC_VER(svr) == SVR_T4240 && SVR_REV(svr) > 0x10)) ||
+	    ((SVR_SOC_VER(svr) == SVR_T4160 && SVR_REV(svr) > 0x10)) ||
+	    (SVR_SOC_VER(svr) == SVR_T2080) ||
+	    (SVR_SOC_VER(svr) == SVR_T2081)) {
 		DBG(WARNING, ("Hack: No FM reset!\n"));
 	} else {
 		WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rstc, FPM_RSTC_FM_RESET);
