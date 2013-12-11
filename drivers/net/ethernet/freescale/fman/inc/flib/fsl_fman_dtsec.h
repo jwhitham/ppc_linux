@@ -1023,9 +1023,9 @@ void fman_dtsec_reset_filter_table(struct dtsec_regs *regs, bool mcast,
 	bool ucast);
 
 /**
- * fman_dtsec_set_mc_promisc() - Set multicast promiscous mode
+ * fman_dtsec_set_mc_promisc() - Set multicast promiscuous mode
  * @regs:	Pointer to dTSEC register block
- * @enable:	Enable multicast promiscous mode
+ * @enable:	Enable multicast promiscuous mode
  *
  * Call this to enable/disable L2 address filtering for multicast packets.
  */

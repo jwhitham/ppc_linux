@@ -63,7 +63,7 @@
 *//***************************************************************************/
 typedef _Packed struct t_FmPcdIpcSwPrsLable
 {
-    uint32_t    enumHdr;                        /**< IN. The existance of this header will envoke
+    uint32_t    enumHdr;                        /**< IN. The existence of this header will invoke
                                                      the sw parser code. */
     uint8_t     indexPerHdr;                    /**< IN. Normally 0, if more than one sw parser
                                                      attachments for the same header, use this

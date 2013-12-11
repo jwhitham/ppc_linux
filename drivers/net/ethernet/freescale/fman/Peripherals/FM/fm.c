@@ -3324,7 +3324,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
         XX_Free(p_Fm->p_FmDriverParam);
         XX_Free(p_Fm->p_FmStateStruct);
         XX_Free(p_Fm);
-        REPORT_ERROR(MAJOR, E_INVALID_STATE, ("cant allocate spinlock!"));
+        REPORT_ERROR(MAJOR, E_INVALID_STATE, ("can't allocate spinlock!"));
         return NULL;
     }
 

@@ -392,7 +392,7 @@ t_Error     PcdGetClsPlanGrpParams(t_FmPcd *p_FmPcd, t_FmPcdKgInterModuleClsPlan
 void        FmPcdSetClsPlanGrpId(t_FmPcd *p_FmPcd, uint8_t netEnvId, uint8_t clsPlanGrpId);
 e_NetHeaderType FmPcdGetAliasHdr(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType hdr);
 uint8_t     FmPcdNetEnvGetUnitIdForSingleHdr(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType hdr);
-uint8_t     FmPcdNetEnvGetUnitId(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType hdr, bool interchangable, protocolOpt_t opt);
+uint8_t     FmPcdNetEnvGetUnitId(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType hdr, bool interchangeable, protocolOpt_t opt);
 
 t_Error     FmPcdManipBuildIpReassmScheme(t_FmPcd *p_FmPcd, t_Handle h_NetEnv, t_Handle h_CcTree, t_Handle h_Manip, bool isIpv4, uint8_t groupId);
 t_Error     FmPcdManipDeleteIpReassmSchemes(t_Handle h_Manip);

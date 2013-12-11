@@ -203,11 +203,11 @@ uint32_t fman_rtc_get_interrupt_mask(struct rtc_regs *regs);
 void fman_rtc_set_interrupt_mask(struct rtc_regs *regs, uint32_t mask);
 
 /**
- * fman_rtc_get_event() - Check if specific events occured
+ * fman_rtc_get_event() - Check if specific events occurred
  * @regs:		Pointer to RTC register block
  * @ev_mask:	a mask of the events to check
  *
- * Returns: 0 if the events did not occur. Non zero if one of the events occured
+ * Returns: 0 if the events did not occur. Non zero if one of the events occurred
  */
 uint32_t fman_rtc_get_event(struct rtc_regs *regs, uint32_t ev_mask);
 

@@ -159,7 +159,7 @@ typedef struct t_FmMacStatistics {
 /* */
     uint64_t  eStatFragments;          /**< Total number of packets that were less than 64 octets long with a wrong CRC.*/
     uint64_t  eStatJabbers;            /**< Total number of packets longer than valid maximum length octets */
-    uint64_t  eStatsDropEvents;        /**< number of dropped packets due to internal errors of the MAC Client (during recieve). */
+    uint64_t  eStatsDropEvents;        /**< number of dropped packets due to internal errors of the MAC Client (during receive). */
     uint64_t  eStatCRCAlignErrors;     /**< Incremented when frames of correct length but with CRC error are received.*/
     uint64_t  eStatUndersizePkts;      /**< Incremented for frames under 64 bytes with a valid FCS and otherwise well formed;
                                             This count does not include range length errors */

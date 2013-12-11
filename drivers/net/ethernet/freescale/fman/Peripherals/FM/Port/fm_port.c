@@ -622,7 +622,7 @@ static t_Error InitLowLevelDriver(t_FmPort *p_FmPort)
         if (!p_DriverParams->dfltFqid && p_DriverParams->dontReleaseBuf)
         {
             /* override fmbm_tcfqid 0 with a false non-0 value. This will force FM to
-             * act acording to tfene. Otherwise, if fmbm_tcfqid is 0 the FM will release
+             * act according to tfene. Otherwise, if fmbm_tcfqid is 0 the FM will release
              * buffers to BM regardless of fmbm_tfene
              */
             WRITE_UINT32(p_FmPort->port.bmi_regs->tx.fmbm_tcfqid, 0xFFFFFF);
@@ -901,7 +901,7 @@ static t_Error AdditionalPrsParams(t_FmPort *p_FmPort, t_FmPcdPrsAdditionalHdrPa
         }
     }
 
-    /* set software parsing (address is devided in 2 since parser uses 2 byte access. */
+    /* set software parsing (address is divided in 2 since parser uses 2 byte access. */
     if (p_HdrParams->swPrsEnable)
     {
         tmpPrsOffset = FmPcdGetSwPrsOffset(p_FmPort->h_FmPcd, p_HdrParams->hdr, p_HdrParams->indexPerHdr);

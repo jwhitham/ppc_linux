@@ -1755,7 +1755,7 @@ int fm_get_counter(void *h_fm, e_FmCounters cnt_e, uint32_t *cnt_val)
 	case (e_FM_COUNTERS_DEQ_2):
 	case (e_FM_COUNTERS_DEQ_3):
 		if (p_fm->p_FmStateStruct->revInfo.majorRev >= 6)
-			return -EINVAL; /* counter not avilable */
+			return -EINVAL; /* counter not available */
 
 	case (e_FM_COUNTERS_ENQ_TOTAL_FRAME):
 	case (e_FM_COUNTERS_DEQ_TOTAL_FRAME):
@@ -1766,7 +1766,7 @@ int fm_get_counter(void *h_fm, e_FmCounters cnt_e, uint32_t *cnt_val)
 	case (e_FM_COUNTERS_DEQ_CONFIRM):
 		if (!(ioread32be(&p_fm->p_FmQmiRegs->fmqm_gc) &
 			QMI_CFG_EN_COUNTERS))
-			return -EINVAL; /* Requested counter not avilable */
+			return -EINVAL; /* Requested counter not available */
 		break;
 	default:
 		break;
@@ -1805,5 +1805,5 @@ int fm_get_counter(void *h_fm, e_FmCounters cnt_e, uint32_t *cnt_val)
 		return 0;
 	}
 	/* should never get here */
-	return -EINVAL; /* counter not avilable */
+	return -EINVAL; /* counter not available */
 }

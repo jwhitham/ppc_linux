@@ -521,13 +521,13 @@ bool  FmPcdNetEnvIsHdrExist(t_Handle h_FmPcd, uint8_t netEnvId, e_NetHeaderType 
     return FALSE;
 }
 
-uint8_t FmPcdNetEnvGetUnitId(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType hdr, bool interchangable, protocolOpt_t opt)
+uint8_t FmPcdNetEnvGetUnitId(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType hdr, bool interchangeable, protocolOpt_t opt)
 {
     uint8_t     i, k;
 
     ASSERT_COND(p_FmPcd);
 
-    if (interchangable)
+    if (interchangeable)
     {
         for (i=0; (i < FM_PCD_MAX_NUM_OF_DISTINCTION_UNITS) &&
                  (p_FmPcd->netEnvs[netEnvId].units[i].hdrs[0].hdr != HEADER_TYPE_NONE); i++)
@@ -1369,7 +1369,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
             {
                 /* If IPv4+Frag, we need to set 2 units - SHIM 2 and IPv4. We first set SHIM2, and than check if
                  * IPv4 exists. If so we don't need to set an extra unit
-                 * We consider as "having IPv4" any IPv4 without interchangable headers
+                 * We consider as "having IPv4" any IPv4 without interchangeable headers
                  * but including any options.  */
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].hdr = HEADER_TYPE_IPv4;
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].opt = IPV4_FRAG_1;
@@ -1389,7 +1389,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
             {
                 /* If IPv6+Frag, we need to set 2 units - SHIM 2 and IPv6. We first set SHIM2, and than check if
                  * IPv4 exists. If so we don't need to set an extra unit
-                 * We consider as "having IPv6" any IPv6 without interchangable headers
+                 * We consider as "having IPv6" any IPv6 without interchangeable headers
                  * but including any options.  */
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].hdr = HEADER_TYPE_IPv6;
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].opt = IPV6_FRAG_1;

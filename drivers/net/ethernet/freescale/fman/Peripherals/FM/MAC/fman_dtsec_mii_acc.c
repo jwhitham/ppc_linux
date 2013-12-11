@@ -114,7 +114,7 @@ int fman_dtsec_mii_write_reg(struct dtsec_mii_reg *regs, uint8_t addr,
 	tmp = ioread32be(&regs->miimcon);
 	wmb();
 
-	/* Wait untill MII management write is complete */
+	/* Wait until MII management write is complete */
 	/* todo: a timeout could be useful here */
 	while ((ioread32be(&regs->miimind)) & MIIMIND_BUSY)
 		/* busy wait */;

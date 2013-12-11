@@ -208,7 +208,7 @@ void fm_port_pcd_bind (struct fm_port *port, struct fm_port_pcd_param *params);
  @Function	fm_port_get_buff_layout_ext_params
 
  @Description	Get data_align and manip_extra_space from the device tree
-                chosen node if aplied.
+                chosen node if applied.
                 This function will only update these two parameters.
                 When this port has no such parameters in the device tree
                 values will be set to 0.

@@ -113,7 +113,7 @@ struct fmt_port_s {
 	spinlock_t          rx_q_lock;
 	struct list_head    rx_q;
 
-	/* tx queuee for injecting trafic */
+	/* tx queuee for injecting traffic */
 	int                 num_of_tx_fqs;
 	struct fmt_fqs_s    p_tx_fqs[FMAN_TEST_MAX_TX_FQS];
 
@@ -1542,7 +1542,7 @@ ssize_t fmt_write(
 		return -EFAULT;
 	}
 
-	/* TODO: dma_map_single here (cannnot access the bpool struct) */
+	/* TODO: dma_map_single here (cannot access the bpool struct) */
 
 	/* prepare fd */
 	memset(&fd, 0, sizeof(fd));

@@ -122,7 +122,7 @@ extern struct device_node *GetFmPortAdvArgsDevTreeNode (struct device_node *fm_n
  * Max frame size, across all interfaces.
  * Configurable from Kconfig or bootargs, to avoid allocating
  * oversized (socket) buffers when not using jumbo frames.
- * Must be large enough to accomodate the network MTU, but small enough
+ * Must be large enough to accommodate the network MTU, but small enough
  * to avoid wasting skb memory.
  *
  * Could be overridden once, at boot-time, via the

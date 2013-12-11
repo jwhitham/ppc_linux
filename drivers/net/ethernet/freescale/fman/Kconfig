@@ -64,7 +64,7 @@ config FSL_FM_MAX_FRAME_SIZE
 		Configure this in relation to the maximum possible MTU of your
 		network configuration. In particular, one would need to
 		increase this value in order to use jumbo frames.
-		FSL_FM_MAX_FRAME_SIZE must accomodate the Ethernet FCS (4 bytes)
+		FSL_FM_MAX_FRAME_SIZE must accommodate the Ethernet FCS (4 bytes)
 		and one ETH+VLAN header (18 bytes), to a total of 22 bytes in
 		excess of the desired L3 MTU.
 

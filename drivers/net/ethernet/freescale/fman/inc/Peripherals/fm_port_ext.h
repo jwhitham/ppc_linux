@@ -1505,7 +1505,7 @@ t_Error FM_PORT_SetFrameQueueCounters(t_Handle h_FmPort, bool enable);
 
  @Description   User may call this routine to so the driver will analyze if the
                 basic performance parameters are correct and also the driver may
-                suggest of improvments; The basic parameters are FIFO sizes, number
+                suggest of improvements; The basic parameters are FIFO sizes, number
                 of DMAs and number of TNUMs for the port.
 
                 May be used for all port types
