@@ -1,5 +1,4 @@
-/*
- * Copyright 2012 Freescale Semiconductor Inc.
+/* Copyright 2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -155,9 +154,7 @@ netdev_alloc_failed:
 	return 0;
 }
 
-/*
- * Cold path wrapper over _dpa_bp_add_8_bufs().
- */
+/* Cold path wrapper over _dpa_bp_add_8_bufs(). */
 void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
 {
 	int *count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu);

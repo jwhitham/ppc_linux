@@ -1,5 +1,4 @@
-/*
- * Copyright 2008-2013 Freescale Semiconductor Inc.
+/* Copyright 2008-2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -215,8 +214,7 @@ static void _dpa_rx_error(struct net_device *net_dev,
 		const struct qm_fd *fd,
 		u32 fqid)
 {
-	/*
-	 * limit common, possibly innocuous Rx FIFO Overflow errors'
+	/* limit common, possibly innocuous Rx FIFO Overflow errors'
 	 * interference with zero-loss convergence benchmark results.
 	 */
 	if (likely(fd->status & FM_FD_STAT_ERR_PHYSICAL))

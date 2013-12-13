@@ -1,7 +1,4 @@
-/*
- * drivers/net/dpa/dpaa_1588.c
- *
- * Copyright (C) 2011 Freescale Semiconductor, Inc.
+/* Copyright (C) 2011 Freescale Semiconductor, Inc.
  * Copyright (C) 2009 IXXAT Automation, GmbH
  *
  * DPAA Ethernet Driver -- IEEE 1588 interface functionality

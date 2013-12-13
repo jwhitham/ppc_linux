@@ -1,5 +1,4 @@
-/*
- * Copyright 2013 Freescale Semiconductor Inc.
+/* Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

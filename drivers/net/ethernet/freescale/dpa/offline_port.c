@@ -1,5 +1,4 @@
-/*
- * Copyright 2011-2012 Freescale Semiconductor Inc.
+/* Copyright 2011-2012 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,8 +29,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * Offline Parsing / Host Command port driver for FSL QorIQ FMan.
+/* Offline Parsing / Host Command port driver for FSL QorIQ FMan.
  * Validates device-tree configuration and sets up the offline ports.
  */
 
@@ -49,9 +47,7 @@
 #include "dpaa_eth_common.h"
 
 #define OH_MOD_DESCRIPTION	"FSL FMan Offline Parsing port driver"
-/*
- * Manip extra space and data alignment for fragmentation
- */
+/* Manip extra space and data alignment for fragmentation */
 #define FRAG_MANIP_SPACE 128
 #define FRAG_DATA_ALIGN 64
 
@@ -237,9 +233,7 @@ oh_port_probe(struct platform_device *_of_dev)
 
 	dev_dbg(dpa_oh_dev, "Probing OH port...\n");
 
-	/*
-	 * Find the referenced OH node
-	 */
+	/* Find the referenced OH node */
 
 	oh_port_handle = of_get_property(dpa_oh_node,
 		"fsl,fman-oh-port", &lenp);
@@ -251,8 +245,8 @@ oh_port_probe(struct platform_device *_of_dev)
 
 	BUG_ON(lenp % sizeof(*oh_port_handle));
 	if (lenp != sizeof(*oh_port_handle)) {
-		dev_err(dpa_oh_dev, "Found %lu OH port bindings in node %s,"
-			" only 1 phandle is allowed.\n",
+		dev_err(dpa_oh_dev,
+			"Found %lu OH port bindings in node %s, only 1 phandle is allowed.\n",
 			(unsigned long int)(lenp / sizeof(*oh_port_handle)),
 			dpa_oh_node->full_name);
 		return -EINVAL;
@@ -261,8 +255,9 @@ oh_port_probe(struct platform_device *_of_dev)
 	/* Read configuration for the OH port */
 	oh_node = of_find_node_by_phandle(*oh_port_handle);
 	if (oh_node == NULL) {
-		dev_err(dpa_oh_dev, "Can't find OH node referenced from "
-			"node %s\n", dpa_oh_node->full_name);
+		dev_err(dpa_oh_dev,
+			"Can't find OH node referenced from node %s\n",
+			dpa_oh_node->full_name);
 		return -EINVAL;
 	}
 	dev_info(dpa_oh_dev, "Found OH node handle compatible with %s.\n",
@@ -283,8 +278,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	BUG_ON(oh_of_dev == NULL);
 	oh_dev = &oh_of_dev->dev;
 
-	/*
-	 * The OH port must be initialized exactly once.
+	/* The OH port must be initialized exactly once.
 	 * The following scenarios are of interest:
 	 *	- the node is Linux-private (will always initialize it);
 	 *	- the node is shared between two Linux partitions
@@ -295,13 +289,15 @@ oh_port_probe(struct platform_device *_of_dev)
 
 	/* Check if the current partition owns the OH port
 	 * and ought to initialize it. It may be the case that we leave this
-	 * to another (also Linux) partition. */
+	 * to another (also Linux) partition.
+	 */
 	init_oh_port = strcmp(match->compatible, "fsl,dpa-oh-shared");
 
 	/* If we aren't the "owner" of the OH node, we're done here. */
 	if (!init_oh_port) {
-		dev_dbg(dpa_oh_dev, "Not owning the shared OH port %s, "
-			"will not initialize it.\n", oh_node->full_name);
+		dev_dbg(dpa_oh_dev,
+			"Not owning the shared OH port %s, will not initialize it.\n",
+			oh_node->full_name);
 		of_node_put(oh_node);
 		return 0;
 	}
@@ -309,21 +305,19 @@ oh_port_probe(struct platform_device *_of_dev)
 	/* Allocate OH dev private data */
 	oh_config = devm_kzalloc(dpa_oh_dev, sizeof(*oh_config), GFP_KERNEL);
 	if (oh_config == NULL) {
-		dev_err(dpa_oh_dev, "Can't allocate private data for "
-			"OH node %s referenced from node %s!\n",
+		dev_err(dpa_oh_dev,
+			"Can't allocate private data for OH node %s referenced from node %s!\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -ENOMEM;
 		goto return_kfree;
 	}
 
-	/*
-	 * Read FQ ids/nums for the DPA OH node
-	 */
+	/* Read FQ ids/nums for the DPA OH node */
 	oh_all_queues = (uint32_t *)of_get_property(dpa_oh_node,
 		"fsl,qman-frame-queues-oh", &lenp);
 	if (oh_all_queues == NULL) {
-		dev_err(dpa_oh_dev, "No frame queues have been "
-			"defined for OH node %s referenced from node %s\n",
+		dev_err(dpa_oh_dev,
+			"No frame queues have been defined for OH node %s referenced from node %s\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -EINVAL;
 		goto return_kfree;
@@ -333,8 +327,8 @@ oh_port_probe(struct platform_device *_of_dev)
 	BUG_ON(lenp % (2 * sizeof(*oh_all_queues)));
 	queues_count = lenp / (2 * sizeof(*oh_all_queues));
 	if (queues_count != 2) {
-		dev_err(dpa_oh_dev, "Error and Default queues must be "
-			"defined for OH node %s referenced from node %s\n",
+		dev_err(dpa_oh_dev,
+			"Error and Default queues must be defined for OH node %s referenced from node %s\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -EINVAL;
 		goto return_kfree;
@@ -348,8 +342,8 @@ oh_port_probe(struct platform_device *_of_dev)
 	crt_fqid_base = oh_all_queues[fq_idx++];
 	crt_fq_count = oh_all_queues[fq_idx++];
 	if (crt_fq_count != 1) {
-		dev_err(dpa_oh_dev, "Only 1 Error FQ allowed in OH node %s "
-			"referenced from node %s (read: %d FQIDs).\n",
+		dev_err(dpa_oh_dev,
+			"Only 1 Error FQ allowed in OH node %s referenced from node %s (read: %d FQIDs).\n",
 			oh_node->full_name, dpa_oh_node->full_name,
 			crt_fq_count);
 		_errno = -EINVAL;
@@ -363,8 +357,8 @@ oh_port_probe(struct platform_device *_of_dev)
 	crt_fqid_base = oh_all_queues[fq_idx++];
 	crt_fq_count = oh_all_queues[fq_idx++];
 	if (crt_fq_count != 1) {
-		dev_err(dpa_oh_dev, "Only 1 Default FQ allowed "
-			"in OH node %s referenced from %s (read: %d FQIDs).\n",
+		dev_err(dpa_oh_dev,
+			"Only 1 Default FQ allowed in OH node %s referenced from %s (read: %d FQIDs).\n",
 			oh_node->full_name, dpa_oh_node->full_name,
 			crt_fq_count);
 		_errno = -EINVAL;
@@ -378,8 +372,8 @@ oh_port_probe(struct platform_device *_of_dev)
 	oh_tx_queues = (uint32_t *)of_get_property(dpa_oh_node,
 		"fsl,qman-frame-queues-tx", &lenp);
 	if (oh_tx_queues == NULL) {
-		dev_dbg(dpa_oh_dev, "No tx queues have been "
-		"defined for OH node %s referenced from node %s\n",
+		dev_dbg(dpa_oh_dev,
+			"No tx queues have been defined for OH node %s referenced from node %s\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		goto config_port;
 	}
@@ -388,9 +382,8 @@ oh_port_probe(struct platform_device *_of_dev)
 	BUG_ON(lenp % (2 * sizeof(*oh_tx_queues)));
 	queues_count = lenp / (2 * sizeof(*oh_tx_queues));
 	if (queues_count != 1) {
-		dev_err(dpa_oh_dev, "TX queues must be defined in"
-			"only one <base count> tuple for OH node %s "
-			"referenced from node %s\n",
+		dev_err(dpa_oh_dev,
+			"TX queues must be defined in only one <base count> tuple for OH node %s referenced from node %s\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -EINVAL;
 		goto return_kfree;
@@ -416,8 +409,8 @@ oh_port_probe(struct platform_device *_of_dev)
 	oh_config->egress_fqs = devm_kzalloc(dpa_oh_dev,
 		crt_fq_count * sizeof(struct qman_fq), GFP_KERNEL);
 	if (oh_config->egress_fqs == NULL) {
-		dev_err(dpa_oh_dev, "Can't allocate private data for "
-			"TX queues for OH node %s referenced from node %s!\n",
+		dev_err(dpa_oh_dev,
+			"Can't allocate private data for TX queues for OH node %s referenced from node %s!\n",
 			oh_node->full_name, dpa_oh_node->full_name);
 		_errno = -ENOMEM;
 		goto return_kfree;
@@ -428,9 +421,8 @@ oh_port_probe(struct platform_device *_of_dev)
 		ret = oh_fq_create(oh_config->egress_fqs + i,
 			crt_fqid_base + i, *channel_id, 3);
 		if (ret != 0) {
-			dev_err(dpa_oh_dev, "Unable to create TX frame "
-				"queue %d for OH node %s referenced "
-				"from node %s!\n",
+			dev_err(dpa_oh_dev,
+				"Unable to create TX frame queue %d for OH node %s referenced from node %s!\n",
 				crt_fqid_base + i, oh_node->full_name,
 				dpa_oh_node->full_name);
 			_errno = -EINVAL;
@@ -440,7 +432,8 @@ oh_port_probe(struct platform_device *_of_dev)
 
 config_port:
 	/* Get a handle to the fm_port so we can set
-	 * its configuration params */
+	 * its configuration params
+	 */
 	oh_config->oh_port = fm_port_bind(oh_dev);
 	if (oh_config->oh_port == NULL) {
 		dev_err(dpa_oh_dev, "NULL drvdata from fm port dev %s!\n",
@@ -454,7 +447,8 @@ config_port:
 			"fsl,bman-buffer-pools", &lenp);
 
 	if (bpool_handle == NULL) {
-		dev_info(dpa_oh_dev, "OH port %s has no buffer pool. Fragmentation will not be enabled\n",
+		dev_info(dpa_oh_dev,
+			 "OH port %s has no buffer pool. Fragmentation will not be enabled\n",
 			oh_node->full_name);
 		goto init_port;
 	}
@@ -608,7 +602,8 @@ static int __init __cold oh_port_load(void)
 {
 	int _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": " OH_MOD_DESCRIPTION " (" VERSION ")\n");
+	printk(KERN_INFO KBUILD_MODNAME ": "
+	       OH_MOD_DESCRIPTION " (" VERSION ")\n");
 
 	_errno = platform_driver_register(&oh_port_driver);
 	if (_errno < 0) {
