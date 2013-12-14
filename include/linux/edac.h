@@ -51,7 +51,7 @@ static inline void opstate_init(void)
 #define EDAC_MC_LABEL_LEN	31
 
 /* Maximum size of the location string */
-#define LOCATION_SIZE 80
+#define LOCATION_SIZE 256
 
 /* Defines the maximum number of labels that can be reported */
 #define EDAC_MAX_LABELS		8
@@ -622,7 +622,7 @@ struct edac_raw_error_desc {
  */
 struct mem_ctl_info {
 	struct device			dev;
-	struct bus_type			bus;
+	struct bus_type			*bus;
 
 	struct list_head link;	/* for global list of mem_ctl_info structs */
 
@@ -741,5 +741,10 @@ struct mem_ctl_info {
 	u16 fake_inject_count;
 #endif
 };
+
+/*
+ * Maximum number of memory controllers in the coherent fabric.
+ */
+#define EDAC_MAX_MCS	16
 
 #endif

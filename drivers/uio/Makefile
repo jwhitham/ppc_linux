@@ -1,6 +1,5 @@
 obj-$(CONFIG_UIO)	+= uio.o
 obj-$(CONFIG_UIO_CIF)	+= uio_cif.o
-obj-$(CONFIG_UIO_PDRV)	+= uio_pdrv.o
 obj-$(CONFIG_UIO_PDRV_GENIRQ)	+= uio_pdrv_genirq.o
 obj-$(CONFIG_UIO_DMEM_GENIRQ)	+= uio_dmem_genirq.o
 obj-$(CONFIG_UIO_AEC)	+= uio_aec.o
@@ -12,3 +11,4 @@ obj-$(CONFIG_UIO_FSL_SRIO)	+= fsl_srio_uio.o
 obj-$(CONFIG_UIO_FSL_RMU)	+= fsl_rmu_uio.o
 obj-$(CONFIG_UIO_FSL_DMA)	+= fsl_dma_uio.o
 obj-$(CONFIG_UIO_FSL_SEC)	+= fsl_sec_uio.o
+obj-$(CONFIG_UIO_MF624)         += uio_mf624.o

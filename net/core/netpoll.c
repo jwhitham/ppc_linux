@@ -12,6 +12,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/moduleparam.h>
+#include <linux/kernel.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/string.h>
@@ -247,7 +248,7 @@ static void netpoll_poll_dev(struct net_device *dev)
 	zap_completion_queue();
 }
 
-int netpoll_rx_disable(struct net_device *dev)
+void netpoll_rx_disable(struct net_device *dev)
 {
 	struct netpoll_info *ni;
 	int idx;
@@ -257,7 +258,6 @@ int netpoll_rx_disable(struct net_device *dev)
 	if (ni)
 		down(&ni->dev_lock);
 	srcu_read_unlock(&netpoll_srcu, idx);
-	return 0;
 }
 EXPORT_SYMBOL(netpoll_rx_disable);
 
@@ -555,7 +555,7 @@ static void netpoll_neigh_reply(struct sk_buff *skb, struct netpoll_info *npinfo
 		return;
 
 	proto = ntohs(eth_hdr(skb)->h_proto);
-	if (proto == ETH_P_IP) {
+	if (proto == ETH_P_ARP) {
 		struct arphdr *arp;
 		unsigned char *arp_ptr;
 		/* No arp on this interface */
@@ -641,8 +641,9 @@ static void netpoll_neigh_reply(struct sk_buff *skb, struct netpoll_info *npinfo
 
 			netpoll_send_skb(np, send_skb);
 
-			/* If there are several rx_hooks for the same address,
-			   we're fine by sending a single reply */
+			/* If there are several rx_skb_hooks for the same
+			 * address we're fine by sending a single reply
+			 */
 			break;
 		}
 		spin_unlock_irqrestore(&npinfo->rx_lock, flags);
@@ -695,25 +696,20 @@ static void netpoll_neigh_reply(struct sk_buff *skb, struct netpoll_info *npinfo
 			send_skb->dev = skb->dev;
 
 			skb_reset_network_header(send_skb);
-			skb_put(send_skb, sizeof(struct ipv6hdr));
-			hdr = ipv6_hdr(send_skb);
-
+			hdr = (struct ipv6hdr *) skb_put(send_skb, sizeof(struct ipv6hdr));
 			*(__be32*)hdr = htonl(0x60000000);
-
 			hdr->payload_len = htons(size);
 			hdr->nexthdr = IPPROTO_ICMPV6;
 			hdr->hop_limit = 255;
 			hdr->saddr = *saddr;
 			hdr->daddr = *daddr;
 
-			send_skb->transport_header = send_skb->tail;
-			skb_put(send_skb, size);
-
-			icmp6h = (struct icmp6hdr *)skb_transport_header(skb);
+			icmp6h = (struct icmp6hdr *) skb_put(send_skb, sizeof(struct icmp6hdr));
 			icmp6h->icmp6_type = NDISC_NEIGHBOUR_ADVERTISEMENT;
 			icmp6h->icmp6_router = 0;
 			icmp6h->icmp6_solicited = 1;
-			target = (struct in6_addr *)(skb_transport_header(send_skb) + sizeof(struct icmp6hdr));
+
+			target = (struct in6_addr *) skb_put(send_skb, sizeof(struct in6_addr));
 			*target = msg->target;
 			icmp6h->icmp6_cksum = csum_ipv6_magic(saddr, daddr, size,
 							      IPPROTO_ICMPV6,
@@ -729,8 +725,9 @@ static void netpoll_neigh_reply(struct sk_buff *skb, struct netpoll_info *npinfo
 
 			netpoll_send_skb(np, send_skb);
 
-			/* If there are several rx_hooks for the same address,
-			   we're fine by sending a single reply */
+			/* If there are several rx_skb_hooks for the same
+			 * address, we're fine by sending a single reply
+			 */
 			break;
 		}
 		spin_unlock_irqrestore(&npinfo->rx_lock, flags);
@@ -766,11 +763,12 @@ static bool pkt_is_ns(struct sk_buff *skb)
 
 int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 {
-	int proto, len, ulen;
-	int hits = 0;
+	int proto, len, ulen, data_len;
+	int hits = 0, offset;
 	const struct iphdr *iph;
 	struct udphdr *uh;
 	struct netpoll *np, *tmp;
+	uint16_t source;
 
 	if (list_empty(&npinfo->rx_np))
 		goto out;
@@ -830,7 +828,10 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 
 		len -= iph->ihl*4;
 		uh = (struct udphdr *)(((char *)iph) + iph->ihl*4);
+		offset = (unsigned char *)(uh + 1) - skb->data;
 		ulen = ntohs(uh->len);
+		data_len = skb->len - offset;
+		source = ntohs(uh->source);
 
 		if (ulen != len)
 			goto out;
@@ -844,9 +845,7 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 			if (np->local_port && np->local_port != ntohs(uh->dest))
 				continue;
 
-			np->rx_hook(np, ntohs(uh->source),
-				       (char *)(uh+1),
-				       ulen - sizeof(struct udphdr));
+			np->rx_skb_hook(np, source, skb, offset, data_len);
 			hits++;
 		}
 	} else {
@@ -869,7 +868,10 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 		if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 			goto out;
 		uh = udp_hdr(skb);
+		offset = (unsigned char *)(uh + 1) - skb->data;
 		ulen = ntohs(uh->len);
+		data_len = skb->len - offset;
+		source = ntohs(uh->source);
 		if (ulen != skb->len)
 			goto out;
 		if (udp6_csum_init(skb, uh, IPPROTO_UDP))
@@ -882,9 +884,7 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 			if (np->local_port && np->local_port != ntohs(uh->dest))
 				continue;
 
-			np->rx_hook(np, ntohs(uh->source),
-				       (char *)(uh+1),
-				       ulen - sizeof(struct udphdr));
+			np->rx_skb_hook(np, source, skb, offset, data_len);
 			hits++;
 		}
 #endif
@@ -1072,7 +1072,7 @@ int __netpoll_setup(struct netpoll *np, struct net_device *ndev, gfp_t gfp)
 
 	npinfo->netpoll = np;
 
-	if (np->rx_hook) {
+	if (np->rx_skb_hook) {
 		spin_lock_irqsave(&npinfo->rx_lock, flags);
 		npinfo->rx_flags |= NETPOLL_RX_ENABLED;
 		list_add_tail(&np->rx, &npinfo->rx_np);
@@ -1294,15 +1294,14 @@ EXPORT_SYMBOL_GPL(__netpoll_free_async);
 
 void netpoll_cleanup(struct netpoll *np)
 {
-	if (!np->dev)
-		return;
-
 	rtnl_lock();
+	if (!np->dev)
+		goto out;
 	__netpoll_cleanup(np);
-	rtnl_unlock();
-
 	dev_put(np->dev);
 	np->dev = NULL;
+out:
+	rtnl_unlock();
 }
 EXPORT_SYMBOL(netpoll_cleanup);
 

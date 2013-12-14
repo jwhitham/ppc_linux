@@ -19,7 +19,9 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/syscore_ops.h>
 #include <sysdev/fsl_soc.h>
 #include <asm/io.h>
@@ -28,7 +30,14 @@
 
 #define FSL_GLOBAL_TIMER		0x1
 
-#define MPIC_TIMER_TCR_CLKDIV_64	0x00000300
+/* Clock Ratio
+ * Divide by 64 0x00000300
+ * Divide by 32 0x00000200
+ * Divide by 16 0x00000100
+ * Divide by  8 0x00000000 (Hardware default div)
+ */
+#define MPIC_TIMER_TCR_CLKDIV		0x00000300
+
 #define MPIC_TIMER_TCR_ROVR_OFFSET	24
 
 #define TIMER_STOP			0x80000000
@@ -83,26 +92,12 @@ static void convert_ticks_to_time(struct timer_group_priv *priv,
 		const u64 ticks, struct timeval *time)
 {
 	u64 tmp_sec;
-	u32 rem_us;
-	u32 div;
 
-	if (!(priv->flags & FSL_GLOBAL_TIMER)) {
-		time->tv_sec = (__kernel_time_t)
-			div_u64_rem(ticks, priv->timerfreq, &rem_us);
-		tmp_sec = (u64)time->tv_sec * (u64)priv->timerfreq;
-		time->tv_usec = (__kernel_suseconds_t)
-			div_u64((ticks - tmp_sec) * 1000000, priv->timerfreq);
-
-		return;
-	}
-
-	div = (1 << (MPIC_TIMER_TCR_CLKDIV_64 >> 8)) * 8;
-
-	time->tv_sec = (__kernel_time_t)div_u64(ticks, priv->timerfreq / div);
-	tmp_sec = div_u64((u64)time->tv_sec * (u64)priv->timerfreq, div);
+	time->tv_sec = (__kernel_time_t)div_u64(ticks, priv->timerfreq);
+	tmp_sec = (u64)time->tv_sec * (u64)priv->timerfreq;
 
 	time->tv_usec = (__kernel_suseconds_t)
-		div_u64((ticks - tmp_sec) * 1000000, priv->timerfreq / div);
+		div_u64((ticks - tmp_sec) * 1000000, priv->timerfreq);
 
 	return;
 }
@@ -117,7 +112,6 @@ static int convert_time_to_ticks(struct timer_group_priv *priv,
 	u64 tmp_sec;
 	u64 tmp_ms;
 	u64 tmp_us;
-	u32 div;
 
 	max_value = div_u64(ULLONG_MAX, priv->timerfreq);
 
@@ -125,27 +119,15 @@ static int convert_time_to_ticks(struct timer_group_priv *priv,
 			(time->tv_sec == max_value && time->tv_usec > 0))
 		return -EINVAL;
 
-	if (!(priv->flags & FSL_GLOBAL_TIMER)) {
-		tmp_sec = time->tv_sec * priv->timerfreq;
-		tmp_ms = time->tv_usec / 1000 * priv->timerfreq / 1000;
-		tmp_us = time->tv_usec % 1000 * priv->timerfreq / 1000000;
-
-		*ticks = tmp_sec + tmp_ms + tmp_us;
-
-		return 0;
-	}
-
-	div = (1 << (MPIC_TIMER_TCR_CLKDIV_64 >> 8)) * 8;
-
-	tmp_sec = div_u64((u64)time->tv_sec * (u64)priv->timerfreq, div);
+	tmp_sec = (u64)time->tv_sec * (u64)priv->timerfreq;
 	tmp += tmp_sec;
 
 	tmp_ms = time->tv_usec / 1000;
-	tmp_ms = div_u64((u64)tmp_ms * (u64)priv->timerfreq, div * 1000);
+	tmp_ms = div_u64((u64)tmp_ms * (u64)priv->timerfreq, 1000);
 	tmp += tmp_ms;
 
 	tmp_us = time->tv_usec % 1000;
-	tmp_us = div_u64((u64)tmp_us * (u64)priv->timerfreq, div * 1000000);
+	tmp_us = div_u64((u64)tmp_us * (u64)priv->timerfreq, 1000000);
 	tmp += tmp_us;
 
 	*ticks = tmp;
@@ -260,8 +242,8 @@ static struct mpic_timer *get_timer(const struct timeval *time)
 			timer = get_cascade_timer(priv, ticks);
 			if (!timer)
 				continue;
-			else
-				return timer;
+
+			return timer;
 		}
 
 		for (i = 0; i < TIMERS_PER_GROUP; i++) {
@@ -438,6 +420,8 @@ EXPORT_SYMBOL(mpic_request_timer);
 static int timer_group_get_freq(struct device_node *np,
 			struct timer_group_priv *priv)
 {
+	u32 div;
+
 	if (priv->flags & FSL_GLOBAL_TIMER) {
 		struct device_node *dn;
 
@@ -451,6 +435,11 @@ static int timer_group_get_freq(struct device_node *np,
 
 	if (priv->timerfreq <= 0)
 		return -EINVAL;
+
+	if (priv->flags & FSL_GLOBAL_TIMER) {
+		div = (1 << (MPIC_TIMER_TCR_CLKDIV >> 8)) * 8;
+		priv->timerfreq /= div;
+	}
 
 	return 0;
 }
@@ -553,7 +542,7 @@ static void timer_group_init(struct device_node *np)
 
 	/* Init FSL timer hardware */
 	if (priv->flags & FSL_GLOBAL_TIMER)
-		setbits32(priv->group_tcr, MPIC_TIMER_TCR_CLKDIV_64);
+		setbits32(priv->group_tcr, MPIC_TIMER_TCR_CLKDIV);
 
 	list_add_tail(&priv->node, &timer_group_list);
 
@@ -576,7 +565,7 @@ static void mpic_timer_resume(void)
 	list_for_each_entry(priv, &timer_group_list, node) {
 		/* Init FSL timer hardware */
 		if (priv->flags & FSL_GLOBAL_TIMER)
-			setbits32(priv->group_tcr, MPIC_TIMER_TCR_CLKDIV_64);
+			setbits32(priv->group_tcr, MPIC_TIMER_TCR_CLKDIV);
 	}
 }
 

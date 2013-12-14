@@ -36,6 +36,7 @@
 
 /include/ "fsl/e6500_power_isa.dtsi"
 / {
+	compatible = "fsl,T4240";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
@@ -55,11 +56,6 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		/*
-		 * Temporarily add next-level-cache info in each cpu node so
-		 * that uboot can do L2 cache fixup. This can be removed once
-		 * u-boot can create cpu node with cache info.
-		 */
 		cpu0: PowerPC,e6500@0 {
 			device_type = "cpu";
 			reg = <0 1>;
@@ -127,7 +123,7 @@
 
 / {
 	model = "fsl,T4240QDS";
-	compatible = "fsl,t4240emu", "fsl,T4240QDS";
+	compatible = "fsl,T4240EMU", "fsl,T4240QDS";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
@@ -159,7 +155,6 @@
 		reg = <0xf 0xfe000000 0 0x00001000>;
 
 	};
-
 };
 
 &ifc {
@@ -208,11 +203,13 @@
 	};
 
 	cpc: l3-cache-controller@10000 {
-		compatible = "fsl,p5020-l3-cache-controller", "fsl,p4080-l3-cache-controller", "cache";
+		compatible = "fsl,t4240-l3-cache-controller", "cache";
 		reg = <0x10000 0x1000
-		       0x11000 0x1000>;
+		       0x11000 0x1000
+		       0x12000 0x1000>;
 		interrupts = <16 2 1 27
-			      16 2 1 26>;
+			      16 2 1 26
+			      16 2 1 25>;
 	};
 
 	corenet-cf@18000 {
@@ -234,14 +231,14 @@
 /include/ "fsl/qoriq-mpic.dtsi"
 
 	guts: global-utilities@e0000 {
-		compatible = "fsl,t4240-device-config";
+		compatible = "fsl,t4240-device-config", "fsl,qoriq-device-config-2.0";
 		reg = <0xe0000 0xe00>;
 		fsl,has-rstcr;
 		fsl,liodn-bits = <12>;
 	};
 
 	clockgen: global-utilities@e1000 {
-		compatible = "fsl,t4240-clockgen", "fsl,qoriq-clockgen-2";
+		compatible = "fsl,t4240-clockgen", "fsl,qoriq-clockgen-2.0";
 		reg = <0xe1000 0x1000>;
 	};
 
@@ -253,12 +250,6 @@
 /include/ "fsl/qoriq-duart-0.dtsi"
 /include/ "fsl/qoriq-duart-1.dtsi"
 
-
-	/*
-	 * Temporarily define cluster 1/2/3's L2 cache nodes in order to pass
-	 * next-level-cache info to uboot to do L3 cache fixup. This can be
-	 * removed once u-boot can create cpu node with cache info.
-	 */
 	L2_1: l2-cache-controller@c20000 {
 		compatible = "fsl,t4240-l2-cache-controller";
 		reg = <0xc20000 0x40000>;
@@ -275,4 +266,3 @@
 		next-level-cache = <&cpc>;
 	};
 };
-

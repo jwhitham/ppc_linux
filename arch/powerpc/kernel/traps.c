@@ -44,9 +44,7 @@
 #include <asm/machdep.h>
 #include <asm/rtas.h>
 #include <asm/pmc.h>
-#ifdef CONFIG_PPC32
 #include <asm/reg.h>
-#endif
 #ifdef CONFIG_PMAC_BACKLIGHT
 #include <asm/backlight.h>
 #endif
@@ -353,8 +351,8 @@ static inline int check_io_access(struct pt_regs *regs)
 #define REASON_TRAP		ESR_PTR
 
 /* single-step stuff */
-#define single_stepping(regs)	(current->thread.dbcr0 & DBCR0_IC)
-#define clear_single_step(regs)	(current->thread.dbcr0 &= ~DBCR0_IC)
+#define single_stepping(regs)	(current->thread.debug.dbcr0 & DBCR0_IC)
+#define clear_single_step(regs)	(current->thread.debug.dbcr0 &= ~DBCR0_IC)
 
 #else
 /* On non-4xx, the reason for the machine check or program
@@ -818,7 +816,7 @@ static void parse_fpe(struct pt_regs *regs)
 
 	flush_fp_to_thread(current);
 
-	code = __parse_fpscr(current->thread.fpscr.val);
+	code = __parse_fpscr(current->thread.fp_state.fpscr);
 
 	_exception(SIGFPE, regs, code, regs->nip);
 }
@@ -967,7 +965,7 @@ static int emulate_instruction(struct pt_regs *regs)
 	u32 instword;
 	u32 rd;
 
-	if (!user_mode(regs) || (regs->msr & MSR_LE))
+	if (!user_mode(regs))
 		return -EINVAL;
 	CHECK_FULL_REGS(regs);
 
@@ -1020,6 +1018,13 @@ static int emulate_instruction(struct pt_regs *regs)
 		return emulate_isel(regs, instword);
 	}
 
+	/* Emulate sync instruction variants */
+	if ((instword & PPC_INST_SYNC_MASK) == PPC_INST_SYNC) {
+		PPC_WARN_EMULATED(sync, regs);
+		asm volatile("sync");
+		return 0;
+	}
+
 #ifdef CONFIG_PPC64
 	/* Emulate the mfspr rD, DSCR. */
 	if ((((instword & PPC_INST_MFSPR_DSCR_USER_MASK) ==
@@ -1055,11 +1060,41 @@ int is_valid_bugaddr(unsigned long addr)
 	return is_kernel_addr(addr);
 }
 
+#ifdef CONFIG_MATH_EMULATION
+static int emulate_math(struct pt_regs *regs)
+{
+	int ret;
+	extern int do_mathemu(struct pt_regs *regs);
+
+	ret = do_mathemu(regs);
+	if (ret >= 0)
+		PPC_WARN_EMULATED(math, regs);
+
+	switch (ret) {
+	case 0:
+		emulate_single_step(regs);
+		return 0;
+	case 1: {
+			int code = 0;
+			code = __parse_fpscr(current->thread.fp_state.fpscr);
+			_exception(SIGFPE, regs, code, regs->nip);
+			return 0;
+		}
+	case -EFAULT:
+		_exception(SIGSEGV, regs, SEGV_MAPERR, regs->nip);
+		return 0;
+	}
+
+	return -1;
+}
+#else
+static inline int emulate_math(struct pt_regs *regs) { return -1; }
+#endif
+
 void __kprobes program_check_exception(struct pt_regs *regs)
 {
 	enum ctx_state prev_state = exception_enter();
 	unsigned int reason = get_reason(regs);
-	extern int do_mathemu(struct pt_regs *regs);
 
 	/* We can now get here via a FP Unavailable exception if the core
 	 * has no FPU, in that case the reason flags will be 0 */
@@ -1121,34 +1156,30 @@ void __kprobes program_check_exception(struct pt_regs *regs)
 	}
 #endif
 
+	/*
+	 * If we took the program check in the kernel skip down to sending a
+	 * SIGILL. The subsequent cases all relate to emulating instructions
+	 * which we should only do for userspace. We also do not want to enable
+	 * interrupts for kernel faults because that might lead to further
+	 * faults, and loose the context of the original exception.
+	 */
+	if (!user_mode(regs))
+		goto sigill;
+
 	/* We restore the interrupt state now */
 	if (!arch_irq_disabled_regs(regs))
 		local_irq_enable();
 
-#ifdef CONFIG_MATH_EMULATION
 	/* (reason & REASON_ILLEGAL) would be the obvious thing here,
 	 * but there seems to be a hardware bug on the 405GP (RevD)
 	 * that means ESR is sometimes set incorrectly - either to
 	 * ESR_DST (!?) or 0.  In the process of chasing this with the
 	 * hardware people - not sure if it can happen on any illegal
 	 * instruction or only on FP instructions, whether there is a
-	 * pattern to occurrences etc. -dgibson 31/Mar/2003 */
-	switch (do_mathemu(regs)) {
-	case 0:
-		emulate_single_step(regs);
+	 * pattern to occurrences etc. -dgibson 31/Mar/2003
+	 */
+	if (!emulate_math(regs))
 		goto bail;
-	case 1: {
-			int code = 0;
-			code = __parse_fpscr(current->thread.fpscr.val);
-			_exception(SIGFPE, regs, code, regs->nip);
-			goto bail;
-		}
-	case -EFAULT:
-		_exception(SIGSEGV, regs, SEGV_MAPERR, regs->nip);
-		goto bail;
-	}
-	/* fall through on any other errors */
-#endif /* CONFIG_MATH_EMULATION */
 
 	/* Try to emulate it if we should. */
 	if (reason & (REASON_ILLEGAL | REASON_PRIVILEGED)) {
@@ -1163,6 +1194,7 @@ void __kprobes program_check_exception(struct pt_regs *regs)
 		}
 	}
 
+sigill:
 	if (reason & REASON_PRIVILEGED)
 		_exception(SIGILL, regs, ILL_PRVOPC, regs->nip);
 	else
@@ -1289,30 +1321,62 @@ void vsx_unavailable_exception(struct pt_regs *regs)
 	die("Unrecoverable VSX Unavailable Exception", regs, SIGABRT);
 }
 
-void tm_unavailable_exception(struct pt_regs *regs)
+#ifdef CONFIG_PPC64
+void facility_unavailable_exception(struct pt_regs *regs)
 {
+	static char *facility_strings[] = {
+		[FSCR_FP_LG] = "FPU",
+		[FSCR_VECVSX_LG] = "VMX/VSX",
+		[FSCR_DSCR_LG] = "DSCR",
+		[FSCR_PM_LG] = "PMU SPRs",
+		[FSCR_BHRB_LG] = "BHRB",
+		[FSCR_TM_LG] = "TM",
+		[FSCR_EBB_LG] = "EBB",
+		[FSCR_TAR_LG] = "TAR",
+	};
+	char *facility = "unknown";
+	u64 value;
+	u8 status;
+	bool hv;
+
+	hv = (regs->trap == 0xf80);
+	if (hv)
+		value = mfspr(SPRN_HFSCR);
+	else
+		value = mfspr(SPRN_FSCR);
+
+	status = value >> 56;
+	if (status == FSCR_DSCR_LG) {
+		/* User is acessing the DSCR.  Set the inherit bit and allow
+		 * the user to set it directly in future by setting via the
+		 * FSCR DSCR bit.  We always leave HFSCR DSCR set.
+		 */
+		current->thread.dscr_inherit = 1;
+		mtspr(SPRN_FSCR, value | FSCR_DSCR);
+		return;
+	}
+
+	if ((status < ARRAY_SIZE(facility_strings)) &&
+	    facility_strings[status])
+		facility = facility_strings[status];
+
 	/* We restore the interrupt state now */
 	if (!arch_irq_disabled_regs(regs))
 		local_irq_enable();
 
-	/* Currently we never expect a TMU exception.  Catch
-	 * this and kill the process!
-	 */
-	printk(KERN_EMERG "Unexpected TM unavailable exception at %lx "
-	       "(msr %lx)\n",
-	       regs->nip, regs->msr);
+	pr_err("%sFacility '%s' unavailable, exception at 0x%lx, MSR=%lx\n",
+	       hv ? "Hypervisor " : "", facility, regs->nip, regs->msr);
 
 	if (user_mode(regs)) {
 		_exception(SIGILL, regs, ILL_ILLOPC, regs->nip);
 		return;
 	}
 
-	die("Unexpected TM unavailable exception", regs, SIGABRT);
+	die("Unexpected facility unavailable exception", regs, SIGABRT);
 }
+#endif
 
 #ifdef CONFIG_PPC_TRANSACTIONAL_MEM
-
-extern void do_load_up_fpu(struct pt_regs *regs);
 
 void fp_unavailable_tm(struct pt_regs *regs)
 {
@@ -1344,8 +1408,6 @@ void fp_unavailable_tm(struct pt_regs *regs)
 }
 
 #ifdef CONFIG_ALTIVEC
-extern void do_load_up_altivec(struct pt_regs *regs);
-
 void altivec_unavailable_tm(struct pt_regs *regs)
 {
 	/* See the comments in fp_unavailable_tm().  This function operates
@@ -1402,61 +1464,18 @@ void performance_monitor_exception(struct pt_regs *regs)
 #ifdef CONFIG_8xx
 void SoftwareEmulation(struct pt_regs *regs)
 {
-	extern int do_mathemu(struct pt_regs *);
-	extern int Soft_emulate_8xx(struct pt_regs *);
-#if defined(CONFIG_MATH_EMULATION) || defined(CONFIG_8XX_MINIMAL_FPEMU)
-	int errcode;
-#endif
-
 	CHECK_FULL_REGS(regs);
 
 	if (!user_mode(regs)) {
 		debugger(regs);
-		die("Kernel Mode Software FPU Emulation", regs, SIGFPE);
+		die("Kernel Mode Unimplemented Instruction or SW FPU Emulation",
+			regs, SIGFPE);
 	}
 
-#ifdef CONFIG_MATH_EMULATION
-	errcode = do_mathemu(regs);
-	if (errcode >= 0)
-		PPC_WARN_EMULATED(math, regs);
+	if (!emulate_math(regs))
+		return;
 
-	switch (errcode) {
-	case 0:
-		emulate_single_step(regs);
-		return;
-	case 1: {
-			int code = 0;
-			code = __parse_fpscr(current->thread.fpscr.val);
-			_exception(SIGFPE, regs, code, regs->nip);
-			return;
-		}
-	case -EFAULT:
-		_exception(SIGSEGV, regs, SEGV_MAPERR, regs->nip);
-		return;
-	default:
-		_exception(SIGILL, regs, ILL_ILLOPC, regs->nip);
-		return;
-	}
-
-#elif defined(CONFIG_8XX_MINIMAL_FPEMU)
-	errcode = Soft_emulate_8xx(regs);
-	if (errcode >= 0)
-		PPC_WARN_EMULATED(8xx, regs);
-
-	switch (errcode) {
-	case 0:
-		emulate_single_step(regs);
-		return;
-	case 1:
-		_exception(SIGILL, regs, ILL_ILLOPC, regs->nip);
-		return;
-	case -EFAULT:
-		_exception(SIGSEGV, regs, SEGV_MAPERR, regs->nip);
-		return;
-	}
-#else
 	_exception(SIGILL, regs, ILL_ILLOPC, regs->nip);
-#endif
 }
 #endif /* CONFIG_8xx */
 
@@ -1471,7 +1490,7 @@ static void handle_debug(struct pt_regs *regs, unsigned long debug_status)
 	if (debug_status & (DBSR_DAC1R | DBSR_DAC1W)) {
 		dbcr_dac(current) &= ~(DBCR_DAC1R | DBCR_DAC1W);
 #ifdef CONFIG_PPC_ADV_DEBUG_DAC_RANGE
-		current->thread.dbcr2 &= ~DBCR2_DAC12MODE;
+		current->thread.debug.dbcr2 &= ~DBCR2_DAC12MODE;
 #endif
 		do_send_trap(regs, mfspr(SPRN_DAC1), debug_status, TRAP_HWBKPT,
 			     5);
@@ -1482,24 +1501,24 @@ static void handle_debug(struct pt_regs *regs, unsigned long debug_status)
 			     6);
 		changed |= 0x01;
 	}  else if (debug_status & DBSR_IAC1) {
-		current->thread.dbcr0 &= ~DBCR0_IAC1;
+		current->thread.debug.dbcr0 &= ~DBCR0_IAC1;
 		dbcr_iac_range(current) &= ~DBCR_IAC12MODE;
 		do_send_trap(regs, mfspr(SPRN_IAC1), debug_status, TRAP_HWBKPT,
 			     1);
 		changed |= 0x01;
 	}  else if (debug_status & DBSR_IAC2) {
-		current->thread.dbcr0 &= ~DBCR0_IAC2;
+		current->thread.debug.dbcr0 &= ~DBCR0_IAC2;
 		do_send_trap(regs, mfspr(SPRN_IAC2), debug_status, TRAP_HWBKPT,
 			     2);
 		changed |= 0x01;
 	}  else if (debug_status & DBSR_IAC3) {
-		current->thread.dbcr0 &= ~DBCR0_IAC3;
+		current->thread.debug.dbcr0 &= ~DBCR0_IAC3;
 		dbcr_iac_range(current) &= ~DBCR_IAC34MODE;
 		do_send_trap(regs, mfspr(SPRN_IAC3), debug_status, TRAP_HWBKPT,
 			     3);
 		changed |= 0x01;
 	}  else if (debug_status & DBSR_IAC4) {
-		current->thread.dbcr0 &= ~DBCR0_IAC4;
+		current->thread.debug.dbcr0 &= ~DBCR0_IAC4;
 		do_send_trap(regs, mfspr(SPRN_IAC4), debug_status, TRAP_HWBKPT,
 			     4);
 		changed |= 0x01;
@@ -1509,19 +1528,20 @@ static void handle_debug(struct pt_regs *regs, unsigned long debug_status)
 	 * Check all other debug flags and see if that bit needs to be turned
 	 * back on or not.
 	 */
-	if (DBCR_ACTIVE_EVENTS(current->thread.dbcr0, current->thread.dbcr1))
+	if (DBCR_ACTIVE_EVENTS(current->thread.debug.dbcr0,
+			       current->thread.debug.dbcr1))
 		regs->msr |= MSR_DE;
 	else
 		/* Make sure the IDM flag is off */
-		current->thread.dbcr0 &= ~DBCR0_IDM;
+		current->thread.debug.dbcr0 &= ~DBCR0_IDM;
 
 	if (changed & 0x01)
-		mtspr(SPRN_DBCR0, current->thread.dbcr0);
+		mtspr(SPRN_DBCR0, current->thread.debug.dbcr0);
 }
 
 void __kprobes DebugException(struct pt_regs *regs, unsigned long debug_status)
 {
-	current->thread.dbsr = debug_status;
+	current->thread.debug.dbsr = debug_status;
 
 	/* Hack alert: On BookE, Branch Taken stops on the branch itself, while
 	 * on server, it stops on the target of the branch. In order to simulate
@@ -1538,8 +1558,8 @@ void __kprobes DebugException(struct pt_regs *regs, unsigned long debug_status)
 
 		/* Do the single step trick only when coming from userspace */
 		if (user_mode(regs)) {
-			current->thread.dbcr0 &= ~DBCR0_BT;
-			current->thread.dbcr0 |= DBCR0_IDM | DBCR0_IC;
+			current->thread.debug.dbcr0 &= ~DBCR0_BT;
+			current->thread.debug.dbcr0 |= DBCR0_IDM | DBCR0_IC;
 			regs->msr |= MSR_DE;
 			return;
 		}
@@ -1567,13 +1587,13 @@ void __kprobes DebugException(struct pt_regs *regs, unsigned long debug_status)
 			return;
 
 		if (user_mode(regs)) {
-			current->thread.dbcr0 &= ~DBCR0_IC;
-			if (DBCR_ACTIVE_EVENTS(current->thread.dbcr0,
-					       current->thread.dbcr1))
+			current->thread.debug.dbcr0 &= ~DBCR0_IC;
+			if (DBCR_ACTIVE_EVENTS(current->thread.debug.dbcr0,
+					       current->thread.debug.dbcr1))
 				regs->msr |= MSR_DE;
 			else
 				/* Make sure the IDM bit is off */
-				current->thread.dbcr0 &= ~DBCR0_IDM;
+				current->thread.debug.dbcr0 &= ~DBCR0_IDM;
 		}
 
 		_exception(SIGTRAP, regs, TRAP_TRACE, regs->nip);
@@ -1619,7 +1639,7 @@ void altivec_assist_exception(struct pt_regs *regs)
 		/* XXX quick hack for now: set the non-Java bit in the VSCR */
 		printk_ratelimited(KERN_ERR "Unrecognized altivec instruction "
 				   "in %s at %lx\n", current->comm, regs->nip);
-		current->thread.vscr.u[3] |= 0x10000;
+		current->thread.vr_state.vscr.u[3] |= 0x10000;
 	}
 }
 #endif /* CONFIG_ALTIVEC */
@@ -1800,11 +1820,10 @@ struct ppc_emulated ppc_emulated = {
 	WARN_EMULATED_SETUP(popcntb),
 	WARN_EMULATED_SETUP(spe),
 	WARN_EMULATED_SETUP(string),
+	WARN_EMULATED_SETUP(sync),
 	WARN_EMULATED_SETUP(unaligned),
 #ifdef CONFIG_MATH_EMULATION
 	WARN_EMULATED_SETUP(math),
-#elif defined(CONFIG_8XX_MINIMAL_FPEMU)
-	WARN_EMULATED_SETUP(8xx),
 #endif
 #ifdef CONFIG_VSX
 	WARN_EMULATED_SETUP(vsx),

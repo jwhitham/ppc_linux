@@ -1,7 +1,7 @@
 /*
  * talitos - Freescale Integrated Security Engine (SEC) device driver
  *
- * Copyright (c) 2008-2012 Freescale Semiconductor, Inc.
+ * Copyright (c) 2008-2011 Freescale Semiconductor, Inc.
  *
  * Scatterlist Crypto API glue code copied from files with the following:
  * Copyright (c) 2006-2007 Herbert Xu <herbert@gondor.apana.org.au>
@@ -32,12 +32,13 @@
 #include <linux/interrupt.h>
 #include <linux/crypto.h>
 #include <linux/hw_random.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/spinlock.h>
 #include <linux/rtnetlink.h>
-#include <linux/netdevice.h>
 #include <linux/slab.h>
 
 #include <crypto/algapi.h>
@@ -243,18 +244,17 @@ EXPORT_SYMBOL(talitos_submit);
 /*
  * process what was done, notify callback of error if not
  */
-static int flush_channel(struct device *dev, int ch, int error, int reset_ch,
-			 int weight)
+static void flush_channel(struct device *dev, int ch, int error, int reset_ch)
 {
 	struct talitos_private *priv = dev_get_drvdata(dev);
 	struct talitos_request *request, saved_req;
 	unsigned long flags;
-	int tail, status, count = 0;
+	int tail, status;
 
 	spin_lock_irqsave(&priv->chan[ch].tail_lock, flags);
 
 	tail = priv->chan[ch].tail;
-	while (priv->chan[ch].fifo[tail].desc && (count < weight)) {
+	while (priv->chan[ch].fifo[tail].desc) {
 		request = &priv->chan[ch].fifo[tail];
 
 		/* descriptors with their done bits set don't get the error */
@@ -291,58 +291,46 @@ static int flush_channel(struct device *dev, int ch, int error, int reset_ch,
 				   status);
 		/* channel may resume processing in single desc error case */
 		if (error && !reset_ch && status == error)
-			return 0;
+			return;
 		spin_lock_irqsave(&priv->chan[ch].tail_lock, flags);
 		tail = priv->chan[ch].tail;
-		count++;
 	}
 
 	spin_unlock_irqrestore(&priv->chan[ch].tail_lock, flags);
-
-	return count;
 }
 
 /*
  * process completed requests for channels that have done status
  */
-#define DEF_TALITOS_DONE(name, ch_done_mask, num_ch)			\
-static int talitos_done_##name(struct napi_struct *napi, int budget)	\
+#define DEF_TALITOS_DONE(name, ch_done_mask)				\
+static void talitos_done_##name(unsigned long data)			\
 {									\
-	struct device *dev = &napi->dev->dev;				\
+	struct device *dev = (struct device *)data;			\
 	struct talitos_private *priv = dev_get_drvdata(dev);		\
-	int budget_per_ch, work_done = 0;				\
 	unsigned long flags;						\
 									\
-	budget_per_ch = budget / num_ch;				\
 	if (ch_done_mask & 1)						\
-		work_done += flush_channel(dev, 0, 0, 0, budget_per_ch);\
+		flush_channel(dev, 0, 0, 0);				\
 	if (priv->num_channels == 1)					\
 		goto out;						\
 	if (ch_done_mask & (1 << 2))					\
-		work_done += flush_channel(dev, 1, 0, 0, budget_per_ch);\
+		flush_channel(dev, 1, 0, 0);				\
 	if (ch_done_mask & (1 << 4))					\
-		work_done += flush_channel(dev, 2, 0, 0, budget_per_ch);\
+		flush_channel(dev, 2, 0, 0);				\
 	if (ch_done_mask & (1 << 6))					\
-		work_done += flush_channel(dev, 3, 0, 0, budget_per_ch);\
+		flush_channel(dev, 3, 0, 0);				\
 									\
 out:									\
-	if (work_done < budget) {					\
-		napi_complete(napi);					\
-		/* At this point, all completed channels have been */	\
-		/* processed. Unmask done interrupts for channels */	\
-		/* completed later on. */				\
-		spin_lock_irqsave(&priv->reg_lock, flags);		\
-		setbits32(priv->reg + TALITOS_IMR, ch_done_mask);	\
-		setbits32(priv->reg + TALITOS_IMR_LO,			\
-			  TALITOS_IMR_LO_INIT);				\
-		spin_unlock_irqrestore(&priv->reg_lock, flags);		\
-	}								\
-									\
-	return work_done;						\
+	/* At this point, all completed channels have been processed */	\
+	/* Unmask done interrupts for channels completed later on. */	\
+	spin_lock_irqsave(&priv->reg_lock, flags);			\
+	setbits32(priv->reg + TALITOS_IMR, ch_done_mask);		\
+	setbits32(priv->reg + TALITOS_IMR_LO, TALITOS_IMR_LO_INIT);	\
+	spin_unlock_irqrestore(&priv->reg_lock, flags);			\
 }
-DEF_TALITOS_DONE(4ch, TALITOS_ISR_4CHDONE, 4)
-DEF_TALITOS_DONE(ch0_2, TALITOS_ISR_CH_0_2_DONE, 2)
-DEF_TALITOS_DONE(ch1_3, TALITOS_ISR_CH_1_3_DONE, 2)
+DEF_TALITOS_DONE(4ch, TALITOS_ISR_4CHDONE)
+DEF_TALITOS_DONE(ch0_2, TALITOS_ISR_CH_0_2_DONE)
+DEF_TALITOS_DONE(ch1_3, TALITOS_ISR_CH_1_3_DONE)
 
 /*
  * locate current (offending) descriptor
@@ -492,7 +480,7 @@ static void talitos_error(struct device *dev, u32 isr, u32 isr_lo)
 		if (v_lo & TALITOS_CCPSR_LO_SRL)
 			dev_err(dev, "scatter return/length error\n");
 
-		flush_channel(dev, ch, error, reset_ch, priv->fifo_len);
+		flush_channel(dev, ch, error, reset_ch);
 
 		if (reset_ch) {
 			reset_channel(dev, ch);
@@ -516,14 +504,14 @@ static void talitos_error(struct device *dev, u32 isr, u32 isr_lo)
 
 		/* purge request queues */
 		for (ch = 0; ch < priv->num_channels; ch++)
-			flush_channel(dev, ch, -EIO, 1, priv->fifo_len);
+			flush_channel(dev, ch, -EIO, 1);
 
 		/* reset and reinitialize the device */
 		init_device(dev);
 	}
 }
 
-#define DEF_TALITOS_INTERRUPT(name, ch_done_mask, ch_err_mask, sirq)	       \
+#define DEF_TALITOS_INTERRUPT(name, ch_done_mask, ch_err_mask, tlet)	       \
 static irqreturn_t talitos_interrupt_##name(int irq, void *data)	       \
 {									       \
 	struct device *dev = data;					       \
@@ -547,8 +535,7 @@ static irqreturn_t talitos_interrupt_##name(int irq, void *data)	       \
 			/* mask further done interrupts. */		       \
 			clrbits32(priv->reg + TALITOS_IMR, ch_done_mask);      \
 			/* done_task will unmask done interrupts at exit */    \
-			napi_schedule(per_cpu_ptr(priv->done_task[sirq],       \
-						  smp_processor_id()));	       \
+			tasklet_schedule(&priv->done_task[tlet]);	       \
 		}							       \
 		spin_unlock_irqrestore(&priv->reg_lock, flags);		       \
 	}								       \
@@ -634,399 +621,6 @@ static void talitos_unregister_rng(struct device *dev)
 	hwrng_unregister(&priv->rng);
 }
 
-#ifdef CONFIG_CRYPTO_DEV_TALITOS_RAIDXOR
-static void talitos_release_xor(struct device *dev, struct talitos_desc *hwdesc,
-				void *context, int error);
-
-static enum dma_status talitos_is_tx_complete(struct dma_chan *chan,
-					      dma_cookie_t cookie,
-					      struct dma_tx_state *state)
-{
-	struct talitos_xor_chan *xor_chan;
-	dma_cookie_t last_used;
-	dma_cookie_t last_complete;
-
-	xor_chan = container_of(chan, struct talitos_xor_chan, common);
-
-	last_used = chan->cookie;
-	last_complete = xor_chan->completed_cookie;
-
-	if (state->last)
-		state->last = last_complete;
-
-	if (state->used)
-		state->used = last_used;
-
-	return dma_async_is_complete(cookie, last_complete, last_used);
-}
-
-static void talitos_process_pending(struct talitos_xor_chan *xor_chan)
-{
-	struct talitos_xor_desc *desc, *_desc;
-	unsigned long flags;
-	int status;
-	struct talitos_private *priv;
-	int ch;
-
-	priv = dev_get_drvdata(xor_chan->dev);
-	ch = atomic_inc_return(&priv->last_chan) &
-				  (priv->num_channels - 1);
-	spin_lock_irqsave(&xor_chan->desc_lock, flags);
-
-	list_for_each_entry_safe(desc, _desc, &xor_chan->pending_q, node) {
-		status = talitos_submit(xor_chan->dev, ch, &desc->hwdesc,
-					talitos_release_xor, desc);
-		if (status != -EINPROGRESS)
-			break;
-
-		list_del(&desc->node);
-		list_add_tail(&desc->node, &xor_chan->in_progress_q);
-	}
-
-	spin_unlock_irqrestore(&xor_chan->desc_lock, flags);
-}
-
-static void talitos_xor_run_tx_complete_actions(struct talitos_xor_desc *desc,
-		struct talitos_xor_chan *xor_chan)
-{
-	struct device *dev = xor_chan->dev;
-	dma_addr_t dest, addr;
-	unsigned int src_cnt = desc->unmap_src_cnt;
-	unsigned int len = desc->unmap_len;
-	enum dma_ctrl_flags flags = desc->async_tx.flags;
-	struct dma_async_tx_descriptor *tx = &desc->async_tx;
-
-	/* unmap dma addresses */
-	dest = desc->hwdesc.ptr[6].ptr;
-	if (likely(!(flags & DMA_COMPL_SKIP_DEST_UNMAP)))
-		dma_unmap_page(dev, dest, len, DMA_BIDIRECTIONAL);
-
-	desc->idx = 6 - src_cnt;
-	if (likely(!(flags & DMA_COMPL_SKIP_SRC_UNMAP))) {
-		while(desc->idx < 6) {
-			addr = desc->hwdesc.ptr[desc->idx++].ptr;
-			if (addr == dest)
-				continue;
-			dma_unmap_page(dev, addr, len, DMA_TO_DEVICE);
-		}
-	}
-
-	/* run dependent operations */
-	dma_run_dependencies(tx);
-}
-
-static void talitos_release_xor(struct device *dev, struct talitos_desc *hwdesc,
-				void *context, int error)
-{
-	struct talitos_xor_desc *desc = context;
-	struct talitos_xor_chan *xor_chan;
-	dma_async_tx_callback callback;
-	void *callback_param;
-
-	if (unlikely(error))
-		dev_err(dev, "xor operation: talitos error %d\n", error);
-
-	xor_chan = container_of(desc->async_tx.chan, struct talitos_xor_chan,
-				common);
-	spin_lock_bh(&xor_chan->desc_lock);
-	if (xor_chan->completed_cookie < desc->async_tx.cookie)
-		xor_chan->completed_cookie = desc->async_tx.cookie;
-
-	callback = desc->async_tx.callback;
-	callback_param = desc->async_tx.callback_param;
-
-	if (callback) {
-		spin_unlock_bh(&xor_chan->desc_lock);
-		callback(callback_param);
-		spin_lock_bh(&xor_chan->desc_lock);
-	}
-
-	talitos_xor_run_tx_complete_actions(desc, xor_chan);
-
-	list_del(&desc->node);
-	list_add_tail(&desc->node, &xor_chan->free_desc);
-	spin_unlock_bh(&xor_chan->desc_lock);
-	if (!list_empty(&xor_chan->pending_q))
-		talitos_process_pending(xor_chan);
-}
-
-/**
- * talitos_issue_pending - move the descriptors in submit
- * queue to pending queue and submit them for processing
- * @chan: DMA channel
- */
-static void talitos_issue_pending(struct dma_chan *chan)
-{
-	struct talitos_xor_chan *xor_chan;
-
-	xor_chan = container_of(chan, struct talitos_xor_chan, common);
-	spin_lock_bh(&xor_chan->desc_lock);
-	list_splice_tail_init(&xor_chan->submit_q,
-				 &xor_chan->pending_q);
-	spin_unlock_bh(&xor_chan->desc_lock);
-	talitos_process_pending(xor_chan);
-}
-
-static dma_cookie_t talitos_async_tx_submit(struct dma_async_tx_descriptor *tx)
-{
-	struct talitos_xor_desc *desc;
-	struct talitos_xor_chan *xor_chan;
-	dma_cookie_t cookie;
-
-	desc = container_of(tx, struct talitos_xor_desc, async_tx);
-	xor_chan = container_of(tx->chan, struct talitos_xor_chan, common);
-
-	spin_lock_bh(&xor_chan->desc_lock);
-
-	cookie = xor_chan->common.cookie + 1;
-	if (cookie < 0)
-		cookie = 1;
-
-	desc->async_tx.cookie = cookie;
-	xor_chan->common.cookie = desc->async_tx.cookie;
-
-	list_splice_tail_init(&desc->tx_list,
-				 &xor_chan->submit_q);
-
-	spin_unlock_bh(&xor_chan->desc_lock);
-
-	return cookie;
-}
-
-static struct talitos_xor_desc *talitos_xor_alloc_descriptor(
-				struct talitos_xor_chan *xor_chan, gfp_t flags)
-{
-	struct talitos_xor_desc *desc;
-
-	desc = kmalloc(sizeof(*desc), flags);
-	if (desc) {
-		xor_chan->total_desc++;
-		desc->async_tx.tx_submit = talitos_async_tx_submit;
-	}
-
-	return desc;
-}
-
-static void talitos_free_chan_resources(struct dma_chan *chan)
-{
-	struct talitos_xor_chan *xor_chan;
-	struct talitos_xor_desc *desc, *_desc;
-
-	xor_chan = container_of(chan, struct talitos_xor_chan, common);
-
-	spin_lock_bh(&xor_chan->desc_lock);
-
-	list_for_each_entry_safe(desc, _desc, &xor_chan->submit_q, node) {
-		list_del(&desc->node);
-		xor_chan->total_desc--;
-		kfree(desc);
-	}
-	list_for_each_entry_safe(desc, _desc, &xor_chan->pending_q, node) {
-		list_del(&desc->node);
-		xor_chan->total_desc--;
-		kfree(desc);
-	}
-	list_for_each_entry_safe(desc, _desc, &xor_chan->in_progress_q, node) {
-		list_del(&desc->node);
-		xor_chan->total_desc--;
-		kfree(desc);
-	}
-	list_for_each_entry_safe(desc, _desc, &xor_chan->free_desc, node) {
-		list_del(&desc->node);
-		xor_chan->total_desc--;
-		kfree(desc);
-	}
-
-	/* Some descriptor not freed? */
-	if (unlikely(xor_chan->total_desc))
-		dev_warn(chan->device->dev, "Failed to free xor channel resource\n");
-
-	spin_unlock_bh(&xor_chan->desc_lock);
-}
-
-static int talitos_alloc_chan_resources(struct dma_chan *chan)
-{
-	struct talitos_xor_chan *xor_chan;
-	struct talitos_xor_desc *desc;
-	LIST_HEAD(tmp_list);
-	int i;
-
-	xor_chan = container_of(chan, struct talitos_xor_chan, common);
-
-	if (!list_empty(&xor_chan->free_desc))
-		return xor_chan->total_desc;
-
-	for (i = 0; i < TALITOS_MAX_DESCRIPTOR_NR; i++) {
-		desc = talitos_xor_alloc_descriptor(xor_chan,
-				GFP_KERNEL | GFP_DMA);
-		if (!desc) {
-			dev_err(xor_chan->common.device->dev,
-				"Only %d initial descriptors\n", i);
-			break;
-		}
-		list_add_tail(&desc->node, &tmp_list);
-	}
-
-	if (!i)
-		return -ENOMEM;
-
-	/* At least one desc is allocated */
-	spin_lock_bh(&xor_chan->desc_lock);
-	list_splice_init(&tmp_list, &xor_chan->free_desc);
-	spin_unlock_bh(&xor_chan->desc_lock);
-
-	return xor_chan->total_desc;
-}
-
-static struct dma_async_tx_descriptor *talitos_prep_dma_xor(
-			struct dma_chan *chan, dma_addr_t dest, dma_addr_t *src,
-			unsigned int src_cnt, size_t len, unsigned long flags)
-{
-	struct talitos_xor_chan *xor_chan;
-	struct talitos_xor_desc *new;
-	struct talitos_desc *desc;
-	int i, j;
-
-	BUG_ON(len > TALITOS_MAX_DATA_LEN);
-
-	xor_chan = container_of(chan, struct talitos_xor_chan, common);
-
-	spin_lock_bh(&xor_chan->desc_lock);
-	if (!list_empty(&xor_chan->free_desc)) {
-		new = container_of(xor_chan->free_desc.next,
-				   struct talitos_xor_desc, node);
-		list_del(&new->node);
-	} else {
-		 new = talitos_xor_alloc_descriptor(xor_chan, GFP_KERNEL | GFP_DMA);
-	}
-	spin_unlock_bh(&xor_chan->desc_lock);
-
-	if (!new) {
-		dev_err(xor_chan->common.device->dev,
-			"No free memory for XOR DMA descriptor\n");
-		return NULL;
-	}
-	dma_async_tx_descriptor_init(&new->async_tx, &xor_chan->common);
-
-	INIT_LIST_HEAD(&new->node);
-	INIT_LIST_HEAD(&new->tx_list);
-
-	desc = &new->hwdesc;
-	/* Set destination: Last pointer pair */
-	to_talitos_ptr(&desc->ptr[6], dest);
-	desc->ptr[6].len = cpu_to_be16(len);
-	desc->ptr[6].j_extent = 0;
-	new->unmap_src_cnt = src_cnt;
-	new->unmap_len = len;
-
-	/* Set Sources: End loading from second-last pointer pair */
-	for (i = 5, j = 0; j < src_cnt && i >= 0; i--, j++) {
-		to_talitos_ptr(&desc->ptr[i], src[j]);
-		desc->ptr[i].len = cpu_to_be16(len);
-		desc->ptr[i].j_extent = 0;
-	}
-
-	/*
-	 * documentation states first 0 ptr/len combo marks end of sources
-	 * yet device produces scatter boundary error unless all subsequent
-	 * sources are zeroed out
-	 */
-	for (; i >= 0; i--) {
-		to_talitos_ptr(&desc->ptr[i], 0);
-		desc->ptr[i].len = 0;
-		desc->ptr[i].j_extent = 0;
-	}
-
-	desc->hdr = DESC_HDR_SEL0_AESU | DESC_HDR_MODE0_AESU_XOR |
-		DESC_HDR_TYPE_RAID_XOR;
-
-	new->async_tx.parent = NULL;
-	new->async_tx.next = NULL;
-	new->async_tx.cookie = 0;
-	async_tx_ack(&new->async_tx);
-
-	list_add_tail(&new->node, &new->tx_list);
-
-	new->async_tx.flags = flags;
-	new->async_tx.cookie = -EBUSY;
-
-	return &new->async_tx;
-}
-
-static void talitos_unregister_async_xor(struct device *dev)
-{
-	struct talitos_private *priv = dev_get_drvdata(dev);
-	struct talitos_xor_chan *xor_chan;
-	struct dma_chan *chan, *_chan;
-
-	if (priv->dma_dev_common.chancnt)
-		dma_async_device_unregister(&priv->dma_dev_common);
-
-	list_for_each_entry_safe(chan, _chan, &priv->dma_dev_common.channels,
-				device_node) {
-		xor_chan = container_of(chan, struct talitos_xor_chan,
-					common);
-		list_del(&chan->device_node);
-		priv->dma_dev_common.chancnt--;
-		kfree(xor_chan);
-	}
-}
-
-/**
- * talitos_register_dma_async - Initialize the Freescale XOR ADMA device
- * It is registered as a DMA device with the capability to perform
- * XOR operation with the Async_tx layer.
- * The various queues and channel resources are also allocated.
- */
-static int talitos_register_async_tx(struct device *dev, int max_xor_srcs)
-{
-	struct talitos_private *priv = dev_get_drvdata(dev);
-	struct dma_device *dma_dev = &priv->dma_dev_common;
-	struct talitos_xor_chan *xor_chan;
-	int err;
-
-	xor_chan = kzalloc(sizeof(struct talitos_xor_chan), GFP_KERNEL);
-	if (!xor_chan) {
-		dev_err(dev, "unable to allocate xor channel\n");
-		return -ENOMEM;
-	}
-
-	dma_dev->dev = dev;
-	dma_dev->device_alloc_chan_resources = talitos_alloc_chan_resources;
-	dma_dev->device_free_chan_resources = talitos_free_chan_resources;
-	dma_dev->device_prep_dma_xor = talitos_prep_dma_xor;
-	dma_dev->max_xor = max_xor_srcs;
-	dma_dev->device_tx_status = talitos_is_tx_complete;
-	dma_dev->device_issue_pending = talitos_issue_pending;
-	INIT_LIST_HEAD(&dma_dev->channels);
-	dma_cap_set(DMA_XOR, dma_dev->cap_mask);
-
-	xor_chan->dev = dev;
-	xor_chan->common.device = dma_dev;
-	xor_chan->total_desc = 0;
-	INIT_LIST_HEAD(&xor_chan->submit_q);
-	INIT_LIST_HEAD(&xor_chan->pending_q);
-	INIT_LIST_HEAD(&xor_chan->in_progress_q);
-	INIT_LIST_HEAD(&xor_chan->free_desc);
-	spin_lock_init(&xor_chan->desc_lock);
-
-	list_add_tail(&xor_chan->common.device_node, &dma_dev->channels);
-	dma_dev->chancnt++;
-
-	err = dma_async_device_register(dma_dev);
-	if (err) {
-		dev_err(dev, "Unable to register XOR with Async_tx\n");
-		goto err_out;
-	}
-
-	return err;
-
-err_out:
-	talitos_unregister_async_xor(dev);
-	return err;
-}
-#endif
-
 /*
  * crypto alg
  */
@@ -1079,39 +673,20 @@ static int aead_setkey(struct crypto_aead *authenc,
 		       const u8 *key, unsigned int keylen)
 {
 	struct talitos_ctx *ctx = crypto_aead_ctx(authenc);
-	struct rtattr *rta = (void *)key;
-	struct crypto_authenc_key_param *param;
-	unsigned int authkeylen;
-	unsigned int enckeylen;
+	struct crypto_authenc_keys keys;
 
-	if (!RTA_OK(rta, keylen))
+	if (crypto_authenc_extractkeys(&keys, key, keylen) != 0)
 		goto badkey;
 
-	if (rta->rta_type != CRYPTO_AUTHENC_KEYA_PARAM)
+	if (keys.authkeylen + keys.enckeylen > TALITOS_MAX_KEY_SIZE)
 		goto badkey;
 
-	if (RTA_PAYLOAD(rta) < sizeof(*param))
-		goto badkey;
+	memcpy(ctx->key, keys.authkey, keys.authkeylen);
+	memcpy(&ctx->key[keys.authkeylen], keys.enckey, keys.enckeylen);
 
-	param = RTA_DATA(rta);
-	enckeylen = be32_to_cpu(param->enckeylen);
-
-	key += RTA_ALIGN(rta->rta_len);
-	keylen -= RTA_ALIGN(rta->rta_len);
-
-	if (keylen < enckeylen)
-		goto badkey;
-
-	authkeylen = keylen - enckeylen;
-
-	if (keylen > TALITOS_MAX_KEY_SIZE)
-		goto badkey;
-
-	memcpy(&ctx->key, key, keylen);
-
-	ctx->keylen = keylen;
-	ctx->enckeylen = enckeylen;
-	ctx->authkeylen = authkeylen;
+	ctx->keylen = keys.authkeylen + keys.enckeylen;
+	ctx->enckeylen = keys.enckeylen;
+	ctx->authkeylen = keys.authkeylen;
 
 	return 0;
 
@@ -1215,7 +790,7 @@ static void ipsec_esp_unmap(struct device *dev,
 
 	if (edesc->assoc_chained)
 		talitos_unmap_sg_chain(dev, areq->assoc, DMA_TO_DEVICE);
-	else
+	else if (areq->assoclen)
 		/* assoc_nents counts also for IV in non-contiguous cases */
 		dma_unmap_sg(dev, areq->assoc,
 			     edesc->assoc_nents ? edesc->assoc_nents - 1 : 1,
@@ -1398,7 +973,11 @@ static int ipsec_esp(struct talitos_edesc *edesc, struct aead_request *areq,
 		dma_sync_single_for_device(dev, edesc->dma_link_tbl,
 					   edesc->dma_len, DMA_BIDIRECTIONAL);
 	} else {
-		to_talitos_ptr(&desc->ptr[1], sg_dma_address(areq->assoc));
+		if (areq->assoclen)
+			to_talitos_ptr(&desc->ptr[1],
+				       sg_dma_address(areq->assoc));
+		else
+			to_talitos_ptr(&desc->ptr[1], edesc->iv_dma);
 		desc->ptr[1].j_extent = 0;
 	}
 
@@ -1520,64 +1099,6 @@ static int sg_count(struct scatterlist *sg_list, int nbytes, bool *chained)
 	return sg_nents;
 }
 
-/**
- * sg_copy_end_to_buffer - Copy end data from SG list to a linear buffer
- * @sgl:		 The SG list
- * @nents:		 Number of SG entries
- * @buf:		 Where to copy to
- * @buflen:		 The number of bytes to copy
- * @skip:		 The number of bytes to skip before copying.
- *                       Note: skip + buflen should equal SG total size.
- *
- * Returns the number of copied bytes.
- *
- **/
-static size_t sg_copy_end_to_buffer(struct scatterlist *sgl, unsigned int nents,
-				    void *buf, size_t buflen, unsigned int skip)
-{
-	unsigned int offset = 0;
-	unsigned int boffset = 0;
-	struct sg_mapping_iter miter;
-	unsigned long flags;
-	unsigned int sg_flags = SG_MITER_ATOMIC;
-	size_t total_buffer = buflen + skip;
-
-	sg_flags |= SG_MITER_FROM_SG;
-
-	sg_miter_start(&miter, sgl, nents, sg_flags);
-
-	local_irq_save(flags);
-
-	while (sg_miter_next(&miter) && offset < total_buffer) {
-		unsigned int len;
-		unsigned int ignore;
-
-		if ((offset + miter.length) > skip) {
-			if (offset < skip) {
-				/* Copy part of this segment */
-				ignore = skip - offset;
-				len = miter.length - ignore;
-				if (boffset + len > buflen)
-					len = buflen - boffset;
-				memcpy(buf + boffset, miter.addr + ignore, len);
-			} else {
-				/* Copy all of this segment (up to buflen) */
-				len = miter.length;
-				if (boffset + len > buflen)
-					len = buflen - boffset;
-				memcpy(buf + boffset, miter.addr, len);
-			}
-			boffset += len;
-		}
-		offset += miter.length;
-	}
-
-	sg_miter_stop(&miter);
-
-	local_irq_restore(flags);
-	return boffset;
-}
-
 /*
  * allocate and map the extended descriptor
  */
@@ -1591,7 +1112,8 @@ static struct talitos_edesc *talitos_edesc_alloc(struct device *dev,
 						 unsigned int authsize,
 						 unsigned int ivsize,
 						 int icv_stashing,
-						 u32 cryptoflags)
+						 u32 cryptoflags,
+						 bool encrypt)
 {
 	struct talitos_edesc *edesc;
 	int assoc_nents = 0, src_nents, dst_nents, alloc_len, dma_len;
@@ -1605,10 +1127,10 @@ static struct talitos_edesc *talitos_edesc_alloc(struct device *dev,
 		return ERR_PTR(-EINVAL);
 	}
 
-	if (iv)
+	if (ivsize)
 		iv_dma = dma_map_single(dev, iv, ivsize, DMA_TO_DEVICE);
 
-	if (assoc) {
+	if (assoclen) {
 		/*
 		 * Currently it is assumed that iv is provided whenever assoc
 		 * is.
@@ -1624,19 +1146,17 @@ static struct talitos_edesc *talitos_edesc_alloc(struct device *dev,
 			assoc_nents = assoc_nents ? assoc_nents + 1 : 2;
 	}
 
-	src_nents = sg_count(src, cryptlen + authsize, &src_chained);
-	src_nents = (src_nents == 1) ? 0 : src_nents;
-
-	if (!dst) {
-		dst_nents = 0;
-	} else {
-		if (dst == src) {
-			dst_nents = src_nents;
-		} else {
-			dst_nents = sg_count(dst, cryptlen + authsize,
-					     &dst_chained);
-			dst_nents = (dst_nents == 1) ? 0 : dst_nents;
-		}
+	if (!dst || dst == src) {
+		src_nents = sg_count(src, cryptlen + authsize, &src_chained);
+		src_nents = (src_nents == 1) ? 0 : src_nents;
+		dst_nents = dst ? src_nents : 0;
+	} else { /* dst && dst != src*/
+		src_nents = sg_count(src, cryptlen + (encrypt ? 0 : authsize),
+				     &src_chained);
+		src_nents = (src_nents == 1) ? 0 : src_nents;
+		dst_nents = sg_count(dst, cryptlen + (encrypt ? authsize : 0),
+				     &dst_chained);
+		dst_nents = (dst_nents == 1) ? 0 : dst_nents;
 	}
 
 	/*
@@ -1656,9 +1176,16 @@ static struct talitos_edesc *talitos_edesc_alloc(struct device *dev,
 
 	edesc = kmalloc(alloc_len, GFP_DMA | flags);
 	if (!edesc) {
-		talitos_unmap_sg_chain(dev, assoc, DMA_TO_DEVICE);
+		if (assoc_chained)
+			talitos_unmap_sg_chain(dev, assoc, DMA_TO_DEVICE);
+		else if (assoclen)
+			dma_unmap_sg(dev, assoc,
+				     assoc_nents ? assoc_nents - 1 : 1,
+				     DMA_TO_DEVICE);
+
 		if (iv_dma)
 			dma_unmap_single(dev, iv_dma, ivsize, DMA_TO_DEVICE);
+
 		dev_err(dev, "could not allocate edescriptor\n");
 		return ERR_PTR(-ENOMEM);
 	}
@@ -1680,7 +1207,7 @@ static struct talitos_edesc *talitos_edesc_alloc(struct device *dev,
 }
 
 static struct talitos_edesc *aead_edesc_alloc(struct aead_request *areq, u8 *iv,
-					      int icv_stashing)
+					      int icv_stashing, bool encrypt)
 {
 	struct crypto_aead *authenc = crypto_aead_reqtfm(areq);
 	struct talitos_ctx *ctx = crypto_aead_ctx(authenc);
@@ -1689,7 +1216,7 @@ static struct talitos_edesc *aead_edesc_alloc(struct aead_request *areq, u8 *iv,
 	return talitos_edesc_alloc(ctx->dev, areq->assoc, areq->src, areq->dst,
 				   iv, areq->assoclen, areq->cryptlen,
 				   ctx->authsize, ivsize, icv_stashing,
-				   areq->base.flags);
+				   areq->base.flags, encrypt);
 }
 
 static int aead_encrypt(struct aead_request *req)
@@ -1699,7 +1226,7 @@ static int aead_encrypt(struct aead_request *req)
 	struct talitos_edesc *edesc;
 
 	/* allocate extended descriptor */
-	edesc = aead_edesc_alloc(req, req->iv, 0);
+	edesc = aead_edesc_alloc(req, req->iv, 0, true);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -1722,7 +1249,7 @@ static int aead_decrypt(struct aead_request *req)
 	req->cryptlen -= authsize;
 
 	/* allocate extended descriptor */
-	edesc = aead_edesc_alloc(req, req->iv, 1);
+	edesc = aead_edesc_alloc(req, req->iv, 1, false);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -1768,7 +1295,7 @@ static int aead_givencrypt(struct aead_givcrypt_request *req)
 	struct talitos_edesc *edesc;
 
 	/* allocate extended descriptor */
-	edesc = aead_edesc_alloc(areq, req->giv, 0);
+	edesc = aead_edesc_alloc(areq, req->giv, 0, true);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -1924,7 +1451,7 @@ static int common_nonsnoop(struct talitos_edesc *edesc,
 }
 
 static struct talitos_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request *
-						    areq)
+						    areq, bool encrypt)
 {
 	struct crypto_ablkcipher *cipher = crypto_ablkcipher_reqtfm(areq);
 	struct talitos_ctx *ctx = crypto_ablkcipher_ctx(cipher);
@@ -1932,7 +1459,7 @@ static struct talitos_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request *
 
 	return talitos_edesc_alloc(ctx->dev, NULL, areq->src, areq->dst,
 				   areq->info, 0, areq->nbytes, 0, ivsize, 0,
-				   areq->base.flags);
+				   areq->base.flags, encrypt);
 }
 
 static int ablkcipher_encrypt(struct ablkcipher_request *areq)
@@ -1942,7 +1469,7 @@ static int ablkcipher_encrypt(struct ablkcipher_request *areq)
 	struct talitos_edesc *edesc;
 
 	/* allocate extended descriptor */
-	edesc = ablkcipher_edesc_alloc(areq);
+	edesc = ablkcipher_edesc_alloc(areq, true);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -1959,7 +1486,7 @@ static int ablkcipher_decrypt(struct ablkcipher_request *areq)
 	struct talitos_edesc *edesc;
 
 	/* allocate extended descriptor */
-	edesc = ablkcipher_edesc_alloc(areq);
+	edesc = ablkcipher_edesc_alloc(areq, false);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -2111,7 +1638,7 @@ static struct talitos_edesc *ahash_edesc_alloc(struct ahash_request *areq,
 	struct talitos_ahash_req_ctx *req_ctx = ahash_request_ctx(areq);
 
 	return talitos_edesc_alloc(ctx->dev, NULL, req_ctx->psrc, NULL, NULL, 0,
-				   nbytes, 0, 0, 0, areq->base.flags);
+				   nbytes, 0, 0, 0, areq->base.flags, false);
 }
 
 static int ahash_init(struct ahash_request *areq)
@@ -2208,7 +1735,7 @@ static int ahash_process_req(struct ahash_request *areq, unsigned int nbytes)
 
 	if (to_hash_later) {
 		int nents = sg_count(areq->src, nbytes, &chained);
-		sg_copy_end_to_buffer(areq->src, nents,
+		sg_pcopy_to_buffer(areq->src, nents,
 				      req_ctx->bufnext,
 				      to_hash_later,
 				      nbytes - to_hash_later);
@@ -2923,7 +2450,7 @@ static int talitos_remove(struct platform_device *ofdev)
 	struct device *dev = &ofdev->dev;
 	struct talitos_private *priv = dev_get_drvdata(dev);
 	struct talitos_crypto_alg *t_alg, *n;
-	int i, j;
+	int i;
 
 	list_for_each_entry_safe(t_alg, n, &priv->alg_list, entry) {
 		switch (t_alg->algt.type) {
@@ -2942,31 +2469,24 @@ static int talitos_remove(struct platform_device *ofdev)
 	if (hw_supports(dev, DESC_HDR_SEL0_RNG))
 		talitos_unregister_rng(dev);
 
-	for (i = 0; i < 2; i++)
-		if (priv->irq[i]) {
-			free_irq(priv->irq[i], dev);
-			irq_dispose_mapping(priv->irq[i]);
-
-			for_each_possible_cpu(j) {
-				napi_disable(per_cpu_ptr(priv->done_task[i],
-							 j));
-				netif_napi_del(per_cpu_ptr(priv->done_task[i],
-							   j));
-			}
-
-			free_percpu(priv->done_task[i]);
-		}
-
 	for (i = 0; i < priv->num_channels; i++)
 		kfree(priv->chan[i].fifo);
 
 	kfree(priv->chan);
 
+	for (i = 0; i < 2; i++)
+		if (priv->irq[i]) {
+			free_irq(priv->irq[i], dev);
+			irq_dispose_mapping(priv->irq[i]);
+		}
+
+	tasklet_kill(&priv->done_task[0]);
+	if (priv->irq[1])
+		tasklet_kill(&priv->done_task[1]);
+
 	iounmap(priv->reg);
 
 	dev_set_drvdata(dev, NULL);
-
-	free_percpu(priv->netdev);
 
 	kfree(priv);
 
@@ -3113,63 +2633,21 @@ static int talitos_probe(struct platform_device *ofdev)
 	dev_set_drvdata(dev, priv);
 
 	priv->ofdev = ofdev;
-	priv->dev = dev;
 
 	spin_lock_init(&priv->reg_lock);
-
-	priv->netdev = alloc_percpu(struct net_device);
-	if (!priv->netdev) {
-		dev_err(dev, "failed to allocate netdevice\n");
-		err = -ENOMEM;
-		goto err_out;
-	}
-
-	for_each_possible_cpu(i) {
-		err = init_dummy_netdev(per_cpu_ptr(priv->netdev, i));
-		if (err) {
-			dev_err(dev, "failed to initialize dummy netdevice\n");
-			goto err_out;
-		}
-		(per_cpu_ptr(priv->netdev, i))->dev = *dev;
-	}
 
 	err = talitos_probe_irq(ofdev);
 	if (err)
 		goto err_out;
 
-	priv->done_task[0] = alloc_percpu(struct napi_struct);
-	if (!priv->done_task[0]) {
-		dev_err(dev, "failed to allocate napi for 1st irq\n");
-		err = -ENOMEM;
-		goto err_out;
-	}
-
 	if (!priv->irq[1]) {
-		for_each_possible_cpu(i) {
-			netif_napi_add(per_cpu_ptr(priv->netdev, i),
-				       per_cpu_ptr(priv->done_task[0], i),
-				       talitos_done_4ch, TALITOS_NAPI_WEIGHT);
-			napi_enable(per_cpu_ptr(priv->done_task[0], i));
-		}
+		tasklet_init(&priv->done_task[0], talitos_done_4ch,
+			     (unsigned long)dev);
 	} else {
-		priv->done_task[1] = alloc_percpu(struct napi_struct);
-		if (!priv->done_task[1]) {
-			dev_err(dev, "failed to allocate napi for 2nd irq\n");
-			err = -ENOMEM;
-			goto err_out;
-		}
-
-		for_each_possible_cpu(i) {
-			netif_napi_add(per_cpu_ptr(priv->netdev, i),
-				       per_cpu_ptr(priv->done_task[0], i),
-				       talitos_done_ch0_2, TALITOS_NAPI_WEIGHT);
-			napi_enable(per_cpu_ptr(priv->done_task[0], i));
-
-			netif_napi_add(per_cpu_ptr(priv->netdev, i),
-				       per_cpu_ptr(priv->done_task[1], i),
-				       talitos_done_ch1_3, TALITOS_NAPI_WEIGHT);
-			napi_enable(per_cpu_ptr(priv->done_task[1], i));
-		}
+		tasklet_init(&priv->done_task[0], talitos_done_ch0_2,
+			     (unsigned long)dev);
+		tasklet_init(&priv->done_task[1], talitos_done_ch1_3,
+			     (unsigned long)dev);
 	}
 
 	INIT_LIST_HEAD(&priv->alg_list);
@@ -3266,26 +2744,6 @@ static int talitos_probe(struct platform_device *ofdev)
 		} else
 			dev_info(dev, "hwrng\n");
 	}
-
-#ifdef CONFIG_CRYPTO_DEV_TALITOS_RAIDXOR
-	/*
-	 * register with async_tx xor, if capable
-	 * SEC 2.x support up to 3 RAID sources,
-	 * SEC 3.x support up to 6
-	 */
-	if (hw_supports(dev, DESC_HDR_SEL0_AESU | DESC_HDR_TYPE_RAID_XOR)) {
-		int max_xor_srcs = 3;
-		if (of_device_is_compatible(np, "fsl,sec3.0"))
-			max_xor_srcs = 6;
-		err = talitos_register_async_tx(dev, max_xor_srcs);
-		if (err) {
-			dev_err(dev, "failed to register async_tx xor: %d\n",
-					err);
-			goto err_out;
-		}
-		dev_info(dev, "max_xor_srcs %d\n", max_xor_srcs);
-	}
-#endif
 
 	/* register crypto algorithms the device supports */
 	for (i = 0; i < ARRAY_SIZE(driver_algs); i++) {

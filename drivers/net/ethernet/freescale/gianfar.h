@@ -9,7 +9,7 @@
  * Maintainer: Kumar Gala
  * Modifier: Sandeep Gopalpet <sandeep.kumar@freescale.com>
  *
- * Copyright 2002-2009, 2011, 2013 Freescale Semiconductor, Inc.
+ * Copyright 2002-2009, 2011 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -46,7 +46,6 @@
 #include <linux/crc32.h>
 #include <linux/workqueue.h>
 #include <linux/ethtool.h>
-#include <linux/circ_buf.h>
 
 struct ethtool_flow_spec_container {
 	struct ethtool_rx_flow_spec fs;
@@ -89,27 +88,6 @@ extern const char gfar_driver_version[];
 
 /* MAXIMUM NUMBER OF GROUPS SUPPORTED */
 #define MAXGROUPS 0x2
-
-#ifdef CONFIG_AS_FASTPATH
-#define AS_FP_PROCEED	1
-#define AS_FP_STOLEN	2
-typedef	int (*devfp_hook_t)(struct sk_buff *skb, struct net_device *dev);
-extern devfp_hook_t	devfp_rx_hook;
-extern devfp_hook_t	devfp_tx_hook;
-/* Overwrite the Rx/Tx Hooks pointers
- * if already configured. */
-static inline int devfp_register_rx_hook(devfp_hook_t hook)
-{
-	devfp_rx_hook = hook;
-	return 0;
-}
-
-static inline int devfp_register_tx_hook(devfp_hook_t hook)
-{
-	devfp_tx_hook = hook;
-	return 0;
-}
-#endif
 
 /* These need to be powers of 2 for this driver */
 #define DEFAULT_TX_RING_SIZE	256
@@ -168,58 +146,9 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 		| SUPPORTED_Autoneg \
 		| SUPPORTED_MII)
 
-/* 1588 defines */
-#define make64(high, low) (((u64)(high) << 32) | (low))
-
-#define PTP_ENBL_TXTS_IOCTL	SIOCDEVPRIVATE
-#define PTP_DSBL_TXTS_IOCTL	(SIOCDEVPRIVATE + 1)
-#define PTP_ENBL_RXTS_IOCTL	(SIOCDEVPRIVATE + 2)
-#define PTP_DSBL_RXTS_IOCTL	(SIOCDEVPRIVATE + 3)
-#define PTP_GET_TX_TIMESTAMP	(SIOCDEVPRIVATE + 4)
-#define PTP_GET_RX_TIMESTAMP	(SIOCDEVPRIVATE + 5)
-#define PTP_SET_TIME		(SIOCDEVPRIVATE + 6)
-#define PTP_GET_TIME		(SIOCDEVPRIVATE + 7)
-#define PTP_SET_FIPER_ALARM	(SIOCDEVPRIVATE + 8)
-#define PTP_SET_ADJ		(SIOCDEVPRIVATE + 9)
-#define PTP_GET_ADJ		(SIOCDEVPRIVATE + 10)
-#define PTP_CLEANUP_TS		(SIOCDEVPRIVATE + 11)
-
-#define DEFAULT_PTP_TX_BUF_SZ		1024
-#define DEFAULT_PTP_RX_BUF_SZ		2048
-/* The threshold between the current found one and the oldest one */
-#define TS_ACCUMULATION_THRESHOLD	50
-
-#define GFAR_PTP_SOURCE_PORT_LENGTH	10
-#define	GFAR_PTP_HEADER_SEQ_OFFS	30
-#define GFAR_PTP_SPID_OFFS		20
-#define GFAR_PTP_HEADER_SZE		34
-#define GFAR_PTP_EVENT_PORT		0x013F
-
-#define GFAR_VLAN_QINQ_1		0x9100
-#define GFAR_VLAN_QINQ_2		0x9200
-#define GFAR_VLAN_QINQ_3		0x9300
-#define GFAR_VLAN_QINQ_4		0x88A8
-#define GFAR_VLAN_TAG_LEN		0x04
-#define GFAR_ETHTYPE_LEN		0x02
-#define GFAR_PACKET_TYPE_UDP		0x11
-/* 1588-2008 network protocol enumeration values */
-#define GFAR_PTP_PROT_IPV4		1
-#define GFAR_PTP_PROT_IPV6		2
-#define GFAR_PTP_PROT_802_3		3
-#define GFAR_PTP_PROT_DONTCARE		0xFFFF
-
-/* 1588 Module Registers bits */
-#define TMR_CTRL_CKSEL_MASK	0x00000003
-#define TMR_CTRL_ENABLE		0x00000004
-#define TMR_RTPE		0x00008000
-#define TMR_CTRL_TCLK_MASK	0x03ff0000
-#define TMR_CTRL_FIPER_START	0x10000000
-#define ONE_GIGA	1000000000
-
-/*Alarm to traigger at 15sec boundary */
-#define TMR_ALARM1_L	0xD964B800
-#define TMR_ALARM1_H	0x00000045
-#define NANOSEC_PER_SEC	1000000000
+#define GFAR_SUPPORTED_GBIT (SUPPORTED_1000baseT_Full \
+		| SUPPORTED_Pause \
+		| SUPPORTED_Asym_Pause)
 
 /* TBI register addresses */
 #define MII_TBICON		0x11
@@ -304,13 +233,6 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define RQUEUE_EN7		0x00000001
 #define RQUEUE_EN_ALL		0x000000FF
 
-/* Wake-On-Lan options */
-#define GIANFAR_WOL_UCAST	0x00000001	/* Unicast wakeup */
-#define GIANFAR_WOL_MCAST	0x00000002	/* Multicast wakeup */
-#define GIANFAR_WOL_BCAST	0x00000004	/* Broadcase wakeup */
-#define GIANFAR_WOL_ARP		0x00000008	/* ARP request wakeup */
-#define GIANFAR_WOL_MAGIC	0x00000010	/* Magic packet wakeup */
-
 /* Init to do tx snooping for buffers and descriptors */
 #define DMACTRL_INIT_SETTINGS   0x000000c3
 #define DMACTRL_GRS             0x00000010
@@ -326,9 +248,6 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define TSTAT_CLEAR_THALT5	0x04000000
 #define TSTAT_CLEAR_THALT6	0x02000000
 #define TSTAT_CLEAR_THALT7	0x01000000
-
-#define TSTAT_TXF_MASK_ALL	0x0000ff00
-#define TSTAT_TXF0_MASK		0x00008000
 
 /* Interrupt coalescing macros */
 #define IC_ICEN			0x80000000
@@ -359,15 +278,11 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define RCTRL_PAL_MASK		0x001f0000
 #define RCTRL_VLEX		0x00002000
 #define RCTRL_FILREN		0x00001000
-#define RCTRL_FSQEN		0x00000800
 #define RCTRL_GHTX		0x00000400
 #define RCTRL_IPCSEN		0x00000200
 #define RCTRL_TUCSEN		0x00000100
 #define RCTRL_PRSDEP_MASK	0x000000c0
 #define RCTRL_PRSDEP_INIT	0x000000c0
-#define RCTRL_PRSDEP_L2		0x00000040
-#define RCTRL_PRSDEP_L2L3	0x00000080
-#define RCTRL_PRSDEP_L2L3L4	0x000000c0
 #define RCTRL_PRSFM		0x00000020
 #define RCTRL_PROM		0x00000008
 #define RCTRL_EMEN		0x00000002
@@ -423,20 +338,18 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define IEVENT_MAG		0x00000800
 #define IEVENT_GRSC		0x00000100
 #define IEVENT_RXF0		0x00000080
-#define IEVENT_FGPI		0x00000010
 #define IEVENT_FIR		0x00000008
 #define IEVENT_FIQ		0x00000004
 #define IEVENT_DPE		0x00000002
 #define IEVENT_PERR		0x00000001
-#define IEVENT_RX_MASK          (IEVENT_RXB0 | IEVENT_RXF0 | IEVENT_BSY | \
-				 IEVENT_FGPI)
+#define IEVENT_RX_MASK          (IEVENT_RXB0 | IEVENT_RXF0 | IEVENT_BSY)
 #define IEVENT_TX_MASK          (IEVENT_TXB | IEVENT_TXF)
 #define IEVENT_RTX_MASK         (IEVENT_RX_MASK | IEVENT_TX_MASK)
 #define IEVENT_ERR_MASK         \
-	(IEVENT_RXC | IEVENT_BSY | IEVENT_EBERR | IEVENT_MSRO | \
-	 IEVENT_BABT | IEVENT_TXC | IEVENT_TXE | IEVENT_LC \
-	 | IEVENT_CRL | IEVENT_XFUN | IEVENT_DPE | IEVENT_PERR \
-	 | IEVENT_MAG | IEVENT_BABR | IEVENT_FIR | IEVENT_FIQ)
+(IEVENT_RXC | IEVENT_BSY | IEVENT_EBERR | IEVENT_MSRO | \
+ IEVENT_BABT | IEVENT_TXC | IEVENT_TXE | IEVENT_LC \
+ | IEVENT_CRL | IEVENT_XFUN | IEVENT_DPE | IEVENT_PERR \
+ | IEVENT_MAG | IEVENT_BABR)
 
 #define IMASK_INIT_CLEAR	0x00000000
 #define IMASK_BABR              0x80000000
@@ -457,28 +370,16 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define IMASK_MAG		0x00000800
 #define IMASK_GRSC              0x00000100
 #define IMASK_RXFEN0		0x00000080
-#define IMASK_FGPI		0x00000010
 #define IMASK_FIR		0x00000008
 #define IMASK_FIQ		0x00000004
 #define IMASK_DPE		0x00000002
 #define IMASK_PERR		0x00000001
-#ifndef CONFIG_RX_TX_BUFF_XCHG
 #define IMASK_DEFAULT  (IMASK_TXEEN | IMASK_TXFEN | IMASK_TXBEN | \
 		IMASK_RXFEN0 | IMASK_BSY | IMASK_EBERR | IMASK_BABR | \
 		IMASK_XFUN | IMASK_RXC | IMASK_BABT | IMASK_DPE \
 		| IMASK_PERR)
-#else
-#define IMASK_DEFAULT  (IMASK_TXEEN | \
-		IMASK_RXFEN0 | IMASK_BSY | IMASK_EBERR | IMASK_BABR | \
-		IMASK_XFUN | IMASK_RXC | IMASK_BABT | IMASK_DPE \
-		| IMASK_PERR)
-#endif
-#define IMASK_RX_DEFAULT	(IMASK_RXFEN0 | IMASK_BSY)
-#define IMASK_TX_DEFAULT	(IMASK_TXFEN | IMASK_TXBEN)
-
-#define IMASK_RX_DISABLED	((~(IMASK_RX_DEFAULT)) & IMASK_DEFAULT)
-#define IMASK_TX_DISABLED	((~(IMASK_TX_DEFAULT)) & IMASK_DEFAULT)
-
+#define IMASK_RTX_DISABLED ((~(IMASK_RXFEN0 | IMASK_TXFEN | IMASK_BSY)) \
+			   & IMASK_DEFAULT)
 
 /* Fifo management */
 #define FIFO_TX_THR_MASK	0x01ff
@@ -569,14 +470,6 @@ static inline int devfp_register_tx_hook(devfp_hook_t hook)
 #define RQFPR_TUV		0x00000004
 #define RQFPR_PER		0x00000002
 #define RQFPR_EER		0x00000001
-
-/* RBIFX B[x]CTL field values */
-#define RBIFX_B_NONE		0x0
-#define RBIFX_B_BEFORE_L2	0x1
-#define RBIFX_B_AFTER_L2	0x2
-#define RBIFX_B_AFTER_L3	0x3
-/* BCTL field offset */
-#define RBIFX_BCTL_OFF		6
 
 /* TxBD status field bits */
 #define TXBD_READY		0x8000
@@ -682,7 +575,7 @@ struct rxfcb {
 };
 
 struct gianfar_skb_cb {
-	int alignamount;
+	unsigned int bytes_sent; /* bytes-on-wire (i.e. no FCB) */
 };
 
 #define GFAR_CB(skb) ((struct gianfar_skb_cb *)((skb)->cb))
@@ -762,78 +655,6 @@ struct gfar_extra_stats {
 /* Number of stats exported via ethtool */
 #define GFAR_STATS_LEN (GFAR_RMON_LEN + GFAR_EXTRA_STATS_LEN)
 
-/* IEEE-1588 Timer Controller Registers */
-struct gfar_regs_1588 {
-	u32	tmr_ctrl;	/* 0x.e00 - Timer Control Register */
-	u32	tmr_tevent;	/* 0x.e04 - Timer stamp event register */
-	u32	tmr_temask;	/* 0x.e08 - Timer event mask register */
-	u32	tmr_pevent;	/* 0x.e0c - Timer stamp event register */
-	u32	tmr_pemask;	/* 0x.e10 - Timer event mask register */
-	u32	tmr_stat;	/* 0x.e14 - Timer stamp status register */
-	u32	tmr_cnt_h;	/* 0x.e18 - Timer counter high register */
-	u32	tmr_cnt_l;	/* 0x.e1c - Timer counter low register */
-	u32	tmr_add;	/* 0x.e20 - Timer dirft compensation */
-					/* addend register */
-	u32	tmr_acc;	/* 0x.e24 - Timer accumulator register */
-	u32	tmr_prsc;	/* 0x.e28 - Timer prescale register */
-	u8	res24a[4];	/* 0x.e2c - 0x.e2f reserved */
-	u32	tmr_off_h;	/* 0x.e30 - Timer offset high register */
-	u32	tmr_off_l;	/* 0x.e34 - Timer offset low register */
-	u8	res24b[8];	/* 0x.e38 - 0x.e3f reserved */
-	u32	tmr_alarm1_h;	/* 0x.e40 - Timer alarm 1 high register */
-	u32	tmr_alarm1_l;	/* 0x.e44 - Timer alarm 1 low register */
-	u32	tmr_alarm2_h;	/* 0x.e48 - Timer alarm 2 high register */
-	u32	tmr_alarm2_l;	/* 0x.e4c - Timer alarm 2 low register */
-	u8	res24c[48];	/* 0x.e50 - 0x.e7f reserved */
-	u32	tmr_fiper1;	/* 0x.e80 - Timer fixed period register 1 */
-	u32	tmr_fiper2;	/* 0x.e84 - Timer fixed period register 2 */
-	u32	tmr_fiper3;	/* 0x.e88 - Timer fixed period register 3 */
-	u8	res24d[20];	/* 0x.e8c - 0x.ebf reserved */
-	u32	tmr_etts1_h;	/* 0x.ea0 - Timer stamp high of */
-					/* general purpose external trigger 1 */
-	u32	tmr_etts1_l;	/* 0x.ea4 - Timer stamp low of */
-					/* general purpose external trigger 1 */
-	u32	tmr_etts2_h;	/* 0x.ea8 - Timer stamp high of */
-					/* general purpose external trigger 2 */
-	u32	tmr_etts2_l;	/* 0x.eac - Timer stamp low of */
-};
-
-/* struct needed to identify a timestamp */
-struct gfar_ptp_ident {
-	u8  version;
-	u8  msg_type;
-	u16 netw_prot;
-	u16 seq_id;
-	u8  snd_port_id[GFAR_PTP_SOURCE_PORT_LENGTH];
-};
-
-/* timestamp format in 1588-2008 */
-struct gfar_ptp_time {
-	u64 sec; /* just 48 bit used */
-	u32 nsec;
-};
-
-/* needed for timestamp data over ioctl */
-struct gfar_ptp_data {
-	struct  gfar_ptp_ident  ident;
-	struct  gfar_ptp_time   ts;
-};
-
-/* circular buffer for ptp timestamps over ioctl */
-struct gfar_ptp_circular {
-	struct circ_buf circ_buf;
-	u32 size;
-	spinlock_t ptp_lock;
-};
-
-struct gfar_ptp_attr_t {
-	u32 tclk_period;
-	u32 nominal_freq;
-	u32 sysclock_freq;
-	u32 tmr_fiper1;
-	u32 freq_comp;
-};
-
 struct gfar {
 	u32	tsec_id;	/* 0x.000 - Controller ID register */
 	u32	tsec_id2;	/* 0x.004 - Controller ID2 register */
@@ -906,15 +727,7 @@ struct gfar {
 	u32	tbase6;		/* 0x.234 - TxBD Base Address of ring 6 */
 	u8	res10g[4];
 	u32	tbase7;		/* 0x.23c - TxBD Base Address of ring 7 */
-	u8	res10h[64];
-	u32	tmr_txts1_id;	/* 0x.280 Tx time stamp identification */
-	u32	tmr_txts2_id;	/* 0x.284 Tx time stamp Identification */
-	u8	res10i[56];
-	u32	tmr_txts1_h;	/* 0x.2c0 Tx time stamp high */
-	u32	tmr_txts1_l;	/* 0x.2c4 Tx Time Stamp low */
-	u32	tmr_txts2_h;	/* 0x.2c8 Tx time stamp high */
-	u32	tmr_txts2_l;	/* 0x.2cc  Tx Time Stamp low */
-	u8	res10j[48];
+	u8	res10[192];
 	u32	rctrl;		/* 0x.300 - Receive Control Register */
 	u32	rstat;		/* 0x.304 - Receive Status Register */
 	u8	res12[8];
@@ -965,10 +778,7 @@ struct gfar {
 	u32	rbase6;		/* 0x.434 - RxBD base address of ring 6 */
 	u8	res17g[4];
 	u32	rbase7;		/* 0x.43c - RxBD base address of ring 7 */
-	u8	res17h[128];
-	u32	tmr_rxts_h;	/* 0x.4c0 Rx Time Stamp high */
-	u32	tmr_rxts_l;	/* 0x.4c4 Rx Time Stamp low */
-	u8	res17i[56];
+	u8	res17[192];
 	u32	maccfg1;	/* 0x.500 - MAC Configuration 1 Register */
 	u32	maccfg2;	/* 0x.504 - MAC Configuration 2 Register */
 	u32	ipgifg;		/* 0x.508 - Inter Packet Gap/Inter Frame Gap Register */
@@ -1037,8 +847,7 @@ struct gfar {
 	u8	res23c[248];
 	u32	attr;		/* 0x.bf8 - Attributes Register */
 	u32	attreli;	/* 0x.bfc - Attributes Extract Length and Extract Index Register */
-	u8	res24[512];
-	struct gfar_regs_1588 regs_1588;
+	u8	res24[688];
 	u32	isrg0;		/* 0x.eb0 - Interrupt steering group 0 register */
 	u32	isrg1;		/* 0x.eb4 - Interrupt steering group 1 register */
 	u32	isrg2;		/* 0x.eb8 - Interrupt steering group 2 register */
@@ -1077,8 +886,6 @@ struct gfar {
 #define FSL_GIANFAR_DEV_HAS_BD_STASHING		0x00000200
 #define FSL_GIANFAR_DEV_HAS_BUF_STASHING	0x00000400
 #define FSL_GIANFAR_DEV_HAS_TIMER		0x00000800
-#define FSL_GIANFAR_DEV_HAS_TS_TO_BUFFER	0x00001000
-#define FSL_GIANFAR_DEV_HAS_36BIT_ADDR		0x00002000
 
 #if (MAXGROUPS == 2)
 #define DEFAULT_MAPPING 	0xAA
@@ -1129,7 +936,7 @@ struct tx_q_stats {
  */
 struct gfar_priv_tx_q {
 	/* cacheline 1 */
-	spinlock_t txlock __aligned(SMP_CACHE_BYTES);
+	spinlock_t txlock __attribute__ ((aligned (SMP_CACHE_BYTES)));
 	struct	txbd8 *tx_bd_base;
 	struct	txbd8 *cur_tx;
 	unsigned int num_txbdfree;
@@ -1173,13 +980,13 @@ struct rx_q_stats {
  */
 
 struct gfar_priv_rx_q {
-	spinlock_t rxlock __aligned(SMP_CACHE_BYTES);
+	spinlock_t rxlock __attribute__ ((aligned (SMP_CACHE_BYTES)));
 	struct	sk_buff ** rx_skbuff;
 	dma_addr_t rx_bd_dma_base;
 	struct	rxbd8 *rx_bd_base;
 	struct	rxbd8 *cur_rx;
 	struct	net_device *dev;
-	struct gfar_priv_napi_rx *napi_rx;
+	struct gfar_priv_grp *grp;
 	struct rx_q_stats stats;
 	u16	skb_currx;
 	u16	qindex;
@@ -1206,59 +1013,33 @@ struct gfar_irqinfo {
  *	@napi: the napi poll function
  *	@priv: back pointer to the priv structure
  *	@regs: the ioremapped register space for this group
- *	@grp_id: group id for this group
  *	@irqinfo: TX/RX/ER irq data for this group
  */
 
-
-struct gfar_priv_napi_rx {
-	struct	napi_struct napi __aligned(SMP_CACHE_BYTES);
-	struct gfar_priv_grp *grp;
+struct gfar_priv_grp {
+	spinlock_t grplock __attribute__ ((aligned (SMP_CACHE_BYTES)));
+	struct	napi_struct napi;
+	struct gfar_private *priv;
+	struct gfar __iomem *regs;
+	unsigned int rstat;
 	unsigned long num_rx_queues;
 	unsigned long rx_bit_map;
-	unsigned int rstat;
-};
-
-struct gfar_priv_napi_tx {
-	struct	napi_struct napi __aligned(SMP_CACHE_BYTES);
-	struct gfar_priv_grp *grp;
+	/* cacheline 3 */
+	unsigned int tstat;
 	unsigned long num_tx_queues;
 	unsigned long tx_bit_map;
-	unsigned int tstat;
-};
 
-struct gfar_priv_grp {
-	spinlock_t grplock __aligned(SMP_CACHE_BYTES);
-	struct gfar __iomem *regs;
-	struct gfar_private *priv;
-	struct gfar_priv_napi_rx *napi_rx;
-	struct gfar_priv_napi_tx *napi_tx;
-	unsigned int grp_id;
+	struct gfar_irqinfo *irqinfo[GFAR_NUM_IRQS];
 };
 
 #define gfar_irq(grp, ID) \
-	((grp)->priv->irqinfo[(grp)->grp_id][GFAR_##ID])
+	((grp)->irqinfo[GFAR_##ID])
 
 enum gfar_errata {
 	GFAR_ERRATA_74		= 0x01,
 	GFAR_ERRATA_76		= 0x02,
 	GFAR_ERRATA_A002	= 0x04,
 	GFAR_ERRATA_12		= 0x08, /* a.k.a errata eTSEC49 */
-};
-
-struct gfar_priv_recycle_local {
-	struct sk_buff_head recycle_q; /* percpu queue */
-	unsigned int recycle_cnt;
-	unsigned int reuse_cnt;
-};
-
-#define GFAR_RECYCLE_MAX	DEFAULT_TX_RING_SIZE
-struct gfar_priv_recycle {
-	struct gfar_priv_recycle_local __percpu *local;
-	struct sk_buff_head recycle_q; /* shared queue */
-	unsigned int buff_size;
-	atomic_t recycle_cnt;
-	atomic_t reuse_cnt;
 };
 
 /* Struct stolen almost completely (and shamelessly) from the FCC enet source
@@ -1281,18 +1062,15 @@ struct gfar_private {
 	u16 uses_rxfcb;
 	u16 padding;
 
-	u32 device_flags;
-
-	/* HW TX timestamping enabled flag */
-	u16 hwts_tx_en;
-	u16 hwts_tx_en_ioctl;
+	/* HW time stamping enabled flag */
+	int hwts_rx_en;
+	int hwts_tx_en;
 
 	struct gfar_priv_tx_q *tx_queue[MAX_TX_QS];
 	struct gfar_priv_rx_q *rx_queue[MAX_RX_QS];
 	struct gfar_priv_grp gfargrp[MAXGROUPS];
 
-	struct gfar_priv_recycle recycle;
-	struct gfar_priv_recycle *recycle_target;
+	u32 device_flags;
 
 	unsigned int mode;
 	unsigned int num_tx_queues;
@@ -1300,15 +1078,6 @@ struct gfar_private {
 
 	/* Network Statistics */
 	struct gfar_extra_stats extra_stats;
-
-	/* HW RX timestamping enabled flag */
-	u16 hwts_rx_en;
-	u16 hwts_rx_en_ioctl;
-
-	/* 1588 stuff */
-	struct gfar_regs_1588 __iomem *ptimer;
-	struct gfar_ptp_circular tx_timestamps;
-	struct gfar_ptp_circular rx_timestamps;
 
 	/* PHY stuff */
 	phy_interface_t interface;
@@ -1319,10 +1088,6 @@ struct gfar_private {
 	int oldspeed;
 	int oldduplex;
 	int oldlink;
-	bool rx_pause;
-	bool tx_pause;
-
-	struct gfar_irqinfo *irqinfo[MAXGROUPS][GFAR_NUM_IRQS];
 
 	/* Bitfield update lock */
 	spinlock_t bflock;
@@ -1340,15 +1105,10 @@ struct gfar_private {
 		wol_en:1,
 		/* Enable priorty based Tx scheduling in Hw */
 		prio_sched_en:1,
-		/* L2 SRAM alloc of BDs enabled */
-		bd_l2sram_en:1;
-
-	struct net_device *recycle_ndev;
-	struct list_head recycle_node;
-
-	u32 ip_addr;       /* the primary IP address of the device */
-	u32 wol_opts;      /* enabled Wake-on-Lan modes */
-	u32 wol_supported; /* supported Wake-on-Lan modes */
+		/* Flow control flags */
+		pause_aneg_en:1,
+		tx_pause_en:1,
+		rx_pause_en:1;
 
 	/* The total tx and rx ring size for the enabled queues */
 	unsigned int total_tx_ring_size;
@@ -1378,9 +1138,6 @@ struct gfar_private {
 	unsigned int ftp_rqfcr[MAX_FILER_IDX + 1];
 };
 
-#define BD_RING_REG_SZ(priv) ( \
-	sizeof(struct txbd8) * (priv)->total_tx_ring_size + \
-	sizeof(struct rxbd8) * (priv)->total_rx_ring_size)
 
 static inline int gfar_has_errata(struct gfar_private *priv,
 				  enum gfar_errata err)
@@ -1420,38 +1177,23 @@ static inline void gfar_read_filer(struct gfar_private *priv,
 	*fpr = gfar_read(&regs->rqfpr);
 }
 
-extern void lock_rx_qs(struct gfar_private *priv);
-extern void lock_tx_qs(struct gfar_private *priv);
-extern void unlock_rx_qs(struct gfar_private *priv);
-extern void unlock_tx_qs(struct gfar_private *priv);
-extern irqreturn_t gfar_receive(int irq, void *dev_id);
-extern int startup_gfar(struct net_device *dev);
-extern void stop_gfar(struct net_device *dev);
-extern void gfar_halt(struct net_device *dev);
-void gfar_1588_start(struct gfar_private *priv);
-void gfar_1588_stop(struct gfar_private *priv);
-int gfar_ptp_init(struct device_node *np, struct gfar_private *priv);
-void gfar_ptp_cleanup(struct gfar_private *priv);
-int gfar_ioctl_1588(struct net_device *dev, struct ifreq *ifr, int cmd);
-void gfar_ptp_store_txstamp(struct net_device *dev,
-			struct sk_buff *skb, struct gfar_ptp_time *tx_ts);
-void gfar_ptp_store_rxstamp(struct net_device *dev,
-			struct sk_buff *skb, struct gfar_ptp_time *rx_ts);
-void gfar_cnt_to_ptp_time(u32 high, u32 low, struct gfar_ptp_time *time);
-u64 gfar_get_tx_timestamp(struct gfar __iomem *regs);
-extern void gfar_phy_test(struct mii_bus *bus, struct phy_device *phydev,
-		int enable, u32 regnum, u32 read);
-extern void gfar_configure_coalescing_all(struct gfar_private *priv);
+void lock_rx_qs(struct gfar_private *priv);
+void lock_tx_qs(struct gfar_private *priv);
+void unlock_rx_qs(struct gfar_private *priv);
+void unlock_tx_qs(struct gfar_private *priv);
+irqreturn_t gfar_receive(int irq, void *dev_id);
+int startup_gfar(struct net_device *dev);
+void stop_gfar(struct net_device *dev);
+void gfar_halt(struct net_device *dev);
+void gfar_phy_test(struct mii_bus *bus, struct phy_device *phydev, int enable,
+		   u32 regnum, u32 read);
+void gfar_configure_coalescing_all(struct gfar_private *priv);
 void gfar_init_sysfs(struct net_device *dev);
 int gfar_set_features(struct net_device *dev, netdev_features_t features);
-extern void gfar_check_rx_parser_mode(struct gfar_private *priv);
-extern void gfar_vlan_mode(struct net_device *dev, netdev_features_t features);
-void gfar_configure_pause(struct gfar_private *priv, bool en);
+void gfar_check_rx_parser_mode(struct gfar_private *priv);
+void gfar_vlan_mode(struct net_device *dev, netdev_features_t features);
 
 extern const struct ethtool_ops gfar_ethtool_ops;
-extern struct list_head gfar_recycle_queues;
-extern bool gfar_skb_recycling_en;
-extern bool gfar_l2sram_en;
 
 #define MAX_FILER_CACHE_IDX (2*(MAX_FILER_IDX))
 

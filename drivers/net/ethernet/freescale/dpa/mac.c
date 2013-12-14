@@ -35,6 +35,7 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/of_net.h>
 #include <linux/device.h>

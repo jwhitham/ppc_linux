@@ -33,6 +33,7 @@ extern int boot_cpuid;
 extern int spinning_secondaries;
 
 extern void cpu_die(void);
+extern int cpu_to_chip_id(int cpu);
 
 #ifdef CONFIG_SMP
 
@@ -146,6 +147,10 @@ extern void __cpu_die(unsigned int cpu);
 #define smp_setup_cpu_maps()
 static inline void inhibit_secondary_onlining(void) {}
 static inline void uninhibit_secondary_onlining(void) {}
+static inline const struct cpumask *cpu_sibling_mask(int cpu)
+{
+	return cpumask_of(cpu);
+}
 
 #endif /* CONFIG_SMP */
 

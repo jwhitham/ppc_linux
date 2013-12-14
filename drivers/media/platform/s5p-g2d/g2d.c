@@ -784,6 +784,7 @@ static int g2d_probe(struct platform_device *pdev)
 	}
 	*vfd = g2d_videodev;
 	vfd->lock = &dev->mutex;
+	vfd->v4l2_dev = &dev->v4l2_dev;
 	ret = video_register_device(vfd, VFL_TYPE_GRABBER, 0);
 	if (ret) {
 		v4l2_err(&dev->v4l2_dev, "Failed to register video device\n");
@@ -839,7 +840,7 @@ put_clk:
 
 static int g2d_remove(struct platform_device *pdev)
 {
-	struct g2d_dev *dev = (struct g2d_dev *)platform_get_drvdata(pdev);
+	struct g2d_dev *dev = platform_get_drvdata(pdev);
 
 	v4l2_info(&dev->v4l2_dev, "Removing " G2D_NAME);
 	v4l2_m2m_release(dev->m2m_dev);

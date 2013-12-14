@@ -85,6 +85,7 @@ struct audit_names {
 
 	struct filename		*name;
 	int			name_len;	/* number of chars to log */
+	bool			hidden;		/* don't log this record */
 	bool			name_put;	/* call __putname()? */
 
 	unsigned long		ino;
@@ -196,6 +197,9 @@ struct audit_context {
 			int			fd;
 			int			flags;
 		} mmap;
+		struct {
+			int			argc;
+		} execve;
 	};
 	int fds[2];
 

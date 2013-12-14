@@ -29,6 +29,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include "pme2_private.h"
 #include "pme2_regs.h"
 

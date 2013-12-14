@@ -5,6 +5,9 @@
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
  */
 
+#include <linux/of_irq.h>
+#include <linux/of_address.h>
+
 #include "compat.h"
 #include "regs.h"
 #include "jr.h"
@@ -62,23 +65,15 @@ static int caam_reset_hw_jr(struct device *dev)
 /*
  * Shutdown JobR independent of platform property code
  */
-static int caam_jr_shutdown(struct device *dev)
+int caam_jr_shutdown(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	dma_addr_t inpbusaddr, outbusaddr;
-	int i, ret;
+	int ret;
 
 	ret = caam_reset_hw_jr(dev);
-	if (ret)
-		dev_err(dev, "failed to reset job ring\n");
 
-	for_each_possible_cpu(i) {
-		napi_disable(per_cpu_ptr(jrp->irqtask, i));
-		netif_napi_del(per_cpu_ptr(jrp->irqtask, i));
-	}
-
-	free_percpu(jrp->irqtask);
-	free_percpu(jrp->net_dev);
+	tasklet_kill(&jrp->irqtask);
 
 	/* Release interrupt */
 	free_irq(jrp->irq, dev);
@@ -158,24 +153,23 @@ static irqreturn_t caam_jr_interrupt(int irq, void *st_dev)
 	wr_reg32(&jrp->rregs->jrintstatus, irqstate);
 
 	preempt_disable();
-	napi_schedule(per_cpu_ptr(jrp->irqtask, smp_processor_id()));
+	tasklet_schedule(&jrp->irqtask);
 	preempt_enable();
 
 	return IRQ_HANDLED;
 }
 
 /* Deferred service handler, run as interrupt-fired tasklet */
-static int caam_jr_dequeue(struct napi_struct *napi, int budget)
+static void caam_jr_dequeue(unsigned long devarg)
 {
 	int hw_idx, sw_idx, i, head, tail;
-	struct device *dev = &napi->dev->dev;
+	struct device *dev = (struct device *)devarg;
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	void (*usercall)(struct device *dev, u32 *desc, u32 status, void *arg);
 	u32 *userdesc, userstatus;
 	void *userarg;
-	int cleaned = 0;
 
-	while (rd_reg32(&jrp->rregs->outring_used) && cleaned < budget) {
+	while (rd_reg32(&jrp->rregs->outring_used)) {
 
 		head = ACCESS_ONCE(jrp->head);
 
@@ -235,16 +229,10 @@ static int caam_jr_dequeue(struct napi_struct *napi, int budget)
 
 		/* Finally, execute user's callback */
 		usercall(dev, userdesc, userstatus, userarg);
-		cleaned++;
 	}
 
-	if (cleaned < budget) {
-		napi_complete(per_cpu_ptr(jrp->irqtask, smp_processor_id()));
-		/* reenable / unmask IRQs */
-		clrbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
-	}
-
-	return cleaned;
+	/* reenable / unmask IRQs */
+	clrbits32(&jrp->rregs->rconfig_lo, JRCFG_IMSK);
 }
 
 /**
@@ -391,28 +379,7 @@ static int caam_jr_init(struct device *dev)
 
 	jrp = dev_get_drvdata(dev);
 
-	/* Connect job ring interrupt handler. */
-	jrp->irqtask = alloc_percpu(struct napi_struct);
-	if (!jrp->irqtask) {
-		dev_err(dev, "can't allocate percpu irqtask memory\n");
-		return -ENOMEM;
-	}
-
-	jrp->net_dev = alloc_percpu(struct net_device);
-	if (!jrp->net_dev) {
-		dev_err(dev, "can't allocate percpu net_dev memory\n");
-		free_percpu(jrp->irqtask);
-		return -ENOMEM;
-	}
-
-	for_each_possible_cpu(i) {
-		(per_cpu_ptr(jrp->net_dev, i))->dev = *dev;
-		INIT_LIST_HEAD(&per_cpu_ptr(jrp->net_dev, i)->napi_list);
-		netif_napi_add(per_cpu_ptr(jrp->net_dev, i),
-				per_cpu_ptr(jrp->irqtask, i),
-				caam_jr_dequeue, CAAM_NAPI_WEIGHT);
-		napi_enable(per_cpu_ptr(jrp->irqtask, i));
-	}
+	tasklet_init(&jrp->irqtask, caam_jr_dequeue, (unsigned long)dev);
 
 	/* Connect job ring interrupt handler. */
 	error = request_irq(jrp->irq, caam_jr_interrupt, IRQF_SHARED,
@@ -472,6 +439,10 @@ static int caam_jr_init(struct device *dev)
 	return 0;
 }
 
+
+/*
+ * Probe routine for each detected JobR subsystem.
+ */
 static int caam_jr_probe(struct platform_device *pdev)
 {
 	struct device *jrdev;
@@ -512,7 +483,7 @@ static int caam_jr_probe(struct platform_device *pdev)
 		dma_set_mask(jrdev, DMA_BIT_MASK(32));
 
 	/* Identify the interrupt */
-	jrpriv->irq = of_irq_to_resource(nprop, 0, NULL);
+	jrpriv->irq = irq_of_parse_and_map(nprop, 0);
 
 	/* Now do the platform independent part */
 	error = caam_jr_init(jrdev); /* now turn on hardware */
@@ -570,4 +541,3 @@ module_exit(jr_driver_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("FSL CAAM JR request backend");
 MODULE_AUTHOR("Freescale Semiconductor - NMG/STC");
-

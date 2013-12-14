@@ -75,7 +75,7 @@ config CRYPTO_DEV_FSL_CAAM_INTC_TIME_THLD
 
 config CRYPTO_DEV_FSL_CAAM_CRYPTO_API
 	tristate "Register algorithm implementations with the Crypto API"
-	depends on CRYPTO_DEV_FSL_CAAM && NET && CRYPTO_DEV_FSL_CAAM_JR
+	depends on CRYPTO_DEV_FSL_CAAM && CRYPTO_DEV_FSL_CAAM_JR
 	default y
 	select CRYPTO_ALGAPI
 	select CRYPTO_AUTHENC
@@ -86,25 +86,6 @@ config CRYPTO_DEV_FSL_CAAM_CRYPTO_API
 
 	  To compile this as a module, choose M here: the module
 	  will be called caamalg.
-
-config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI
-	tristate "Queue Interface as Crypto API backend"
-	depends on CRYPTO_DEV_FSL_CAAM_CRYPTO_API && FSL_QMAN
-	default y
-	help
-	  Selecting this will use SEC Queue Interface for sending
-	  & receiving crypto jobs to/from SEC. This gives better
-	  performance than job ring interface when the number of
-	  cores are more than the number of job rings assigned to
-	  the kernel. The number of portals assigned to the kernel
-	  should also be more than the number of job rings.
-
-	  Currently, only AEAD algorithms have been implemented on
-	  top of SEC-QI backend interface. The rest of the algorithms
-	  use job ring interface.
-
-	  To compile this as a module, choose M here: the module
-	  will be called caamalg_qi.
 
 config CRYPTO_DEV_FSL_CAAM_AHASH_API
 	tristate "Register hash algorithm implementations with Crypto API"

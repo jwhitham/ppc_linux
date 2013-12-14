@@ -36,16 +36,25 @@ KBUILD_DEFCONFIG := ppc64_defconfig
 endif
 
 ifeq ($(CONFIG_PPC64),y)
-OLDARCH	:= ppc64
-
 new_nm := $(shell if $(NM) --help 2>&1 | grep -- '--synthetic' > /dev/null; then echo y; else echo n; fi)
 
 ifeq ($(new_nm),y)
 NM		:= $(NM) --synthetic
 endif
+endif
 
+ifeq ($(CONFIG_PPC64),y)
+ifeq ($(CONFIG_CPU_LITTLE_ENDIAN),y)
+OLDARCH	:= ppc64le
+else
+OLDARCH	:= ppc64
+endif
+else
+ifeq ($(CONFIG_CPU_LITTLE_ENDIAN),y)
+OLDARCH	:= ppcle
 else
 OLDARCH	:= ppc
+endif
 endif
 
 # It seems there are times we use this Makefile without
@@ -56,11 +65,31 @@ endif
 
 UTS_MACHINE := $(OLDARCH)
 
+ifeq ($(CONFIG_CPU_LITTLE_ENDIAN),y)
+override CC	+= -mlittle-endian -mno-strict-align
+override AS	+= -mlittle-endian
+override LD	+= -EL
+override CROSS32CC += -mlittle-endian
+override CROSS32AS += -mlittle-endian
+LDEMULATION	:= lppc
+GNUTARGET	:= powerpcle
+MULTIPLEWORD	:= -mno-multiple
+else
+ifeq ($(call cc-option-yn,-mbig-endian),y)
+override CC	+= -mbig-endian
+override AS	+= -mbig-endian
+endif
+override LD	+= -EB
+LDEMULATION	:= ppc
+GNUTARGET	:= powerpc
+MULTIPLEWORD	:= -mmultiple
+endif
+
 ifeq ($(HAS_BIARCH),y)
 override AS	+= -a$(CONFIG_WORD_SIZE)
-override LD	+= -m elf$(CONFIG_WORD_SIZE)ppc
+override LD	+= -m elf$(CONFIG_WORD_SIZE)$(LDEMULATION)
 override CC	+= -m$(CONFIG_WORD_SIZE)
-override AR	:= GNUTARGET=elf$(CONFIG_WORD_SIZE)-powerpc $(AR)
+override AR	:= GNUTARGET=elf$(CONFIG_WORD_SIZE)-$(GNUTARGET) $(AR)
 endif
 
 LDFLAGS_vmlinux-y := -Bstatic
@@ -86,21 +115,44 @@ endif
 endif
 
 CFLAGS-$(CONFIG_PPC64)	:= -mtraceback=no -mcall-aixdesc
+CFLAGS-$(CONFIG_PPC64)	+= $(call cc-option,-mabi=elfv1)
 CFLAGS-$(CONFIG_PPC64)	+= $(call cc-option,-mcmodel=medium,-mminimal-toc)
 CFLAGS-$(CONFIG_PPC64)	+= $(call cc-option,-mno-pointers-to-nested-functions)
-CFLAGS-$(CONFIG_PPC32)	:= -ffixed-r2 -mmultiple
+CFLAGS-$(CONFIG_PPC32)	:= -ffixed-r2 $(MULTIPLEWORD)
 
+ifeq ($(CONFIG_PPC_BOOK3S_64),y)
 CFLAGS-$(CONFIG_GENERIC_CPU) += $(call cc-option,-mtune=power7,-mtune=power4)
+else
+CFLAGS-$(CONFIG_GENERIC_CPU) += -mcpu=powerpc64
+endif
+
 CFLAGS-$(CONFIG_CELL_CPU) += $(call cc-option,-mcpu=cell)
 CFLAGS-$(CONFIG_POWER4_CPU) += $(call cc-option,-mcpu=power4)
 CFLAGS-$(CONFIG_POWER5_CPU) += $(call cc-option,-mcpu=power5)
 CFLAGS-$(CONFIG_POWER6_CPU) += $(call cc-option,-mcpu=power6)
 CFLAGS-$(CONFIG_POWER7_CPU) += $(call cc-option,-mcpu=power7)
 
+# Altivec option not allowed with e500mc64 in GCC.
+ifeq ($(CONFIG_ALTIVEC),y)
+E5500_CPU := -mcpu=powerpc64
+else
+E5500_CPU := $(call cc-option,-mcpu=e500mc64,-mcpu=powerpc64)
+endif
+CFLAGS-$(CONFIG_E5500_CPU) += $(E5500_CPU)
+CFLAGS-$(CONFIG_E6500_CPU) += $(call cc-option,-mcpu=e6500,$(E5500_CPU))
+
+ifeq ($(CONFIG_PPC32),y)
+ifeq ($(CONFIG_PPC_E500MC),y)
+CFLAGS-y += $(call cc-option,-mcpu=e500mc,-mcpu=powerpc)
+else
+CFLAGS-$(CONFIG_E500) += $(call cc-option,-mcpu=8540 -msoft-float,-mcpu=powerpc)
+endif
+endif
+
 CFLAGS-$(CONFIG_TUNE_CELL) += $(call cc-option,-mtune=cell)
 
 KBUILD_CPPFLAGS	+= -Iarch/$(ARCH)
-KBUILD_AFLAGS	+= -msoft-float -Iarch/$(ARCH)
+KBUILD_AFLAGS	+= -Iarch/$(ARCH)
 KBUILD_CFLAGS	+= -msoft-float -pipe -Iarch/$(ARCH) $(CFLAGS-y)
 CPP		= $(CC) -E $(KBUILD_CFLAGS)
 
@@ -137,21 +189,6 @@ endif
 
 ifeq ($(CONFIG_6xx),y)
 KBUILD_CFLAGS		+= -mcpu=powerpc
-endif
-
-ifeq ($(CONFIG_E500),y)
-ifeq ($(CONFIG_64BIT),y)
-KBUILD_CFLAGS		+= -mcpu=e5500
-KBUILD_AFLAGS		+= -mcpu=e5500
-else
-ifeq ($(CONFIG_PPC_E500MC),y)
-KBUILD_CFLAGS		+= -mcpu=e500mc
-KBUILD_AFLAGS		+= -mcpu=e500mc
-else
-KBUILD_CFLAGS		+= -mcpu=8540
-KBUILD_AFLAGS		+= -mcpu=8540
-endif
-endif
 endif
 
 # Work around a gcc code-gen bug with -fno-omit-frame-pointer.

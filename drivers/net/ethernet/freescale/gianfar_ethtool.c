@@ -30,7 +30,6 @@
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 #include <linux/mm.h>
-#include <linux/platform_device.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -43,7 +42,6 @@
 #include <linux/phy.h>
 #include <linux/sort.h>
 #include <linux/if_vlan.h>
-#include <linux/in.h>
 
 #include "gianfar.h"
 
@@ -522,10 +520,8 @@ static int gfar_sringparam(struct net_device *dev,
 	}
 
 	/* Change the size */
-	for (i = 0; i < priv->num_rx_queues; i++)
+	for (i = 0; i < priv->num_rx_queues; i++) {
 		priv->rx_queue[i]->rx_ring_size = rvals->rx_pending;
-
-	for (i = 0; i < priv->num_tx_queues; i++) {
 		priv->tx_queue[i]->tx_ring_size = rvals->tx_pending;
 		priv->tx_queue[i]->num_txbdfree =
 			priv->tx_queue[i]->tx_ring_size;
@@ -540,29 +536,73 @@ static int gfar_sringparam(struct net_device *dev,
 }
 
 static void gfar_gpauseparam(struct net_device *dev,
-			     struct ethtool_pauseparam *pause)
+			     struct ethtool_pauseparam *epause)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 
-	pause->autoneg = AUTONEG_ENABLE;
-	if (priv->rx_pause)
-		pause->rx_pause = 1;
-	if (priv->tx_pause)
-		pause->tx_pause = 1;
+	epause->autoneg = !!priv->pause_aneg_en;
+	epause->rx_pause = !!priv->rx_pause_en;
+	epause->tx_pause = !!priv->tx_pause_en;
 }
 
 static int gfar_spauseparam(struct net_device *dev,
-			    struct ethtool_pauseparam *pause)
+			    struct ethtool_pauseparam *epause)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 	struct phy_device *phydev = priv->phydev;
+	struct gfar __iomem *regs = priv->gfargrp[0].regs;
+	u32 oldadv, newadv;
 
-	priv->rx_pause = !!pause->rx_pause;
-	priv->tx_pause = !!pause->tx_pause;
+	if (!(phydev->supported & SUPPORTED_Pause) ||
+	    (!(phydev->supported & SUPPORTED_Asym_Pause) &&
+	     (epause->rx_pause != epause->tx_pause)))
+		return -EINVAL;
 
-	/* update h/w settings, if link is up */
-	if (phydev && phydev->link)
-		gfar_configure_pause(priv, !!phydev->duplex);
+	priv->rx_pause_en = priv->tx_pause_en = 0;
+	if (epause->rx_pause) {
+		priv->rx_pause_en = 1;
+
+		if (epause->tx_pause) {
+			priv->tx_pause_en = 1;
+			/* FLOW_CTRL_RX & TX */
+			newadv = ADVERTISED_Pause;
+		} else  /* FLOW_CTLR_RX */
+			newadv = ADVERTISED_Pause | ADVERTISED_Asym_Pause;
+	} else if (epause->tx_pause) {
+		priv->tx_pause_en = 1;
+		/* FLOW_CTLR_TX */
+		newadv = ADVERTISED_Asym_Pause;
+	} else
+		newadv = 0;
+
+	if (epause->autoneg)
+		priv->pause_aneg_en = 1;
+	else
+		priv->pause_aneg_en = 0;
+
+	oldadv = phydev->advertising &
+		(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+	if (oldadv != newadv) {
+		phydev->advertising &=
+			~(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+		phydev->advertising |= newadv;
+		if (phydev->autoneg)
+			/* inform link partner of our
+			 * new flow ctrl settings
+			 */
+			return phy_start_aneg(phydev);
+
+		if (!epause->autoneg) {
+			u32 tempval;
+			tempval = gfar_read(&regs->maccfg1);
+			tempval &= ~(MACCFG1_TX_FLOW | MACCFG1_RX_FLOW);
+			if (priv->tx_pause_en)
+				tempval |= MACCFG1_TX_FLOW;
+			if (priv->rx_pause_en)
+				tempval |= MACCFG1_RX_FLOW;
+			gfar_write(&regs->maccfg1, tempval);
+		}
+	}
 
 	return 0;
 }
@@ -628,50 +668,32 @@ static void gfar_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 
-	wol->supported = 0;
-	wol->wolopts = 0;
-
-	if (!priv->wol_supported || !device_can_wakeup(&priv->ofdev->dev))
-		return;
-
-	if (priv->wol_supported & GIANFAR_WOL_MAGIC)
-		wol->supported |= WAKE_MAGIC;
-
-	if (priv->wol_supported & GIANFAR_WOL_ARP)
-		wol->supported |= WAKE_ARP;
-
-	if (priv->wol_supported & GIANFAR_WOL_UCAST)
-		wol->supported |= WAKE_UCAST;
-
-	if (priv->wol_opts & GIANFAR_WOL_MAGIC)
-		wol->wolopts |= WAKE_MAGIC;
-
-	if (priv->wol_opts & GIANFAR_WOL_ARP)
-		wol->wolopts |= WAKE_ARP;
-
-	if (priv->wol_opts & GIANFAR_WOL_UCAST)
-		wol->wolopts |= WAKE_UCAST;
+	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) {
+		wol->supported = WAKE_MAGIC;
+		wol->wolopts = priv->wol_en ? WAKE_MAGIC : 0;
+	} else {
+		wol->supported = wol->wolopts = 0;
+	}
 }
 
 static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
+	unsigned long flags;
 
-	if (!priv->wol_supported || !device_can_wakeup(&priv->ofdev->dev) ||
-		(wol->wolopts & ~(WAKE_MAGIC | WAKE_ARP | WAKE_UCAST)))
-		return -EOPNOTSUPP;
+	if (!(priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) &&
+	    wol->wolopts != 0)
+		return -EINVAL;
 
-	priv->wol_opts = 0;
+	if (wol->wolopts & ~WAKE_MAGIC)
+		return -EINVAL;
 
-	if (wol->wolopts & WAKE_MAGIC) {
-		priv->wol_opts |= GIANFAR_WOL_MAGIC;
-	} else {
-		if (wol->wolopts & WAKE_ARP)
-			priv->wol_opts |= GIANFAR_WOL_ARP;
-		if (wol->wolopts & WAKE_UCAST)
-			priv->wol_opts |= GIANFAR_WOL_UCAST;
-	}
-	device_set_wakeup_enable(&priv->ofdev->dev, (bool)!!priv->wol_opts);
+	device_set_wakeup_enable(&dev->dev, wol->wolopts & WAKE_MAGIC);
+
+	spin_lock_irqsave(&priv->bflock, flags);
+	priv->wol_en =  !!device_may_wakeup(&dev->dev);
+	spin_unlock_irqrestore(&priv->bflock, flags);
+
 	return 0;
 }
 #endif
@@ -679,7 +701,6 @@ static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 static void ethflow_to_filer_rules (struct gfar_private *priv, u64 ethflow)
 {
 	u32 fcr = 0x0, fpr = FPR_FILER_MASK;
-	u32 class = upper_32_bits(ethflow);
 
 	if (ethflow & RXH_L2DA) {
 		fcr = RQFCR_PID_DAH |RQFCR_CMP_NOMATCH |
@@ -750,45 +771,6 @@ static void ethflow_to_filer_rules (struct gfar_private *priv, u64 ethflow)
 		gfar_write_filer(priv, priv->cur_filer_idx, fcr, fpr);
 		priv->cur_filer_idx = priv->cur_filer_idx - 1;
 	}
-
-	if (((class == AH_V4_FLOW) || (class == ESP_V4_FLOW)) &&
-	   (ethflow & RXH_AH_ESP_SPI)) {
-		struct gfar __iomem *regs = priv->gfargrp[0].regs;
-		u8 rbifx_bx, spi_off;
-		u32 rbifx;
-		int i;
-
-		fcr = RQFCR_PID_ARB | RQFCR_HASH | RQFCR_HASHTBL_0 |
-		      RQFCR_CMP_NOMATCH | RQFCR_AND;
-		priv->ftp_rqfpr[priv->cur_filer_idx] = fpr;
-		priv->ftp_rqfcr[priv->cur_filer_idx] = fcr;
-		gfar_write_filer(priv, priv->cur_filer_idx, fcr, fpr);
-		priv->cur_filer_idx = priv->cur_filer_idx - 1;
-
-		fcr = RQFCR_PID_L4P | RQFCR_CMP_EXACT | RQFCR_AND;
-		fpr = (class == AH_V4_FLOW) ? IPPROTO_AH : IPPROTO_ESP;
-		priv->ftp_rqfpr[priv->cur_filer_idx] = fpr;
-		priv->ftp_rqfcr[priv->cur_filer_idx] = fcr;
-		gfar_write_filer(priv, priv->cur_filer_idx, fcr, fpr);
-		priv->cur_filer_idx = priv->cur_filer_idx - 1;
-
-		/* SPI field to be extracted starting from offset 4 for AH,
-		 * or offset 0 for ESP, just after the L3 header
-		 */
-		spi_off = (class == AH_V4_FLOW) ? 4 : 0;
-		/* configure RBIFX's B0 field */
-		rbifx_bx = RBIFX_B_AFTER_L3 << RBIFX_BCTL_OFF;
-		rbifx_bx |= spi_off;
-		rbifx = rbifx_bx;
-		/* configure the next 3 bytes (B1, B2, B3) */
-		for (i = 1; i < 4; i++) {
-			rbifx_bx++; /* next SPI byte offset */
-			rbifx <<= 8;
-			rbifx |= rbifx_bx;
-		}
-
-		gfar_write(&regs->rbifx, rbifx);
-	}
 }
 
 static int gfar_ethflow_to_filer_table(struct gfar_private *priv, u64 ethflow,
@@ -823,11 +805,6 @@ static int gfar_ethflow_to_filer_table(struct gfar_private *priv, u64 ethflow,
 		break;
 	case UDP_V6_FLOW:
 		cmp_rqfpr = RQFPR_IPV6 |RQFPR_UDP;
-		break;
-	case AH_V4_FLOW:
-	case ESP_V4_FLOW:
-		cmp_rqfpr = RQFPR_IPV4;
-		ethflow |= (class << 32);
 		break;
 	default:
 		netdev_err(priv->ndev,

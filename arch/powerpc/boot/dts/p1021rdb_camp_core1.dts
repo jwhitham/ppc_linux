@@ -38,7 +38,7 @@
  * Please note to add "-b 1" for core1's dts compiling.
  */
 
-/include/ "p1021rdb.dts"
+/include/ "p1021rdb-pc_32b.dts"
 
 / {
 	model = "fsl,P1021RDB";

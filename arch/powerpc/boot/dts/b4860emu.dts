@@ -20,16 +20,16 @@
  * Foundation, either version 2 of that License or (at your option) any
  * later version.
  *
- * THIS SOFTWARE IS PROVIDED BY Freescale Semiconductor ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL Freescale Semiconductor BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This software is provided by Freescale Semiconductor "as is" and any
+ * express or implied warranties, including, but not limited to, the implied
+ * warranties of merchantability and fitness for a particular purpose are
+ * disclaimed. In no event shall Freescale Semiconductor be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential damages
+ * (including, but not limited to, procurement of substitute goods or services;
+ * loss of use, data, or profits; or business interruption) however caused and
+ * on any theory of liability, whether in contract, strict liability, or tort
+ * (including negligence or otherwise) arising in any way out of the use of
+ * this software, even if advised of the possibility of such damage.
  */
 
 /dts-v1/;
@@ -37,6 +37,7 @@
 /include/ "fsl/e6500_power_isa.dtsi"
 
 / {
+	compatible = "fsl,B4860";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
@@ -81,7 +82,7 @@
 
 / {
 	model = "fsl,B4860QDS";
-	compatible = "fsl,b4860emu", "fsl,B4860QDS";
+	compatible = "fsl,B4860EMU", "fsl,B4860QDS";
 	#address-cells = <2>;
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
@@ -109,7 +110,6 @@
 	soc: soc@ffe000000 {
 		ranges = <0x00000000 0xf 0xfe000000 0x1000000>;
 		reg = <0xf 0xfe000000 0 0x00001000>;
-
 	};
 };
 
@@ -150,15 +150,14 @@
 	};
 
 	cpc: l3-cache-controller@10000 {
-		compatible = "fsl,p5020-l3-cache-controller", "fsl,p4080-l3-cache-controller", "cache";
+		compatible = "fsl,b4-l3-cache-controller", "cache";
 		reg = <0x10000 0x1000
 		       0x11000 0x1000>;
-		interrupts = <16 2 1 4
-			      16 2 1 5>;
+		interrupts = <16 2 1 4>;
 	};
 
 	corenet-cf@18000 {
-		compatible = "fsl,corenet-cf";
+		compatible = "fsl,b4-corenet-cf";
 		reg = <0x18000 0x1000>;
 		interrupts = <16 2 1 0>;
 		fsl,ccf-num-csdids = <32>;
@@ -168,27 +167,43 @@
 	iommu@20000 {
 		compatible = "fsl,pamu-v1.0", "fsl,pamu";
 		reg = <0x20000 0x4000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
 		interrupts = <
 			24 2 0 0
 			16 2 1 1>;
+		pamu0: pamu@0 {
+			reg = <0 0x1000>;
+			fsl,primary-cache-geometry = <8 1>;
+			fsl,secondary-cache-geometry = <32 2>;
+		};
 	};
 
 /include/ "fsl/qoriq-mpic.dtsi"
 
 	guts: global-utilities@e0000 {
-		compatible = "fsl,b4860-device-config";
+		compatible = "fsl,b4-device-config";
 		reg = <0xe0000 0xe00>;
 		fsl,has-rstcr;
 		fsl,liodn-bits = <12>;
 	};
 
 	clockgen: global-utilities@e1000 {
-		compatible = "fsl,b4860-clockgen", "fsl,qoriq-clockgen-2";
+		compatible = "fsl,b4-clockgen", "fsl,qoriq-clockgen-2.0";
 		reg = <0xe1000 0x1000>;
 	};
 
 /include/ "fsl/qoriq-dma-0.dtsi"
+	dma@100300 {
+		fsl,iommu-parent = <&pamu0>;
+		fsl,liodn-reg = <&guts 0x580>; /* DMA1LIODNR */
+	};
+
 /include/ "fsl/qoriq-dma-1.dtsi"
+	dma@101300 {
+		fsl,iommu-parent = <&pamu0>;
+		fsl,liodn-reg = <&guts 0x584>; /* DMA2LIODNR */
+	};
 
 /include/ "fsl/qoriq-i2c-0.dtsi"
 /include/ "fsl/qoriq-i2c-1.dtsi"
@@ -196,6 +211,8 @@
 /include/ "fsl/qoriq-duart-1.dtsi"
 
 	L2: l2-cache-controller@c20000 {
+		compatible = "fsl,b4-l2-cache-controller";
+		reg = <0xc20000 0x1000>;
 		next-level-cache = <&cpc>;
 	};
 };

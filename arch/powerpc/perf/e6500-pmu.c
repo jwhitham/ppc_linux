@@ -1,10 +1,10 @@
 /*
  * Performance counter support for e6500 family processors.
  *
- * Author: Lijun Pan
- * Based on Priyanka Jain's code
+ * Author: Priyanka Jain, Priyanka.Jain@freescale.com
  * Based on e500-pmu.c
  * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright 2008-2009 Paul Mackerras, IBM Corporation.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -78,8 +78,9 @@ static int e6500_cache_events[C(MAX)][C(OP_MAX)][C(RESULT_MAX)] = {
 		[C(OP_WRITE)] = {	-1,		-1	},
 		[C(OP_PREFETCH)] = {	-1,		-1	},
 	},
-	[C(NODE)] = {		/* 	RESULT_ACCESS	RESULT_MISS */
-		[C(OP_READ)] = {	-1,		-1 	},
+	[C(NODE)] = {
+				/* RESULT_ACCESS	RESULT_MISS */
+		[C(OP_READ)] = {	-1,		-1	},
 		[C(OP_WRITE)] = {	-1,		-1	},
 		[C(OP_PREFETCH)] = {	-1,		-1	},
 	},
@@ -91,7 +92,7 @@ static int num_events = 512;
 static u64 e6500_xlate_event(u64 event_id)
 {
 	u32 event_low = (u32)event_id;
-	if ((event_low >= num_events) ||
+	if (event_low >= num_events ||
 		(event_id & (FSL_EMB_EVENT_THRESHMUL | FSL_EMB_EVENT_THRESH)))
 		return 0;
 
@@ -110,8 +111,8 @@ static struct fsl_emb_pmu e6500_pmu = {
 
 static int init_e6500_pmu(void)
 {
-	if ((!cur_cpu_spec->oprofile_cpu_type) ||
-		(strcmp(cur_cpu_spec->oprofile_cpu_type, "ppc/e6500")))
+	if (!cur_cpu_spec->oprofile_cpu_type ||
+		strcmp(cur_cpu_spec->oprofile_cpu_type, "ppc/e6500"))
 		return -ENODEV;
 
 	return register_fsl_emb_pmu(&e6500_pmu);

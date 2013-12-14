@@ -10,7 +10,7 @@
  *      2 of the License, or (at your option) any later version.
  */
 
-#undef DEBUG
+#define DEBUG
 
 #include <linux/export.h>
 #include <linux/string.h>
@@ -68,8 +68,6 @@
 #include <asm/hugetlb.h>
 #include <asm/epapr_hcalls.h>
 
-#include "setup.h"
-
 #ifdef DEBUG
 #define DBG(fmt...) udbg_printf(fmt)
 #else
@@ -77,7 +75,7 @@
 #endif
 
 int boot_cpuid = 0;
-int __initdata spinning_secondaries;
+int spinning_secondaries;
 u64 ppc64_pft_size;
 
 /* Pick defaults since we might want to patch instructions
@@ -245,6 +243,8 @@ void __init early_setup(unsigned long dt_ptr)
 	 */
 	early_init_devtree(__va(dt_ptr));
 
+	epapr_paravirt_early_init();
+
 	/* Now we know the logical id of our boot cpu, setup the paca. */
 	setup_paca(&paca[boot_cpuid]);
 	fixup_boot_paca();
@@ -259,6 +259,8 @@ void __init early_setup(unsigned long dt_ptr)
 	/* Initialize the hash table or TLB handling */
 	early_init_mmu();
 
+	kvm_cma_reserve();
+
 	/*
 	 * Reserve any gigantic pages requested on the command line.
 	 * memblock needs to have been initialized by the time this is
@@ -267,6 +269,18 @@ void __init early_setup(unsigned long dt_ptr)
 	reserve_hugetlb_gpages();
 
 	DBG(" <- early_setup()\n");
+
+#ifdef CONFIG_PPC_EARLY_DEBUG_BOOTX
+	/*
+	 * This needs to be done *last* (after the above DBG() even)
+	 *
+	 * Right after we return from this function, we turn on the MMU
+	 * which means the real-mode access trick that btext does will
+	 * no longer work, it needs to switch to using a real MMU
+	 * mapping. This call will ensure that it does
+	 */
+	btext_map();
+#endif /* CONFIG_PPC_EARLY_DEBUG_BOOTX */
 }
 
 #ifdef CONFIG_SMP
@@ -335,14 +349,14 @@ static void __init initialize_cache_info(void)
 		 * d-cache and i-cache sizes... -Peter
 		 */
 		if (num_cpus == 1) {
-			const u32 *sizep, *lsizep;
+			const __be32 *sizep, *lsizep;
 			u32 size, lsize;
 
 			size = 0;
 			lsize = cur_cpu_spec->dcache_bsize;
 			sizep = of_get_property(np, "d-cache-size", NULL);
 			if (sizep != NULL)
-				size = *sizep;
+				size = be32_to_cpu(*sizep);
 			lsizep = of_get_property(np, "d-cache-block-size",
 						 NULL);
 			/* fallback if block size missing */
@@ -351,8 +365,8 @@ static void __init initialize_cache_info(void)
 							 "d-cache-line-size",
 							 NULL);
 			if (lsizep != NULL)
-				lsize = *lsizep;
-			if (sizep == 0 || lsizep == 0)
+				lsize = be32_to_cpu(*lsizep);
+			if (sizep == NULL || lsizep == NULL)
 				DBG("Argh, can't find dcache properties ! "
 				    "sizep: %p, lsizep: %p\n", sizep, lsizep);
 
@@ -365,7 +379,7 @@ static void __init initialize_cache_info(void)
 			lsize = cur_cpu_spec->icache_bsize;
 			sizep = of_get_property(np, "i-cache-size", NULL);
 			if (sizep != NULL)
-				size = *sizep;
+				size = be32_to_cpu(*sizep);
 			lsizep = of_get_property(np, "i-cache-block-size",
 						 NULL);
 			if (lsizep == NULL)
@@ -373,8 +387,8 @@ static void __init initialize_cache_info(void)
 							 "i-cache-line-size",
 							 NULL);
 			if (lsizep != NULL)
-				lsize = *lsizep;
-			if (sizep == 0 || lsizep == 0)
+				lsize = be32_to_cpu(*lsizep);
+			if (sizep == NULL || lsizep == NULL)
 				DBG("Argh, can't find icache properties ! "
 				    "sizep: %p, lsizep: %p\n", sizep, lsizep);
 
@@ -643,10 +657,6 @@ void __init setup_arch(char **cmdline_p)
 	/* Initialize the MMU context management stuff */
 	mmu_context_init();
 
-	epapr_paravirt_init();
-
-	kvm_linear_init();
-
 	/* Interrupt code needs to be 64K-aligned */
 	if ((unsigned long)_stext & 0xffff)
 		panic("Kernelbase not 64K-aligned (0x%lx)!\n",
@@ -737,8 +747,7 @@ void __init setup_per_cpu_areas(void)
 #endif
 
 
-#ifdef CONFIG_PPC_INDIRECT_IO
+#if defined(CONFIG_PPC_INDIRECT_PIO) || defined(CONFIG_PPC_INDIRECT_MMIO)
 struct ppc_pci_io ppc_pci_io;
 EXPORT_SYMBOL(ppc_pci_io);
-#endif /* CONFIG_PPC_INDIRECT_IO */
-
+#endif

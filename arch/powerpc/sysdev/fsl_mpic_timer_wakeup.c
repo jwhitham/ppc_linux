@@ -17,6 +17,7 @@
 #include <linux/device.h>
 
 #include <asm/mpic_timer.h>
+#include <asm/mpic.h>
 
 struct fsl_mpic_timer_wakeup {
 	struct mpic_timer *timer;
@@ -47,7 +48,8 @@ static irqreturn_t fsl_mpic_timer_irq(int irq, void *dev_id)
 	struct fsl_mpic_timer_wakeup *wakeup = dev_id;
 
 	schedule_work(&wakeup->free_work);
-	return IRQ_HANDLED;
+
+	return wakeup->timer ? IRQ_HANDLED : IRQ_NONE;
 }
 
 static ssize_t fsl_timer_wakeup_show(struct device *dev,
@@ -81,18 +83,15 @@ static ssize_t fsl_timer_wakeup_store(struct device *dev,
 
 	mutex_lock(&sysfs_lock);
 
-	if (fsl_wakeup->timer && !interval.tv_sec) {
+	if (fsl_wakeup->timer) {
 		disable_irq_wake(fsl_wakeup->timer->irq);
 		mpic_free_timer(fsl_wakeup->timer);
 		fsl_wakeup->timer = NULL;
-		mutex_unlock(&sysfs_lock);
-
-		return count;
 	}
 
-	if (fsl_wakeup->timer) {
+	if (!interval.tv_sec) {
 		mutex_unlock(&sysfs_lock);
-		return -EBUSY;
+		return count;
 	}
 
 	fsl_wakeup->timer = mpic_request_timer(fsl_mpic_timer_irq,
@@ -110,6 +109,7 @@ static ssize_t fsl_timer_wakeup_store(struct device *dev,
 
 		return ret;
 	}
+
 	mpic_start_timer(fsl_wakeup->timer);
 
 	mutex_unlock(&sysfs_lock);
@@ -117,23 +117,12 @@ static ssize_t fsl_timer_wakeup_store(struct device *dev,
 	return count;
 }
 
-static struct bus_type mpic_subsys = {
-	.name = "mpic",
-	.dev_name = "mpic",
-};
-
-static DEVICE_ATTR(timer_wakeup, 0644,
+static struct device_attribute mpic_attributes = __ATTR(timer_wakeup, 0644,
 			fsl_timer_wakeup_show, fsl_timer_wakeup_store);
-
-static struct device_attribute *mpic_attributes[] = {
-	&dev_attr_timer_wakeup,
-	NULL
-};
 
 static int __init fsl_wakeup_sys_init(void)
 {
 	int ret;
-	int i;
 
 	fsl_wakeup = kzalloc(sizeof(struct fsl_mpic_timer_wakeup), GFP_KERNEL);
 	if (!fsl_wakeup)
@@ -141,40 +130,27 @@ static int __init fsl_wakeup_sys_init(void)
 
 	INIT_WORK(&fsl_wakeup->free_work, fsl_free_resource);
 
-	ret = subsys_system_register(&mpic_subsys, NULL);
+	ret = device_create_file(mpic_subsys.dev_root, &mpic_attributes);
 	if (ret)
-		goto err;
-
-	for (i = 0; mpic_attributes[i]; i++) {
-		ret = device_create_file(mpic_subsys.dev_root,
-					mpic_attributes[i]);
-		if (ret)
-			goto err2;
-	}
-
-	return ret;
-
-err2:
-	while(--i >= 0)
-		device_remove_file(mpic_subsys.dev_root, mpic_attributes[i]);
-
-	bus_unregister(&mpic_subsys);
-
-err:
-	kfree(fsl_wakeup);
+		kfree(fsl_wakeup);
 
 	return ret;
 }
 
 static void __exit fsl_wakeup_sys_exit(void)
 {
-	int i;
+	device_remove_file(mpic_subsys.dev_root, &mpic_attributes);
 
-	for (i = 0; mpic_attributes[i]; i++)
-		device_remove_file(mpic_subsys.dev_root,
-				mpic_attributes[i]);
-	bus_unregister(&mpic_subsys);
+	mutex_lock(&sysfs_lock);
+
+	if (fsl_wakeup->timer) {
+		disable_irq_wake(fsl_wakeup->timer->irq);
+		mpic_free_timer(fsl_wakeup->timer);
+	}
+
 	kfree(fsl_wakeup);
+
+	mutex_unlock(&sysfs_lock);
 }
 
 module_init(fsl_wakeup_sys_init);

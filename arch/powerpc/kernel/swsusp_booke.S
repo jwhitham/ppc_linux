@@ -142,15 +142,10 @@ _GLOBAL(swsusp_arch_resume)
 	ori	r11,r11,swsusp_save_area@l
 
 	/*
-	 * The boot core get a virtual address, when the boot process,
-	 * the virtual address corresponds to a physical address. After
-	 * hibernation resume memory snapshots, The corresponding
-	 * relationship between the virtual memory and physical memory
-	 * might change again. We need to get a new page table. So we
-	 * need to invalidate TLB after resume pages.
-	 *
-	 * Invalidations TLB Using tlbilx/tlbivax/MMUCSR0.
-	 * tlbilx used here.
+	 * Mappings from virtual addresses to physical addresses may be
+	 * different than they were prior to restoring hibernation state. 
+	 * Invalidate the TLB so that the boot CPU is using the new
+	 * mappings.
 	 */
 	bl	_tlbil_all
 

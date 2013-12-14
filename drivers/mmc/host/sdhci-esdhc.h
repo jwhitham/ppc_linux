@@ -41,69 +41,18 @@
 /* pltfm-specific */
 #define ESDHC_HOST_CONTROL_LE	0x20
 
+/*
+ * P2020 interpretation of the SDHCI_HOST_CONTROL register
+ */
+#define ESDHC_CTRL_4BITBUS          (0x1 << 1)
+#define ESDHC_CTRL_8BITBUS          (0x2 << 1)
+#define ESDHC_CTRL_BUSWIDTH_MASK    (0x3 << 1)
+
 /* OF-specific */
 #define ESDHC_DMA_SYSCTL	0x40c
 #define ESDHC_DMA_SNOOP		0x00000040
 
 #define ESDHC_HOST_CONTROL_RES	0x01
 #define ESDHC_VOL_SEL		0x04
-
-static inline void esdhc_set_clock(struct sdhci_host *host, unsigned int clock)
-{
-	int pre_div = 2;
-	int div = 1;
-	u32 temp;
-	u32 actual_clk;
-	u32 timeout;
-
-	if (clock == 0)
-		goto out;
-
-	temp = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
-	temp &= ~(ESDHC_CLOCK_IPGEN | ESDHC_CLOCK_HCKEN | ESDHC_CLOCK_PEREN
-		| ESDHC_CLOCK_MASK | ESDHC_CLOCK_CRDEN);
-	sdhci_writel(host, temp, ESDHC_SYSTEM_CONTROL);
-
-	while (host->max_clk / pre_div / 16 > clock && pre_div < 256)
-		pre_div *= 2;
-
-	while (host->max_clk / pre_div / div > clock && div < 16)
-		div++;
-
-	dev_dbg(mmc_dev(host->mmc), "desired SD clock: %d, actual: %d\n",
-		clock, host->max_clk / pre_div / div);
-
-	actual_clk = host->max_clk / pre_div / div;
-	pre_div >>= 1;
-	div--;
-
-	temp = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
-	temp |= (ESDHC_CLOCK_IPGEN | ESDHC_CLOCK_HCKEN | ESDHC_CLOCK_PEREN
-		| (div << ESDHC_DIVIDER_SHIFT)
-		| (pre_div << ESDHC_PREDIV_SHIFT));
-	sdhci_writel(host, temp, ESDHC_SYSTEM_CONTROL);
-
-	/* Wait max 20 ms */
-	timeout = 20;
-	while (!(sdhci_readl(host, ESDHCI_PRESENT_STATE) & ESDHC_CLK_STABLE)) {
-		if (timeout == 0) {
-			pr_err("%s: Internal clock never "
-				"stabilised.\n", mmc_hostname(host->mmc));
-			return;
-		}
-		timeout--;
-		mdelay(1);
-	}
-
-	temp |= ESDHC_CLOCK_CRDEN;
-	sdhci_writel(host, temp, ESDHC_SYSTEM_CONTROL);
-
-	if (host->quirks & SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK) {
-		host->timeout_clk = actual_clk / 1000;
-		host->mmc->max_discard_to = (1 << 27) / host->timeout_clk;
-	}
-out:
-	host->clock = clock;
-}
 
 #endif /* _DRIVERS_MMC_SDHCI_ESDHC_H */

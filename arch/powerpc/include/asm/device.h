@@ -28,9 +28,6 @@ struct dev_archdata {
 		void		*iommu_table_base;
 	} dma_data;
 
-	/* IOMMU domain information pointer. This would be set
-	 * when this device is attached to an iommu_domain.
-	 */
 #ifdef CONFIG_IOMMU_API
 	void			*iommu_domain;
 #endif

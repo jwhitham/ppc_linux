@@ -35,9 +35,9 @@
 #include <asm/machdep.h>
 #include <asm/disassemble.h>
 #include <asm/ppc-opcode.h>
-#include <asm/mpc85xx.h>
 #include <sysdev/fsl_soc.h>
 #include <sysdev/fsl_pci.h>
+#include <asm/mpc85xx.h>
 
 static int fsl_pcie_bus_fixup, is_mpc83xx_pci;
 
@@ -46,7 +46,7 @@ static void quirk_fsl_pcie_early(struct pci_dev *dev)
 	u8 hdr_type;
 
 	/* if we aren't a PCIe don't bother */
-	if (!pci_find_capability(dev, PCI_CAP_ID_EXP))
+	if (!pci_is_pcie(dev))
 		return;
 
 	/* if we aren't in host mode don't bother */
@@ -339,10 +339,10 @@ static void setup_pci_atmu(struct pci_controller *hose)
 #endif
 		/* Size window to exact size if power-of-two or one size up */
 		if ((1ull << mem_log) != mem) {
+			mem_log++;
 			if ((1ull << mem_log) > mem)
 				pr_info("%s: Setting PCI inbound window "
 					"greater than memory size\n", name);
-			mem_log++;
 		}
 
 		piwar |= ((mem_log - 1) & PIWAR_SZ_MASK);
@@ -415,7 +415,9 @@ static void setup_pci_atmu(struct pci_controller *hose)
 	}
 
 	if (hose->dma_window_size < mem) {
-#ifndef CONFIG_SWIOTLB
+#ifdef CONFIG_SWIOTLB
+		ppc_swiotlb_enable = 1;
+#else
 		pr_err("%s: ERROR: Memory size exceeds PCI ATMU ability to "
 			"map - enable CONFIG_SWIOTLB to avoid dma errors.\n",
 			 name);
@@ -976,6 +978,15 @@ static int mcheck_handle_load(struct pt_regs *regs, u32 inst)
 			regs->gpr[ra] += regs->gpr[rb];
 			break;
 
+		case OP_31_XOP_LHAX:
+			regs->gpr[rd] = ~0UL;
+			break;
+
+		case OP_31_XOP_LHAUX:
+			regs->gpr[rd] = ~0UL;
+			regs->gpr[ra] += regs->gpr[rb];
+			break;
+
 		default:
 			return 0;
 		}
@@ -1008,6 +1019,15 @@ static int mcheck_handle_load(struct pt_regs *regs, u32 inst)
 		regs->gpr[ra] += (s16)d;
 		break;
 
+	case OP_LHA:
+		regs->gpr[rd] = ~0UL;
+		break;
+
+	case OP_LHAU:
+		regs->gpr[rd] = ~0UL;
+		regs->gpr[ra] += (s16)d;
+		break;
+
 	default:
 		return 0;
 	}
@@ -1032,7 +1052,6 @@ static int is_in_pci_mem_space(phys_addr_t addr)
 				return 1;
 		}
 	}
-
 	return 0;
 }
 
@@ -1131,27 +1150,9 @@ static int fsl_pci_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct device_node *node;
-#ifdef CONFIG_SWIOTLB
-	struct pci_controller *hose;
-#endif
 
 	node = pdev->dev.of_node;
 	ret = fsl_add_bridge(pdev, fsl_pci_primary == node);
-
-#ifdef CONFIG_SWIOTLB
-	if (ret == 0) {
-		hose = pci_find_hose_for_OF_device(pdev->dev.of_node);
-
-		/*
-		 * if we couldn't map all of DRAM via the dma windows
-		 * we need SWIOTLB to handle buffers located outside of
-		 * dma capable memory region
-		 */
-		if (memblock_end_of_DRAM() - 1 > hose->dma_window_base_cur +
-				hose->dma_window_size)
-			ppc_swiotlb_enable = 1;
-	}
-#endif
 
 	mpc85xx_pci_err_probe(pdev);
 

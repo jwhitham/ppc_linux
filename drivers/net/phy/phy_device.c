@@ -188,6 +188,7 @@ struct phy_device *phy_device_create(struct mii_bus *bus, int addr, int phy_id,
 
 	mutex_init(&dev->lock);
 	INIT_DELAYED_WORK(&dev->state_queue, phy_state_machine);
+	INIT_WORK(&dev->phy_queue, phy_change);
 
 	/* Request the appropriate module unconditionally; don't
 	   bother trying to do so only if it isn't already loaded,
@@ -724,7 +725,6 @@ int genphy_setup_forced(struct phy_device *phydev)
 }
 EXPORT_SYMBOL(genphy_setup_forced);
 
-
 /**
  * genphy_restart_aneg - Enable and Restart Autonegotiation
  * @phydev: target phy_device struct
@@ -1081,9 +1081,15 @@ static int phy_probe(struct device *dev)
 	phydrv = to_phy_driver(drv);
 	phydev->drv = phydrv;
 
-	/* Disable the interrupt if the PHY doesn't support it */
-	if (!(phydrv->flags & PHY_HAS_INTERRUPT))
+	/* Disable the interrupt if the PHY doesn't support it
+	 * but the interrupt is still a valid one
+	 */
+	if (!(phydrv->flags & PHY_HAS_INTERRUPT) &&
+			phy_interrupt_is_valid(phydev))
 		phydev->irq = PHY_POLL;
+
+	if (phydrv->flags & PHY_IS_INTERNAL)
+		phydev->is_internal = true;
 
 	mutex_lock(&phydev->lock);
 

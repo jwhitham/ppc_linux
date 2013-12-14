@@ -15,6 +15,7 @@
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/kexec.h>
 #include <linux/highmem.h>
 #include <linux/cpu.h>
@@ -144,11 +145,13 @@ static void __cpuinit mpc85xx_give_timebase(void)
 	{
 		u64 prev;
 
-		asm volatile("mftb %0" : "=r" (timebase));
+		asm volatile("mfspr %0, %1" : "=r" (timebase) :
+			     "i" (SPRN_TBRL));
 
 		do {
 			prev = timebase;
-			asm volatile("mftb %0" : "=r" (timebase));
+			asm volatile("mfspr %0, %1" : "=r" (timebase) :
+				     "i" (SPRN_TBRL));
 		} while (prev != timebase);
 	}
 #else
@@ -242,8 +245,7 @@ void platform_cpu_die(unsigned int cpu)
 	}
 }
 #else
-/* for e500v1 and e500v2 */
-static void __cpuinit smp_85xx_mach_cpu_die(void)
+static void smp_85xx_mach_cpu_die(void)
 {
 	unsigned int cpu = smp_processor_id();
 	u32 tmp;
@@ -286,7 +288,7 @@ static inline u32 read_spin_table_addr_l(void *spin_table)
 	return in_be32(&((struct epapr_spin_table *)spin_table)->addr_l);
 }
 
-static int __cpuinit smp_85xx_kick_cpu(int nr)
+static int smp_85xx_kick_cpu(int nr)
 {
 	unsigned long flags;
 	const u64 *cpu_rel_addr;
@@ -563,7 +565,7 @@ static void mpc85xx_smp_machine_kexec(struct kimage *image)
 }
 #endif /* CONFIG_KEXEC */
 
-static void __cpuinit smp_85xx_setup_cpu(int cpu_nr)
+static void smp_85xx_setup_cpu(int cpu_nr)
 {
 	if (smp_85xx_ops.probe == smp_mpic_probe)
 		mpic_setup_this_cpu();

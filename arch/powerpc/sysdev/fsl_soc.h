@@ -32,8 +32,6 @@ static inline int mpc85xx_pmc_set_wake(struct device *dev, bool enable)
 #define mpc85xx_pmc_set_lossless_ethernet(enable)	do { } while (0)
 #endif
 
-#if defined(CONFIG_FB_FSL_DIU) || defined(CONFIG_FB_FSL_DIU_MODULE)
-
 /* The different ports that the DIU can be connected to */
 enum fsl_diu_monitor_port {
 	FSL_DIU_PORT_DVI,	/* DVI */
@@ -54,7 +52,6 @@ struct platform_diu_data_ops {
 };
 
 extern struct platform_diu_data_ops diu_ops;
-#endif
 
 void fsl_hv_restart(char *cmd);
 void fsl_hv_halt(void);

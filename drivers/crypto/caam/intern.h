@@ -23,8 +23,6 @@
 #define JOBR_INTC_COUNT_THLD 0
 #endif
 
-#define CAAM_NAPI_WEIGHT	63
-
 /*
  * Storage for tracking each in-process entry moving across a ring
  * Each entry on an output ring needs one of these
@@ -39,13 +37,11 @@ struct caam_jrentry_info {
 
 /* Private sub-storage for a single JobR */
 struct caam_drv_private_jr {
-	struct list_head	list_node;
+	struct list_head	list_node;	/* Job Ring device list */
 	struct device		*dev;
-	struct platform_device *jr_pdev;/* points to platform device for JR */
 	int ridx;
 	struct caam_job_ring __iomem *rregs;	/* JobR's register space */
-	struct napi_struct __percpu *irqtask;
-	struct net_device __percpu *net_dev;
+	struct tasklet_struct irqtask;
 	int irq;			/* One per queue */
 
 	/* Number of scatterlist crypt transforms active on the JobR */
@@ -71,9 +67,6 @@ struct caam_drv_private {
 
 	struct device *dev;
 	struct platform_device **jrpdev; /* Alloc'ed array per sub-device */
-#ifdef CONFIG_FSL_QMAN
-	struct device *qidev;
-#endif
 	struct platform_device *pdev;
 
 	/* Physical-presence section */
@@ -89,6 +82,12 @@ struct caam_drv_private {
 	u8 total_jobrs;		/* Total Job Rings in device */
 	u8 qi_present;		/* Nonzero if QI present in device */
 	int secvio_irq;		/* Security violation interrupt number */
+
+#define	RNG4_MAX_HANDLES 2
+	/* RNG4 block */
+	u32 rng4_sh_init;	/* This bitmap shows which of the State
+				   Handles of the RNG4 block are initialized
+				   by this driver */
 
 	/*
 	 * debugfs entries for developer view into driver/device

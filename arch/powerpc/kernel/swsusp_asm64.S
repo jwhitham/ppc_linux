@@ -46,29 +46,19 @@
 #define SL_r29		0xe8
 #define SL_r30		0xf0
 #define SL_r31		0xf8
-#define SL_SPRG0	0x100
-#define SL_SPRG1	0x108
-#define SL_SPRG2	0x110
-#define SL_SPRG3	0x118
-#define SL_SPRG4	0x120
-#define SL_SPRG5	0x128
-#define SL_SPRG6	0x130
-#define SL_SPRG7	0x138
-#define SL_TCR		0x140
+#define SL_SPRG1	0x100
+#define SL_TCR		0x108
 #define SL_SIZE		SL_TCR+8
 
 /* these macros rely on the save area being
  * pointed to by r11 */
 
 #define SAVE_SPR(register)		\
-	mfspr	r0,SPRN_##register	;\
-	std	r0,SL_##register(r11)
+	mfspr	r0, SPRN_##register	;\
+	std	r0, SL_##register(r11)
 #define RESTORE_SPR(register)		\
-	ld	r0,SL_##register(r11)	;\
-	mtspr	SPRN_##register,r0
-#define RESTORE_SPRG(n)			\
-	ld	r0,SL_SPRG##n(r11)	;\
-	mtsprg	n,r0
+	ld	r0, SL_##register(r11)	;\
+	mtspr	SPRN_##register, r0
 #define SAVE_SPECIAL(special)		\
 	mf##special	r0		;\
 	std	r0, SL_##special(r11)
@@ -124,18 +114,14 @@ _GLOBAL(swsusp_arch_suspend)
 	SAVE_SPECIAL(MSR)
 	SAVE_SPECIAL(XER)
 #ifdef CONFIG_PPC_BOOK3S_64
+BEGIN_FW_FTR_SECTION
 	SAVE_SPECIAL(SDR1)
+END_FW_FTR_SECTION_IFCLR(FW_FEATURE_LPAR)
 #else
 	SAVE_SPR(TCR)
-	/* Save SPRGs */
-	SAVE_SPR(SPRG0)
+
+	/* Save SPRG1, SPRG1 be used save paca */
 	SAVE_SPR(SPRG1)
-	SAVE_SPR(SPRG2)
-	SAVE_SPR(SPRG3)
-	SAVE_SPR(SPRG4)
-	SAVE_SPR(SPRG5)
-	SAVE_SPR(SPRG6)
-	SAVE_SPR(SPRG7)
 #endif
 
 	/* we push the stack up 128 bytes but don't store the
@@ -247,28 +233,27 @@ nothing_to_copy:
 	/* can't use RESTORE_SPECIAL(MSR) */
 	ld	r0, SL_MSR(r11)
 	mtmsrd	r0, 0
+BEGIN_FW_FTR_SECTION
 	RESTORE_SPECIAL(SDR1)
+END_FW_FTR_SECTION_IFCLR(FW_FEATURE_LPAR)
 #else
-	/* Save SPRGs */
-	RESTORE_SPRG(0)
-	RESTORE_SPRG(1)
-	RESTORE_SPRG(2)
-	RESTORE_SPRG(3)
-	RESTORE_SPRG(4)
-	RESTORE_SPRG(5)
-	RESTORE_SPRG(6)
-	RESTORE_SPRG(7)
+	/* Restore SPRG1, be used to save paca */
+	ld	r0, SL_SPRG1(r11)
+	mtsprg	1, r0
 
 	RESTORE_SPECIAL(MSR)
 
 	/* Restore TCR and clear any pending bits in TSR. */
 	RESTORE_SPR(TCR)
 	lis	r0, (TSR_ENW | TSR_WIS | TSR_DIS | TSR_FIS)@h
-	mtspr	SPRN_TSR,r0
+	mtspr	SPRN_TSR, r0
 
 	/* Kick decrementer */
-	li	r0,1
+	li	r0, 1
 	mtdec	r0
+
+	/* Invalidate all tlbs */
+	bl	_tlbil_all
 #endif
 	RESTORE_SPECIAL(XER)
 

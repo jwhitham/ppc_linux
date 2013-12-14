@@ -19,6 +19,8 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/io.h>
 #include <linux/module.h>

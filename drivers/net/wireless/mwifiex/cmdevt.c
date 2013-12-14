@@ -570,6 +570,7 @@ int mwifiex_send_cmd_async(struct mwifiex_private *priv, uint16_t cmd_no,
 		case HostCmd_CMD_UAP_SYS_CONFIG:
 		case HostCmd_CMD_UAP_BSS_START:
 		case HostCmd_CMD_UAP_BSS_STOP:
+		case HostCmd_CMD_UAP_STA_DEAUTH:
 			ret = mwifiex_uap_prepare_cmd(priv, cmd_no, cmd_action,
 						      cmd_oid, data_buf,
 						      cmd_ptr);
@@ -1047,7 +1048,7 @@ mwifiex_cancel_pending_ioctl(struct mwifiex_adapter *adapter)
 	struct cmd_ctrl_node *cmd_node = NULL, *tmp_node = NULL;
 	unsigned long cmd_flags;
 	unsigned long scan_pending_q_flags;
-	uint16_t cancel_scan_cmd = false;
+	bool cancel_scan_cmd = false;
 
 	if ((adapter->curr_cmd) &&
 	    (adapter->curr_cmd->wait_q_enabled)) {
@@ -1154,7 +1155,7 @@ int mwifiex_ret_802_11_hs_cfg(struct mwifiex_private *priv,
 	uint32_t conditions = le32_to_cpu(phs_cfg->params.hs_config.conditions);
 
 	if (phs_cfg->action == cpu_to_le16(HS_ACTIVATE) &&
-	    adapter->iface_type == MWIFIEX_SDIO) {
+	    adapter->iface_type != MWIFIEX_USB) {
 		mwifiex_hs_activated_event(priv, true);
 		return 0;
 	} else {
@@ -1166,8 +1167,7 @@ int mwifiex_ret_802_11_hs_cfg(struct mwifiex_private *priv,
 	}
 	if (conditions != HS_CFG_CANCEL) {
 		adapter->is_hs_configured = true;
-		if (adapter->iface_type == MWIFIEX_USB ||
-		    adapter->iface_type == MWIFIEX_PCIE)
+		if (adapter->iface_type == MWIFIEX_USB)
 			mwifiex_hs_activated_event(priv, true);
 	} else {
 		adapter->is_hs_configured = false;

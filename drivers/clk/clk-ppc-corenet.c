@@ -11,6 +11,7 @@
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/of.h>
 #include <linux/slab.h>
@@ -258,7 +259,7 @@ static int __init ppc_corenet_clk_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id ppc_clk_ids[] __initdata = {
+static const struct of_device_id ppc_clk_ids[] __initconst = {
 	{ .compatible = "fsl,qoriq-clockgen-1.0", },
 	{ .compatible = "fsl,qoriq-clockgen-2.0", },
 	{}

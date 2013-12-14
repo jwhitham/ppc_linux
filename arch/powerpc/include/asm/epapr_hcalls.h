@@ -106,9 +106,9 @@ extern bool epapr_paravirt_enabled;
 extern u32 epapr_hypercall_start[];
 
 #ifdef CONFIG_EPAPR_PARAVIRT
-int __init epapr_paravirt_init(void);
+int __init epapr_paravirt_early_init(void);
 #else
-static inline int epapr_paravirt_init(void) { return 0; }
+static inline int epapr_paravirt_early_init(void) { return 0; }
 #endif
 
 /*

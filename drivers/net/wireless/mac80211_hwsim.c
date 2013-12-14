@@ -167,6 +167,7 @@ struct hwsim_vif_priv {
 	u32 magic;
 	u8 bssid[ETH_ALEN];
 	bool assoc;
+	bool bcn_en;
 	u16 aid;
 };
 
@@ -867,7 +868,7 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 
 	if (WARN_ON(skb->len < 10)) {
 		/* Should not happen; just a sanity check for addr1 use */
-		dev_kfree_skb(skb);
+		ieee80211_free_txskb(hw, skb);
 		return;
 	}
 
@@ -884,13 +885,13 @@ static void mac80211_hwsim_tx(struct ieee80211_hw *hw,
 	}
 
 	if (WARN(!channel, "TX w/o channel - queue = %d\n", txi->hw_queue)) {
-		dev_kfree_skb(skb);
+		ieee80211_free_txskb(hw, skb);
 		return;
 	}
 
 	if (data->idle && !data->tmp_chan) {
 		wiphy_debug(hw->wiphy, "Trying to TX when idle - reject\n");
-		dev_kfree_skb(skb);
+		ieee80211_free_txskb(hw, skb);
 		return;
 	}
 
@@ -1170,6 +1171,16 @@ static void mac80211_hwsim_configure_filter(struct ieee80211_hw *hw,
 	*total_flags = data->rx_filter;
 }
 
+static void mac80211_hwsim_bcn_en_iter(void *data, u8 *mac,
+				       struct ieee80211_vif *vif)
+{
+	unsigned int *count = data;
+	struct hwsim_vif_priv *vp = (void *)vif->drv_priv;
+
+	if (vp->bcn_en)
+		(*count)++;
+}
+
 static void mac80211_hwsim_bss_info_changed(struct ieee80211_hw *hw,
 					    struct ieee80211_vif *vif,
 					    struct ieee80211_bss_conf *info,
@@ -1180,7 +1191,8 @@ static void mac80211_hwsim_bss_info_changed(struct ieee80211_hw *hw,
 
 	hwsim_check_magic(vif);
 
-	wiphy_debug(hw->wiphy, "%s(changed=0x%x)\n", __func__, changed);
+	wiphy_debug(hw->wiphy, "%s(changed=0x%x vif->addr=%pM)\n",
+		    __func__, changed, vif->addr);
 
 	if (changed & BSS_CHANGED_BSSID) {
 		wiphy_debug(hw->wiphy, "%s: BSSID changed: %pM\n",
@@ -1202,6 +1214,7 @@ static void mac80211_hwsim_bss_info_changed(struct ieee80211_hw *hw,
 
 	if (changed & BSS_CHANGED_BEACON_ENABLED) {
 		wiphy_debug(hw->wiphy, "  BCN EN: %d\n", info->enable_beacon);
+		vp->bcn_en = info->enable_beacon;
 		if (data->started &&
 		    !hrtimer_is_queued(&data->beacon_timer.timer) &&
 		    info->enable_beacon) {
@@ -1215,8 +1228,16 @@ static void mac80211_hwsim_bss_info_changed(struct ieee80211_hw *hw,
 			tasklet_hrtimer_start(&data->beacon_timer,
 					      ns_to_ktime(until_tbtt * 1000),
 					      HRTIMER_MODE_REL);
-		} else if (!info->enable_beacon)
-			tasklet_hrtimer_cancel(&data->beacon_timer);
+		} else if (!info->enable_beacon) {
+			unsigned int count = 0;
+			ieee80211_iterate_active_interfaces(
+				data->hw, IEEE80211_IFACE_ITER_NORMAL,
+				mac80211_hwsim_bcn_en_iter, &count);
+			wiphy_debug(hw->wiphy, "  beaconing vifs remaining: %u",
+				    count);
+			if (count == 0)
+				tasklet_hrtimer_cancel(&data->beacon_timer);
+		}
 	}
 
 	if (changed & BSS_CHANGED_ERP_CTS_PROT) {
@@ -1364,6 +1385,7 @@ static const struct nla_policy hwsim_testmode_policy[HWSIM_TM_ATTR_MAX + 1] = {
 static int hwsim_fops_ps_write(void *dat, u64 val);
 
 static int mac80211_hwsim_testmode_cmd(struct ieee80211_hw *hw,
+				       struct ieee80211_vif *vif,
 				       void *data, int len)
 {
 	struct mac80211_hwsim_data *hwsim = hw->priv;
@@ -2075,7 +2097,7 @@ out:
 }
 
 /* Generic Netlink operations array */
-static struct genl_ops hwsim_ops[] = {
+static const struct genl_ops hwsim_ops[] = {
 	{
 		.cmd = HWSIM_CMD_REGISTER,
 		.policy = hwsim_genl_policy,
@@ -2126,8 +2148,7 @@ static int hwsim_init_netlink(void)
 
 	printk(KERN_INFO "mac80211_hwsim: initializing netlink\n");
 
-	rc = genl_register_family_with_ops(&hwsim_genl_family,
-		hwsim_ops, ARRAY_SIZE(hwsim_ops));
+	rc = genl_register_family_with_ops(&hwsim_genl_family, hwsim_ops);
 	if (rc)
 		goto failure;
 
@@ -2309,7 +2330,9 @@ static int __init init_mac80211_hwsim(void)
 			hw->flags |= IEEE80211_HW_SUPPORTS_RC_TABLE;
 
 		hw->wiphy->flags |= WIPHY_FLAG_SUPPORTS_TDLS |
-				    WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
+				    WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL |
+				    WIPHY_FLAG_AP_UAPSD;
+		hw->wiphy->features |= NL80211_FEATURE_ACTIVE_MONITOR;
 
 		/* ask mac80211 to reserve space for magic */
 		hw->vif_data_size = sizeof(struct hwsim_vif_priv);
@@ -2525,8 +2548,10 @@ static int __init init_mac80211_hwsim(void)
 	}
 
 	hwsim_mon = alloc_netdev(0, "hwsim%d", hwsim_mon_setup);
-	if (hwsim_mon == NULL)
+	if (hwsim_mon == NULL) {
+		err = -ENOMEM;
 		goto failed;
+	}
 
 	rtnl_lock();
 

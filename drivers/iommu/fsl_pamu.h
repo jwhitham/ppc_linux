@@ -19,6 +19,8 @@
 #ifndef __FSL_PAMU_H
 #define __FSL_PAMU_H
 
+#include <asm/fsl_pamu_stash.h>
+
 /* Bit Field macros
  *	v = bit field variable; m = mask, m##_SHIFT = shift, x = value to load
  */
@@ -85,6 +87,9 @@ struct pamu_mmap_regs {
 /* PAMU Revision Registers */
 #define PAMU_PR1 0x0BF8
 #define PAMU_PR2 0x0BFC
+
+/* PAMU version mask */
+#define PAMU_PR1_MASK 0xffff
 
 /* PAMU Capabilities Registers */
 #define PAMU_PC1 0x0C00
@@ -384,12 +389,6 @@ struct ome {
 #define EOE_WWSAOL      0x1e    /* Write with stash allocate only and lock */
 #define EOE_VALID       0x80
 
-enum  paace_field {
-	PAACE_STASH_FIELD,
-	PAACE_OMI_FIELD,
-	PAACE_FIELD_MAX,
-};
-
 /* Function prototypes */
 int pamu_domain_init(void);
 int pamu_enable_liodn(int liodn);
@@ -404,9 +403,8 @@ int pamu_config_spaace(int liodn, u32 subwin_cnt, u32 subwin_addr,
 
 u32 get_stash_id(u32 stash_dest_hint, u32 vcpu);
 void get_ome_index(u32 *omi_index, struct device *dev);
-int  pamu_update_paace_field(int liodn, u32 subwin, int field, u32 value);
+int  pamu_update_paace_stash(int liodn, u32 subwin, u32 value);
 int pamu_disable_spaace(int liodn, u32 subwin);
 u32 pamu_get_max_subwin_cnt(void);
-void enable_default_dma_window(int liodn);
 
 #endif  /* __FSL_PAMU_H */

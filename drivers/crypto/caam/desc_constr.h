@@ -359,7 +359,7 @@ do { \
 		append_u64(desc, data); \
 	else \
 		append_u32(desc, data); \
-} while (0);
+} while (0)
 
 #define append_math_add_imm_u64(desc, dest, src0, src1, data) \
 	APPEND_MATH_IMM_u64(ADD, desc, dest, src0, src1, data)

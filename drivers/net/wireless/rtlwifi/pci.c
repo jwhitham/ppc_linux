@@ -35,6 +35,13 @@
 #include "efuse.h"
 #include <linux/export.h>
 #include <linux/kmemleak.h>
+#include <linux/module.h>
+
+MODULE_AUTHOR("lizhaoming	<chaoming_li@realsil.com.cn>");
+MODULE_AUTHOR("Realtek WlanFAE	<wlanfae@realtek.com>");
+MODULE_AUTHOR("Larry Finger	<Larry.FInger@lwfinger.net>");
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("PCI basic driver for rtlwifi");
 
 static const u16 pcibridge_vendors[PCI_BRIDGE_VENDOR_MAX] = {
 	PCI_VENDOR_ID_INTEL,
@@ -729,7 +736,6 @@ static void _rtl_pci_rx_interrupt(struct ieee80211_hw *hw)
 
 	struct rtl_stats stats = {
 		.signal = 0,
-		.noise = -98,
 		.rate = 0,
 	};
 	int index = rtlpci->rx_ring[rx_queue_idx].idx;
@@ -1006,19 +1012,6 @@ static void _rtl_pci_prepare_bcn_tasklet(struct ieee80211_hw *hw)
 				    &temp_one);
 
 	return;
-}
-
-static void rtl_lps_change_work_callback(struct work_struct *work)
-{
-	struct rtl_works *rtlworks =
-	    container_of(work, struct rtl_works, lps_change_work);
-	struct ieee80211_hw *hw = rtlworks->hw;
-	struct rtl_priv *rtlpriv = rtl_priv(hw);
-
-	if (rtlpriv->enter_ps)
-		rtl_lps_enter(hw);
-	else
-		rtl_lps_leave(hw);
 }
 
 static void _rtl_pci_init_trx_var(struct ieee80211_hw *hw)
@@ -1899,7 +1892,7 @@ int rtl_pci_probe(struct pci_dev *pdev,
 	rtlpriv->rtlhal.interface = INTF_PCI;
 	rtlpriv->cfg = (struct rtl_hal_cfg *)(id->driver_data);
 	rtlpriv->intf_ops = &rtl_pci_ops;
-	rtlpriv->glb_var = &global_var;
+	rtlpriv->glb_var = &rtl_global_var;
 
 	/*
 	 *init dbgp flags before all
@@ -2015,7 +2008,6 @@ fail2:
 fail1:
 	if (hw)
 		ieee80211_free_hw(hw);
-	pci_set_drvdata(pdev, NULL);
 	pci_disable_device(pdev);
 
 	return err;
@@ -2069,8 +2061,6 @@ void rtl_pci_disconnect(struct pci_dev *pdev)
 	pci_disable_device(pdev);
 
 	rtl_pci_disable_aspm(hw);
-
-	pci_set_drvdata(pdev, NULL);
 
 	ieee80211_free_hw(hw);
 }
