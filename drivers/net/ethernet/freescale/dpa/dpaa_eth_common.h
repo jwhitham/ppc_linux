@@ -125,4 +125,16 @@ void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	struct sk_buff *skb, struct qm_fd *fd, char *parse_results);
 
+struct proxy_device {
+		struct mac_device *mac_dev;
+};
+
+/* mac device control functions exposed by proxy interface*/
+int dpa_proxy_start(struct net_device *net_dev);
+int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev);
+int dpa_proxy_set_mac_address(struct proxy_device *proxy_dev,
+			  struct net_device *net_dev);
+int dpa_proxy_set_rx_mode(struct proxy_device *proxy_dev,
+		      struct net_device *net_dev);
+
 #endif /* __DPAA_ETH_COMMON_H */

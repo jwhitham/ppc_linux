@@ -4897,52 +4897,8 @@ int qman_shutdown_fq(u32 fqid)
 	return ret;
 }
 
-static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
-							unsigned int cpu)
+const struct qm_portal_config *qman_get_qm_portal_config(
+						struct qman_portal *portal)
 {
-	struct iommu_stash_attribute stash_attr;
-	int ret;
-
-	if (pcfg->iommu_domain) {
-		stash_attr.cpu = cpu;
-		stash_attr.cache = IOMMU_ATTR_CACHE_L1;
-		stash_attr.window = ~(u32)0;
-		ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				DOMAIN_ATTR_PAMU_STASH,	&stash_attr);
-		if (ret < 0) {
-			pr_err("Failed to update pamu stash setting\n");
-			return;
-		}
-	}
-#ifdef CONFIG_FSL_QMAN_CONFIG
-	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
-#endif
-		pr_warning("Failed to update portal's stash request queue\n");
+	return portal->sharing_redirect ? NULL : portal->config;
 }
-
-int qman_portal_is_sharing_redirect(struct qman_portal *portal)
-{
-	return portal->sharing_redirect ? 1 : 0;
-}
-
-/* Migrate the portal to the boot cpu(cpu0) for offline cpu */
-void qman_migrate_portal(struct qman_portal *portal)
-{
-	unsigned long irqflags __maybe_unused;
-	PORTAL_IRQ_LOCK(portal, irqflags);
-	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(0));
-	qman_portal_update_sdest(portal->config, 0);
-	PORTAL_IRQ_UNLOCK(portal, irqflags);
-}
-
-#ifdef CONFIG_HOTPLUG_CPU
-/* Migrate the portal back to the affined cpu once that cpu appears.*/
-void qman_migrate_portal_back(struct qman_portal *portal, unsigned int cpu)
-{
-	unsigned long irqflags __maybe_unused;
-	PORTAL_IRQ_LOCK(portal, irqflags);
-	qman_portal_update_sdest(portal->config, cpu);
-	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(cpu));
-	PORTAL_IRQ_UNLOCK(portal, irqflags);
-}
-#endif /* CONFIG_HOTPLUG_CPU */

@@ -390,10 +390,6 @@ int qman_ceetm_query_ccgr(struct qm_mcc_ceetm_ccgr_query *ccgr_query,
 				struct qm_mcr_ceetm_ccgr_query *response);
 int qman_ceetm_get_xsfdr(enum qm_dc_portal portal, unsigned int *num);
 
-/* Portal migration */
 extern void *affine_portals[NR_CPUS];
-int qman_portal_is_sharing_redirect(struct qman_portal *portal);
-void qman_migrate_portal(struct qman_portal *portal);
-#ifdef CONFIG_HOTPLUG_CPU
-void qman_migrate_portal_back(struct qman_portal *portal, unsigned int cpu);
-#endif /* CONFIG_HOTPLUG_CPU */
+const struct qm_portal_config *qman_get_qm_portal_config(
+						struct qman_portal *portal);

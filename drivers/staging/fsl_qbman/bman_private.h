@@ -156,10 +156,6 @@ u32 bm_pool_free_buffers(u32 bpid);
 __init int bman_init(void);
 __init int bman_resource_init(void);
 
-/* Portal migration */
-int bman_portal_is_sharing_redirect(struct bman_portal *portal);
-void bman_migrate_portal(struct bman_portal *portal);
-#ifdef CONFIG_HOTPLUG_CPU
-void bman_migrate_portal_back(struct bman_portal *portal, unsigned int cpu);
-#endif /* CONFIG_HOTPLUG_CPU */
+const struct bm_portal_config *bman_get_bm_portal_config(
+						struct bman_portal *portal);
 #endif /* CONFIG_FSL_BMAN_CONFIG */

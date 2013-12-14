@@ -1048,27 +1048,8 @@ int bman_shutdown_pool(u32 bpid)
 }
 EXPORT_SYMBOL(bman_shutdown_pool);
 
-int bman_portal_is_sharing_redirect(struct bman_portal *portal)
+const struct bm_portal_config *bman_get_bm_portal_config(
+						struct bman_portal *portal)
 {
-	return portal->sharing_redirect ? 1 : 0;
+	return portal->sharing_redirect ? NULL : portal->config;
 }
-
-/* Migrate the portal to the boot cpu(cpu0) for offline cpu */
-void bman_migrate_portal(struct bman_portal *portal)
-{
-	unsigned long irqflags __maybe_unused;
-	PORTAL_IRQ_LOCK(portal, irqflags);
-	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(0));
-	PORTAL_IRQ_UNLOCK(portal, irqflags);
-}
-
-#ifdef CONFIG_HOTPLUG_CPU
-/* Migrate the portal back to the affined cpu once that cpu reappears.*/
-void bman_migrate_portal_back(struct bman_portal *portal, unsigned int cpu)
-{
-	unsigned long irqflags __maybe_unused;
-	PORTAL_IRQ_LOCK(portal, irqflags);
-	irq_set_affinity(portal->config->public_cfg.irq, cpumask_of(cpu));
-	PORTAL_IRQ_UNLOCK(portal, irqflags);
-}
-#endif /* CONFIG_HOTPLUG_CPU */

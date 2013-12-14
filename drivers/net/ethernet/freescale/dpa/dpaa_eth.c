@@ -116,6 +116,8 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 
 uint8_t dpa_priv_common_bpid;
 
+extern u16 qman_portal_max;
+
 /* A set of callbacks for hooking into the fastpath at different points. */
 struct dpaa_eth_hooks_s dpaa_eth_hooks;
 /*
@@ -275,12 +277,15 @@ void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 
 static int dpaa_eth_poll(struct napi_struct *napi, int budget)
 {
-	int cleaned = qman_poll_dqrr(budget);
+	struct dpa_napi_portal *np =
+			container_of(napi, struct dpa_napi_portal, napi);
+
+	int cleaned = qman_p_poll_dqrr(np->p, budget);
 
 	if (cleaned < budget) {
 		int tmp;
 		napi_complete(napi);
-		tmp = qman_irqsource_add(QM_PIRQ_DQRI);
+		tmp = qman_p_irqsource_add(np->p, QM_PIRQ_DQRI);
 		BUG_ON(tmp);
 	}
 
@@ -337,7 +342,7 @@ priv_rx_error_dqrr(struct qman_portal		*portal,
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (dpaa_eth_napi_schedule(percpu_priv))
+	if (dpaa_eth_napi_schedule(percpu_priv, portal))
 		return qman_cb_dqrr_stop;
 
 	if (unlikely(dpaa_eth_refill_bpools(priv->dpa_bp)))
@@ -371,7 +376,7 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (unlikely(dpaa_eth_napi_schedule(percpu_priv)))
+	if (unlikely(dpaa_eth_napi_schedule(percpu_priv, portal)))
 		return qman_cb_dqrr_stop;
 
 	/* Vale of plenty: make sure we didn't run out of buffers */
@@ -383,7 +388,7 @@ priv_rx_default_dqrr(struct qman_portal		*portal,
 		 */
 		dpa_fd_release(net_dev, &dq->fd);
 	else
-		_dpa_rx(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
+		_dpa_rx(net_dev, portal, priv, percpu_priv, &dq->fd, fq->fqid);
 
 	return qman_cb_dqrr_consume;
 }
@@ -402,7 +407,7 @@ priv_tx_conf_error_dqrr(struct qman_portal		*portal,
 
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (dpaa_eth_napi_schedule(percpu_priv))
+	if (dpaa_eth_napi_schedule(percpu_priv, portal))
 		return qman_cb_dqrr_stop;
 
 	_dpa_tx_error(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
@@ -428,7 +433,7 @@ priv_tx_conf_default_dqrr(struct qman_portal		*portal,
 	/* Non-migratable context, safe to use __this_cpu_ptr */
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 
-	if (dpaa_eth_napi_schedule(percpu_priv))
+	if (dpaa_eth_napi_schedule(percpu_priv, portal))
 		return qman_cb_dqrr_stop;
 
 	_dpa_tx_conf(net_dev, priv, percpu_priv, &dq->fd, fq->fqid);
@@ -479,22 +484,26 @@ static const dpa_fq_cbs_t private_fq_cbs = {
 static void dpaa_eth_napi_enable(struct dpa_priv_s *priv)
 {
 	struct dpa_percpu_priv_s *percpu_priv;
-	int i;
+	int i, j;
 
 	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		napi_enable(&percpu_priv->napi);
+
+		for (j = 0; j < qman_portal_max; j++)
+			napi_enable(&percpu_priv->np[j].napi);
 	}
 }
 
 static void dpaa_eth_napi_disable(struct dpa_priv_s *priv)
 {
 	struct dpa_percpu_priv_s *percpu_priv;
-	int i;
+	int i, j;
 
 	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
-		napi_disable(&percpu_priv->napi);
+
+		for (j = 0; j < qman_portal_max; j++)
+			napi_disable(&percpu_priv->np[j].napi);
 	}
 }
 
@@ -543,11 +552,17 @@ static void dpaa_eth_poll_controller(struct net_device *net_dev)
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 	struct dpa_percpu_priv_s *percpu_priv =
 		__this_cpu_ptr(priv->percpu_priv);
-	struct napi_struct napi = percpu_priv->napi;
+	struct qman_portal *p;
+	const struct qman_portal_config *pc;
+	struct dpa_napi_portal *np;
 
-	qman_irqsource_remove(QM_PIRQ_DQRI);
-	qman_poll_dqrr(napi.weight);
-	qman_irqsource_add(QM_PIRQ_DQRI);
+	p = (struct qman_portal *)qman_get_affine_portal(smp_processor_id());
+	pc = qman_p_get_portal_config(p);
+	np = &percpu_priv->np[pc->index];
+
+	qman_p_irqsource_remove(np->p, QM_PIRQ_DQRI);
+	qman_p_poll_dqrr(np->p, np->napi.weight);
+	qman_p_irqsource_add(np->p, QM_PIRQ_DQRI);
 }
 #endif
 
@@ -573,6 +588,50 @@ static const struct net_device_ops dpa_private_ops = {
 #endif
 };
 
+static int dpa_private_napi_add(struct net_device *net_dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i, cpu;
+
+	for_each_possible_cpu(cpu) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, cpu);
+
+		percpu_priv->np = devm_kzalloc(net_dev->dev.parent,
+			qman_portal_max * sizeof(struct dpa_napi_portal),
+			GFP_KERNEL);
+
+		if (unlikely(percpu_priv->np == NULL)) {
+			dev_err(net_dev->dev.parent, "devm_kzalloc() failed\n");
+			return -ENOMEM;
+		}
+
+		for (i = 0; i < qman_portal_max; i++)
+			netif_napi_add(net_dev, &percpu_priv->np[i].napi,
+					dpaa_eth_poll, DPA_NAPI_WEIGHT);
+	}
+
+	return 0;
+}
+
+void dpa_private_napi_del(struct net_device *net_dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i, cpu;
+
+	for_each_possible_cpu(cpu) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, cpu);
+
+		if (percpu_priv->np) {
+			for (i = 0; i < qman_portal_max; i++)
+				netif_napi_del(&percpu_priv->np[i].napi);
+
+			devm_kfree(net_dev->dev.parent, percpu_priv->np);
+		}
+	}
+}
+
 static int dpa_private_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev)
 {
@@ -587,13 +646,9 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	for_each_possible_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 		percpu_priv->net_dev = net_dev;
-
-		netif_napi_add(net_dev, &percpu_priv->napi, dpaa_eth_poll,
-			       DPA_NAPI_WEIGHT);
 	}
 
 	net_dev->netdev_ops = &dpa_private_ops;
-
 	mac_addr = priv->mac_dev->addr;
 
 	net_dev->mem_start = priv->mac_dev->res->start;
@@ -827,6 +882,12 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 		memset(percpu_priv, 0, sizeof(*percpu_priv));
 	}
 
+	/* Initialize NAPI */
+	err = dpa_private_napi_add(net_dev);
+
+	if (err < 0)
+		goto napi_add_failed;
+
 	err = dpa_private_netdev_init(dpa_node, net_dev);
 
 	if (err < 0)
@@ -838,9 +899,12 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	return 0;
 
+napi_add_failed:
 netdev_init_failed:
-	if (net_dev)
+	if (net_dev) {
+		dpa_private_napi_del(net_dev);
 		free_percpu(priv->percpu_priv);
+	}
 alloc_percpu_failed:
 fq_alloc_failed:
 	if (net_dev) {
