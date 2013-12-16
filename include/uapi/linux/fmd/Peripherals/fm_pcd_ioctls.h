@@ -1213,8 +1213,10 @@ typedef struct ioc_fm_pcd_kg_scheme_params_t {
 /**************************************************************************//**
  @Collection
 *//***************************************************************************/
+#if DPAA_VERSION >= 11
 #define IOC_FM_PCD_CC_STATS_MAX_NUM_OF_FLR      10  /* Maximal supported number of frame length ranges */
 #define IOC_FM_PCD_CC_STATS_FLR_SIZE            2   /* Size in bytes of a frame length range limit */
+#endif /* DPAA_VERSION >= 11 */
 #define IOC_FM_PCD_CC_STATS_FLR_COUNT_SIZE      4   /* Size in bytes of a frame length range counter */
 /* @} */
 

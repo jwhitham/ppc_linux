@@ -584,6 +584,7 @@ switch (hdr)                                                \
     case (HEADER_TYPE_LLC_SNAP):         num = 1;  break;   \
     case (HEADER_TYPE_VLAN):             num = 2;  break;   \
     case (HEADER_TYPE_PPPoE):            num = 3;  break;   \
+    case (HEADER_TYPE_PPP):              num = 3;  break;   \
     case (HEADER_TYPE_MPLS):             num = 4;  break;   \
     case (HEADER_TYPE_IPv4):             num = 5;  break;   \
     case (HEADER_TYPE_IPv6):             num = 6;  break;   \

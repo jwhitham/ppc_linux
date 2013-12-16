@@ -1520,8 +1520,9 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                 swDefault = GetGenericSwDefault(swDefaults, numOfSwDefaults, code);
                 if (swDefault == e_FM_PCD_KG_DFLT_ILLEGAL)
                     DBG(WARNING, ("No sw default configured"));
+                else
+                    genTmp |= swDefault << KG_SCH_GEN_DEF_SHIFT;
 
-                genTmp |= swDefault << KG_SCH_GEN_DEF_SHIFT;
                 genTmp |= KG_SCH_GEN_MASK;
                 p_SchemeRegs->kgse_gec[currGenId] = genTmp;
                 /* save in driver structure */
