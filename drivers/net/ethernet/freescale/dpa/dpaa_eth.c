@@ -1012,7 +1012,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
-	printk(KERN_INFO "fsl_dpa: Probed interface %s\n", net_dev->name);
+	pr_info("fsl_dpa: Probed interface %s\n", net_dev->name);
 
 	return 0;
 
@@ -1069,8 +1069,7 @@ static int __init __cold dpa_load(void)
 {
 	int	 _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": "
-		DPA_DESCRIPTION " (" VERSION ")\n");
+	pr_info(DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();

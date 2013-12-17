@@ -435,7 +435,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
 
-	printk(KERN_INFO "fsl_dpa_macless: Probed %s interface as %s\n",
+	pr_info("fsl_dpa_macless: Probed %s interface as %s\n",
 			priv->if_type, net_dev->name);
 
 	return 0;
@@ -467,8 +467,7 @@ static int __init __cold dpa_macless_load(void)
 {
 	int	 _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": "
-		DPA_DESCRIPTION " (" VERSION ")\n");
+	pr_info(DPA_DESCRIPTION " (" VERSION ")\n");
 
 	/* Initialize dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();

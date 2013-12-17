@@ -608,8 +608,7 @@ static int __init __cold oh_port_load(void)
 {
 	int _errno;
 
-	printk(KERN_INFO KBUILD_MODNAME ": "
-	       OH_MOD_DESCRIPTION " (" VERSION ")\n");
+	pr_info(OH_MOD_DESCRIPTION " (" VERSION ")\n");
 
 	_errno = platform_driver_register(&oh_port_driver);
 	if (_errno < 0) {
