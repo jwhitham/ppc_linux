@@ -93,6 +93,10 @@ typedef enum dpaa_eth_hook_result (*dpaa_eth_egress_hook_t)(
 		struct sk_buff *skb, struct net_device *net_dev);
 typedef enum dpaa_eth_hook_result (*dpaa_eth_confirm_hook_t)(
 		struct net_device *net_dev, const struct qm_fd *fd, u32 fqid);
+
+/* used in napi related functions */
+extern u16 qman_portal_max;
+
 #if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
 /* Various hooks used for unit-testing and/or fastpath optimizations.
  * Currently only one set of such hooks is supported.

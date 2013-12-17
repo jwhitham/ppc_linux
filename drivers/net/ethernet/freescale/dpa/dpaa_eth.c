@@ -120,8 +120,6 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 
 uint8_t dpa_priv_common_bpid;
 
-extern u16 qman_portal_max;
-
 #ifdef CONFIG_PM
 
 static int dpaa_suspend_noirq(struct device *dev)
