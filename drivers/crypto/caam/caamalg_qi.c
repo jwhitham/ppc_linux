@@ -676,7 +676,6 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	fd_sgt[1].__reserved3 = 0;
 	fd_sgt[1].offset = 0;
 
-
 	if (!all_contig) {
 		fd_sgt[1].extension = 1;
 		fd_sgt[1].addr = qm_sg_dma;
@@ -696,28 +695,28 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 		fd_sgt[1].addr = sg_dma_address(req->assoc);
 	}
 
-	if (dst_nents) {
-		fd_sgt[0].addr = qm_sg_dma +
-				(sizeof(struct qm_sg_entry) * qm_sg_index);
-		fd_sgt[0].extension = 1;
-
+	if (dst_nents)
 		sg_to_qm_sg_last(req->dst, dst_nents,
 				 sg_table + qm_sg_index, 0);
+
+	if (req->dst == req->src) {
+		if (src_nents <= 1) {
+			fd_sgt[0].addr = sg_dma_address(req->src);
+			fd_sgt[0].extension = 0;
+		} else {
+			fd_sgt[0].extension = 1;
+			fd_sgt[0].addr = fd_sgt[1].addr +
+				sizeof(struct qm_sg_entry) *
+					((edesc->assoc_nents ? : 1) + 1);
+		}
 	} else {
-		if (req->dst != req->src) {
+		if (!dst_nents) {
 			fd_sgt[0].addr = sg_dma_address(req->dst);
 			fd_sgt[0].extension = 0;
 		} else {
-			if (src_nents <= 1) {
-				fd_sgt[0].addr = sg_dma_address(req->dst);
-				fd_sgt[0].extension = 0;
-			} else {
-				fd_sgt[0].extension = 1;
-				fd_sgt[0].addr = qm_sg_dma +
+			fd_sgt[0].addr = qm_sg_dma +
 				(sizeof(struct qm_sg_entry) * qm_sg_index);
-				sg_to_qm_sg_last(req->src, src_nents,
-						 sg_table + qm_sg_index, 0);
-			}
+			fd_sgt[0].extension = 1;
 		}
 	}
 
