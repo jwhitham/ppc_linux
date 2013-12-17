@@ -93,6 +93,7 @@ int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 	size_t size;
 	struct list_head *list;
 	int num_retries = 0;
+	unsigned long flags;
 
 	fd.cmd = 0;
 	fd.format = qm_fd_compound;
@@ -109,9 +110,11 @@ int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 	req->hwaddr = qm_fd_addr(&fd);
 	list = &per_cpu(pcpu_qipriv.bklog_list, req->drv_ctx->cpu);
 
-	spin_lock(&per_cpu(pcpu_qipriv.listlock, req->drv_ctx->cpu));
+	spin_lock_irqsave(&per_cpu(pcpu_qipriv.listlock, req->drv_ctx->cpu),
+			  flags);
 	list_add_tail(&req->hdr__, list);
-	spin_unlock(&per_cpu(pcpu_qipriv.listlock, req->drv_ctx->cpu));
+	spin_unlock_irqrestore(&per_cpu(pcpu_qipriv.listlock,
+					req->drv_ctx->cpu), flags);
 	atomic_inc(&per_cpu(pcpu_qipriv.pending, req->drv_ctx->cpu));
 
 	do {
@@ -126,9 +129,11 @@ int caam_qi_enqueue(struct device *qidev, struct caam_drv_req *req)
 
 	dev_err(qidev, "qman_enqueue failed: %d\n", ret);
 
-	spin_lock(&per_cpu(pcpu_qipriv.listlock, req->drv_ctx->cpu));
+	spin_lock_irqsave(&per_cpu(pcpu_qipriv.listlock, req->drv_ctx->cpu),
+			  flags);
 	list_del(&req->hdr__);
-	spin_unlock(&per_cpu(pcpu_qipriv.listlock, req->drv_ctx->cpu));
+	spin_unlock_irqrestore(&per_cpu(pcpu_qipriv.listlock,
+					req->drv_ctx->cpu), flags);
 	atomic_dec(&per_cpu(pcpu_qipriv.pending, req->drv_ctx->cpu));
 
 	dma_unmap_single(qidev, fd.addr, size, DMA_BIDIRECTIONAL);
@@ -140,6 +145,7 @@ struct caam_drv_req *lookup_drv_req(const struct qm_fd *fd, int cpu)
 {
 	struct list_head *pos, *list, *n;
 	struct caam_drv_req *req;
+	unsigned long flags;
 
 	list = &per_cpu(pcpu_qipriv.bklog_list, cpu);
 	list_for_each_safe(pos, n, list) {
@@ -148,11 +154,12 @@ struct caam_drv_req *lookup_drv_req(const struct qm_fd *fd, int cpu)
 		if (req->hwaddr == qm_fd_addr(fd)) {
 			BUG_ON(req->drv_ctx->cpu != cpu);
 
-			spin_lock(&per_cpu(pcpu_qipriv.listlock,
-					   req->drv_ctx->cpu));
+			spin_lock_irqsave(&per_cpu(pcpu_qipriv.listlock,
+						   req->drv_ctx->cpu), flags);
 			list_del(&req->hdr__);
-			spin_unlock(&per_cpu(pcpu_qipriv.listlock,
-					     req->drv_ctx->cpu));
+			spin_unlock_irqrestore(&per_cpu(pcpu_qipriv.listlock,
+							req->drv_ctx->cpu),
+					       flags);
 			atomic_dec(&per_cpu(pcpu_qipriv.pending,
 					    req->drv_ctx->cpu));
 			return req;
