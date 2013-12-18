@@ -90,7 +90,7 @@ static int oh_resume_noirq(struct device *dev)
 	return fm_port_resume(oh_config->oh_port);
 }
 
-static struct dev_pm_ops oh_pm_ops = {
+static const struct dev_pm_ops oh_pm_ops = {
 	.suspend_noirq = oh_suspend_noirq,
 	.resume_noirq = oh_resume_noirq,
 };
