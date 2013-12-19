@@ -448,18 +448,27 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 	 * Check for A-005055: A glitch is generated on the card clock
 	 * due to software reset or a clock change
 	 * Impact list:
-	 * T4240-R1.0 B4860-4420-R1.0-R2.0 P3041-R1.0 P3041-R2.0
-	 * P2041-R1.0 P2041-R1.1 P2041-R2.0 P1010-R1.0
+	 * T4240-4160-R1.0 B4860-4420-R1.0-R2.0 P3041-R1.0-R1.1-R2.0
+	 * P2041-2040-R1.0-R1.1-R2.0 P1010-1014-R1.0 P5020-5010-R1.0-R2.0
+	 * P5040-5021-R1.0-R2.0-R2.1
 	 */
 	if (((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x10)) ||
+	    ((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_T4160) && (SVR_REV(svr) == 0x10)) ||
+	    ((SVR_SOC_VER(svr) == SVR_T4160) && (SVR_REV(svr) == 0x20)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x20)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x20)) ||
-	    ((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)) ||
-	    ((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) == 0x10)) ||
-	    ((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) == 0x20)) ||
-	    ((SVR_SOC_VER(svr) == SVR_P2041) && (SVR_REV(svr) <= 0x20)))
+	    ((SVR_SOC_VER(svr) == SVR_P5040) && (SVR_REV(svr) <= 0x21)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P5020) && (SVR_REV(svr) <= 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P5021) && (SVR_REV(svr) <= 0x21)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P5010) && (SVR_REV(svr) <= 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P3041) && (SVR_REV(svr) <= 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P2041) && (SVR_REV(svr) <= 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P2040) && (SVR_REV(svr) <= 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P1014) && (SVR_REV(svr) == 0x10)) ||
+	    ((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)))
 		host->quirks2 |= SDHCI_QUIRK2_DISABLE_CLOCK_BEFORE_RESET;
 }
 
