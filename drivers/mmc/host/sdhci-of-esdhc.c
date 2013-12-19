@@ -499,6 +499,21 @@ static int esdhc_of_get_cd(struct sdhci_host *host)
 	return !!present;
 }
 
+static void esdhc_get_pltfm_irq(struct sdhci_host *host, u32 *irq)
+{
+	*irq |= ESDHC_INT_DMA_ERROR;
+}
+
+static void esdhc_pltfm_irq_handler(struct sdhci_host *host, u32 intmask)
+{
+	if (intmask & (ESDHC_INT_DMA_ERROR | SDHCI_INT_ADMA_ERROR)) {
+		host->data->error = -EIO;
+		pr_err("%s: ADMA error\n", mmc_hostname(host->mmc));
+		sdhci_show_adma_error(host);
+		esdhci_of_adma_workaround(host, intmask);
+	}
+}
+
 static int esdhc_pltfm_bus_width(struct sdhci_host *host, int width)
 {
 	u32 ctrl;
@@ -534,6 +549,8 @@ static const struct sdhci_ops sdhci_esdhc_ops = {
 	.enable_dma = esdhc_of_enable_dma,
 	.get_max_clock = esdhc_of_get_max_clock,
 	.get_min_clock = esdhc_of_get_min_clock,
+	.get_platform_irq = esdhc_get_pltfm_irq,
+	.handle_platform_irq = esdhc_pltfm_irq_handler,
 	.platform_reset_enter = esdhc_of_platform_reset_enter,
 	.platform_reset_exit = esdhc_of_platform_reset_exit,
 	.platform_init = esdhc_of_platform_init,
