@@ -4078,7 +4078,7 @@ int qman_ceetm_channel_set_group_er_eligibility(struct qm_ceetm_channel
 EXPORT_SYMBOL(qman_ceetm_channel_set_group_er_eligibility);
 
 int qman_ceetm_channel_set_cq_cr_eligibility(struct qm_ceetm_channel *channel,
-						unsigned int idx, u16 cre)
+						unsigned int idx, int cre)
 {
 	struct qm_mcc_ceetm_class_scheduler_config csch_config;
 	struct qm_mcr_ceetm_class_scheduler_query csch_query;
@@ -4112,7 +4112,7 @@ int qman_ceetm_channel_set_cq_cr_eligibility(struct qm_ceetm_channel *channel,
 EXPORT_SYMBOL(qman_ceetm_channel_set_cq_cr_eligibility);
 
 int qman_ceetm_channel_set_cq_er_eligibility(struct qm_ceetm_channel *channel,
-						unsigned int idx, u16 ere)
+						unsigned int idx, int ere)
 {
 	struct qm_mcc_ceetm_class_scheduler_config csch_config;
 	struct qm_mcr_ceetm_class_scheduler_query csch_query;
