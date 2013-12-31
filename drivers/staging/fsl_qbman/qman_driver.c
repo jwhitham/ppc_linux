@@ -508,7 +508,8 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 	stash_attr.cpu = cpu;
 	stash_attr.cache = IOMMU_ATTR_CACHE_L1;
 	stash_attr.window = ~(u32)0;
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_PAMU_STASH,
+	ret = iommu_domain_set_attr(pcfg->iommu_domain,
+				    DOMAIN_ATTR_FSL_PAMU_STASH,
 				    &stash_attr);
 	if (ret < 0) {
 		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
@@ -528,7 +529,8 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 			   __func__, ret);
 		goto _iommu_domain_free;
 	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_PAMU_ENABLE,
+	ret = iommu_domain_set_attr(pcfg->iommu_domain,
+				    DOMAIN_ATTR_FSL_PAMU_ENABLE,
 				    &window_count);
 	if (ret < 0) {
 		pr_err(KBUILD_MODNAME ":%s(): iommu_domain_set_attr() = %d",
@@ -650,7 +652,7 @@ static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
 		stash_attr.cache = IOMMU_ATTR_CACHE_L1;
 		stash_attr.window = ~(u32)0;
 		ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				DOMAIN_ATTR_PAMU_STASH, &stash_attr);
+				DOMAIN_ATTR_FSL_PAMU_STASH, &stash_attr);
 		if (ret < 0) {
 			pr_err("Failed to update pamu stash setting\n");
 			return;

@@ -850,7 +850,7 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 	int ret = 0, k;
 	u32 largest_page, so_far = 0;
 	int frag_count = 0;
-	unsigned long next_addr = PAGE_SIZE;
+	unsigned long next_addr = PAGE_SIZE, populate;
 
 	if (i->len && i->len % PAGE_SIZE)
 		return -EINVAL;
@@ -1007,7 +1007,8 @@ out:
 					 USDPAA_DMA_FLAG_RDONLY ? 0
 					 : PROT_WRITE),
 					MAP_SHARED,
-					start_frag->pfn_base);
+					start_frag->pfn_base,
+					&populate);
 		up_write(&current->mm->mmap_sem);
 		if (longret & ~PAGE_MASK)
 			ret = (int)longret;
@@ -1144,12 +1145,12 @@ map_match:
 
 static int portal_mmap(struct file *fp, struct resource *res, void **ptr)
 {
-	unsigned long longret = 0;
+	unsigned long longret = 0, populate;
 
 	down_write(&current->mm->mmap_sem);
 	longret = do_mmap_pgoff(fp, PAGE_SIZE, resource_size(res),
 				PROT_READ | PROT_WRITE, MAP_SHARED,
-				res->start >> PAGE_SHIFT);
+				res->start >> PAGE_SHIFT, &populate);
 	up_write(&current->mm->mmap_sem);
 
 	if (longret & ~PAGE_MASK)
