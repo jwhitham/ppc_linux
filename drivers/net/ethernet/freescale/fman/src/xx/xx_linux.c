@@ -354,14 +354,22 @@ uint32_t XX_DisableAllIntr(void)
 {
     unsigned long flags;
 
+#ifdef local_irq_save_nort
     local_irq_save_nort(flags);
+#else
+    local_irq_save(flags);
+#endif
 
     return (uint32_t)flags;
 }
 
 void XX_RestoreAllIntr(uint32_t flags)
 {
+#ifdef local_irq_restore_nort
     local_irq_restore_nort((unsigned long)flags);
+#else
+    local_irq_restore((unsigned long)flags);
+#endif
 }
 
 t_Error XX_Call( uint32_t qid, t_Error (* f)(t_Handle), t_Handle id, t_Handle appId, uint16_t flags )
