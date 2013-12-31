@@ -54,6 +54,8 @@
 #include <linux/io.h>
 #include <linux/ioport.h>
 #include <linux/of_platform.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <asm/uaccess.h>
 #include <asm/errno.h>
 #include <asm/qe.h>        /* For struct qe_firmware */
