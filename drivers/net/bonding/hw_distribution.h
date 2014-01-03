@@ -38,9 +38,15 @@
 #include "bonding.h"
 #include "bond_3ad.h"
 #include "bond_alb.h"
+#include "lnxwrp_fm.h"
 #include "offline_port.h"
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
+/* FMD includes */
+#include "error_ext.h"
+#include "fm_pcd_ext.h"
+#include "fm_cc.h"
+#include "crc64.h"
 
 #define OHFRIENDNAMSIZ	10	/* fman0-oh@1, ...  fman1-oh@6 */
 #define OHNODENAMSIZ	24	/* /fsl,dpaa/dpa-fman0-oh@1 */
@@ -98,6 +104,27 @@ struct oh_port_priv {
 	int	oh_en;	/* enable or disable offline port's help at run-time */
 	unsigned char friendname[OHFRIENDNAMSIZ];
 	unsigned long cell_index;
+	t_Handle h_FmPcd;
+	t_Handle h_FmPort;
+	t_Handle h_NetEnv;
+
+	t_FmPcdNetEnvParams *netEnvParams;
+	t_FmPcdKgSchemeParams *scheme;
+	t_FmPortPcdParams *pcdParam;
+	t_FmPortPcdPrsParams *prsParam;
+	t_FmPortPcdKgParams *kgParam;
+	int numberof_pre_schemes;
+};
+
+enum e_dist_hdr {
+	L2_MAC = 0,
+	MAC_L3_IPV6,
+	MAC_L3_IPV4,
+	MAC_IPV6_TCP,
+	MAC_IPV6_UDP,
+	MAC_IPV4_TCP,
+	MAC_IPV4_UDP,
+	MAX_SCHEMES
 };
 
 extern struct oh_port_priv *poh;

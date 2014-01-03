@@ -17,6 +17,6 @@ proc-$(CONFIG_PROC_FS) += bond_procfs.o
 bonding-objs += $(proc-y)
 
 hash_pcd_based_xmit_frames_distribution-$(CONFIG_HW_DISTRIBUTION_WITH_OH) += \
-	hw_distribution.o
+	hw_distribution.o hw_oh_pcd.o
 
 bonding-objs += $(hash_pcd_based_xmit_frames_distribution-y)

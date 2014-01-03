@@ -2253,24 +2253,3 @@ int del_oh_pcd_fqs_with_slave_info(struct bonding *bond, struct slave *slave)
 
 	return hw_lag_release_fq(cur->dpa_oh_dev, pcd_fq);
 }
-
-int release_pcd_mem(struct bonding *bond)
-{
-	return BOND_OH_SUCCESS;
-}
-
-/* get all offline port information from bond, including
- * dev,oh handler, PCD FQid base and PCD FQ count, then
- * get the new xmit policy, copy schemes needed from the
- * cached_scheme pointer, config PCD params, init PCD dev,
- * set PCD Net Env Characteristics, then set Keygen Scheme
- * params to the PCD dev, disable offline port, set PCD
- * params to the offline port dev, at last enable the offline
- * port.
- * this subroutine return true when it can apply PCD to
- * the offline port, otherwise return false.
- */
-bool apply_pcd(struct bonding *bond, int new_xmit_policy)
-{
-	return true;
-}
