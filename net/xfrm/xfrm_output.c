@@ -61,7 +61,7 @@ static int xfrm_output_one(struct sk_buff *skb, int err)
 		if (x->asf_sa_cookie && asf_cb_fns.ipsec_encrypt_n_send) {
 			err = -EINPROGRESS;
 			if (!asf_cb_fns.ipsec_encrypt_n_send(skb, x))
-				goto out_exit;
+				goto out;
 		}
 #endif
 
