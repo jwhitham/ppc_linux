@@ -42,27 +42,6 @@ struct notifier_block;
 typedef int (*iommu_fault_handler_t)(struct iommu_domain *,
 			struct device *, unsigned long, int, void *);
 
-/* cache stash targets */
-enum stash_target {
-	IOMMU_ATTR_CACHE_L1 = 1,
-	IOMMU_ATTR_CACHE_L2,
-	IOMMU_ATTR_CACHE_L3,
-	IOMMU_ATTR_CACHE_DSP_L2,
-};
-
-/* This attribute corresponds to IOMMUs capable of generating
- * a stash transaction. A stash transaction is typically a
- * hardware initiated prefetch of data from memory to cache.
- * This attribute allows configuring stashig specific parameters
- * in the IOMMU hardware.
- */
-
-struct iommu_stash_attribute {
-	u32 	cpu;	/* cpu number */
-	u32 	cache;	/* cache to stash to L1,L2,L3 */
-	u32	window;	/* ~0 indicates all windows */
-};
-
 struct iommu_omi_attribute {
 	u32 omi;   /* index in the operation mapping table */
 	u32 window; /* ~0 indicates all windows */
