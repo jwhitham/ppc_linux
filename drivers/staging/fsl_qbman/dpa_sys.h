@@ -43,6 +43,8 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/of_platform.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/kthread.h>
 #include <linux/memblock.h>
 #include <linux/completion.h>

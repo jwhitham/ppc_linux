@@ -29,8 +29,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/of_address.h>
-#include <linux/of_irq.h>
 #include <asm/cacheflush.h>
 #include "bman_private.h"
 

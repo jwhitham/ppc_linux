@@ -29,9 +29,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/of_address.h>
-#include <linux/of_irq.h>
-
 #include "bman_private.h"
 #ifdef CONFIG_HOTPLUG_CPU
 #include <linux/cpu.h>
