@@ -114,47 +114,6 @@ static dma_cookie_t re_jr_tx_submit(struct dma_async_tx_descriptor *tx)
 	return cookie;
 }
 
-static void re_jr_unmap_dest_src(struct fsl_re_dma_async_tx_desc *desc)
-{
-	int i, j;
-	struct cmpnd_frame *cf;
-	dma_addr_t dest1 = 0, dest2 = 0, src;
-	struct device *dev;
-	enum dma_ctrl_flags flags;
-	enum dma_data_direction dir;
-
-	cf = desc->cf_addr;
-	dest1 = cf[1].address;
-	j = 2;
-	if (desc->dest_cnt == 2) {
-		dest2 = cf[2].address;
-		j = 3;
-	}
-	dev = desc->jr->chan.device->dev;
-	flags = desc->async_tx.flags;
-	if (!(flags & DMA_COMPL_SKIP_DEST_UNMAP)) {
-		if (desc->cdb_opcode == RE_MOVE_OPCODE)
-			dir = DMA_FROM_DEVICE;
-		else
-			dir = DMA_BIDIRECTIONAL;
-
-		dma_unmap_page(dev, dest1, desc->dma_len, dir);
-
-		if (dest2)
-			dma_unmap_page(dev, dest2, desc->dma_len, dir);
-	}
-
-	if (!(flags & DMA_COMPL_SKIP_SRC_UNMAP)) {
-		dir = DMA_TO_DEVICE;
-		for (i = j; i < desc->src_cnt + j; i++) {
-			src = cf[i].address;
-			if (src == dest1 || src == dest2)
-				continue;
-			dma_unmap_page(dev, src, desc->dma_len, dir);
-		}
-	}
-}
-
 static void re_jr_desc_done(struct fsl_re_dma_async_tx_desc *desc)
 {
 	struct dma_chan *chan = &desc->jr->chan;
@@ -171,7 +130,6 @@ static void re_jr_desc_done(struct fsl_re_dma_async_tx_desc *desc)
 		if (chan->completed_cookie == DMA_MAX_COOKIE)
 			chan->completed_cookie = DMA_MIN_COOKIE;
 	}
-	re_jr_unmap_dest_src(desc);
 
 	if (callback)
 		callback(callback_param);
