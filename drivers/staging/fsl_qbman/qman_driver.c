@@ -479,7 +479,7 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 	int ret;
 	int window_count = 1;
 	struct iommu_domain_geometry geom_attr;
-	struct iommu_stash_attribute stash_attr;
+	struct pamu_stash_attribute stash_attr;
 
 	pcfg->iommu_domain = iommu_domain_alloc(&platform_bus_type);
 	if (!pcfg->iommu_domain) {
@@ -506,8 +506,7 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 		goto _iommu_domain_free;
 	}
 	stash_attr.cpu = cpu;
-	stash_attr.cache = IOMMU_ATTR_CACHE_L1;
-	stash_attr.window = ~(u32)0;
+	stash_attr.cache = PAMU_ATTR_CACHE_L1;
 	ret = iommu_domain_set_attr(pcfg->iommu_domain,
 				    DOMAIN_ATTR_FSL_PAMU_STASH,
 				    &stash_attr);
@@ -644,13 +643,12 @@ __setup("qportals=", parse_qportals);
 static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
 							unsigned int cpu)
 {
-	struct iommu_stash_attribute stash_attr;
+	struct pamu_stash_attribute stash_attr;
 	int ret;
 
 	if (pcfg->iommu_domain) {
 		stash_attr.cpu = cpu;
-		stash_attr.cache = IOMMU_ATTR_CACHE_L1;
-		stash_attr.window = ~(u32)0;
+		stash_attr.cache = PAMU_ATTR_CACHE_L1;
 		ret = iommu_domain_set_attr(pcfg->iommu_domain,
 				DOMAIN_ATTR_FSL_PAMU_STASH, &stash_attr);
 		if (ret < 0) {

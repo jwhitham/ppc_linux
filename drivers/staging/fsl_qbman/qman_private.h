@@ -32,6 +32,7 @@
 #include "dpa_sys.h"
 #include <linux/fsl_qman.h>
 #include <linux/iommu.h>
+#include <asm/fsl_pamu_stash.h>
 
 #if !defined(CONFIG_FSL_QMAN_FQ_LOOKUP) && defined(CONFIG_PPC64)
 #error "_PPC64 requires _FSL_QMAN_FQ_LOOKUP"
