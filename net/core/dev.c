@@ -2846,13 +2846,6 @@ int dev_queue_xmit(struct sk_buff *skb)
 	}
 #endif
 	txq = netdev_pick_tx(dev, skb);
-#ifdef CONFIG_AS_FASTPATH
-	if ((dev->features & NETIF_F_HW_QDISC) &&
-	    likely(!netif_tx_queue_stopped(txq))) {
-		rc = dev_hard_start_xmit(skb, dev, txq);
-		goto out;
-	}
-#endif
 	q = rcu_dereference_bh(txq->qdisc);
 
 #ifdef CONFIG_NET_CLS_ACT
