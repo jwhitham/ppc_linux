@@ -273,14 +273,14 @@ static int vfio_disable_iommu_domain(struct vfio_iommu *iommu)
 {
 	int enable = 0;
 	return iommu_domain_set_attr(iommu->domain,
-				     DOMAIN_ATTR_PAMU_ENABLE, &enable);
+				     DOMAIN_ATTR_FSL_PAMU_ENABLE, &enable);
 }
 
 static int vfio_enable_iommu_domain(struct vfio_iommu *iommu)
 {
 	int enable = 1;
 	return iommu_domain_set_attr(iommu->domain,
-				     DOMAIN_ATTR_PAMU_ENABLE, &enable);
+				     DOMAIN_ATTR_FSL_PAMU_ENABLE, &enable);
 }
 
 static inline bool ranges_overlap(dma_addr_t start1, size_t size1,
@@ -621,7 +621,7 @@ static int vfio_handle_get_attr(struct vfio_iommu *iommu,
 	case VFIO_ATTR_PAMU_STASH: {
 		struct iommu_stash_attribute stash;
 		if (iommu_domain_get_attr(iommu->domain,
-				      DOMAIN_ATTR_PAMU_STASH, &stash)) {
+				      DOMAIN_ATTR_FSL_PAMU_STASH, &stash)) {
 			pr_err("%s Error getting domain windows\n",
 			       __func__);
 			return -EFAULT;
@@ -687,7 +687,7 @@ static int vfio_handle_set_attr(struct vfio_iommu *iommu,
 		stash.cpu = pamu_attr->attr_info.stash.cpu;
 		stash.cache = pamu_attr->attr_info.stash.cache;
 		if (iommu_domain_set_attr(iommu->domain,
-				      DOMAIN_ATTR_PAMU_STASH, &stash)) {
+				      DOMAIN_ATTR_FSL_PAMU_STASH, &stash)) {
 			pr_err("%s Error getting domain windows\n",
 			       __func__);
 			return -EFAULT;
