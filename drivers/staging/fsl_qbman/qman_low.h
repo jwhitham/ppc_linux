@@ -374,7 +374,7 @@ do { \
 	DPA_ASSERT(eqcr->busy); \
 	DPA_ASSERT(eqcr->cursor->orp == (eqcr->cursor->orp & 0x00ffffff)); \
 	DPA_ASSERT(eqcr->cursor->fqid == (eqcr->cursor->fqid & 0x00ffffff)); \
-} while(0)
+} while (0)
 
 static inline void qm_eqcr_pci_commit(struct qm_portal *portal, u8 myverb)
 {

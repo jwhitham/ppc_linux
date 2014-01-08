@@ -38,7 +38,7 @@ MODULE_DESCRIPTION("Qman testing");
 static int test_init(void)
 {
 	int loop = 1;
-	while(loop--) {
+	while (loop--) {
 #ifdef CONFIG_FSL_QMAN_TEST_STASH_POTATO
 		qman_test_hotpotato();
 #endif

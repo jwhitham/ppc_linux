@@ -133,13 +133,13 @@ static const struct bman_error_info_mdata error_mdata[] = {
  * "write the enable register" rather than "enable the write register"!
  */
 #define bm_err_isr_status_read(bm)	__bm_err_isr_read(bm, bm_isr_status)
-#define bm_err_isr_status_clear(bm, m)	__bm_err_isr_write(bm, bm_isr_status,m)
+#define bm_err_isr_status_clear(bm, m)	__bm_err_isr_write(bm, bm_isr_status, m)
 #define bm_err_isr_enable_read(bm)	__bm_err_isr_read(bm, bm_isr_enable)
-#define bm_err_isr_enable_write(bm, v)	__bm_err_isr_write(bm, bm_isr_enable,v)
+#define bm_err_isr_enable_write(bm, v)	__bm_err_isr_write(bm, bm_isr_enable, v)
 #define bm_err_isr_disable_read(bm)	__bm_err_isr_read(bm, bm_isr_disable)
-#define bm_err_isr_disable_write(bm, v)	__bm_err_isr_write(bm, bm_isr_disable,v)
-#define bm_err_isr_inhibit(bm)		__bm_err_isr_write(bm, bm_isr_inhibit,1)
-#define bm_err_isr_uninhibit(bm)	__bm_err_isr_write(bm, bm_isr_inhibit,0)
+#define bm_err_isr_disable_write(bm, v)	__bm_err_isr_write(bm, bm_isr_disable, v)
+#define bm_err_isr_inhibit(bm)		__bm_err_isr_write(bm, bm_isr_inhibit, 1)
+#define bm_err_isr_uninhibit(bm)	__bm_err_isr_write(bm, bm_isr_inhibit, 0)
 
 /*
  * TODO: unimplemented registers
@@ -210,11 +210,11 @@ static u32 __generate_thresh(u32 val, int roundup)
 {
 	u32 e = 0;	/* co-efficient, exponent */
 	int oddbit = 0;
-	while(val > 0xff) {
+	while (val > 0xff) {
 		oddbit = val & 1;
 		val >>= 1;
 		e++;
-		if(roundup && oddbit)
+		if (roundup && oddbit)
 			val++;
 	}
 	DPA_ASSERT(e < 0x10);

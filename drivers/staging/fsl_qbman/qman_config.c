@@ -251,13 +251,13 @@ static const struct qman_error_info_mdata error_mdata[] = {
  * "write the enable register" rather than "enable the write register"!
  */
 #define qm_err_isr_status_read(qm)	__qm_err_isr_read(qm, qm_isr_status)
-#define qm_err_isr_status_clear(qm, m)	__qm_err_isr_write(qm, qm_isr_status,m)
+#define qm_err_isr_status_clear(qm, m)	__qm_err_isr_write(qm, qm_isr_status, m)
 #define qm_err_isr_enable_read(qm)	__qm_err_isr_read(qm, qm_isr_enable)
-#define qm_err_isr_enable_write(qm, v)	__qm_err_isr_write(qm, qm_isr_enable,v)
+#define qm_err_isr_enable_write(qm, v)	__qm_err_isr_write(qm, qm_isr_enable, v)
 #define qm_err_isr_disable_read(qm)	__qm_err_isr_read(qm, qm_isr_disable)
-#define qm_err_isr_disable_write(qm, v)	__qm_err_isr_write(qm, qm_isr_disable,v)
-#define qm_err_isr_inhibit(qm)		__qm_err_isr_write(qm, qm_isr_inhibit,1)
-#define qm_err_isr_uninhibit(qm)	__qm_err_isr_write(qm, qm_isr_inhibit,0)
+#define qm_err_isr_disable_write(qm, v)	__qm_err_isr_write(qm, qm_isr_disable, v)
+#define qm_err_isr_inhibit(qm)		__qm_err_isr_write(qm, qm_isr_inhibit, 1)
+#define qm_err_isr_uninhibit(qm)	__qm_err_isr_write(qm, qm_isr_inhibit, 0)
 
 /*
  * TODO: unimplemented registers
@@ -480,11 +480,11 @@ static int qm_init_pfdr(struct qman *qm, u32 pfdr_start, u32 num)
 
 	DPA_ASSERT(pfdr_start && !(pfdr_start & 7) && !(num & 7) && num);
 	/* Make sure the command interface is 'idle' */
-	if(!MCR_rslt_idle(rslt))
+	if (!MCR_rslt_idle(rslt))
 		panic("QMAN_MCR isn't idle");
 
 	/* Write the MCR command params then the verb */
-	qm_out(MCP(0), pfdr_start );
+	qm_out(MCP(0), pfdr_start);
 	/* TODO: remove this - it's a workaround for a model bug that is
 	 * corrected in more recent versions. We use the workaround until
 	 * everyone has upgraded. */
@@ -494,7 +494,7 @@ static int qm_init_pfdr(struct qman *qm, u32 pfdr_start, u32 num)
 	/* Poll for the result */
 	do {
 		rslt = MCR_get_rslt(qm_in(MCR));
-	} while(!MCR_rslt_idle(rslt));
+	} while (!MCR_rslt_idle(rslt));
 	if (MCR_rslt_ok(rslt))
 		return 0;
 	if (MCR_rslt_eaccess(rslt))

@@ -58,13 +58,13 @@
 		struct qman_fq *__fq478 = (fq); \
 		if (fq_isset(__fq478, QMAN_FQ_FLAG_LOCKED)) \
 			spin_lock(&__fq478->fqlock); \
-	} while(0)
+	} while (0)
 #define FQUNLOCK(fq) \
 	do { \
 		struct qman_fq *__fq478 = (fq); \
 		if (fq_isset(__fq478, QMAN_FQ_FLAG_LOCKED)) \
 			spin_unlock(&__fq478->fqlock); \
-	} while(0)
+	} while (0)
 
 static inline void fq_set(struct qman_fq *fq, u32 mask)
 {
@@ -676,7 +676,7 @@ static inline void fq_state_change(struct qman_portal *p, struct qman_fq *fq,
 				const struct qm_mr_entry *msg, u8 verb)
 {
 	FQLOCK(fq);
-	switch(verb) {
+	switch (verb) {
 	case QM_MR_VERB_FQRL:
 		DPA_ASSERT(fq_isset(fq, QMAN_FQ_STATE_ORL));
 		fq_clear(fq, QMAN_FQ_STATE_ORL);

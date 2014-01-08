@@ -49,7 +49,7 @@ static __init int qbman_init(void)
 			is_portal_available = 1;
 	}
 
-	if (!qman_have_ccsr() && is_portal_available ) {
+	if (!qman_have_ccsr() && is_portal_available) {
 		struct qman_fq fq = {
 				.fqid = 1
 		};

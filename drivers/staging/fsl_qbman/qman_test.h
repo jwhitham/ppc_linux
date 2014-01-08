@@ -62,9 +62,9 @@ static inline void __hexdump(unsigned long start, unsigned long end,
 				nl = 1;
 			} else {
 				nl = 0;
-				if(!(start & 1))
+				if (!(start & 1))
 					buf[pos++] = ' ';
-				if(!(start & 3))
+				if (!(start & 3))
 					buf[pos++] = ' ';
 			}
 		} while (start & 15);

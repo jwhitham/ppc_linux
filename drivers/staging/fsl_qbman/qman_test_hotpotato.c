@@ -328,7 +328,7 @@ static inline u8 num_cachelines(u32 offset)
 #define STASH_DATA_CL \
 	num_cachelines(HP_NUM_WORDS * 4)
 #define STASH_CTX_CL \
-	num_cachelines(offsetof(struct hp_handler,fqid_rx))
+	num_cachelines(offsetof(struct hp_handler, fqid_rx))
 
 static void init_handler(void *__handler)
 {

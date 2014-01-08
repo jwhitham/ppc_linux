@@ -1490,7 +1490,7 @@ __init void fsl_usdpaa_init_early(void)
 	}
 	phys_start = __memblock_alloc_base(phys_size,
 					   largest_page_size(phys_size),
-					   MEMBLOCK_ALLOC_ACCESSIBLE );
+					   MEMBLOCK_ALLOC_ACCESSIBLE);
 	if (!phys_start) {
 		pr_err("Failed to reserve USDPAA region (sz:%llx)\n",
 		       phys_size);

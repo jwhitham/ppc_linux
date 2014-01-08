@@ -87,23 +87,23 @@
 #define hwsync() \
 	do { \
 		__asm__ __volatile__ ("sync" : : : "memory"); \
-	} while(0)
+	} while (0)
 #define lwsync() \
 	do { \
 		__asm__ __volatile__ (stringify_in_c(LWSYNC) : : : "memory"); \
-	} while(0)
+	} while (0)
 #define dcbf(p) \
 	do { \
 		__asm__ __volatile__ ("dcbf 0,%0" : : "r" (p) : "memory"); \
-	} while(0)
+	} while (0)
 #define dcbt_ro(p) \
 	do { \
 		__asm__ __volatile__ ("dcbt 0,%0" : : "r" (p)); \
-	} while(0)
+	} while (0)
 #define dcbt_rw(p) \
 	do { \
 		__asm__ __volatile__ ("dcbtst 0,%0" : : "r" (p)); \
-	} while(0)
+	} while (0)
 #define dcbi(p) dcbf(p)
 #ifdef CONFIG_PPC_E500MC
 #define dcbzl(p) \
@@ -169,7 +169,7 @@ static inline u64 mfatb(void)
 			dump_stack(); \
 			panic("assertion failure"); \
 		} \
-	} while(0)
+	} while (0)
 #else
 #define DPA_ASSERT(x)
 #endif
