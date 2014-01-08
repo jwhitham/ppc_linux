@@ -222,7 +222,7 @@ static struct mem_fragment *split_frag(struct mem_fragment *frag)
 	return x[2];
 }
 
-__maybe_unused static void dump_frags(void)
+static __maybe_unused void dump_frags(void)
 {
 	struct mem_fragment *frag;
 	int i = 0;
