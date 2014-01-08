@@ -696,8 +696,8 @@ static void log_additional_error_info(u32 isr_val, u32 ecsr_val)
 	ecir_val.ecir_raw = qm_in(ECIR);
 	/* Is portal info valid */
 	if ((qman_ip_rev & 0xFF00) >= QMAN_REV30) {
-	union qman_ecir2 ecir2_val;
-	ecir2_val.ecir2_raw = qm_in(ECIR2);
+		union qman_ecir2 ecir2_val;
+		ecir2_val.ecir2_raw = qm_in(ECIR2);
 		if (ecsr_val & PORTAL_ECSR_ERR) {
 			pr_warn("Qman ErrInt: %s id %d\n",
 				(ecir2_val.info.portal_type) ?
