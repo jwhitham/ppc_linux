@@ -406,7 +406,7 @@ static inline void bman_release_bpid(u32 bpid)
 int bman_reserve_bpid_range(u32 bpid, unsigned int count);
 static inline int bman_reserve_bpid(u32 bpid)
 {
-       return bman_reserve_bpid_range(bpid, 1);
+	return bman_reserve_bpid_range(bpid, 1);
 }
 
 void bman_seed_bpid_range(u32 bpid, unsigned int count);
