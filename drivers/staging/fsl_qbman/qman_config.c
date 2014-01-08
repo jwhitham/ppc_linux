@@ -250,14 +250,22 @@ static const struct qman_error_info_mdata error_mdata[] = {
  * the QM_EIRQ_*** definitions. Note that "qm_err_isr_enable_write" means
  * "write the enable register" rather than "enable the write register"!
  */
-#define qm_err_isr_status_read(qm)	__qm_err_isr_read(qm, qm_isr_status)
-#define qm_err_isr_status_clear(qm, m)	__qm_err_isr_write(qm, qm_isr_status, m)
-#define qm_err_isr_enable_read(qm)	__qm_err_isr_read(qm, qm_isr_enable)
-#define qm_err_isr_enable_write(qm, v)	__qm_err_isr_write(qm, qm_isr_enable, v)
-#define qm_err_isr_disable_read(qm)	__qm_err_isr_read(qm, qm_isr_disable)
-#define qm_err_isr_disable_write(qm, v)	__qm_err_isr_write(qm, qm_isr_disable, v)
-#define qm_err_isr_inhibit(qm)		__qm_err_isr_write(qm, qm_isr_inhibit, 1)
-#define qm_err_isr_uninhibit(qm)	__qm_err_isr_write(qm, qm_isr_inhibit, 0)
+#define qm_err_isr_status_read(qm)	\
+		__qm_err_isr_read(qm, qm_isr_status)
+#define qm_err_isr_status_clear(qm, m)	\
+		__qm_err_isr_write(qm, qm_isr_status, m)
+#define qm_err_isr_enable_read(qm)	\
+		__qm_err_isr_read(qm, qm_isr_enable)
+#define qm_err_isr_enable_write(qm, v)	\
+		__qm_err_isr_write(qm, qm_isr_enable, v)
+#define qm_err_isr_disable_read(qm)	\
+		__qm_err_isr_read(qm, qm_isr_disable)
+#define qm_err_isr_disable_write(qm, v)	\
+		__qm_err_isr_write(qm, qm_isr_disable, v)
+#define qm_err_isr_inhibit(qm)		\
+		__qm_err_isr_write(qm, qm_isr_inhibit, 1)
+#define qm_err_isr_uninhibit(qm)	\
+		__qm_err_isr_write(qm, qm_isr_inhibit, 0)
 
 /*
  * TODO: unimplemented registers
@@ -310,7 +318,8 @@ static void qm_set_ddebug(struct qman *qm, u8 mdd, u8 m_cfg)
 	qm_out(DD_CFG, ((mdd & 0x3) << 4) | (m_cfg & 0xf));
 }
 
-static void qm_set_dc_ddebug(struct qman *qm, enum qm_dc_portal portal, u16 ecd_tp_cfg)
+static void qm_set_dc_ddebug(struct qman *qm, enum qm_dc_portal portal,
+			     u16 ecd_tp_cfg)
 {
 	qm_out(DCP_DD_CFG(portal), ecd_tp_cfg & 0x1ff);
 }

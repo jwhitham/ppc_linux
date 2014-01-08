@@ -1169,10 +1169,11 @@ static inline int qm_shutdown_fq(struct qm_portal **portal, int portal_count,
 						  QM_SDQCR_CHANNELS_DEDICATED);
 			else
 				for (i = 0; i < portal_count; i++)
-					qm_dqrr_sdqcr_set(portal[i],
-							  QM_SDQCR_TYPE_ACTIVE |
-							  QM_SDQCR_CHANNELS_POOL_CONV
-							  (channel));
+					qm_dqrr_sdqcr_set(
+						portal[i],
+						QM_SDQCR_TYPE_ACTIVE |
+						QM_SDQCR_CHANNELS_POOL_CONV
+						(channel));
 			while (!found_fqrn) {
 				/* Keep draining DQRR while checking the MR*/
 				for (i = 0; i < portal_count; i++) {

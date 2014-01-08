@@ -200,9 +200,11 @@ struct bm_mc_result {
 #define BM_MCR_VERB_CMD_ERR_ECC		0x70
 #define BM_MCR_VERB_ACQUIRE_BUFCOUNT	BM_MCC_VERB_ACQUIRE_BUFCOUNT /* 0..8 */
 /* Determine the "availability state" of pool 'p' from a query result 'r' */
-#define BM_MCR_QUERY_AVAILABILITY(r, p) bman_depletion_get(&r->query.as.state, p)
+#define BM_MCR_QUERY_AVAILABILITY(r, p)	\
+		bman_depletion_get(&r->query.as.state, p)
 /* Determine the "depletion state" of pool 'p' from a query result 'r' */
-#define BM_MCR_QUERY_DEPLETION(r, p) bman_depletion_get(&r->query.ds.state, p)
+#define BM_MCR_QUERY_DEPLETION(r, p)	\
+		bman_depletion_get(&r->query.ds.state, p)
 
 /*******************************************************************/
 /* Managed (aka "shared" or "mux/demux") portal, high-level i/face */

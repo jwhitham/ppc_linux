@@ -1427,10 +1427,12 @@ int usdpaa_get_portal_config(struct file *filp, void *cinh,
 		    portal->user.addr.cinh == cinh) {
 			if (ptype == usdpaa_portal_qman) {
 				*irq = portal->qportal->public_cfg.irq;
-				*iir_reg = portal->qportal->addr_virt[1] + QM_REG_IIR;
+				*iir_reg = portal->qportal->addr_virt[1] +
+					QM_REG_IIR;
 			} else {
 				*irq = portal->bportal->public_cfg.irq;
-				*iir_reg = portal->bportal->addr_virt[1] + BM_REG_IIR;
+				*iir_reg = portal->bportal->addr_virt[1] +
+					BM_REG_IIR;
 			}
 			spin_unlock(&context->lock);
 			return 0;

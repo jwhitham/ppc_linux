@@ -132,14 +132,22 @@ static const struct bman_error_info_mdata error_mdata[] = {
  * the BM_EIRQ_*** definitions. Note that "bm_err_isr_enable_write" means
  * "write the enable register" rather than "enable the write register"!
  */
-#define bm_err_isr_status_read(bm)	__bm_err_isr_read(bm, bm_isr_status)
-#define bm_err_isr_status_clear(bm, m)	__bm_err_isr_write(bm, bm_isr_status, m)
-#define bm_err_isr_enable_read(bm)	__bm_err_isr_read(bm, bm_isr_enable)
-#define bm_err_isr_enable_write(bm, v)	__bm_err_isr_write(bm, bm_isr_enable, v)
-#define bm_err_isr_disable_read(bm)	__bm_err_isr_read(bm, bm_isr_disable)
-#define bm_err_isr_disable_write(bm, v)	__bm_err_isr_write(bm, bm_isr_disable, v)
-#define bm_err_isr_inhibit(bm)		__bm_err_isr_write(bm, bm_isr_inhibit, 1)
-#define bm_err_isr_uninhibit(bm)	__bm_err_isr_write(bm, bm_isr_inhibit, 0)
+#define bm_err_isr_status_read(bm)	\
+		__bm_err_isr_read(bm, bm_isr_status)
+#define bm_err_isr_status_clear(bm, m)	\
+		__bm_err_isr_write(bm, bm_isr_status, m)
+#define bm_err_isr_enable_read(bm)	\
+		__bm_err_isr_read(bm, bm_isr_enable)
+#define bm_err_isr_enable_write(bm, v)	\
+		__bm_err_isr_write(bm, bm_isr_enable, v)
+#define bm_err_isr_disable_read(bm)	\
+		__bm_err_isr_read(bm, bm_isr_disable)
+#define bm_err_isr_disable_write(bm, v)	\
+		__bm_err_isr_write(bm, bm_isr_disable, v)
+#define bm_err_isr_inhibit(bm)		\
+		__bm_err_isr_write(bm, bm_isr_inhibit, 1)
+#define bm_err_isr_uninhibit(bm)	\
+		__bm_err_isr_write(bm, bm_isr_inhibit, 0)
 
 /*
  * TODO: unimplemented registers
