@@ -97,7 +97,7 @@ struct bm_buffer {
 			u64 addr:48;
 		};
 	};
-} __attribute__((aligned(8)));
+} __aligned(8);
 static inline u64 bm_buffer_get64(const struct bm_buffer *buf)
 {
 	return buf->addr;
