@@ -702,7 +702,7 @@ int bman_rcr_is_empty(void)
 	avail = bm_rcr_get_fill(&p->p);
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 	put_affine_portal();
-	return (avail == 0);
+	return avail == 0;
 }
 EXPORT_SYMBOL(bman_rcr_is_empty);
 

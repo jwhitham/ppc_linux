@@ -2085,7 +2085,7 @@ int qman_eqcr_is_empty(void)
 	avail = qm_eqcr_get_fill(&p->p);
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 	put_affine_portal();
-	return (avail == 0);
+	return avail == 0;
 }
 EXPORT_SYMBOL(qman_eqcr_is_empty);
 

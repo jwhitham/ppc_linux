@@ -288,7 +288,7 @@ static inline int qm_eqcr_init(struct qm_portal *portal,
 
 static inline unsigned int qm_eqcr_get_ci_stashing(struct qm_portal *portal)
 {
-	return ((qm_in(CFG) >> 28) & 0x7);
+	return (qm_in(CFG) >> 28) & 0x7;
 }
 
 static inline void qm_eqcr_finish(struct qm_portal *portal)

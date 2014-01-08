@@ -95,7 +95,7 @@ EXPORT_SYMBOL(bman_alloc_bpid_range);
 
 static int bp_cleanup(u32 bpid)
 {
-	return (bman_shutdown_pool(bpid) == 0);
+	return bman_shutdown_pool(bpid) == 0;
 }
 void bman_release_bpid_range(u32 bpid, u32 count)
 {
@@ -129,7 +129,7 @@ EXPORT_SYMBOL(qman_alloc_fqid_range);
 
 static int fq_cleanup(u32 fqid)
 {
-	return (qman_shutdown_fq(fqid) == 0);
+	return qman_shutdown_fq(fqid) == 0;
 }
 void qman_release_fqid_range(u32 fqid, u32 count)
 {

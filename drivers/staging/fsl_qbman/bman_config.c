@@ -218,7 +218,7 @@ static u32 __generate_thresh(u32 val, int roundup)
 			val++;
 	}
 	DPA_ASSERT(e < 0x10);
-	return (val | (e << 8));
+	return val | (e << 8);
 }
 
 static void bm_set_pool(struct bman *bm, u8 pool, u32 swdet, u32 swdxt,
@@ -366,7 +366,7 @@ static int __init fsl_bman_init(struct device_node *node)
 
 int bman_have_ccsr(void)
 {
-	return (bm ? 1 : 0);
+	return bm ? 1 : 0;
 }
 
 int bm_pool_set(u32 bpid, const u32 *thresholds)
