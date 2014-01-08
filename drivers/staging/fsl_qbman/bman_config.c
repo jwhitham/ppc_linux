@@ -354,7 +354,7 @@ static int __init fsl_bman_init(struct device_node *node)
 		bman_ip_rev = BMAN_REV21;
 		bman_pool_max = 64;
 	} else {
-		pr_warning("unknown Bman version, default to rev1.0\n");
+		pr_warn("unknown Bman version, default to rev1.0\n");
 	}
 
 	if (standby) {
@@ -402,17 +402,17 @@ static void log_edata_bits(u32 bit_count)
 {
 	u32 i, j, mask = 0xffffffff;
 
-	pr_warning("Bman ErrInt, EDATA:\n");
+	pr_warn("Bman ErrInt, EDATA:\n");
 	i = bit_count/32;
 	if (bit_count%32) {
 		i++;
 		mask = ~(mask << bit_count%32);
 	}
 	j = 16-i;
-	pr_warning("  0x%08x\n", bm_in(EDATA(j)) & mask);
+	pr_warn("  0x%08x\n", bm_in(EDATA(j)) & mask);
 	j++;
 	for (; j < 16; j++)
-		pr_warning("  0x%08x\n", bm_in(EDATA(j)));
+		pr_warn("  0x%08x\n", bm_in(EDATA(j)));
 }
 
 static void log_additional_error_info(u32 isr_val, u32 ecsr_val)
@@ -423,13 +423,13 @@ static void log_additional_error_info(u32 isr_val, u32 ecsr_val)
 	ecir_val.ecir_raw = bm_in(ECIR);
 	/* Is portal info valid */
 	if (ecsr_val & PORTAL_ECSR_ERR) {
-		pr_warning("Bman ErrInt: SWP id %d, numb %d, pid %d\n",
+		pr_warn("Bman ErrInt: SWP id %d, numb %d, pid %d\n",
 			ecir_val.info.portal_num, ecir_val.info.numb,
 			ecir_val.info.pid);
 	}
 	if (ecsr_val & (BM_EIRQ_SBEI|BM_EIRQ_MBEI)) {
 		eadr_val.eadr_raw = bm_in(EADR);
-		pr_warning("Bman ErrInt: EADR Memory: %s, 0x%x\n",
+		pr_warn("Bman ErrInt: EADR Memory: %s, 0x%x\n",
 			error_mdata[eadr_val.info.memid].txt,
 			error_mdata[eadr_val.info.memid].addr_mask
 				& eadr_val.info.eadr);
@@ -451,7 +451,7 @@ static irqreturn_t bman_isr(int irq, void *ptr)
 		return IRQ_NONE;
 	for (i = 0; i < BMAN_HWE_COUNT; i++) {
 		if (bman_hwerr_txts[i].mask & isr_mask) {
-			pr_warning("Bman ErrInt: %s\n", bman_hwerr_txts[i].txt);
+			pr_warn("Bman ErrInt: %s\n", bman_hwerr_txts[i].txt);
 			if (bman_hwerr_txts[i].mask & ecsr_val) {
 				log_additional_error_info(isr_mask, ecsr_val);
 				/* Re-arm error capture registers */

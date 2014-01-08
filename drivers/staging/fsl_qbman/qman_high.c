@@ -2585,7 +2585,7 @@ int qman_create_cgr_to_dcp(struct qman_cgr *cgr, u32 flags, u16 dcp_portal,
 	int ret;
 
 	if ((qman_ip_rev & 0xFF00) < QMAN_REV30) {
-		pr_warning("This QMan version doesn't support to send CSCN to"
+		pr_warn("This QMan version doesn't support to send CSCN to"
 						" DCP portal\n");
 		return -EINVAL;
 	}
@@ -2670,7 +2670,7 @@ EXPORT_SYMBOL(qman_delete_cgr);
 int qm_get_clock(u64 *clock_hz)
 {
 	if (!qman_clk) {
-		pr_warning("Qman clock speed is unknown\n");
+		pr_warn("Qman clock speed is unknown\n");
 		return  -EINVAL;
 	}
 	*clock_hz = (u64)qman_clk;

@@ -345,12 +345,12 @@ void qman_get_ip_revision(struct device_node *dn)
 			if (ip_rev) {
 				qman_ip_rev = ip_rev;
 			} else {
-				pr_warning("unknown Qman version,"
+				pr_warn("unknown Qman version,"
 					" default to rev1.1\n");
 				qman_ip_rev = QMAN_REV11;
 			}
 		} else if (ip_rev && (qman_ip_rev != ip_rev))
-			pr_warning("Revision=0x%04x, but portal '%s' has"
+			pr_warn("Revision=0x%04x, but portal '%s' has"
 							" 0x%04x\n",
 			qman_ip_rev, dn->full_name, ip_rev);
 		if (qman_ip_rev == ip_rev)
@@ -542,7 +542,7 @@ _no_iommu:
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
-		pr_warning("Failed to set QMan portal's stash request queue\n");
+		pr_warn("Failed to set QMan portal's stash request queue\n");
 
 	return;
 
@@ -659,7 +659,7 @@ static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
 #ifdef CONFIG_FSL_QMAN_CONFIG
 	if (qman_set_sdest(pcfg->public_cfg.channel, cpu))
 #endif
-		pr_warning("Failed to update portal's stash request queue\n");
+		pr_warn("Failed to update portal's stash request queue\n");
 }
 
 static void qman_offline_cpu(unsigned int cpu)
@@ -738,7 +738,7 @@ __init int qman_init(void)
 
 		clk = of_get_property(dn, "clock-frequency", NULL);
 		if (!clk)
-			pr_warning("Can't find Qman clock frequency\n");
+			pr_warn("Can't find Qman clock frequency\n");
 		else
 			qman_clk = *clk;
 	}

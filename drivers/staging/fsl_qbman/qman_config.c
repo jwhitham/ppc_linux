@@ -626,7 +626,7 @@ static int __init fsl_qman_init(struct device_node *node)
 		else if ((major == 3) && (minor == 1))
 			qman_ip_rev = QMAN_REV31;
 		else {
-			pr_warning("unknown Qman version, default to rev1.1\n");
+			pr_warn("unknown Qman version, default to rev1.1\n");
 			qman_ip_rev = QMAN_REV11;
 		}
 	}
@@ -666,17 +666,17 @@ static void log_edata_bits(u32 bit_count)
 {
 	u32 i, j, mask = 0xffffffff;
 
-	pr_warning("Qman ErrInt, EDATA:\n");
+	pr_warn("Qman ErrInt, EDATA:\n");
 	i = bit_count/32;
 	if (bit_count%32) {
 		i++;
 		mask = ~(mask << bit_count%32);
 	}
 	j = 16-i;
-	pr_warning("  0x%08x\n", qm_in(EDATA(j)) & mask);
+	pr_warn("  0x%08x\n", qm_in(EDATA(j)) & mask);
 	j++;
 	for (; j < 16; j++)
-		pr_warning("  0x%08x\n", qm_in(EDATA(j)));
+		pr_warn("  0x%08x\n", qm_in(EDATA(j)));
 }
 
 static void log_additional_error_info(u32 isr_val, u32 ecsr_val)
@@ -690,17 +690,17 @@ static void log_additional_error_info(u32 isr_val, u32 ecsr_val)
 	union qman_ecir2 ecir2_val;
 	ecir2_val.ecir2_raw = qm_in(ECIR2);
 		if (ecsr_val & PORTAL_ECSR_ERR) {
-			pr_warning("Qman ErrInt: %s id %d\n",
+			pr_warn("Qman ErrInt: %s id %d\n",
 				(ecir2_val.info.portal_type) ?
 				"DCP" : "SWP", ecir2_val.info.portal_num);
 		}
 		if (ecsr_val & (FQID_ECSR_ERR | QM_EIRQ_IECE)) {
-			pr_warning("Qman ErrInt: ecir.fqid 0x%x\n",
+			pr_warn("Qman ErrInt: ecir.fqid 0x%x\n",
 				ecir_val.info.fqid);
 		}
 		if (ecsr_val & (QM_EIRQ_SBEI|QM_EIRQ_MBEI)) {
 			eadr_val.eadr_raw = qm_in(EADR);
-			pr_warning("Qman ErrInt: EADR Memory: %s, 0x%x\n",
+			pr_warn("Qman ErrInt: EADR Memory: %s, 0x%x\n",
 				error_mdata[eadr_val.info_rev3.memid].txt,
 				error_mdata[eadr_val.info_rev3.memid].addr_mask
 					& eadr_val.info_rev3.eadr);
@@ -709,17 +709,17 @@ static void log_additional_error_info(u32 isr_val, u32 ecsr_val)
 		}
 	} else {
 		if (ecsr_val & PORTAL_ECSR_ERR) {
-			pr_warning("Qman ErrInt: %s id %d\n",
+			pr_warn("Qman ErrInt: %s id %d\n",
 				(ecir_val.info.portal_type) ?
 				"DCP" : "SWP", ecir_val.info.portal_num);
 		}
 		if (ecsr_val & FQID_ECSR_ERR) {
-			pr_warning("Qman ErrInt: ecir.fqid 0x%x\n",
+			pr_warn("Qman ErrInt: ecir.fqid 0x%x\n",
 				ecir_val.info.fqid);
 		}
 		if (ecsr_val & (QM_EIRQ_SBEI|QM_EIRQ_MBEI)) {
 			eadr_val.eadr_raw = qm_in(EADR);
-			pr_warning("Qman ErrInt: EADR Memory: %s, 0x%x\n",
+			pr_warn("Qman ErrInt: EADR Memory: %s, 0x%x\n",
 				error_mdata[eadr_val.info.memid].txt,
 				error_mdata[eadr_val.info.memid].addr_mask
 					& eadr_val.info.eadr);
@@ -742,7 +742,7 @@ static irqreturn_t qman_isr(int irq, void *ptr)
 		return IRQ_NONE;
 	for (i = 0; i < QMAN_HWE_COUNT; i++) {
 		if (qman_hwerr_txts[i].mask & isr_mask) {
-			pr_warning("Qman ErrInt: %s\n", qman_hwerr_txts[i].txt);
+			pr_warn("Qman ErrInt: %s\n", qman_hwerr_txts[i].txt);
 			if (qman_hwerr_txts[i].mask & ecsr_val) {
 				log_additional_error_info(isr_mask, ecsr_val);
 				/* Re-arm error capture registers */
