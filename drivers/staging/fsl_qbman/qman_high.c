@@ -4847,7 +4847,7 @@ int qman_ceetm_querycongestion(struct __qm_mcr_querycongestion *ccg_state,
 	PORTAL_IRQ_LOCK(p, irqflags);
 
 	mcc = qm_mc_start(&p->p);
-	for (i = 0; i < 2 ; i++) {
+	for (i = 0; i < 2; i++) {
 		mcc->ccgr_query.ccgrid = CEETM_QUERY_CONGESTION_STATE | i;
 		mcc->ccgr_query.dcpid = dcp_idx;
 		qm_mc_commit(&p->p, QM_CEETM_VERB_CCGR_QUERY);
