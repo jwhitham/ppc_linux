@@ -430,8 +430,8 @@ static void DUMP(struct dpa_alloc *alloc)
 
 }
 #else
-#define DPRINT(x...)	do { ; } while (0)
-#define DUMP(a)		do { ; } while (0)
+#define DPRINT(x...)
+#define DUMP(a)
 #endif
 
 int dpa_alloc_new(struct dpa_alloc *alloc, u32 *result, u32 count, u32 align,

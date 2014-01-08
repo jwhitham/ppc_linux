@@ -81,40 +81,16 @@
  * barriers and that dcb*() won't fall victim to compiler or execution
  * reordering with respect to other code/instructions that manipulate the same
  * cacheline. */
-#define hwsync() \
-	do { \
-		__asm__ __volatile__ ("sync" : : : "memory"); \
-	} while (0)
-#define lwsync() \
-	do { \
-		__asm__ __volatile__ (stringify_in_c(LWSYNC) : : : "memory"); \
-	} while (0)
-#define dcbf(p) \
-	do { \
-		__asm__ __volatile__ ("dcbf 0,%0" : : "r" (p) : "memory"); \
-	} while (0)
-#define dcbt_ro(p) \
-	do { \
-		__asm__ __volatile__ ("dcbt 0,%0" : : "r" (p)); \
-	} while (0)
-#define dcbt_rw(p) \
-	do { \
-		__asm__ __volatile__ ("dcbtst 0,%0" : : "r" (p)); \
-	} while (0)
+#define hwsync() __asm__ __volatile__ ("sync" : : : "memory")
+#define lwsync()__asm__ __volatile__ (stringify_in_c(LWSYNC) : : : "memory")
+#define dcbf(p) __asm__ __volatile__ ("dcbf 0,%0" : : "r" (p) : "memory")
+#define dcbt_ro(p) __asm__ __volatile__ ("dcbt 0,%0" : : "r" (p))
+#define dcbt_rw(p) __asm__ __volatile__ ("dcbtst 0,%0" : : "r" (p))
 #define dcbi(p) dcbf(p)
 #ifdef CONFIG_PPC_E500MC
-#define dcbzl(p) \
-	do { \
-		__asm__ __volatile__ ("dcbzl 0,%0" : : "r" (p)); \
-	} while (0)
-#define dcbz_64(p) \
-	do { \
-		dcbzl(p); \
-	} while (0)
-#define dcbf_64(p) \
-	do { \
-		dcbf(p); \
-	} while (0)
+#define dcbzl(p) __asm__ __volatile__ ("dcbzl 0,%0" : : "r" (p))
+#define dcbz_64(p) dcbzl(p)
+#define dcbf_64(p) dcbf(p)
 /* Commonly used combo */
 #define dcbit_ro(p) \
 	do { \
@@ -122,10 +98,7 @@
 		dcbt_ro(p); \
 	} while (0)
 #else
-#define dcbz(p) \
-	do { \
-		__asm__ __volatile__ ("dcbz 0,%0" : : "r" (p)); \
-	} while (0)
+#define dcbz(p)__asm__ __volatile__ ("dcbz 0,%0" : : "r" (p))
 #define dcbz_64(p) \
 	do { \
 		dcbz((u32)p + 32);	\

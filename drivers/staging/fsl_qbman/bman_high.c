@@ -115,7 +115,7 @@ static inline struct bman_portal *get_poll_portal(void)
 {
 	return &__get_cpu_var(bman_affine_portal);
 }
-#define put_poll_portal() do { ; } while (0)
+#define put_poll_portal()
 
 /* GOTCHA: this object type refers to a pool, it isn't *the* pool. There may be
  * more than one such object per Bman buffer pool, eg. if different users of the

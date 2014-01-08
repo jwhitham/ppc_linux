@@ -188,7 +188,7 @@ static inline struct qman_portal *get_poll_portal(void)
 {
 	return &__get_cpu_var(qman_affine_portal);
 }
-#define put_poll_portal() do { ; } while (0)
+#define put_poll_portal()
 
 /* This gives a FQID->FQ lookup to cover the fact that we can't directly demux
  * retirement notifications (the fact they are sometimes h/w-consumed means that
