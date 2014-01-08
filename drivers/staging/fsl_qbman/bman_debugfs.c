@@ -52,7 +52,7 @@ static int query_bp_state_show(struct seq_file *file, void *offset)
 		seq_printf(file, "Error %d\n", ret);
 		return 0;
 	}
-	seq_printf(file, "bp_id  free_buffers_avail  bp_depleted\n");
+	seq_puts(file, "bp_id  free_buffers_avail  bp_depleted\n");
 	for (i = 0; i < 2; i++) {
 		mask = 0x80000000;
 		for (j = 0; j < 32; j++) {
