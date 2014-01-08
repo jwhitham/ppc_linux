@@ -530,8 +530,7 @@ fail_devalloc:
 		for (ret = 0; ret < num_ceetms; ret++)
 			kfree(portal->ccgrs[ret]);
 fail_ccgrs:
-	if (portal->cgrs)
-		kfree(portal->cgrs);
+	kfree(portal->cgrs);
 fail_cgrs:
 	qm_isr_finish(__p);
 fail_isr:

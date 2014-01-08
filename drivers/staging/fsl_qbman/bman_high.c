@@ -284,8 +284,7 @@ fail_rcr_empty:
 fail_affinity:
 	free_irq(config->public_cfg.irq, portal);
 fail_irq:
-	if (portal->pools)
-		kfree(portal->pools);
+	kfree(portal->pools);
 fail_pools:
 	bm_isr_finish(__p);
 fail_isr:
@@ -647,8 +646,7 @@ err:
 	if (params->flags & BMAN_POOL_FLAG_DYNAMIC_BPID)
 		bman_release_bpid(bpid);
 	if (pool) {
-		if (pool->sp)
-			kfree(pool->sp);
+		kfree(pool->sp);
 		kfree(pool);
 	}
 	return NULL;

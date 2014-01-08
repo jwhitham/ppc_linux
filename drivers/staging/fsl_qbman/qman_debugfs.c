@@ -1585,8 +1585,7 @@ static int __init qman_debugfs_module_init(void)
 	return 0;
 
 _return:
-	if (dfs_root)
-		debugfs_remove_recursive(dfs_root);
+	debugfs_remove_recursive(dfs_root);
 	return ret;
 }
 
