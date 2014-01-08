@@ -45,7 +45,7 @@
 			QM_SDQCR_TOKEN_SET(0x98) | \
 			QM_SDQCR_CHANNELS_DEDICATED | \
 			QM_SDQCR_CHANNELS_POOL(POOL_ID))
-#define PORTAL_OPAQUE	(void *)0xf00dbeef
+#define PORTAL_OPAQUE	((void *)0xf00dbeef)
 #define VDQCR_FLAGS	(QMAN_VOLATILE_FLAG_WAIT | QMAN_VOLATILE_FLAG_FINISH)
 
 /*************************************/

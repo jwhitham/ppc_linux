@@ -36,8 +36,8 @@
 /* constants */
 /*************/
 
-#define PORTAL_OPAQUE	(void *)0xf00dbeef
-#define POOL_OPAQUE	(void *)0xdeadabba
+#define PORTAL_OPAQUE	((void *)0xf00dbeef)
+#define POOL_OPAQUE	((void *)0xdeadabba)
 #define NUM_BUFS	93
 #define LOOPS		3
 #define BMAN_TOKEN_MASK 0x00FFFFFFFFFFLLU
