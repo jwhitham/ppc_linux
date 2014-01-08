@@ -38,7 +38,7 @@ static u32 fqid_max;
 static u64 qman_ccsr_start;
 static u64 qman_ccsr_size;
 
-static const char *state_txt[] = {
+static const char * const state_txt[] = {
 	"Out of Service",
 	"Retired",
 	"Tentatively Scheduled",
