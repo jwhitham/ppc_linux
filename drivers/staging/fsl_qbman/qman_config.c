@@ -350,14 +350,12 @@ static void qm_set_channel_ddebug(struct qman *qm, u16 channel, u16 tp_cfg)
 		offset = (channel - qm_channel_fman0_sp0);
 		upperhalf = offset & 0x1;
 		offset = REG_WQ_DC0_DD_CFG(offset / 2);
-	}
-	else if ((channel >= qm_channel_fman1_sp0) &&
+	} else if ((channel >= qm_channel_fman1_sp0) &&
 				(channel <= qm_channel_fman1_sp11)) {
 		offset = (channel - qm_channel_fman1_sp0);
 		upperhalf = offset & 0x1;
 		offset = REG_WQ_DC1_DD_CFG(offset / 2);
-	}
-	else if (channel == qm_channel_caam)
+	} else if (channel == qm_channel_caam)
 		offset = REG_WQ_DCn_DD_CFG(2);
 	else if (channel == qm_channel_pme)
 		offset = REG_WQ_DCn_DD_CFG(3);
