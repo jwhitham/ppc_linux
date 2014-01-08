@@ -331,7 +331,7 @@ static int init_qm_portal(struct qm_portal_config *config,
 	}
 
 	/* Initialize the EQCR */
-	if (qm_eqcr_init(portal, qm_eqcr_pvb, 
+	if (qm_eqcr_init(portal, qm_eqcr_pvb,
 			qm_eqcr_get_ci_stashing(portal), 1)) {
 		pr_err("Qman EQCR initialisation failed\n");
 		return 1;
@@ -1488,7 +1488,7 @@ __init void fsl_usdpaa_init_early(void)
 		phys_size = 0;
 		return;
 	}
-	phys_start = __memblock_alloc_base(phys_size, 
+	phys_start = __memblock_alloc_base(phys_size,
 					   largest_page_size(phys_size),
 					   MEMBLOCK_ALLOC_ACCESSIBLE );
 	if (!phys_start) {
