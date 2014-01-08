@@ -1080,15 +1080,15 @@ static ssize_t show_sbec(struct device *dev,
 static DEVICE_ATTR(pfdr_fpc, S_IRUSR, show_pfdr_fpc, NULL);
 static DEVICE_ATTR(pfdr_cfg, S_IRUSR, show_pfdr_cfg, set_pfdr_cfg);
 static DEVICE_ATTR(idle_stat, S_IRUSR, show_idle_stat, NULL);
-static DEVICE_ATTR(ci_rlm_avg, (S_IRUSR|S_IWUGO),
+static DEVICE_ATTR(ci_rlm_avg, (S_IRUSR|S_IWUSR),
 		show_ci_rlm_avg, set_ci_rlm_avg);
 static DEVICE_ATTR(err_isr, S_IRUSR, show_err_isr, NULL);
 static DEVICE_ATTR(sfdr_in_use, S_IRUSR, show_sfdr_in_use, NULL);
 
-static DEVICE_ATTR(dcp0_dlm_avg, (S_IRUSR|S_IWUGO), show_dlm_avg, set_dlm_avg);
-static DEVICE_ATTR(dcp1_dlm_avg, (S_IRUSR|S_IWUGO), show_dlm_avg, set_dlm_avg);
-static DEVICE_ATTR(dcp2_dlm_avg, (S_IRUSR|S_IWUGO), show_dlm_avg, set_dlm_avg);
-static DEVICE_ATTR(dcp3_dlm_avg, (S_IRUSR|S_IWUGO), show_dlm_avg, set_dlm_avg);
+static DEVICE_ATTR(dcp0_dlm_avg, (S_IRUSR|S_IWUSR), show_dlm_avg, set_dlm_avg);
+static DEVICE_ATTR(dcp1_dlm_avg, (S_IRUSR|S_IWUSR), show_dlm_avg, set_dlm_avg);
+static DEVICE_ATTR(dcp2_dlm_avg, (S_IRUSR|S_IWUSR), show_dlm_avg, set_dlm_avg);
+static DEVICE_ATTR(dcp3_dlm_avg, (S_IRUSR|S_IWUSR), show_dlm_avg, set_dlm_avg);
 
 static DEVICE_ATTR(sbec_0, S_IRUSR, show_sbec, NULL);
 static DEVICE_ATTR(sbec_1, S_IRUSR, show_sbec, NULL);
