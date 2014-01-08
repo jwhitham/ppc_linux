@@ -242,7 +242,7 @@ struct qm_sg_entry {
 		};
 	};
 	u32 extension:1;	/* Extension bit */
-	u32 final:1; 		/* Final bit */
+	u32 final:1;		/* Final bit */
 	u32 length:30;
 	u8 __reserved2;
 	u8 bpid;

@@ -182,7 +182,7 @@ static dma_addr_t frame_dma;
 /* the main function waits on this */
 static DECLARE_WAIT_QUEUE_HEAD(queue);
 
-#define HP_PER_CPU 	2
+#define HP_PER_CPU	2
 #define HP_LOOPS	8
 /* 80 bytes, like a small ethernet frame, and bleeds into a second cacheline */
 #define HP_NUM_WORDS	80
