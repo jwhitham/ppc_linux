@@ -173,7 +173,7 @@ static int user_input_convert(const char __user *user_buf, size_t count,
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
 	buf[count] = '\0';
-	if (strict_strtoul(buf, 0, val))
+	if (kstrtoul(buf, 0, val))
 		return -EINVAL;
 	return 0;
 }

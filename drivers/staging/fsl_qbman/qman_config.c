@@ -1000,7 +1000,7 @@ static ssize_t set_dlm_avg(struct device *dev,
 
 	if (!sscanf(dev_attr->attr.name, "dcp%d_dlm_avg", &i))
 		return -EINVAL;
-	if (strict_strtoul(buf, 0, &val)) {
+	if (kstrtoul(buf, 0, &val)) {
 		dev_dbg(dev, "invalid input %s\n", buf);
 		return -EINVAL;
 	}
@@ -1019,7 +1019,7 @@ static ssize_t set_pfdr_cfg(struct device *dev,
 {
 	unsigned long val;
 
-	if (strict_strtoul(buf, 0, &val)) {
+	if (kstrtoul(buf, 0, &val)) {
 		dev_dbg(dev, "invalid input %s\n", buf);
 		return -EINVAL;
 	}
@@ -1052,7 +1052,7 @@ static ssize_t set_ci_rlm_avg(struct device *dev,
 {
 	unsigned long val;
 
-	if (strict_strtoul(buf, 0, &val)) {
+	if (kstrtoul(buf, 0, &val)) {
 		dev_dbg(dev, "invalid input %s\n", buf);
 		return -EINVAL;
 	}
