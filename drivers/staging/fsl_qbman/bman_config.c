@@ -598,7 +598,7 @@ static int of_fsl_bman_remove(struct platform_device *ofdev)
 	return 0;
 };
 
-static int __devinit of_fsl_bman_probe(struct platform_device *ofdev)
+static int of_fsl_bman_probe(struct platform_device *ofdev)
 {
 	int ret, i;
 
@@ -683,7 +683,7 @@ static struct platform_driver of_fsl_bman_driver = {
 		.of_match_table = of_fsl_bman_ids,
 	},
 	.probe = of_fsl_bman_probe,
-	.remove = __devexit_p(of_fsl_bman_remove),
+	.remove = of_fsl_bman_remove,
 };
 
 static int bman_ctrl_init(void)

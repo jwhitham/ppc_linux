@@ -66,9 +66,6 @@
 
 #include <linux/fsl_usdpaa.h>
 
-#define __devinit
-#define __devexit_p
-
 /* When copying aligned words or shorts, try to avoid memcpy() */
 #define CONFIG_TRY_BETTER_MEMCPY
 
