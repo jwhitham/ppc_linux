@@ -502,7 +502,8 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 					  dpa_bp_vaddr + dpa_fd_offset(&fd),
 					  dpa_fd_length(&fd));
 
-		if (!priv->mac_dev)
+		/* if no mac device or peer set it's macless */
+		if (!priv->mac_dev || priv->peer)
 			fd.cmd |= FM_FD_CMD_DTC;
 		else {
 			/* Enable L3/L4 hardware checksum computation,
@@ -521,7 +522,7 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 		}
 
 	} else {
-		if (!priv->mac_dev)
+		if (!priv->mac_dev || priv->peer)
 			fd.cmd |= FM_FD_CMD_DTC;
 		else {
 			/* Enable L3/L4 hardware checksum computation,

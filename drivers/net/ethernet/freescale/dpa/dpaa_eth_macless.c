@@ -359,6 +359,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	priv->msg_enable = netif_msg_init(debug, -1);
 	/* control over proxy's mac device */
 	priv->peer = (void *)proxy_dev;
+	priv->mac_dev = proxy_dev->mac_dev;
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
 

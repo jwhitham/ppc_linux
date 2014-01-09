@@ -333,9 +333,7 @@ static int __cold set_multi(struct net_device *net_dev,
 static void adjust_link(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
-	struct proxy_device *proxy_dev = (struct proxy_device *)priv->peer;
-	struct mac_device *mac_dev = proxy_dev ? proxy_dev->mac_dev :
-		priv->mac_dev;
+	struct mac_device *mac_dev = priv->mac_dev;
 	struct phy_device *phy_dev = mac_dev->phy_dev;
 
 	fm_mac_adjust_link(mac_dev->get_mac_handle(mac_dev),
