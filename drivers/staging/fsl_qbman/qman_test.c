@@ -45,9 +45,6 @@ static int test_init(void)
 #ifdef CONFIG_FSL_QMAN_TEST_HIGH
 		qman_test_high();
 #endif
-#ifdef CONFIG_FSL_QMAN_TEST_ERRATA
-		qman_test_errata();
-#endif
 	}
 	return 0;
 }

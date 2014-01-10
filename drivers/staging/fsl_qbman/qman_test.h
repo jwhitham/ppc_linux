@@ -41,7 +41,6 @@
 
 void qman_test_hotpotato(void);
 void qman_test_high(void);
-void qman_test_errata(void);
 void qman_test_fqrange(void);
 
 static inline void __hexdump(unsigned long start, unsigned long end,

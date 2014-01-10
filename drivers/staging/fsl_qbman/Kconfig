@@ -125,14 +125,6 @@ config FSL_QMAN_TEST_HIGH
 	  high-level API testing with them (whichever portal(s) are affine to
 	  the cpu(s) the test executes on).
 
-config FSL_QMAN_TEST_ERRATA
-	bool "QMan errata-handling self-test"
-	depends on FSL_QMAN_TEST
-	default y
-	---help---
-	  This requires the presence of cpu-affine portals, and performs
-	  testing that handling for known hardware-errata is correct.
-
 config FSL_QMAN_DEBUGFS
 	tristate "QMan debugfs interface"
 	depends on DEBUG_FS

@@ -18,7 +18,6 @@ obj-$(CONFIG_FSL_QMAN_CONFIG)	+= qman_config.o qman_driver.o
 obj-$(CONFIG_FSL_QMAN_TEST)	+= qman_tester.o
 qman_tester-y			 = qman_test.o qman_test_hotpotato.o \
 				   qman_test_high.o
-qman_tester-$(CONFIG_FSL_QMAN_TEST_ERRATA) += qman_test_errata.o
 obj-$(CONFIG_FSL_QMAN_DEBUGFS)	+= qman_debugfs_interface.o
 qman_debugfs_interface-y	 = qman_debugfs.o
 
