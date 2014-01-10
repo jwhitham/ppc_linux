@@ -107,23 +107,12 @@ static inline dma_addr_t bm_buf_addr(const struct bm_buffer *buf)
 	return (dma_addr_t)buf->addr;
 }
 /* Macro, so we compile better if 'v' isn't always 64-bit */
-/* Note: this first version is causing a noticeable performance degradation,
- * which needs analysis, so leaving it commented out for now. The second version
- * achieves optimal performance. */
-#if 0
-#define bm_buffer_set64(buf, v) \
-	do { \
-		struct bm_buffer *__buf931 = (buf); \
-		__buf931->addr = v; \
-	} while (0)
-#else
 #define bm_buffer_set64(buf, v) \
 	do { \
 		struct bm_buffer *__buf931 = (buf); \
 		__buf931->hi = upper_32_bits(v); \
 		__buf931->lo = lower_32_bits(v); \
 	} while (0)
-#endif
 
 /* See 1.5.3.5.4: "Release Command" */
 struct bm_rcr_entry {

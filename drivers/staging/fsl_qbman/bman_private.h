@@ -119,14 +119,9 @@ int bman_have_ccsr(void);
 /*   BMan s/w corenet portal, low-level i/face   */
 /*************************************************/
 
-/* Used by all portal interrupt registers except 'inhibit'. NB, some of these
- * definitions are exported for use by the bman_irqsource_***() APIs, so are
- * commented-out here. */
-#if 0
-#define BM_PIRQ_RCRI	0x00000002	/* RCR Ring (below threshold) */
-#define BM_PIRQ_BSCN	0x00000001	/* Buffer depletion State Change */
-#endif
-/* This mask contains all the "irqsource" bits visible to API users */
+/* Used by all portal interrupt registers except 'inhibit'
+ * This mask contains all the "irqsource" bits visible to API users
+ */
 #define BM_PIRQ_VISIBLE	(BM_PIRQ_RCRI | BM_PIRQ_BSCN)
 
 /* These are bm_<reg>_<verb>(). So for example, bm_disable_write() means "write

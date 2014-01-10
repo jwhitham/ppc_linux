@@ -184,28 +184,6 @@ static void __bm_err_isr_write(struct bman *bm, enum bm_isr_reg n, u32 val)
 	__bm_out(bm, REG_ERR_ISR + (n << 2), val);
 }
 
-#if 0
-static void bm_get_details(struct bman *bm, u8 *int_options, u8 *errata,
-			u8 *conf_options)
-{
-	u32 v = bm_in(IP_REV_1);
-	*int_options = (v >> 16) & 0xff;
-	*errata = (v >> 8) & 0xff;
-	*conf_options = v & 0xff;
-}
-
-static u8 bm_get_corenet_sourceid(struct bman *bm)
-{
-	return bm_in(SRCIDR);
-}
-
-static void bm_set_liodn(struct bman *bm, u16 liodn)
-{
-	bm_out(LIODNR, liodn & 0xfff);
-}
-
-#endif
-
 static void bm_get_version(struct bman *bm, u16 *id, u8 *major, u8 *minor)
 {
 	u32 v = bm_in(IP_REV_1);
