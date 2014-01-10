@@ -863,6 +863,7 @@ int qman_ceetm_get_xsfdr(enum qm_dc_portal portal, unsigned int *num)
 	*num = qm_in(CEETM_XSFDR_IN_USE);
 	return 0;
 }
+EXPORT_SYMBOL(qman_ceetm_get_xsfdr);
 
 #ifdef CONFIG_SYSFS
 

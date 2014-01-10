@@ -2808,6 +2808,7 @@ int qman_ceetm_query_cq(unsigned int cqid, unsigned int dcpid,
 	*cq_query = mcr->cq_query;
 	return 0;
 }
+EXPORT_SYMBOL(qman_ceetm_query_cq);
 
 int qman_ceetm_configure_dct(struct qm_mcc_ceetm_dct_config *opts)
 {
@@ -3059,6 +3060,7 @@ int qman_ceetm_query_ccgr(struct qm_mcc_ceetm_ccgr_query *ccgr_query,
 	*response = mcr->ccgr_query;
 	return 0;
 }
+EXPORT_SYMBOL(qman_ceetm_query_ccgr);
 
 int qman_ceetm_cq_peek_pop_xsfdrread(struct qm_ceetm_cq *cq,
 			u8 command_type, u16 xsfdr,
