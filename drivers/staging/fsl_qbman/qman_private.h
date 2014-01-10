@@ -275,27 +275,12 @@ int qman_setup_fq_lookup_table(size_t num_entries);
 #define QM_SDQCR_TOKEN_SET(v)		(((v) & 0xff) << 16)
 #define QM_SDQCR_TOKEN_GET(v)		(((v) >> 16) & 0xff)
 #define QM_SDQCR_CHANNELS_DEDICATED	0x00008000
-#if 0 /* These are defined in the external fsl_qman.h API */
-#define QM_SDQCR_CHANNELS_POOL_MASK	0x00007fff
-#define QM_SDQCR_CHANNELS_POOL(n)	(0x00008000 >> (n))
-#endif
 #define QM_SDQCR_SPECIFICWQ_MASK	0x000000f7
 #define QM_SDQCR_SPECIFICWQ_DEDICATED	0x00000000
 #define QM_SDQCR_SPECIFICWQ_POOL(n)	((n) << 4)
 #define QM_SDQCR_SPECIFICWQ_WQ(n)	(n)
 
-/* For qm_dqrr_vdqcr_set(); Choose one PRECEDENCE. EXACT is optional. Use
- * NUMFRAMES(n) (6-bit) or NUMFRAMES_TILLEMPTY to fill in the frame-count. Use
- * FQID(n) to fill in the frame queue ID. */
-#if 0 /* These are defined in the external fsl_qman.h API */
-#define QM_VDQCR_PRECEDENCE_VDQCR	0x0
-#define QM_VDQCR_PRECEDENCE_SDQCR	0x80000000
-#define QM_VDQCR_EXACT			0x40000000
-#define QM_VDQCR_NUMFRAMES_MASK		0x3f000000
-#define QM_VDQCR_NUMFRAMES_SET(n)	(((n) & 0x3f) << 24)
-#define QM_VDQCR_NUMFRAMES_GET(n)	(((n) >> 24) & 0x3f)
-#define QM_VDQCR_NUMFRAMES_TILLEMPTY	QM_VDQCR_NUMFRAMES_SET(0)
-#endif
+/* For qm_dqrr_vdqcr_set(): use FQID(n) to fill in the frame queue ID */
 #define QM_VDQCR_FQID_MASK		0x00ffffff
 #define QM_VDQCR_FQID(n)		((n) & QM_VDQCR_FQID_MASK)
 
@@ -334,21 +319,11 @@ int qman_setup_fq_lookup_table(size_t num_entries);
 #define QM_PDQCR_SPECIFICWQ_WQ(n)	(n)
 #define QM_PDQCR_FQID(n)		((n) & 0xffffff)
 
-/* Used by all portal interrupt registers except 'inhibit'. NB, some of these
- * definitions are exported for use by the qman_irqsource_***() APIs, so are
- * commented-out here. */
-#define QM_PIRQ_DQAVAIL	0x0000ffff	/* Channels with frame availability */
-#if 0
-#define QM_PIRQ_CSCI	0x00100000	/* Congestion State Change */
-#define QM_PIRQ_EQCI	0x00080000	/* Enqueue Command Committed */
-#define QM_PIRQ_EQRI	0x00040000	/* EQCR Ring (below threshold) */
-#define QM_PIRQ_DQRI	0x00020000	/* DQRR Ring (non-empty) */
-#define QM_PIRQ_MRI	0x00010000	/* MR Ring (non-empty) */
-/* This mask contains all the interrupt sources that need handling except DQRI,
- * ie. that if present should trigger slow-path processing. */
-#define QM_PIRQ_SLOW	(QM_PIRQ_CSCI | QM_PIRQ_EQCI | QM_PIRQ_EQRI | \
-			QM_PIRQ_MRI)
-#endif
+/* Used by all portal interrupt registers except 'inhibit'
+ * Channels with frame availability
+ */
+#define QM_PIRQ_DQAVAIL	0x0000ffff
+
 /* The DQAVAIL interrupt fields break down into these bits; */
 #define QM_DQAVAIL_PORTAL	0x8000		/* Portal channel */
 #define QM_DQAVAIL_POOL(n)	(0x8000 >> (n))	/* Pool channel, n==[1..15] */
