@@ -1261,7 +1261,7 @@ static int qman_fqd_cred_show(struct seq_file *file, void *offset)
 	struct line_buffer_fq line_buf;
 
 	memset(&line_buf, 0, sizeof(line_buf));
-	seq_printf(file, "List of fq ids with Intra-Class Scheduling Credit > 0"
+	seq_puts(file, "List of fq ids with Intra-Class Scheduling Credit > 0"
 			"\n");
 
 	for (i = 1; i < fqid_max; i++) {
