@@ -153,6 +153,14 @@ struct ucc_tdm_private {
 	wait_queue_head_t tdm_queue;
 	bool tdm_queue_flag;
 	struct tdm_adapter adap;
+#ifdef CONFIG_PM
+	struct ucc_transparent_param *ucc_pram_bak;
+	u32 gumr;
+	u8 guemr;
+	u32 cmxsi1cr_l, cmxsi1cr_h;
+	u32 cmxsi1syr;
+	u32 cmxucr[4];
+#endif
 };
 
 #define NUM_OF_BUF	4
