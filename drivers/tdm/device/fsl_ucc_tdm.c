@@ -347,34 +347,32 @@ static int utdm_init(struct ucc_tdm_private *priv)
 	/* Set UPSMR normal mode */
 	out_be32(&priv->uf_regs->upsmr, 0);
 
-	/* Alloc Rx BD */
-	priv->rx_bd_offset = qe_muram_alloc(NUM_OF_BUF * sizeof(struct qe_bd),
-			QE_ALIGNMENT_OF_BD);
-	if (IS_ERR_VALUE(priv->rx_bd_offset)) {
-		dev_err(priv->dev, "Cannot allocate MURAM memory for RxBDs\n");
+	priv->tx_bd = dma_alloc_coherent(priv->dev,
+			NUM_OF_BUF * MAX_RX_BUF_LENGTH,
+			&priv->dma_tx_bd, GFP_KERNEL);
+
+	if (!priv->tx_bd) {
+		dev_err(priv->dev, "Could not allocate buffer descriptors\n");
 		ret = -ENOMEM;
 		goto rxbd_alloc_error;
 	}
 
-	/* Alloc Tx BD */
-	priv->tx_bd_offset = qe_muram_alloc(NUM_OF_BUF * sizeof(struct qe_bd),
-				QE_ALIGNMENT_OF_BD);
-	if (IS_ERR_VALUE(priv->tx_bd_offset)) {
-		dev_err(priv->dev, "Cannot allocate MURAM memory for TxBDs\n");
+	priv->rx_bd = dma_alloc_coherent(priv->dev,
+			NUM_OF_BUF * MAX_RX_BUF_LENGTH,
+			&priv->dma_rx_bd, GFP_KERNEL);
+	if (!priv->rx_bd) {
+		dev_err(priv->dev, "Could not allocate buffer descriptors\n");
 		ret = -ENOMEM;
 		goto txbd_alloc_error;
 	}
 
-	priv->tx_bd = qe_muram_addr(priv->tx_bd_offset);
-	priv->rx_bd = qe_muram_addr(priv->rx_bd_offset);
-
 	/* Alloc parameter ram for ucc transparent */
-	priv->ucc_pram_offset = qe_muram_alloc(sizeof(priv->ucc_pram),
+	priv->ucc_pram_offset = qe_muram_alloc(sizeof(*priv->ucc_pram),
 				ALIGNMENT_OF_UCC_TRANS_PRAM);
 
 	if (IS_ERR_VALUE(priv->ucc_pram_offset)) {
 		dev_err(priv->dev, "Can not allocate MURAM for hdlc prameter.\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
 		goto pram_alloc_error;
 	}
 
@@ -413,16 +411,9 @@ static int utdm_init(struct ucc_tdm_private *priv)
 	/* Set MRBLR */
 	out_be16(&priv->ucc_pram->mrblr, (u16)MAX_RX_BUF_LENGTH);
 
-	/* QE couldn't support >= 4G */
-	if (cpm_muram_dma(priv->rx_bd) & ~(0xffffffffULL) &&
-	    cpm_muram_dma(priv->tx_bd) & ~(0xffffffffULL)) {
-		dev_err(priv->dev, "QE address couldn't support > 4G");
-		ret = -EFAULT;
-		goto tiptr_alloc_error;
-	}
-		/* Set RBASE, TBASE */
-	out_be32(&priv->ucc_pram->rbase, (u32)cpm_muram_dma(priv->rx_bd));
-	out_be32(&priv->ucc_pram->tbase, (u32)cpm_muram_dma(priv->tx_bd));
+	/* Set RBASE, TBASE */
+	out_be32(&priv->ucc_pram->rbase, (u32)priv->dma_rx_bd);
+	out_be32(&priv->ucc_pram->tbase, (u32)priv->dma_tx_bd);
 
 	/* Set RSTATE, TSTATE */
 	out_be32(&priv->ucc_pram->rstate, 0x30000000);
@@ -484,9 +475,13 @@ tiptr_alloc_error:
 riptr_alloc_error:
 	qe_muram_free(priv->ucc_pram_offset);
 pram_alloc_error:
-	qe_muram_free(priv->tx_bd_offset);
+	dma_free_coherent(priv->dev,
+		NUM_OF_BUF * MAX_RX_BUF_LENGTH,
+		priv->rx_bd, priv->dma_rx_bd);
 txbd_alloc_error:
-	qe_muram_free(priv->rx_bd_offset);
+	dma_free_coherent(priv->dev,
+		NUM_OF_BUF * MAX_RX_BUF_LENGTH,
+		priv->tx_bd, priv->dma_tx_bd);
 rxbd_alloc_error:
 	ucc_fast_free(priv->uccf);
 
@@ -657,15 +652,19 @@ static void utdm_memclean(struct ucc_tdm_private *priv)
 	qe_muram_free(priv->ucc_pram->tiptr);
 
 	if (priv->rx_bd) {
-		qe_muram_free(priv->rx_bd_offset);
+		dma_free_coherent(priv->dev,
+			NUM_OF_BUF * MAX_RX_BUF_LENGTH,
+			priv->rx_bd, priv->dma_rx_bd);
 		priv->rx_bd = NULL;
-		priv->rx_bd_offset = 0;
+		priv->dma_rx_bd = 0;
 	}
 
 	if (priv->tx_bd) {
-		qe_muram_free(priv->tx_bd_offset);
+		dma_free_coherent(priv->dev,
+			NUM_OF_BUF * MAX_RX_BUF_LENGTH,
+			priv->tx_bd, priv->dma_tx_bd);
 		priv->tx_bd = NULL;
-		priv->tx_bd_offset = 0;
+		priv->dma_tx_bd = 0;
 	}
 
 	if (priv->ucc_pram) {
@@ -809,6 +808,10 @@ static int ucc_tdm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Invalid tx-clock-name property\n");
 		return -EINVAL;
 	}
+
+	/* use the same clock when work in loopback */
+	if (ut_info->uf_info.rx_clock == ut_info->uf_info.tx_clock)
+		qe_setbrg(ut_info->uf_info.rx_clock, 2000000, 1);
 
 	sprop = of_get_property(np, "fsl,rx-sync-clock", NULL);
 	if (sprop) {

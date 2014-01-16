@@ -147,8 +147,8 @@ struct ucc_tdm_private {
 	u8 phase_rx;
 	u8 phase_tx;
 	u32 ucc_pram_offset;
-	u32 tx_bd_offset;
-	u32 rx_bd_offset;
+	dma_addr_t dma_rx_bd;
+	dma_addr_t dma_tx_bd;
 	spinlock_t tdmlock;
 	wait_queue_head_t tdm_queue;
 	bool tdm_queue_flag;
