@@ -230,12 +230,11 @@ int qman_setup_fq_lookup_table(size_t num_entries)
 {
 	num_entries++;
 	/* Allocate 1 more entry since the first entry is not used */
-	qman_fq_lookup_table = vmalloc((num_entries * sizeof(void *)));
+	qman_fq_lookup_table = vzalloc((num_entries * sizeof(void *)));
 	if (!qman_fq_lookup_table) {
 		pr_err("QMan: Could not allocate fq lookup table\n");
 		return -ENOMEM;
 	}
-	memset(qman_fq_lookup_table, 0, num_entries * sizeof(void *));
 	qman_fq_lookup_table_size = num_entries;
 	pr_info("QMan: Allocated lookup table at %p, entry count %lu\n",
 			qman_fq_lookup_table,

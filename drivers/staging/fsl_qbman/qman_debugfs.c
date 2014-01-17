@@ -1187,10 +1187,9 @@ static int qman_fqd_dest_wq_show(struct seq_file *file, void *offset)
 	memset(&line_buf, 0, sizeof(line_buf));
 	/* use vmalloc : need to allocate large memory region and don't
 	 * require the memory to be physically contiguous. */
-	wq = vmalloc(sizeof(u16) * (0xFFFF+1));
+	wq = vzalloc(sizeof(u16) * (0xFFFF+1));
 	if (!wq)
 		return -ENOMEM;
-	memset(wq, 0, sizeof(u16) * (0xFFFF+1));
 
 	seq_printf(file, "List of fq ids with destination work queue id"
 			" = 0x%x\n", wq_id);
