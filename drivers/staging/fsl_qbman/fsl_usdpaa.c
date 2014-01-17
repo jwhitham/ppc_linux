@@ -1175,7 +1175,7 @@ static long ioctl_portal_map(struct file *fp, struct ctx *ctx,
 
 	if (!mapping)
 		return -ENOMEM;
-	memcpy(&mapping->user, arg, sizeof(mapping->user));
+	mapping->user = *arg;
 	if (mapping->user.type == usdpaa_portal_qman) {
 		mapping->qportal =
 			qm_get_unused_portal_idx(mapping->user.index);
@@ -1213,7 +1213,7 @@ static long ioctl_portal_map(struct file *fp, struct ctx *ctx,
 			  &mapping->user.addr.cinh);
 	if (ret)
 		goto err_mmap_cinh;
-	memcpy(arg, &mapping->user, sizeof(mapping->user));
+	*arg = mapping->user;
 	return ret;
 
 err_mmap_cinh:

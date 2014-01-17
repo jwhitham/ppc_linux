@@ -77,7 +77,7 @@ static inline int qman_cgrs_next(struct qman_cgrs *c, int num)
 static inline void qman_cgrs_cp(struct qman_cgrs *dest,
 				const struct qman_cgrs *src)
 {
-	memcpy(dest, src, sizeof(*dest));
+	*dest = *src;
 }
 static inline void qman_cgrs_and(struct qman_cgrs *dest,
 			const struct qman_cgrs *a, const struct qman_cgrs *b)
@@ -133,7 +133,7 @@ static inline int qman_ccgrs_next(struct qman_ccgrs *c, int num)
 static inline void qman_ccgrs_cp(struct qman_ccgrs *dest,
 					const struct qman_ccgrs *src)
 {
-	memcpy(dest, src, sizeof(*dest));
+	*dest = *src;
 }
 static inline void qman_ccgrs_and(struct qman_ccgrs *dest,
 			const struct qman_ccgrs *a, const struct qman_ccgrs *b)
