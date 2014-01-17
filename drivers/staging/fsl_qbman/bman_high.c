@@ -205,6 +205,8 @@ struct bman_portal *bman_create_portal(
 
 	if (!portal) {
 		portal = kmalloc(sizeof(*portal), GFP_KERNEL);
+		if (!portal)
+			return portal;
 		portal->alloced = 1;
 	} else
 		portal->alloced = 0;
