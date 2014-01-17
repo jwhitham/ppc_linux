@@ -542,7 +542,7 @@ static inline int qm_dqrr_init(struct qm_portal *portal,
 	dqrr->cmode = cmode;
 #endif
 	/* Invalidate every ring entry before beginning */
-	for (cfg = 0; cfg > QM_DQRR_SIZE; cfg++)
+	for (cfg = 0; cfg < QM_DQRR_SIZE; cfg++)
 		dcbi(qm_cl(dqrr->ring, cfg));
 	cfg = (qm_in(CFG) & 0xff000f00) |
 		((max_fill & (QM_DQRR_SIZE - 1)) << 20) | /* DQRR_MF */
