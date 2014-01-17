@@ -817,7 +817,7 @@ static int query_ccgr_show(struct seq_file *file, void *offset)
 	for (i = 0; i < 32; i++) {
 		if (ccgr_query.cm_query.cscn_targ_dcp & mask)
 			seq_printf(file, "  send CSCN to dcp %u\n", (31 - i));
-			mask >>= 1;
+		mask >>= 1;
 	}
 
 	seq_puts(file, " cscn_targ_swp:\n");
