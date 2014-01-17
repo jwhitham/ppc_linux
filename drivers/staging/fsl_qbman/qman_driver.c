@@ -288,7 +288,7 @@ static __init int fsl_ceetm_init(struct device_node *node)
 	return 0;
 }
 
-void qman_get_ip_revision(struct device_node *dn)
+static void qman_get_ip_revision(struct device_node *dn)
 {
 	u16 ip_rev = 0;
 	for_each_compatible_node(dn, NULL, "fsl,qman-portal") {

@@ -68,13 +68,13 @@ static void cb_depletion(struct bman_portal *portal,
 }
 
 /* Params used to set up a pool, this also dynamically allocates a BPID */
-struct bman_pool_params params_nocb = {
+static const struct bman_pool_params params_nocb = {
 	.flags = BMAN_POOL_FLAG_DYNAMIC_BPID | BMAN_POOL_FLAG_THRESH,
 	.thresholds = { TEST_ENTRY, TEST_EXIT, 0, 0 }
 };
 
 /* Params used to set up each cpu's pool with callbacks enabled */
-struct bman_pool_params params_cb = {
+static struct bman_pool_params params_cb = {
 	.bpid = 0, /* will be replaced to match pool_nocb */
 	.flags = BMAN_POOL_FLAG_DEPLETION,
 	.cb = cb_depletion

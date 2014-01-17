@@ -41,7 +41,7 @@ u16 bman_ip_rev;
 EXPORT_SYMBOL(bman_ip_rev);
 u16 bman_pool_max;
 EXPORT_SYMBOL(bman_pool_max);
-u16 bman_portal_max;
+static u16 bman_portal_max;
 
 /* After initialising cpus that own shared portal configs, we cache the
  * resulting portals (ie. not just the configs) in this array. Then we
