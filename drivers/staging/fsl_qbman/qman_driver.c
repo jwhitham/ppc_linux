@@ -576,7 +576,7 @@ struct qm_portal_config *qm_get_unused_portal_idx(u32 idx)
 	return ret;
 }
 
-struct qm_portal_config *qm_get_unused_portal()
+struct qm_portal_config *qm_get_unused_portal(void)
 {
 	return qm_get_unused_portal_idx(QBMAN_ANY_PORTAL_IDX);
 }
