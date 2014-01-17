@@ -69,12 +69,11 @@ struct qman_fqid_pool *qman_fqid_pool_create(u32 fqid_start, u32 num)
 	pool->total = num;
 	pool->used = 0;
 	pool->next = 0;
-	pool->bits = kmalloc(QNUM_BYTES(num), GFP_KERNEL);
+	pool->bits = kzalloc(QNUM_BYTES(num), GFP_KERNEL);
 	if (!pool->bits) {
 		kfree(pool);
 		return NULL;
 	}
-	memset(pool->bits, 0, QNUM_BYTES(num));
 	/* If num is not an even multiple of QLONG_BITS (or even 8, for
 	 * byte-oriented searching) then we fill the trailing bits with 1, to
 	 * make them look allocated (permanently). */
