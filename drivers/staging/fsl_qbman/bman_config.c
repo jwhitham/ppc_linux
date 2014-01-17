@@ -291,8 +291,8 @@ static __init int parse_mem_property(struct device_node *node, const char *name,
 		flush_dcache_range(vaddr, vaddr + *sz);
 	} else if (zero) {
 		/* map as cacheable, non-guarded */
-		void *tmpp = ioremap_prot(*addr, *sz, 0);
-		memset(tmpp, 0, *sz);
+		void __iomem *tmpp = ioremap_prot(*addr, *sz, 0);
+		memset_io(tmpp, 0, *sz);
 		vaddr = (unsigned long)tmpp;
 		flush_dcache_range(vaddr, vaddr + *sz);
 		iounmap(tmpp);
