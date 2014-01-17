@@ -194,9 +194,9 @@ static struct mem_fragment *split_frag(struct mem_fragment *frag)
 {
 	struct mem_fragment *x[3];
 
-	x[0] = kmalloc(sizeof(struct mem_fragment), GFP_KERNEL);
-	x[1] = kmalloc(sizeof(struct mem_fragment), GFP_KERNEL);
-	x[2] = kmalloc(sizeof(struct mem_fragment), GFP_KERNEL);
+	x[0] = kmalloc(sizeof(struct mem_fragment), GFP_ATOMIC);
+	x[1] = kmalloc(sizeof(struct mem_fragment), GFP_ATOMIC);
+	x[2] = kmalloc(sizeof(struct mem_fragment), GFP_ATOMIC);
 	if (!x[0] || !x[1] || !x[2]) {
 		kfree(x[0]);
 		kfree(x[1]);
