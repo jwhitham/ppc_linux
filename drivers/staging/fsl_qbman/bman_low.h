@@ -519,6 +519,6 @@ static inline int bm_shutdown_pool(struct bm_portal *p, u32 bpid)
 			stop = true;
 		} else
 			++aq_count;
-	};
+	}
 	return 0;
 }
