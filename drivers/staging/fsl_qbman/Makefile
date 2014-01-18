@@ -16,8 +16,9 @@ bman_debugfs_interface-y	 = bman_debugfs.o
 obj-$(CONFIG_FSL_QMAN)		+= qman_high.o qman_utility.o
 obj-$(CONFIG_FSL_QMAN_CONFIG)	+= qman_config.o qman_driver.o
 obj-$(CONFIG_FSL_QMAN_TEST)	+= qman_tester.o
-qman_tester-y			 = qman_test.o qman_test_hotpotato.o \
-				   qman_test_high.o
+qman_tester-y			 = qman_test.o
+qman_tester-$(CONFIG_FSL_QMAN_TEST_STASH_POTATO) += qman_test_hotpotato.o
+qman_tester-$(CONFIG_FSL_QMAN_TEST_HIGH) += qman_test_high.o
 obj-$(CONFIG_FSL_QMAN_DEBUGFS)	+= qman_debugfs_interface.o
 qman_debugfs_interface-y	 = qman_debugfs.o
 
