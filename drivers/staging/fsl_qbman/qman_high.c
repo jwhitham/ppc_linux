@@ -1092,7 +1092,7 @@ void *qman_get_affine_portal(int cpu)
 {
 	return affine_portals[cpu];
 }
-EXPORT_SYMBOL(qman_affine_portal);
+EXPORT_SYMBOL(qman_get_affine_portal);
 
 int qman_p_poll_dqrr(struct qman_portal *p, unsigned int limit)
 {
