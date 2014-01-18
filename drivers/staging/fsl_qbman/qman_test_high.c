@@ -129,7 +129,8 @@ static void do_enqueues(struct qman_fq *fq)
 
 void qman_test_high(void)
 {
-	int flags, res;
+	unsigned int flags;
+	int res;
 	struct qman_fq *fq = &fq_base;
 
 	pr_info("qman_test_high starting\n");

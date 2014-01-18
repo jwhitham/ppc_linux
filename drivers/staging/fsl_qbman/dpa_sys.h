@@ -248,7 +248,7 @@ static inline type *name##_find(struct dpa_rbtree *tree, u32 val) \
  * range of cpu indices, and each item optionally be prefixed by "s" to indicate
  * that the portal associated with that cpu should be shared. See bman_driver.c
  * for more specifics. */
-static int __parse_portals_cpu(const char **s, int *cpu)
+static int __parse_portals_cpu(const char **s, unsigned int *cpu)
 {
 	*cpu = 0;
 	if (!isdigit(**s))
