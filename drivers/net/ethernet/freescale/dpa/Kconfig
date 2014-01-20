@@ -2,7 +2,6 @@ menuconfig FSL_DPAA_ETH
 	bool "DPAA Ethernet"
 	depends on FSL_SOC && FSL_BMAN && FSL_QMAN && FSL_FMAN
 	select PHYLIB
-	select FSL_DPAA_TX_RECYCLE if FMAN_T4240
 	---help---
 	  Data Path Acceleration Architecture Ethernet driver,
 	  supporting the Freescale QorIQ chips.
@@ -39,11 +38,6 @@ config FSL_DPAA_ETH_JUMBO_FRAME
 	  Using this option in combination with small frames increases
 	  significantly the driver's memory footprint and may even deplete
 	  the system memory.
-
-config FSL_DPAA_TX_RECYCLE
-	bool
-	depends on FSL_DPAA_ETH
-	depends on FMAN_T4240
 
 config FSL_DPAA_1588
 	tristate "IEEE 1588-compliant timestamping"

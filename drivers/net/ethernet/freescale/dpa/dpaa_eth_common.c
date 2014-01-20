@@ -60,7 +60,7 @@ static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
 
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 static const struct fqid_cell tx_recycle_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
@@ -860,7 +860,7 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 				  FQ_TYPE_TX_CONF_MQ))
 			goto fq_alloc_failed;
 
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 		/* per-core Tx queues for recyclable frames (FManv3 only) */
 		if (!dpa_fq_alloc(dev, tx_recycle_fqids, list,
 				  FQ_TYPE_TX_RECYCLE))
@@ -1072,7 +1072,7 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 	uint32_t pcd_fqid;
 	const cpumask_t *affine_cpus = qman_affine_cpus();
 	int egress_cnt = 0, conf_cnt = 0;
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 	int recycle_cnt = 0;
 #endif
 
@@ -1128,7 +1128,7 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
 			BUG_ON(!priv->mac_dev);
 			dpa_setup_ingress(priv, fq, &fq_cbs->tx_errq);
 			break;
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 		case FQ_TYPE_TX_RECYCLE:
 			BUG_ON(!priv->mac_dev);
 			dpa_setup_egress(priv, fq, tx_port,
@@ -1261,7 +1261,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 			}
 		}
 
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 		/* Configure the Tx queues for recycled frames, such that the
 		 * buffers are released by FMan and no confirmation is sent
 		 */

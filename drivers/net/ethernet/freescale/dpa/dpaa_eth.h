@@ -238,7 +238,7 @@ enum dpa_fq_type {
 	FQ_TYPE_TX_CONFIRM,     /* Tx default Conf FQ (actually an Rx FQ) */
 	FQ_TYPE_TX_CONF_MQ,     /* Tx conf FQs (one for each Tx FQ) */
 	FQ_TYPE_TX_ERROR,       /* Tx Error FQs (these are actually Rx FQs) */
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 	FQ_TYPE_TX_RECYCLE,	/* Tx FQs for recycleable frames only */
 #endif
 };
@@ -359,7 +359,7 @@ struct dpa_priv_s {
 
 	uint16_t		 channel;	/* "fsl,qman-channel-id" */
 	struct list_head	 dpa_fq_list;
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 	struct qman_fq		*recycle_fqs[DPAA_ETH_TX_QUEUES];
 #endif
 
@@ -549,7 +549,7 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 	int err, i;
 	struct qman_fq *egress_fq;
 
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 	/* Choose egress fq based on whether we want
 	 * to recycle the frame or not
 	 */
@@ -616,7 +616,7 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 		break;
 	case FQ_TYPE_RX_DEFAULT:
 	case FQ_TYPE_TX:
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 	case FQ_TYPE_TX_RECYCLE:
 #endif
 	case FQ_TYPE_RX_PCD:

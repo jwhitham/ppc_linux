@@ -101,7 +101,7 @@ static ssize_t dpaa_eth_show_fqids(struct device *dev,
 		case FQ_TYPE_TX:
 			str = "Tx";
 			break;
-#ifdef CONFIG_FSL_DPAA_TX_RECYCLE
+#ifdef CONFIG_FMAN_T4240
 		case FQ_TYPE_TX_RECYCLE:
 			str = "Tx(recycling)";
 			break;
