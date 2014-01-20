@@ -19,7 +19,6 @@ fsl-dpa-objs	:= dpa-ethtool.o dpaa_eth_sysfs.o \
   dpaa_eth.o dpaa_eth_sg.o
 fsl-dpa-common-objs	:= dpaa_eth_common.o
 fsl-dpa-base-objs	:= dpaa_eth_base.o
-fsl-dpa-sg-objs	:= dpaa_eth_sg.o
 fsl-dpa-shared-objs	:= dpaa_eth_shared.o
 fsl-dpa-macless-objs	:= dpaa_eth_macless.o
 fsl-dpa-proxy-objs	:= dpaa_eth_proxy.o
