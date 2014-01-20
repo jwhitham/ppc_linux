@@ -63,6 +63,8 @@
 	fm_set_##type##_port_params(port, &param); \
 }
 
+#define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
+
 /* return codes for the dpaa-eth hooks */
 enum dpaa_eth_hook_result {
 	/* fd/skb was retained by the hook.

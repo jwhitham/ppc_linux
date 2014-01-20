@@ -95,9 +95,6 @@ struct dpa_buffer_layout_s {
 #define DPA_RX_PRIV_DATA_SIZE   (DPA_TX_PRIV_DATA_SIZE + \
 					dpa_get_rx_extra_headroom())
 
-#define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
-
-
 #define FM_FD_STAT_RX_ERRORS						\
 	(FM_PORT_FRM_ERR_DMA | FM_PORT_FRM_ERR_PHYSICAL	| \
 	 FM_PORT_FRM_ERR_SIZE | FM_PORT_FRM_ERR_CLS_DISCARD | \

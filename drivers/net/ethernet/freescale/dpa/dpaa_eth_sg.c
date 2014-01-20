@@ -47,8 +47,6 @@
 #include "dpaa_eth_common.h"
 #include "dpaa_1588.h"
 
-#define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
-
 /* Convenience macros for storing/retrieving the skb back-pointers. They must
  * accommodate both recycling and confirmation paths - i.e. cases when the buf
  * was allocated by ourselves, respectively by the stack. In the former case,
