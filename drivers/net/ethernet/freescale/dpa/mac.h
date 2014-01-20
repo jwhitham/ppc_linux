@@ -37,7 +37,7 @@
 #include <linux/phy.h>		/* phy_interface_t, struct phy_device */
 #include <linux/list.h>
 
-#include "lnxwrp_fsl_fman.h"		/* struct port_device */
+#include "lnxwrp_fsl_fman.h"	/* struct port_device */
 
 enum {DTSEC, XGMAC, MEMAC};
 
@@ -60,7 +60,7 @@ struct mac_device {
 	uint16_t		 speed;
 	uint16_t		 max_speed;
 	struct device_node	*phy_node;
-	char			fixed_bus_id[MII_BUS_ID_SIZE + 3];
+	char			 fixed_bus_id[MII_BUS_ID_SIZE + 3];
 	struct device_node	*tbi_node;
 	struct phy_device	*phy_dev;
 	void			*fm;

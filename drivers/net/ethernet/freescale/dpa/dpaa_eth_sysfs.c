@@ -245,8 +245,3 @@ void dpaa_eth_sysfs_remove(struct device *dev)
 	for (i = 0; i < ARRAY_SIZE(dpaa_eth_attrs); i++)
 		device_remove_file(dev, &dpaa_eth_attrs[i]);
 }
-
-
-
-
-
