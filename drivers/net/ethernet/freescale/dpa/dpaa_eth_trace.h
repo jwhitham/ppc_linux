@@ -44,6 +44,8 @@
 #define fd_format_list	\
 	fd_format_name(contig),	\
 	fd_format_name(sg)
+#define TR_FMT "[%s] fqid=%d, fd: addr=0x%llx, format=%s, off=%u, len=%u," \
+	" status=0x%08x"
 
 /* This is used to declare a class of events.
  * individual events of this type will be defined below.
@@ -66,13 +68,13 @@ DECLARE_EVENT_CLASS(dpaa_eth_fd,
 	 * for arrays. Use __string for variable length strings.
 	 */
 	TP_STRUCT__entry(
-		__field(	u32,	fqid		)
-		__field(	u64,	fd_addr		)
-		__field(	u8,	fd_format	)
-		__field(	u16,	fd_offset	)
-		__field(	u32,	fd_length	)
-		__field(	u32,	fd_status	)
-		__string(	name,	netdev->name	)
+		__field(u32,	fqid)
+		__field(u64,	fd_addr)
+		__field(u8,	fd_format)
+		__field(u16,	fd_offset)
+		__field(u32,	fd_length)
+		__field(u32,	fd_status)
+		__string(name,	netdev->name)
 	),
 
 	/* The function that assigns values to the above declared fields */
@@ -88,7 +90,7 @@ DECLARE_EVENT_CLASS(dpaa_eth_fd,
 
 	/* This is what gets printed when the trace event is triggered */
 	/* TODO: print the status using __print_flags() */
-	TP_printk("[%s] fqid=%d, fd: addr=0x%llx, format=%s, off=%u, len=%u, status=0x%08x",
+	TP_printk(TR_FMT,
 		  __get_str(name), __entry->fqid, __entry->fd_addr,
 		  __print_symbolic(__entry->fd_format, fd_format_list),
 		  __entry->fd_offset, __entry->fd_length, __entry->fd_status)
