@@ -53,28 +53,6 @@ config FSL_DPAA_TS
 	---help---
 	  Enable Linux API compliant timestamping support.
 
-choice FSL_DPAA_ETH_WQ_ASSIGN
-	prompt "WorkQueue assignment scheme for FrameQueues"
-	depends on FSL_DPAA_ETH
-	default FSL_DPAA_ETH_WQ_MULTI
-	---help---
-	  Selects the FrameQueue to WorkQueue assignment scheme.
-
-	config FSL_DPAA_ETH_WQ_LEGACY
-		bool "Legacy WQ assignment"
-		---help---
-		  Statically-defined FQIDs are round-robin assigned to all WQs (0..7). PCD queues are always
-		  in this category. Other frame queues may be those used for "MAC-less" or "shared MAC" configurations
-		  of the driver.
-		  Dynamically-defined FQIDs all go to WQ7.
-	config FSL_DPAA_ETH_WQ_MULTI
-	bool "Multi-WQ assignment"
-	---help---
-	  Tx Confirmation FQs go to WQ1.
-	  Rx Default, Tx and PCD FQs go to WQ3.
-	  Rx Error and Tx Error FQs go to WQ2.
-endchoice
-
 config FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 	bool "Use driver's Tx queue selection mechanism"
 	default y

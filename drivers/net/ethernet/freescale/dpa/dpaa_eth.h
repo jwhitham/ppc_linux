@@ -583,19 +583,6 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 	return 0;
 }
 
-#if defined CONFIG_FSL_DPAA_ETH_WQ_LEGACY
-#define DPA_NUM_WQS 8
-/* Older WQ assignment: statically-defined FQIDs (such as PCDs) are assigned
- * round-robin to all WQs available. Dynamically-allocated FQIDs go to WQ7.
- *
- * Not necessarily the best scheme, but worked fine so far, so we might want
- * to keep it around for a while.
- */
-static inline void _dpa_assign_wq(struct dpa_fq *fq)
-{
-	fq->wq = fq->fqid ? fq->fqid % DPA_NUM_WQS : DPA_NUM_WQS - 1;
-}
-#elif defined CONFIG_FSL_DPAA_ETH_WQ_MULTI
 /* Use multiple WQs for FQ assignment:
  *	- Tx Confirmation queues go to WQ1.
  *	- Rx Default, Tx and PCD queues go to WQ3 (no differentiation between
@@ -631,11 +618,6 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 		       fq->fq_type, fq->fqid);
 	}
 }
-#else
-/* This shouldn't happen, since we've made a "default" choice in the Kconfig. */
-#warning "No WQ assignment scheme chosen; Kconfig out-of-sync?"
-#endif /* CONFIG_FSL_DPAA_ETH_WQ_ASSIGN_* */
-
 
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 /* Use in lieu of skb_get_queue_mapping() */
