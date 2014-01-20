@@ -56,6 +56,9 @@
 
 static struct dpa_bp *dpa_bp_array[64];
 
+int dpa_max_frm;
+int dpa_rx_extra_headroom;
+
 static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
