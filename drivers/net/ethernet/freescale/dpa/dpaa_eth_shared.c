@@ -104,7 +104,7 @@ static const struct net_device_ops dpa_shared_ops = {
 	.ndo_do_ioctl = dpa_ioctl,
 };
 
-const dpa_fq_cbs_t shared_fq_cbs = {
+const struct dpa_fq_cbs_t shared_fq_cbs = {
 	.rx_defq = { .cb = { .dqrr = shared_rx_dqrr } },
 	.tx_defq = { .cb = { .dqrr = shared_tx_default_dqrr } },
 	.rx_errq = { .cb = { .dqrr = shared_rx_dqrr } },

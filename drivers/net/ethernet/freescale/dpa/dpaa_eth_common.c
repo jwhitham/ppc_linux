@@ -1066,7 +1066,7 @@ static inline void dpa_setup_egress(const struct dpa_priv_s *priv,
 	}
 }
 
-void dpa_fq_setup(struct dpa_priv_s *priv, const dpa_fq_cbs_t *fq_cbs,
+void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 		struct fm_port *tx_port)
 {
 	struct dpa_fq *fq;

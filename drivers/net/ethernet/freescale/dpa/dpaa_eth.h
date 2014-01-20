@@ -255,13 +255,13 @@ struct dpa_fq {
 	enum dpa_fq_type fq_type;
 };
 
-typedef struct dpa_fq_cbs_t {
+struct dpa_fq_cbs_t {
 	struct qman_fq rx_defq;
 	struct qman_fq tx_defq;
 	struct qman_fq rx_errq;
 	struct qman_fq tx_errq;
 	struct qman_fq egress_ern;
-} dpa_fq_cbs_t;
+};
 
 struct fqid_cell {
 	uint32_t start;

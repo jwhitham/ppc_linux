@@ -529,7 +529,7 @@ static void priv_ern(struct qman_portal	*portal,
 	dev_kfree_skb_any(skb);
 }
 
-static const dpa_fq_cbs_t private_fq_cbs = {
+static const struct dpa_fq_cbs_t private_fq_cbs = {
 	.rx_defq = { .cb = { .dqrr = priv_rx_default_dqrr } },
 	.tx_defq = { .cb = { .dqrr = priv_tx_conf_default_dqrr } },
 	.rx_errq = { .cb = { .dqrr = priv_rx_error_dqrr } },

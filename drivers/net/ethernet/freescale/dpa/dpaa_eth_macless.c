@@ -74,7 +74,7 @@ module_param(tx_timeout, ushort, S_IRUGO);
 MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
 
 /* reused from the shared driver */
-extern const dpa_fq_cbs_t shared_fq_cbs;
+extern const struct dpa_fq_cbs_t shared_fq_cbs;
 int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
 
 /* forward declarations */
