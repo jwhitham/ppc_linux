@@ -150,11 +150,9 @@ int dpa_ndo_init(struct net_device *net_dev);
 int dpa_set_features(struct net_device *dev, netdev_features_t features);
 netdev_features_t dpa_fix_features(struct net_device *dev,
 		netdev_features_t features);
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+#ifdef CONFIG_FSL_DPAA_TS
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv,
 			enum port_type rx_tx, const void *data);
-#endif
-#ifdef CONFIG_FSL_DPAA_TS
 /* Updates the skb shared hw timestamp from the hardware timestamp */
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
 	struct skb_shared_hwtstamps *shhwtstamps, const void *data);

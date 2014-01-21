@@ -315,7 +315,7 @@ netdev_features_t dpa_fix_features(struct net_device *dev,
 	return features;
 }
 
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+#ifdef CONFIG_FSL_DPAA_TS
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
 			const void *data)
 {
@@ -332,8 +332,7 @@ u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
 
 	return ns;
 }
-#endif
-#ifdef CONFIG_FSL_DPAA_TS
+
 int dpa_get_ts(const struct dpa_priv_s *priv, enum port_type rx_tx,
 	struct skb_shared_hwtstamps *shhwtstamps, const void *data)
 {
@@ -454,8 +453,8 @@ int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 #endif
 	int ret = 0;
 
-/* at least one timestamping feature must be enabled to proceed */
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+	/* at least one timestamping feature must be enabled */
+#ifdef CONFIG_FSL_DPAA_TS
 	if (!netif_running(dev))
 #endif
 		return -EINVAL;
@@ -653,7 +652,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 	layout[RX].priv_data_size = (uint16_t)DPA_RX_PRIV_DATA_SIZE;
 	layout[RX].parse_results = true;
 	layout[RX].hash_results = true;
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+#ifdef CONFIG_FSL_DPAA_TS
 	layout[RX].time_stamp = true;
 #endif
 	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[RX], &params);
@@ -667,7 +666,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 	layout[TX].priv_data_size = DPA_TX_PRIV_DATA_SIZE;
 	layout[TX].parse_results = true;
 	layout[TX].hash_results = true;
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+#ifdef CONFIG_FSL_DPAA_TS
 	layout[TX].time_stamp = true;
 #endif
 	fm_port_get_buff_layout_ext_params(mac_dev->port_dev[TX], &params);

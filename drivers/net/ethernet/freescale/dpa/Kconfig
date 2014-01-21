@@ -39,19 +39,20 @@ config FSL_DPAA_ETH_JUMBO_FRAME
 	  significantly the driver's memory footprint and may even deplete
 	  the system memory.
 
-config FSL_DPAA_1588
-	tristate "IEEE 1588-compliant timestamping"
-	depends on FSL_DPAA_ETH
-	default n
-	---help---
-	 Enable IEEE1588 support code.
-
 config FSL_DPAA_TS
 	tristate "Linux compliant timestamping"
 	depends on FSL_DPAA_ETH
 	default n
 	---help---
 	  Enable Linux API compliant timestamping support.
+
+config FSL_DPAA_1588
+        tristate "IEEE 1588-compliant timestamping"
+        depends on FSL_DPAA_ETH
+        select FSL_DPAA_TS
+        default n
+        ---help---
+         Enable IEEE1588 support code.
 
 config FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 	bool "Use driver's Tx queue selection mechanism"

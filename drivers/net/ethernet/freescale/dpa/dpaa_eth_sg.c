@@ -274,7 +274,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 		/* Free the page frag that we allocated on Tx */
 		put_page(virt_to_head_page(sgt));
 	}
-#if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
+#ifdef CONFIG_FSL_DPAA_TS
 	else {
 		/* get the timestamp for non-SG frames */
 #ifdef CONFIG_FSL_DPAA_1588
@@ -282,7 +282,6 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 						priv->tsu->hwts_tx_en_ioctl)
 			dpa_ptp_store_txstamp(priv, skb, (void *)skbh);
 #endif
-#ifdef CONFIG_FSL_DPAA_TS
 		if (unlikely(priv->ts_tx_en &&
 				skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
 			struct skb_shared_hwtstamps shhwtstamps;
@@ -290,14 +289,13 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 			dpa_get_ts(priv, TX, &shhwtstamps, (void *)skbh);
 			skb_tstamp_tx(skb, &shhwtstamps);
 		}
-#endif
 	}
 #endif
 
 	return skb;
 }
 
-#if (!defined(CONFIG_FSL_DPAA_TS) && !defined(CONFIG_FSL_DPAA_1588))
+#ifndef CONFIG_FSL_DPAA_TS
 static bool dpa_skb_is_recyclable(struct sk_buff *skb)
 {
 	/* No recycling possible if skb buffer is kmalloc'ed  */
@@ -345,8 +343,7 @@ static bool dpa_buf_is_recyclable(struct sk_buff *skb,
 
 	return false;
 }
-#endif /* (!defined(CONFIG_FSL_DPAA_TS) && !defined(CONFIG_FSL_DPAA_1588)) */
-
+#endif
 
 /* Build a linear skb around the received buffer.
  * We are guaranteed there is enough room at the end of the data buffer to
@@ -626,8 +623,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	enum dma_data_direction dma_dir;
 	unsigned char *buffer_start;
 
-#if (!defined(CONFIG_FSL_DPAA_TS) && !defined(CONFIG_FSL_DPAA_1588))
-
+#ifndef CONFIG_FSL_DPAA_TS
 	/* Check recycling conditions; only if timestamp support is not
 	 * enabled, otherwise we need the fd back on tx confirmation
 	 */
