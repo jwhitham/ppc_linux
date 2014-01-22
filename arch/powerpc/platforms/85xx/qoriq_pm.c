@@ -18,6 +18,9 @@
 #include <asm/fsl_pm.h>
 
 #define FSL_SLEEP		0x1
+#define FSL_DEEP_SLEEP		0x2
+
+int (*fsl_enter_deepsleep)(void);
 
 /* specify the sleep state of the present platform */
 unsigned int sleep_pm_state;
@@ -27,6 +30,7 @@ static unsigned int sleep_modes;
 static int qoriq_suspend_enter(suspend_state_t state)
 {
 	int ret = 0;
+	int cpu;
 
 	switch (state) {
 	case PM_SUSPEND_STANDBY:
@@ -35,6 +39,17 @@ static int qoriq_suspend_enter(suspend_state_t state)
 			cur_cpu_spec->cpu_flush_caches();
 
 		ret = qoriq_pm_ops->plat_enter_state(sleep_pm_state);
+
+		break;
+
+	case PM_SUSPEND_MEM:
+
+		cpu = smp_processor_id();
+		qoriq_pm_ops->irq_mask(cpu);
+
+		ret = fsl_enter_deepsleep();
+
+		qoriq_pm_ops->irq_unmask(cpu);
 
 		break;
 
@@ -51,12 +66,30 @@ static int qoriq_suspend_valid(suspend_state_t state)
 	if (state == PM_SUSPEND_STANDBY && (sleep_modes & FSL_SLEEP))
 		return 1;
 
+	if (state == PM_SUSPEND_MEM && (sleep_modes & FSL_DEEP_SLEEP))
+		return 1;
+
 	return 0;
+}
+
+static int qoriq_suspend_begin(suspend_state_t state)
+{
+	if (state == PM_SUSPEND_MEM)
+		return fsl_dp_iomap();
+
+	return 0;
+}
+
+static void qoriq_suspend_end(void)
+{
+	fsl_dp_iounmap();
 }
 
 static const struct platform_suspend_ops qoriq_suspend_ops = {
 	.valid = qoriq_suspend_valid,
 	.enter = qoriq_suspend_enter,
+	.begin = qoriq_suspend_begin,
+	.end = qoriq_suspend_end,
 };
 
 static int __init qoriq_suspend_init(void)
@@ -69,6 +102,12 @@ static int __init qoriq_suspend_init(void)
 	np = of_find_compatible_node(NULL, NULL, "fsl,qoriq-rcpm-2.0");
 	if (np)
 		sleep_pm_state = PLAT_PM_LPM20;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,t1040-rcpm");
+	if (np) {
+		fsl_enter_deepsleep = fsl_enter_epu_deepsleep;
+		sleep_modes |= FSL_DEEP_SLEEP;
+	}
 
 	suspend_set_ops(&qoriq_suspend_ops);
 

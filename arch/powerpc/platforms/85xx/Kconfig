@@ -295,3 +295,4 @@ config TQM85xx
 
 config FSL_QORIQ_PM
 	bool
+	select FSL_SLEEP_FSM

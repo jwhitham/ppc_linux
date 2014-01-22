@@ -12,6 +12,7 @@
 #define __PPC_FSL_PM_H
 #ifdef	__KERNEL__
 
+#ifndef __ASSEMBLY__
 #define E500_PM_PH10	1
 #define E500_PM_PH15	2
 #define E500_PM_PH20	3
@@ -33,5 +34,23 @@ struct fsl_pm_ops {
 };
 
 extern const struct fsl_pm_ops *qoriq_pm_ops;
+
+struct fsm_reg_vals;
+
+extern void fsl_dp_fsm_setup(void __iomem *dcsr_base, struct fsm_reg_vals *val);
+extern void fsl_dp_fsm_clean(void __iomem *dcsr_base, struct fsm_reg_vals *val);
+
+extern int fsl_dp_iomap(void);
+extern void fsl_dp_iounmap(void);
+
+extern int fsl_enter_epu_deepsleep(void);
+extern void fsl_dp_enter_low(void __iomem *ccsr_base, void __iomem *dcsr_base,
+			     void __iomem *pld_base, int pld_flag);
+extern void fsl_booke_deep_sleep_resume(void);
+#endif	/* __ASSEMBLY__ */
+
+#define T1040QDS_TETRA_FLAG	1
+#define T104xRDB_CPLD_FLAG	2
+
 #endif	/* __KERNEL__ */
 #endif  /* __PPC_FSL_PM_H */
