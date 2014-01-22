@@ -572,7 +572,7 @@ static void generic_suspend_disable_irqs(void)
 	 */
 
 	set_dec(DECREMENTER_MAX);
-	local_irq_disable();
+	hard_irq_disable();
 	set_dec(DECREMENTER_MAX);
 }
 
