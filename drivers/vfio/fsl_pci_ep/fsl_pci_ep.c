@@ -42,6 +42,9 @@
 #define CONFIG_ACCESS_TYPE_VF_SRIOV 3
 #define CONFIG_ACCESS_ENABLE (1 << 31)
 
+#define PCI_ATMU_MIN_SIZE (4 * 1024) /* The smallest window size is 4 Kbytes */
+#define PCI_OB_WIN_MEM_ATTR 0x80044000 /* enable & mem R/W */
+
 static DEFINE_SPINLOCK(pci_ep_spinlock);
 LIST_HEAD(pci_ep_controllers);
 
@@ -407,17 +410,24 @@ static int fsl_pci_ep_set_ibwin(struct pci_ep_dev *ep,
 		return -EINVAL;
 
 	if (ep->type == PCI_EP_TYPE_PF) {
-		int bits = ilog2(win->size);
-		u32 piwar = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
-			    PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP;
+		u32 attr;
+
 		iw_regs = &pf->regs->piw[ep->iw_num - win->idx - 1];
+
+		if (win->size < PCI_ATMU_MIN_SIZE)
+			attr = 0;
+		else
+			attr = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
+			       PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP |
+			       (ilog2(win->size) - 1);
+
 		/* Setup inbound memory window */
 		spin_lock(&pf->lock);
 		out_be32(&iw_regs->pitar, win->cpu_addr >> 12);
 		if (win->attr) /* use the specific attribute */
 			out_be32(&iw_regs->piwar, win->attr);
 		else /* use the default attribute */
-			out_be32(&iw_regs->piwar, piwar | (bits - 1));
+			out_be32(&iw_regs->piwar, attr);
 		spin_unlock(&pf->lock);
 	} else {
 		/*
@@ -445,11 +455,15 @@ static int fsl_pci_ep_set_obwin(struct pci_ep_dev *ep,
 
 	if (ep->type == PCI_EP_TYPE_PF) {
 		int bits;
-		u32 flags = 0x80044000; /* enable & mem R/W */
+		u32 attr; /* enable & mem R/W */
 
-		bits = min(ilog2(win->size),
-				__ffs(win->pci_addr | win->cpu_addr));
-
+		if (win->size < PCI_ATMU_MIN_SIZE)
+			attr = 0;
+		else {
+			bits = min(ilog2(win->size),
+				   __ffs(win->pci_addr | win->cpu_addr));
+			attr = PCI_OB_WIN_MEM_ATTR | (bits - 1);
+		}
 		spin_lock(&pf->lock);
 		out_be32(&ow_regs->potar, win->pci_addr >> 12);
 		out_be32(&ow_regs->potear, win->pci_addr >> 44);
@@ -457,7 +471,7 @@ static int fsl_pci_ep_set_obwin(struct pci_ep_dev *ep,
 		if (win->attr) /* use the specific attribute */
 			out_be32(&ow_regs->powar, win->attr);
 		else /* use the default attribute */
-			out_be32(&ow_regs->powar, flags | (bits - 1));
+			out_be32(&ow_regs->powar, attr);
 		spin_unlock(&pf->lock);
 	} else {
 		/*
@@ -506,9 +520,7 @@ static int fsl_pci_ep_set_vfibwin(struct pci_ep_dev *ep,
 {
 	struct pci_pf_dev *pf = ep->pf;
 	struct pci_inbound_window_regs *iw_regs;
-	int bits;
-	u32 piwar = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
-		    PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP;
+	u32 attr;
 
 	if (win->idx >= ep->iw_num)
 		return -EINVAL;
@@ -517,7 +529,13 @@ static int fsl_pci_ep_set_vfibwin(struct pci_ep_dev *ep,
 	if (ep->type != PCI_EP_TYPE_PF)
 		return -EINVAL;
 
-	bits = ilog2(win->size);
+	if (win->size < PCI_ATMU_MIN_SIZE)
+		attr = 0;
+	else
+		attr = PIWAR_EN | PIWAR_PF | PIWAR_TGI_LOCAL |
+		       PIWAR_READ_SNOOP | PIWAR_WRITE_SNOOP |
+		       (ilog2(win->size) - 1);
+
 	iw_regs = &pf->vf_regs->vfiw[ep->iw_num - win->idx - 1];
 
 	/* Setup inbound memory window */
@@ -526,7 +544,7 @@ static int fsl_pci_ep_set_vfibwin(struct pci_ep_dev *ep,
 	if (win->attr) /* use the specified attribute */
 		out_be32(&iw_regs->piwar, win->attr);
 	else /* use the default attribute */
-		out_be32(&iw_regs->piwar, piwar | (bits - 1));
+		out_be32(&iw_regs->piwar, attr);
 	spin_unlock(&pf->lock);
 
 	return 0;
@@ -538,7 +556,7 @@ static int fsl_pci_ep_set_vfobwin(struct pci_ep_dev *ep,
 	struct pci_pf_dev *pf = ep->pf;
 	struct pci_outbound_window_regs *ow_regs;
 	int bits;
-	u32 flags = 0x80044000; /* enable & mem R/W */
+	u32 attr;
 
 	if (win->idx >= ep->iw_num)
 		return -EINVAL;
@@ -549,14 +567,20 @@ static int fsl_pci_ep_set_vfobwin(struct pci_ep_dev *ep,
 
 	ow_regs = &pf->vf_regs->vfow[win->idx];
 
-	bits = min(ilog2(win->size), __ffs(win->pci_addr | win->cpu_addr));
+	if (win->size < PCI_ATMU_MIN_SIZE)
+		attr = 0;
+	else {
+		bits = min(ilog2(win->size),
+			   __ffs(win->pci_addr | win->cpu_addr));
+		attr = PCI_OB_WIN_MEM_ATTR | (bits - 1);
+	}
 
 	spin_lock(&pf->lock);
 	out_be32(&ow_regs->powbar, win->cpu_addr >> 12);
 	if (win->attr) /* use the specified attribute */
 		out_be32(&ow_regs->powar, win->attr);
 	else /* use the default attribute */
-		out_be32(&ow_regs->powar, flags | (bits - 1));
+		out_be32(&ow_regs->powar, attr);
 	spin_unlock(&pf->lock);
 
 	return 0;
