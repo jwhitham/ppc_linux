@@ -2659,6 +2659,8 @@ static int talitos_probe(struct platform_device *ofdev)
 	if (!priv)
 		return -ENOMEM;
 
+	INIT_LIST_HEAD(&priv->alg_list);
+
 	dev_set_drvdata(dev, priv);
 
 	priv->ofdev = ofdev;
@@ -2720,8 +2722,6 @@ static int talitos_probe(struct platform_device *ofdev)
 			napi_enable(per_cpu_ptr(priv->done_task[1], i));
 		}
 	}
-
-	INIT_LIST_HEAD(&priv->alg_list);
 
 	priv->reg = of_iomap(np, 0);
 	if (!priv->reg) {
