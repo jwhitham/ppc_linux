@@ -626,6 +626,7 @@ static int of_fsl_bman_probe(struct platform_device *ofdev)
 		dev_attr_buffer_pool_count[i].show = show_pool_count;
 		bman_dev_pool_count_attributes[i] =
 			&dev_attr_buffer_pool_count[i].attr;
+		sysfs_attr_init(bman_dev_pool_count_attributes[i]);
 	}
 	bman_dev_pool_count_attributes[bman_pool_max] = NULL;
 
