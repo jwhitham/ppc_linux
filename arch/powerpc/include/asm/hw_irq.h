@@ -111,7 +111,7 @@ static inline void __hard_irq_disable(void)
 		     "memory", "lr");
 }
 #else
-#define __hard_irq_disable()	asm volatile("wrteei 0" : : : "memory");
+#define __hard_irq_disable()	asm volatile("wrteei 0" : : : "memory")
 #endif
 
 #else
