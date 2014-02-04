@@ -58,14 +58,13 @@ module_param(debug, byte, S_IRUGO);
 MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
 
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev);
-static struct proxy_device *proxy_dev;
-
 #ifdef CONFIG_PM
 
 static int proxy_suspend_noirq(struct device *dev)
 {
-	struct mac_device	*mac_dev = proxy_dev->mac_dev;
-	int			err = 0;
+	struct proxy_device *proxy_dev = dev_get_drvdata(dev);
+	struct mac_device *mac_dev = proxy_dev->mac_dev;
+	int err = 0;
 
 	err = fm_port_suspend(mac_dev->port_dev[RX]);
 	if (err)
@@ -81,6 +80,7 @@ port_suspend_failed:
 
 static int proxy_resume_noirq(struct device *dev)
 {
+	struct proxy_device *proxy_dev = dev_get_drvdata(dev);
 	struct mac_device	*mac_dev = proxy_dev->mac_dev;
 	int			err = 0;
 
@@ -120,6 +120,7 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 	struct fm_port_fqs port_fqs;
 	struct dpa_buffer_layout_s *buf_layout = NULL;
 	struct mac_device *mac_dev;
+	struct proxy_device *proxy_dev;
 
 	dev = &_of_dev->dev;
 
@@ -304,12 +305,12 @@ int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
 
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev)
 {
-	struct device *dev;
-
-	dev = &of_dev->dev;
-	dev_set_drvdata(dev, NULL);
+	struct device *dev = &of_dev->dev;
+	struct proxy_device *proxy_dev = dev_get_drvdata(dev);
 
 	kfree(proxy_dev);
+
+	dev_set_drvdata(dev, NULL);
 
 	return 0;
 }
