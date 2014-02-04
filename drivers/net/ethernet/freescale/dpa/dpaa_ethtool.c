@@ -240,4 +240,3 @@ const struct ethtool_ops dpa_ethtool_ops = {
 	.get_ethtool_stats = NULL, /* TODO other stats, currently in debugfs */
 	.get_link = ethtool_op_get_link,
 };
-

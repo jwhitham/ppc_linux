@@ -96,7 +96,7 @@ int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 	struct bm_buffer bmb[8];
 	void *new_buf;
 	dma_addr_t addr;
-	int i;
+	uint8_t i;
 	struct device *dev = dpa_bp->dev;
 	struct sk_buff *skb, **skbh;
 
@@ -694,7 +694,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 			netdev_err(net_dev, "dma_map_single() failed\n");
 		return -EINVAL;
 	}
-	fd->addr_hi = upper_32_bits(addr);
+	fd->addr_hi = (uint8_t)upper_32_bits(addr);
 	fd->addr_lo = lower_32_bits(addr);
 
 	return 0;

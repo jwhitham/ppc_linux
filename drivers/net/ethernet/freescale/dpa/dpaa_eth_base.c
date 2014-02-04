@@ -113,7 +113,7 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 			dpa_bp = ERR_PTR(-EINVAL);
 			goto _return_of_node_put;
 		}
-		dpa_bp[i].bpid = *bpid;
+		dpa_bp[i].bpid = (uint8_t)*bpid;
 
 		bpool_cfg = of_get_property(dev_node, "fsl,bpool-ethernet-cfg",
 					&lenp);
@@ -122,7 +122,8 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 
 			dpa_bp[i].config_count =
 				(int)of_read_number(bpool_cfg, ns);
-			dpa_bp[i].size	= of_read_number(bpool_cfg + ns, ns);
+			dpa_bp[i].size	=
+				(size_t)of_read_number(bpool_cfg + ns, ns);
 			dpa_bp[i].paddr	=
 				of_read_number(bpool_cfg + 2 * ns, na);
 
@@ -177,7 +178,7 @@ int dpa_bp_shared_port_seed(struct dpa_bp *bp)
 
 		while (count) {
 			struct bm_buffer bufs[8];
-			int num_bufs = 0;
+			uint8_t num_bufs = 0;
 
 			do {
 				BUG_ON(addr > 0xffffffffffffull);

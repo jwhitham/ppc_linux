@@ -829,7 +829,7 @@ static const struct of_device_id dpa_match[];
 static int
 dpaa_eth_priv_probe(struct platform_device *_of_dev)
 {
-	int err = 0, i;
+	int err = 0, i, channel;
 	struct device *dev;
 	struct device_node *dpa_node;
 	struct dpa_bp *dpa_bp;
@@ -930,12 +930,14 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 
 	priv->mac_dev = mac_dev;
 
-	priv->channel = dpa_get_channel();
+	channel = dpa_get_channel();
 
-	if (priv->channel < 0) {
-		err = priv->channel;
+	if (channel < 0) {
+		err = channel;
 		goto get_channel_failed;
 	}
+
+	priv->channel = (uint16_t)channel;
 
 	/* Start a thread that will walk the cpus with affine portals
 	 * and add this pool channel to each's dequeue mask.

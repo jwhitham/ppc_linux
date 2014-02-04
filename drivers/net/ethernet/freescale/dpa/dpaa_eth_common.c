@@ -650,7 +650,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 	struct fm_port_params params;
 
 	/* Rx */
-	layout[RX].priv_data_size = DPA_RX_PRIV_DATA_SIZE;
+	layout[RX].priv_data_size = (uint16_t)DPA_RX_PRIV_DATA_SIZE;
 	layout[RX].parse_results = true;
 	layout[RX].hash_results = true;
 #if defined(CONFIG_FSL_DPAA_1588) || defined(CONFIG_FSL_DPAA_TS)
@@ -702,7 +702,7 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp)
 		return -ENODEV;
 	}
 
-	dpa_bp->bpid = bman_get_params(dpa_bp->pool)->bpid;
+	dpa_bp->bpid = (uint8_t)bman_get_params(dpa_bp->pool)->bpid;
 
 	pdev = platform_device_register_simple("dpaa_eth_bpool",
 			dpa_bp->bpid, NULL, 0);
@@ -958,7 +958,7 @@ int dpa_get_channel()
 int dpaa_eth_add_channel(void *__arg)
 {
 	const cpumask_t *cpus = qman_affine_cpus();
-	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u32)(unsigned long)__arg);
+	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u16)(unsigned long)__arg);
 	int cpu;
 	struct qman_portal *portal;
 
@@ -1060,7 +1060,7 @@ static inline void dpa_setup_egress(const struct dpa_priv_s *priv,
 
 	if (port) {
 		fq->flags = QMAN_FQ_FLAG_TO_DCPORTAL;
-		fq->channel = fm_get_tx_port_channel(port);
+		fq->channel = (uint16_t)fm_get_tx_port_channel(port);
 	} else {
 		fq->flags = QMAN_FQ_FLAG_NO_MODIFY;
 	}
@@ -1070,7 +1070,7 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 		struct fm_port *tx_port)
 {
 	struct dpa_fq *fq;
-	int portals[NR_CPUS];
+	uint16_t portals[NR_CPUS];
 	int cpu, portal_cnt = 0, num_portals = 0;
 	uint32_t pcd_fqid;
 	const cpumask_t *affine_cpus = qman_affine_cpus();
@@ -1238,8 +1238,9 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 			 */
 			initfq.we_mask |= QM_INITFQ_WE_OAC;
 			initfq.fqd.oac_init.oac = QM_OAC_CG;
-			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
-				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL);
+			initfq.fqd.oac_init.oal =
+				(signed char)(min(sizeof(struct sk_buff) +
+				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL));
 		}
 
 		if (td_enable) {
@@ -1297,8 +1298,9 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 			 */
 			initfq.we_mask |= QM_INITFQ_WE_OAC;
 			initfq.fqd.oac_init.oac = QM_OAC_CG;
-			initfq.fqd.oac_init.oal = min(sizeof(struct sk_buff) +
-				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL);
+			initfq.fqd.oac_init.oal =
+				(signed char)(min(sizeof(struct sk_buff) +
+				priv->tx_headroom, (size_t)FSL_QMAN_MAX_OAL));
 		}
 
 		/* Initialization common to all ingress queues */
@@ -1401,12 +1403,12 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 
 	memset(&rx_port_param, 0, sizeof(rx_port_param));
 	count = min(ARRAY_SIZE(rx_port_param.pool_param), count);
-	rx_port_param.num_pools = count;
+	rx_port_param.num_pools = (uint8_t)count;
 	for (i = 0; i < count; i++) {
 		if (i >= rx_port_param.num_pools)
 			break;
 		rx_port_param.pool_param[i].id = bp[i].bpid;
-		rx_port_param.pool_param[i].size = bp[i].size;
+		rx_port_param.pool_param[i].size = (uint16_t)bp[i].size;
 	}
 
 	dpaa_eth_init_port(rx, port, rx_port_param, errq->fqid, defq->fqid,
@@ -1453,7 +1455,7 @@ void dpaa_eth_init_ports(struct mac_device *mac_dev,
 void dpa_release_sgt(struct qm_sg_entry *sgt, struct bm_buffer *bmb)
 {
 	struct dpa_bp *dpa_bp;
-	int i = 0, j;
+	uint8_t i = 0, j;
 
 	do {
 		dpa_bp = dpa_bpid2pool(sgt[i].bpid);
@@ -1618,8 +1620,8 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	}
 
 	/* At index 0 is IPOffset_1 as defined in the Parse Results */
-	parse_result->ip_off[0] = skb_network_offset(skb);
-	parse_result->l4_off = skb_transport_offset(skb);
+	parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
+	parse_result->l4_off = (uint8_t)skb_transport_offset(skb);
 
 	/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
 	fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DTC;
