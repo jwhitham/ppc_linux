@@ -321,9 +321,8 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 						"phy-connection-type", NULL);
 	if (unlikely(char_prop == NULL)) {
 		dev_warn(dev,
-				"of_get_property(%s, phy-connection-type) "
-				"failed. Defaulting to MII\n",
-				mac_node->full_name);
+			 "of_get_property(%s, phy-connection-type) failed. Defaulting to MII\n",
+			 mac_node->full_name);
 		mac_dev->phy_if = PHY_INTERFACE_MODE_MII;
 	} else
 		mac_dev->phy_if = str2phy(char_prop);
