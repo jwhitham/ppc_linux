@@ -244,6 +244,69 @@ struct usdpaa_ioctl_dma_used {
 #define USDPAA_IOCTL_DMA_USED \
 	_IOR(USDPAA_IOCTL_MAGIC, 0x0B, struct usdpaa_ioctl_dma_used)
 
+/* ioctl to allocate a raw portal */
+struct usdpaa_ioctl_raw_portal {
+	/* inputs */
+	enum usdpaa_portal_type type; /* Type of portal to allocate */
+
+	 /* set to non zero to turn on stashing */
+	uint8_t enable_stash;
+	/* Stashing attributes for the portal */
+	uint32_t cpu;
+	uint32_t cache;
+	uint32_t window;
+
+	/* Specifies the stash request queue this portal should use */
+	uint8_t sdest;
+
+	/* Specifes a specific portal index to map or QBMAN_ANY_PORTAL_IDX
+	 * for don't care.  The portal index will be populated by the
+	 * driver when the ioctl() successfully completes */
+	uint32_t index;
+
+	/* outputs */
+	uint64_t cinh;
+	uint64_t cena;
+};
+
+#define USDPAA_IOCTL_ALLOC_RAW_PORTAL \
+	_IOWR(USDPAA_IOCTL_MAGIC, 0x0C, struct usdpaa_ioctl_raw_portal)
+
+#define USDPAA_IOCTL_FREE_RAW_PORTAL \
+	_IOR(USDPAA_IOCTL_MAGIC, 0x0D, struct usdpaa_ioctl_raw_portal)
+
+#ifdef CONFIG_COMPAT
+
+struct compat_ioctl_raw_portal {
+	/* inputs */
+	enum usdpaa_portal_type type; /* Type of portal to allocate */
+
+	 /* set to non zero to turn on stashing */
+	uint8_t enable_stash;
+	/* Stashing attributes for the portal */
+	uint32_t cpu;
+	uint32_t cache;
+	uint32_t window;
+	/* Specifies the stash request queue this portal should use */
+	uint8_t sdest;
+
+	/* Specifes a specific portal index to map or QBMAN_ANY_PORTAL_IDX
+	 * for don't care.  The portal index will be populated by the
+	 * driver when the ioctl() successfully completes */
+	uint32_t index;
+
+	/* outputs */
+	uint64_t cinh;
+	uint64_t cena;
+};
+
+#define USDPAA_IOCTL_ALLOC_RAW_PORTAL_COMPAT \
+	_IOWR(USDPAA_IOCTL_MAGIC, 0x0C, struct compat_ioctl_raw_portal)
+
+#define USDPAA_IOCTL_FREE_RAW_PORTAL_COMPAT \
+	_IOR(USDPAA_IOCTL_MAGIC, 0x0D, struct compat_ioctl_raw_portal)
+
+#endif
 
 #ifdef __KERNEL__
 
