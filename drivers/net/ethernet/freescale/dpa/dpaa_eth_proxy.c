@@ -309,8 +309,7 @@ static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev)
 	dev = &of_dev->dev;
 	dev_set_drvdata(dev, NULL);
 
-	if (proxy_dev)
-		kfree(proxy_dev);
+	kfree(proxy_dev);
 
 	return 0;
 }
