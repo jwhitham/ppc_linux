@@ -93,7 +93,7 @@ static void dpa_bp_recycle_frag(struct dpa_bp *dpa_bp, unsigned long vaddr,
 	(*count_ptr)++;
 }
 
-int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
+static int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 {
 	struct bm_buffer bmb[8];
 	void *new_buf;
@@ -160,7 +160,7 @@ netdev_alloc_failed:
 }
 
 /* Cold path wrapper over _dpa_bp_add_8_bufs(). */
-void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
+static void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
 {
 	int *count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu);
 	*count_ptr += _dpa_bp_add_8_bufs(dpa_bp);

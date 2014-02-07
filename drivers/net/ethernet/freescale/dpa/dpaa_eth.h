@@ -167,14 +167,6 @@ struct dpa_buffer_layout_s {
 #define FM_L4_PARSE_RESULT_UDP	0x40
 /* L4 Type field: TCP */
 #define FM_L4_PARSE_RESULT_TCP	0x20
-/* This includes L4 checksum errors, but also other errors that the Hard Parser
- * can detect, such as invalid combinations of TCP control flags, or bad UDP
- * lengths.
- */
-#define FM_L4_PARSE_ERROR	0x10
-/* Check if the hardware parser has run */
-#define FM_L4_HXS_RUN		0xE0
-
 /* FD status field indicating whether the FM Parser has attempted to validate
  * the L4 csum of the frame.
  * Note that having this bit set doesn't necessarily imply that the checksum
@@ -185,18 +177,6 @@ struct dpa_buffer_layout_s {
 
 #define FM_FD_STAT_ERR_PHYSICAL	FM_PORT_FRM_ERR_PHYSICAL
 
-/* Check if the FMan Hardware Parser has run for L4 protocols.
- *
- * @parse_result_ptr must be of type (fm_prs_result_t *).
- */
-#define fm_l4_hxs_has_run(parse_result_ptr) \
-	((parse_result_ptr)->l4r & FM_L4_HXS_RUN)
-/* Iff the FMan Hardware Parser has run for L4 protocols, check error status.
- *
- * @parse_result_ptr must be of type (fm_prs_result_t *).
- */
-#define fm_l4_hxs_error(parse_result_ptr) \
-	((parse_result_ptr)->l4r & FM_L4_PARSE_ERROR)
 /* Check if the parsed frame was found to be a TCP segment.
  *
  * @parse_result_ptr must be of type (fm_prs_result_t *).
@@ -421,9 +401,6 @@ void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 				      struct sk_buff *skb,
 				      int *use_gro);
 
-void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu_id);
-int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp);
-
 /* Turn on HW checksum computation for this outgoing frame.
  * If the current protocol is not something we support in this regard
  * (or if the stack has already computed the SW checksum), we do nothing.
@@ -505,12 +482,6 @@ static inline uint16_t dpa_get_headroom(struct dpa_buffer_layout_s *bl)
 		   bl->manip_extra_space;
 
 	return bl->data_align ? ALIGN(headroom, bl->data_align) : headroom;
-}
-
-static inline uint16_t dpa_get_buffer_size(struct dpa_buffer_layout_s *bl,
-					   uint16_t data_size)
-{
-	return dpa_get_headroom(bl) + data_size;
 }
 
 int fm_mac_dump_regs(struct mac_device *h_dev, char *buf, int n);
