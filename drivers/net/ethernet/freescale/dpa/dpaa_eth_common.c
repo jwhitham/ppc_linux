@@ -44,7 +44,9 @@
 #include <linux/if_vlan.h>	/* vlan_eth_hdr */
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
+#ifdef CONFIG_FSL_DPAA_1588
 #include "dpaa_1588.h"
+#endif
 #include "mac.h"
 
 /* DPAA platforms benefit from hardware-assisted queue management */

@@ -45,7 +45,9 @@
 
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
+#ifdef CONFIG_FSL_DPAA_1588
 #include "dpaa_1588.h"
+#endif
 
 /* Convenience macros for storing/retrieving the skb back-pointers. They must
  * accommodate both recycling and confirmation paths - i.e. cases when the buf
