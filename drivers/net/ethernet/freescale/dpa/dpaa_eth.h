@@ -146,7 +146,7 @@ struct dpa_buffer_layout_s {
  */
 #define DPA_RECYCLE_MAX_SIZE	16384
 
-#if defined(CONFIG_FSL_DPAA_FMAN_UNIT_TESTS)
+#if defined(CONFIG_FSL_FMAN_TEST)
 /*TODO: temporary for fman pcd testing */
 #define FMAN_PCD_TESTS_MAX_NUM_RANGES	20
 #endif
@@ -221,10 +221,12 @@ struct dpa_buffer_layout_s {
 #define DPAA_ETH_TX_QUEUES	NR_CPUS
 #define DPAA_ETH_RX_QUEUES	128
 
+#if defined(CONFIG_FSL_FMAN_TEST)
 struct pcd_range {
 	uint32_t			 base;
 	uint32_t			 count;
 };
+#endif
 
 /* More detailed FQ types - used for fine-grained WQ assignments */
 enum dpa_fq_type {
@@ -369,7 +371,7 @@ struct dpa_priv_s {
 	struct dpa_ptp_tsu	 *tsu;
 #endif
 
-#if defined(CONFIG_FSL_DPAA_FMAN_UNIT_TESTS)
+#if defined(CONFIG_FSL_FMAN_TEST)
 /* TODO: this is temporary until pcd support is implemented in dpaa */
 	int			priv_pcd_num_ranges;
 	struct pcd_range	priv_pcd_ranges[FMAN_PCD_TESTS_MAX_NUM_RANGES];

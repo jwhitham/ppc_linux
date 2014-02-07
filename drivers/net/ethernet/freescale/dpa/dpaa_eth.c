@@ -108,7 +108,7 @@ int dpa_alloc_pcd_fqids(struct device *, uint32_t, uint8_t, uint32_t *)
 __attribute__((weak));
 
 int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
-#endif /* CONFIG_FSL_DPAA_FMAN_UNIT_TESTS */
+#endif /* CONFIG_FSL_FMAN_TEST */
 
 /* BM */
 
