@@ -42,7 +42,7 @@
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
 #include "dpaa_1588.h"
-
+#include "mac.h"
 
 /* DPAA platforms benefit from hardware-assisted queue management */
 #ifdef CONFIG_AS_FASTPATH

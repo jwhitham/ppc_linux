@@ -47,8 +47,6 @@
 #include "lnxwrp_fsl_fman.h"
 #include "fm_ext.h"
 #include "fm_port_ext.h" /* FM_PORT_FRM_ERR_* */
-
-#include "mac.h"		/* struct mac_device */
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 #include "dpaa_debugfs.h"
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */

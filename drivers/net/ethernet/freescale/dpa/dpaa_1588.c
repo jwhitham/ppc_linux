@@ -30,6 +30,7 @@
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
 #include "dpaa_1588.h"
+#include "mac.h"
 
 static int dpa_ptp_init_circ(struct dpa_ptp_circ_buf *ptp_buf, u32 size)
 {

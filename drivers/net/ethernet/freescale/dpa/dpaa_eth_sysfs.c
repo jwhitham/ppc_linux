@@ -35,6 +35,7 @@
 #include <linux/io.h>
 #include <linux/of_net.h>
 #include "dpaa_eth.h"
+#include "mac.h"		/* struct mac_device */
 #ifdef CONFIG_FSL_DPAA_1588
 #include "dpaa_1588.h"
 #endif

@@ -41,6 +41,7 @@
 #include <linux/string.h>
 
 #include "dpaa_eth.h"
+#include "mac.h"                /* struct mac_device */
 
 static int __cold dpa_get_settings(struct net_device *net_dev,
 		struct ethtool_cmd *et_cmd)

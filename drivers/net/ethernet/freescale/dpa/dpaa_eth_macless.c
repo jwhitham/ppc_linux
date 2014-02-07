@@ -51,6 +51,7 @@
 #include "dpaa_eth_common.h"
 #include "dpaa_eth_base.h"
 #include "lnxwrp_fsl_fman.h" /* fm_get_rx_extra_headroom(), fm_get_max_frm() */
+#include "mac.h"
 
 /* For MAC-based interfaces, we compute the tx needed headroom from the
  * associated Tx port's buffer layout settings.
