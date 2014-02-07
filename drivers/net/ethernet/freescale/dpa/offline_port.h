@@ -32,7 +32,8 @@
 #ifndef __OFFLINE_PORT_H
 #define __OFFLINE_PORT_H
 
-#include "lnxwrp_fsl_fman.h"
+struct fm_port;
+struct qman_fq;
 
 /* OH port configuration */
 struct dpa_oh_config_s {
