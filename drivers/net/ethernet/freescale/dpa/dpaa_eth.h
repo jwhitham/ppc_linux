@@ -32,21 +32,10 @@
 #ifndef __DPA_H
 #define __DPA_H
 
-#include <linux/ethtool.h>	/* struct ethtool_ops */
 #include <linux/netdevice.h>
-#include <linux/list.h>		/* struct list_head */
-#include <linux/workqueue.h>	/* struct work_struct */
-#include <linux/skbuff.h>
-#include <linux/hardirq.h>
-#include <linux/if_vlan.h>	/* vlan_eth_hdr */
-#include <linux/ip.h>		/* ip_hdr */
-#include <linux/ipv6.h>		/* ipv6_hdr */
-
 #include <linux/fsl_qman.h>	/* struct qman_fq */
 
-#include "lnxwrp_fsl_fman.h"
 #include "fm_ext.h"
-#include "fm_port_ext.h" /* FM_PORT_FRM_ERR_* */
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 #include "dpaa_debugfs.h"
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */

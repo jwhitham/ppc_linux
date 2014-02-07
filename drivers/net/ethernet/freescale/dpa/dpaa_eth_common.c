@@ -39,6 +39,9 @@
 #include <linux/highmem.h>
 #include <linux/sort.h>
 #include <linux/fsl_qman.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/if_vlan.h>	/* vlan_eth_hdr */
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
 #include "dpaa_1588.h"
