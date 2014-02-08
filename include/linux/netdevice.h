@@ -1207,7 +1207,10 @@ struct net_device {
 	/* Interface index. Unique device identifier	*/
 	int			ifindex;
 	int			iflink;
-
+#ifdef CONFIG_AS_FASTPATH
+	/* Common interface id for ASF */
+	int cii;
+#endif
 	struct net_device_stats	stats;
 	atomic_long_t		rx_dropped; /* dropped packets by core network
 					     * Do not use this in drivers.
