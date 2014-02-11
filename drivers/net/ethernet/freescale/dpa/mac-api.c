@@ -603,7 +603,7 @@ static void __cold setup_dtsec(struct mac_device *mac_dev)
 	mac_dev->ptp_disable		= fm_mac_disable_1588_time_stamp;
 	mac_dev->get_mac_handle		= get_mac_handle;
 	mac_dev->set_tx_pause		= fm_mac_set_tx_pause_frames;
-	mac_dev->set_rx_pause		= fm_mac_set_rx_ignore_pause_frames;
+	mac_dev->set_rx_pause		= fm_mac_set_rx_pause_frames;
 	mac_dev->fm_rtc_enable		= fm_rtc_enable;
 	mac_dev->fm_rtc_disable		= fm_rtc_disable;
 	mac_dev->fm_rtc_get_cnt		= fm_rtc_get_cnt;
@@ -627,7 +627,7 @@ static void __cold setup_xgmac(struct mac_device *mac_dev)
 	mac_dev->uninit		= uninit;
 	mac_dev->get_mac_handle	= get_mac_handle;
 	mac_dev->set_tx_pause	= fm_mac_set_tx_pause_frames;
-	mac_dev->set_rx_pause	= fm_mac_set_rx_ignore_pause_frames;
+	mac_dev->set_rx_pause	= fm_mac_set_rx_pause_frames;
 	mac_dev->dump_mac_regs	= xgmac_dump_regs;
 }
 
@@ -643,7 +643,7 @@ static void __cold setup_memac(struct mac_device *mac_dev)
 	mac_dev->uninit		= uninit;
 	mac_dev->get_mac_handle		= get_mac_handle;
 	mac_dev->set_tx_pause		= fm_mac_set_tx_pause_frames;
-	mac_dev->set_rx_pause		= fm_mac_set_rx_ignore_pause_frames;
+	mac_dev->set_rx_pause		= fm_mac_set_rx_pause_frames;
 	mac_dev->fm_rtc_enable		= fm_rtc_enable;
 	mac_dev->fm_rtc_disable		= fm_rtc_disable;
 	mac_dev->fm_rtc_get_cnt		= fm_rtc_get_cnt;
