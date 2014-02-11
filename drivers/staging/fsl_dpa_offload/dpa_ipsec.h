@@ -242,6 +242,9 @@ struct dpa_ipsec_sa {
 	bool	 sec_desc_extended; /* true if SEC descriptor is extended     */
 	uint32_t *rjob_desc_unaligned;
 	uint32_t *rjob_desc; /* replacement job descriptor address	      */
+	uint64_t w_seq_num; /* RJD will write this SEQ number when modify     */
+	uint64_t r_seq_num; /* RJD will read here the SEQ number for this SA  */
+	bool	 read_seq_in_progress; /* true if a request came but a get not*/
 	uint32_t stats_offset; /* Offset of the statistics (in bytes)	      */
 	uint32_t stats_indx; /* Index of the lifetime counter in descriptor   */
 	uint32_t next_cmd_indx; /* Next command index after SHD header	      */
@@ -249,6 +252,7 @@ struct dpa_ipsec_sa {
 				* form the CAAM Descriptor length
 				* MAX_CAAM_DESCSIZE			      */
 	bool enable_stats; /* Enable counting packets and bytes processed     */
+	bool enable_extended_stats; /* Enable extended statistics per SA      */
 	bool dscp_copy; /* Enable DSCP propagation support		      */
 	bool ecn_copy; /* Enable DSCP propagation support		      */
 	bool enable_dpovrd; /* Enable DECO Protocol Override Register	      */
