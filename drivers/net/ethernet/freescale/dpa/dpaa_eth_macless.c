@@ -358,9 +358,23 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	sprintf(priv->if_type, "macless%d", macless_idx++);
 
 	priv->msg_enable = netif_msg_init(debug, -1);
-	/* control over proxy's mac device */
-	priv->peer = (void *)proxy_dev;
-	priv->mac_dev = proxy_dev->mac_dev;
+
+	priv->peer = NULL;
+	if (proxy_dev) {
+		/* This is a temporary solution for the need of
+		 * having main driver upstreamability: adjust_link
+		 * is a general function that should work for both
+		 * private driver and macless driver with MAC device
+		 * control capabilities even if the last will not be
+		 * upstreamable.
+		 * TODO: find a convenient solution (wrapper over
+		 * main priv structure, etc.)
+		 */
+		priv->mac_dev = proxy_dev->mac_dev;
+
+		/* control over proxy's mac device */
+		priv->peer = (void *)proxy_dev;
+	}
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
 
