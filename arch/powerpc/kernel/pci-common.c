@@ -1480,10 +1480,6 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
 		if (ppc_md.pcibios_enable_device_hook(dev))
 			return -EINVAL;
 
-	/* avoid pcie irq fixup impact on cardbus */
-	if (dev->hdr_type != PCI_HEADER_TYPE_CARDBUS)
-		pcibios_setup_device(dev);
-
 	return pci_enable_resources(dev, mask);
 }
 
