@@ -49,6 +49,7 @@
 #include <linux/workqueue.h>
 #include <linux/hugetlb.h>
 #include <linux/msi.h>
+#include <asm/fsl_pamu_stash.h>
 
 #define DRIVER_VERSION  "0.1"
 #define DRIVER_AUTHOR   "Bharat Bhushan <bharat.bhushan@freescale.com>"
@@ -619,7 +620,7 @@ static int vfio_handle_get_attr(struct vfio_iommu *iommu,
 		break;
 	}
 	case VFIO_ATTR_PAMU_STASH: {
-		struct iommu_stash_attribute stash;
+		struct pamu_stash_attribute stash;
 		if (iommu_domain_get_attr(iommu->domain,
 				      DOMAIN_ATTR_FSL_PAMU_STASH, &stash)) {
 			pr_err("%s Error getting domain windows\n",
@@ -682,7 +683,7 @@ static int vfio_handle_set_attr(struct vfio_iommu *iommu,
 		break;
 	}
 	case VFIO_ATTR_PAMU_STASH: {
-		struct iommu_stash_attribute stash;
+		struct pamu_stash_attribute stash;
 
 		stash.cpu = pamu_attr->attr_info.stash.cpu;
 		stash.cache = pamu_attr->attr_info.stash.cache;
