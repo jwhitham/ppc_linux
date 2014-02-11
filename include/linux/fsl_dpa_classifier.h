@@ -345,7 +345,10 @@ struct dpa_cls_tbl_entry_mod_params {
 struct dpa_cls_tbl_entry_stats {
 
 	/* The total number of packets that have hit the entry */
-	uint64_t		total_pkts;
+	uint32_t	pkts;
+
+	/* The total number of bytes that have hit the entry */
+	uint32_t	bytes;
 };
 
 

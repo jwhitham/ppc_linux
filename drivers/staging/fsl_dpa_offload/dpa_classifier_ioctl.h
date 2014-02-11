@@ -364,7 +364,7 @@ struct compat_ioc_dpa_cls_hm_vlan_params {
 struct compat_ipv4_header {
 	struct iphdr			header;
 	compat_uptr_t			options;
-	unsigned int			options_size;
+	uint8_t				options_size;
 };
 
 struct dpa_cls_compat_hm_nat_pt_params {
