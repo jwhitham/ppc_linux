@@ -76,11 +76,7 @@
 #include "lnxwrp_resources.h"
 #include "lnxwrp_sysfs_fm.h"
 #include "lnxwrp_sysfs_fm_port.h"
-
-/* export LLD API to DPAA offload kernel module */
-#if defined(CONFIG_FSL_DPA_OFFLOAD_MODULE)
 #include "lnxwrp_exp_sym.h"
-#endif
 
 #define __ERR_MODULE__  MODULE_FM
 
