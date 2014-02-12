@@ -216,9 +216,9 @@ static struct mem_fragment *split_frag(struct mem_fragment *frag)
 	x[0]->pfn_len = x[1]->pfn_len = x[2]->pfn_len = frag->pfn_len;
 	x[0]->refs = x[1]->refs = x[2]->refs = 0;
 	x[0]->root_len = x[1]->root_len = x[2]->root_len = frag->root_len;
-	list_add(&x[0]->list, &frag->list);
-	list_add(&x[1]->list, &x[0]->list);
-	list_add(&x[2]->list, &x[1]->list);
+	list_add_tail(&x[0]->list, &frag->list);
+	list_add_tail(&x[1]->list, &x[0]->list);
+	list_add_tail(&x[2]->list, &x[1]->list);
 	return x[2];
 }
 
@@ -248,8 +248,6 @@ static void compress_frags(void)
 		    &next_frag->list != &mem_list) {
 			if (next_frag->refs == 0) {
 				/* Merge with next */
-				next_frag->base = frag->base;
-				next_frag->pfn_base = frag->pfn_base;
 				next_frag->len += frag->len;
 				next_frag->pfn_len += frag->pfn_len;
 				list_del(&frag->list);
@@ -569,7 +567,7 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 		/* Check each fragment and merge if the ref count is 0 */
 		for (i = 0; i < map->frag_count; i++) {
 			--current_frag->refs;
-			current_frag = list_entry(current_frag->list.next,
+			current_frag = list_entry(current_frag->list.prev,
 						  struct mem_fragment, list);
 		}
 
@@ -964,23 +962,13 @@ do_map:
 		BUG_ON(next_frag->len == 0);
 		while ((next_frag->len + so_far) > i->len) {
 			/* Split frag until they match */
-			if (next_frag == start_frag)
-				start_frag = next_frag = split_frag(next_frag);
-			else
-				next_frag = split_frag(next_frag);
+			split_frag(next_frag);
 		}
 		so_far += next_frag->len;
+		next_frag->refs++;
 		++frag_count;
 		next_frag = list_entry(next_frag->list.prev,
 				       struct mem_fragment, list);
-	}
-
-	/* we need to reserve start count fragments starting at start frag */
-	for (k = 0; k < frag_count; k++) {
-		start_frag->refs++;
-		if (k+1 != frag_count)
-			start_frag = list_entry(start_frag->list.prev,
-					       struct mem_fragment, list);
 	}
 
 	start_frag->flags = i->flags;
