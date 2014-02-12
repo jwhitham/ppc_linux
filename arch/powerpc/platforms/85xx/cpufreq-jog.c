@@ -12,15 +12,6 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2, or (at your option)
  * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <linux/module.h>
@@ -28,13 +19,13 @@
 #include <linux/of_platform.h>
 #include <linux/suspend.h>
 #include <linux/cpu.h>
+#include <linux/time.h>
+#include <linux/io.h>
+#include <linux/smp.h>
 
 #include <asm/prom.h>
-#include <asm/time.h>
 #include <asm/reg.h>
-#include <asm/io.h>
 #include <asm/machdep.h>
-#include <asm/smp.h>
 
 #include <sysdev/fsl_soc.h>
 
@@ -178,7 +169,7 @@ static int p1022_set_pll(unsigned int cpu, unsigned int pll)
 	/* readback to sync write */
 	in_be32(guts + PMJCR);
 
-	cpu_hotplug_disable_before_freeze();
+	cpu_hotplug_disable();
 	/*
 	 * A Jog request can not be asserted when any core is in a low
 	 * power state on P1022. Before executing a jog request, any
@@ -188,7 +179,7 @@ static int p1022_set_pll(unsigned int cpu, unsigned int pll)
 	 */
 	for_each_present_cpu(index) {
 		if (!cpu_online(index)) {
-			cpu_hotplug_enable_after_thaw();
+			cpu_hotplug_enable();
 			pr_err("%s: error, core%d is down.\n", __func__, index);
 			return -1;
 		}
@@ -223,7 +214,7 @@ static int p1022_set_pll(unsigned int cpu, unsigned int pll)
 	atomic_set(&in_jog_process, 0);
 err:
 	local_irq_restore(flags);
-	cpu_hotplug_enable_after_thaw();
+	cpu_hotplug_enable();
 
 	/* verify */
 	cur_pll =  get_pll(hw_cpu);
@@ -255,17 +246,17 @@ static int mpc85xx_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	/* initialize frequency table */
 	pr_debug("core%d frequency table:\n", hw_cpu);
 	for (i = 0; mpc85xx_freqs[i].frequency != CPUFREQ_TABLE_END; i++) {
-		if (mpc85xx_freqs[i].index <= max_pll[hw_cpu]) {
+		if (mpc85xx_freqs[i].driver_data <= max_pll[hw_cpu]) {
 			/* The frequency unit is kHz. */
 			mpc85xx_freqs[i].frequency =
-				(sysfreq * mpc85xx_freqs[i].index / 2) / 1000;
+			  (sysfreq * mpc85xx_freqs[i].driver_data / 2) / 1000;
 		} else {
 			mpc85xx_freqs[i].frequency = CPUFREQ_ENTRY_INVALID;
 		}
 
 		pr_debug("%d: %dkHz\n", i, mpc85xx_freqs[i].frequency);
 
-		if (mpc85xx_freqs[i].index == cur_pll)
+		if (mpc85xx_freqs[i].driver_data == cur_pll)
 			policy->cur = mpc85xx_freqs[i].frequency;
 	}
 	pr_debug("current pll is at %d, and core freq is%d\n",
@@ -314,17 +305,17 @@ static int mpc85xx_cpufreq_target(struct cpufreq_policy *policy,
 	freqs.cpu = policy->cpu;
 
 	mutex_lock(&mpc85xx_switch_mutex);
-	cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
+	cpufreq_notify_transition(policy, &freqs, CPUFREQ_PRECHANGE);
 
-	ret = set_pll(policy->cpu, mpc85xx_freqs[new].index);
+	ret = set_pll(policy->cpu, mpc85xx_freqs[new].driver_data);
 	if (!ret) {
 		pr_info("cpufreq: Setting core%d frequency to %d kHz and PLL ratio to %d:2\n",
 			 policy->cpu, mpc85xx_freqs[new].frequency,
-			 mpc85xx_freqs[new].index);
+			 mpc85xx_freqs[new].driver_data);
 
 		ppc_proc_freq = freqs.new * 1000ul;
 	}
-	cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
+	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
 	mutex_unlock(&mpc85xx_switch_mutex);
 
 	return ret;
@@ -336,7 +327,6 @@ static struct cpufreq_driver mpc85xx_cpufreq_driver = {
 	.init		= mpc85xx_cpufreq_cpu_init,
 	.exit		= mpc85xx_cpufreq_cpu_exit,
 	.name		= "mpc85xx-JOG",
-	.owner		= THIS_MODULE,
 	.flags		= CPUFREQ_CONST_LOOPS,
 };
 
@@ -392,7 +382,6 @@ static struct of_device_id mpc85xx_jog_ids[] = {
 static struct platform_driver mpc85xx_jog_driver = {
 	.driver = {
 		.name = "mpc85xx_cpufreq_jog",
-		.owner = THIS_MODULE,
 		.of_match_table = mpc85xx_jog_ids,
 	},
 	.probe = mpc85xx_job_probe,

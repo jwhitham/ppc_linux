@@ -23,6 +23,16 @@ config CPU_FREQ_MAPLE
 	  This adds support for frequency switching on Maple 970FX
 	  Evaluation Board and compatible boards (IBM JS2x blades).
 
+config MPC85xx_CPUFREQ
+	bool "Support for Freescale MPC85xx CPU freq"
+	depends on PPC_85xx && PPC32 && !PPC_E500MC
+	default n
+	help
+	  This adds support for dynamic frequency switching on
+	  Freescale MPC85xx by cpufreq interface. MPC8536 and P1022
+	  have a JOG feature, which provides a dynamic mechanism
+	  to lower or raise the CPU core clock at runtime.
+
 config PPC_CORENET_CPUFREQ
 	tristate "CPU frequency scaling driver for Freescale E500MC SoCs"
 	depends on PPC_E500MC && OF && COMMON_CLK
