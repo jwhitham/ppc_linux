@@ -1764,6 +1764,12 @@ struct asf_ipsec_callbackfn_s {
 			struct xfrm_state *xfrm);
 };
 extern struct asf_ipsec_callbackfn_s	asf_cb_fns;
+struct policy_list {
+	int nr_pol;
+	struct xfrm_policy *xpol[256];
+};
+void xfrm_state_policy_mapping(struct xfrm_state *xfrm,
+				struct policy_list *pol_list);
 #endif
 
 #endif	/* _NET_XFRM_H */

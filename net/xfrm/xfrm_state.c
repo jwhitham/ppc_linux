@@ -1628,9 +1628,10 @@ static void xfrm_replay_timer_handler(unsigned long data)
 }
 
 #ifdef CONFIG_AS_FASTPATH
-struct xfrm_policy *xfrm_state_policy_mapping(struct xfrm_state *xfrm)
+void xfrm_state_policy_mapping(struct xfrm_state *xfrm,
+				struct policy_list *pol_lst)
 {
-	struct xfrm_policy *xp = 0, *matched_pol = 0;
+	struct xfrm_policy *xp = 0;
 	struct net *xfrm_net = xs_net(xfrm);
 	struct list_head *list_policy_head = &xfrm_net->xfrm.policy_all;
 	struct xfrm_policy_walk_entry *x;
@@ -1639,13 +1640,13 @@ struct xfrm_policy *xfrm_state_policy_mapping(struct xfrm_state *xfrm)
 
 	if (!list_policy_head) {
 		printk(KERN_INFO "No Security Policies in the system\n");
-		return matched_pol;
+		return;
 	}
 	x = list_first_entry(list_policy_head,
 				struct xfrm_policy_walk_entry, all);
 	if (!x) {
 		printk(KERN_INFO "Security Policies list is empty\n");
-		return matched_pol;
+		return;
 	}
 	if (xfrm->props.family == AF_INET) {
 		list_for_each_entry_from(x, list_policy_head, all) {
@@ -1659,9 +1660,7 @@ struct xfrm_policy *xfrm_state_policy_mapping(struct xfrm_state *xfrm)
 				tmpl->saddr.a4 == xfrm->props.saddr.a4 &&
 				xfrm->props.reqid == tmpl->reqid &&
 				xfrm->props.mode == tmpl->mode) {
-					matched_pol = xp;
-					xfrm->asf_sa_direction = dir;
-					break;
+					pol_lst->xpol[pol_lst->nr_pol++] = xp;
 			}
 		}
 	} else if (xfrm->props.family == AF_INET6) {
@@ -1678,15 +1677,12 @@ struct xfrm_policy *xfrm_state_policy_mapping(struct xfrm_state *xfrm)
 						xfrm->props.saddr.a6, 16) &&
 				xfrm->props.reqid == tmpl->reqid &&
 				xfrm->props.mode == tmpl->mode) {
-					matched_pol = xp;
-					xfrm->asf_sa_direction = dir;
-					break;
+					pol_lst->xpol[pol_lst->nr_pol++] = xp;
 			}
 		}
-	} else
-		return NULL;
+	}
 
-	return matched_pol;
+	return;
 }
 EXPORT_SYMBOL(xfrm_state_policy_mapping);
 #endif
