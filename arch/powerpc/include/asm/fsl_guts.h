@@ -106,7 +106,7 @@ struct ccsr_guts {
 /* Alternate function signal multiplex control */
 #define MPC85xx_PMUXCR_QE(x) (0x8000 >> (x))
 
-struct ccsr_rcpm {
+struct ccsr_rcpm_v1 {
 	u8	res0000[4];
 	__be32	cdozsr;		/* 0x0004 - Core Doze Status Register */
 	u8	res0008[4];
