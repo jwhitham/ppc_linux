@@ -146,9 +146,7 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit);
 static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue);
 static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 			       int amount_pull, struct napi_struct *napi);
-void gfar_halt(struct net_device *dev);
-static void gfar_halt_nodisable(struct net_device *dev);
-void gfar_start(struct net_device *dev);
+static void gfar_halt_nodisable(struct gfar_private *priv);
 static void gfar_clear_exact_match(struct net_device *dev);
 static void gfar_set_mac_for_addr(struct net_device *dev, int num,
 				  const u8 *addr);
@@ -1064,10 +1062,6 @@ static void gfar_hw_init(struct gfar_private *priv)
 	/* Program the interrupt steering regs, only for MG devices */
 	if (priv->num_grps > 1)
 		gfar_write_isrg(priv);
-
-	/* Enable all Rx/Tx queues after MAC reset */
-	gfar_write(&regs->rqueue, priv->rqueue);
-	gfar_write(&regs->tqueue, priv->tqueue);
 }
 
 static void __init gfar_init_addr_hash_table(struct gfar_private *priv)
@@ -1140,7 +1134,7 @@ static int gfar_probe(struct platform_device *ofdev)
 	/* Stop the DMA engine now, in case it was running before
 	 * (The firmware could have used it, and left it running).
 	 */
-	gfar_halt(dev);
+	gfar_halt(priv);
 
 	gfar_hw_init(priv);
 
@@ -1308,7 +1302,7 @@ static int gfar_suspend(struct device *dev)
 		lock_tx_qs(priv);
 		lock_rx_qs(priv);
 
-		gfar_halt_nodisable(ndev);
+		gfar_halt_nodisable(priv);
 
 		/* Disable Tx, and Rx if wake-on-LAN is disabled. */
 		tempval = gfar_read(&regs->maccfg1);
@@ -1372,7 +1366,7 @@ static int gfar_resume(struct device *dev)
 	tempval &= ~MACCFG2_MPEN;
 	gfar_write(&regs->maccfg2, tempval);
 
-	gfar_start(ndev);
+	gfar_start(priv);
 
 	unlock_rx_qs(priv);
 	unlock_tx_qs(priv);
@@ -1404,7 +1398,7 @@ static int gfar_restore(struct device *dev)
 	init_registers(ndev);
 	gfar_set_mac_address(ndev);
 	gfar_init_mac(ndev);
-	gfar_start(ndev);
+	gfar_start(priv);
 
 	priv->oldlink = 0;
 	priv->oldspeed = 0;
@@ -1627,9 +1621,8 @@ static int __gfar_is_rx_idle(struct gfar_private *priv)
 }
 
 /* Halt the receive and transmit queues */
-static void gfar_halt_nodisable(struct net_device *dev)
+static void gfar_halt_nodisable(struct gfar_private *priv)
 {
-	struct gfar_private *priv = netdev_priv(dev);
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
 	u32 tempval;
 
@@ -1655,15 +1648,20 @@ static void gfar_halt_nodisable(struct net_device *dev)
 }
 
 /* Halt the receive and transmit queues */
-void gfar_halt(struct net_device *dev)
+void gfar_halt(struct gfar_private *priv)
 {
-	struct gfar_private *priv = netdev_priv(dev);
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
 	u32 tempval;
 
-	gfar_halt_nodisable(dev);
+	/* Dissable the Rx/Tx hw queues */
+	gfar_write(&regs->rqueue, 0);
+	gfar_write(&regs->tqueue, 0);
 
-	/* Disable Rx and Tx */
+	mdelay(10);
+
+	gfar_halt_nodisable(priv);
+
+	/* Disable Rx/Tx DMA */
 	tempval = gfar_read(&regs->maccfg1);
 	tempval &= ~(MACCFG1_RX_EN | MACCFG1_TX_EN);
 	gfar_write(&regs->maccfg1, tempval);
@@ -1690,7 +1688,7 @@ void stop_gfar(struct net_device *dev)
 	lock_tx_qs(priv);
 	lock_rx_qs(priv);
 
-	gfar_halt(dev);
+	gfar_halt(priv);
 
 	unlock_rx_qs(priv);
 	unlock_tx_qs(priv);
@@ -1795,17 +1793,15 @@ static void free_skb_resources(struct gfar_private *priv)
 			  priv->tx_queue[0]->tx_bd_dma_base);
 }
 
-void gfar_start(struct net_device *dev)
+void gfar_start(struct gfar_private *priv)
 {
-	struct gfar_private *priv = netdev_priv(dev);
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
 	u32 tempval;
 	int i = 0;
 
-	/* Enable Rx and Tx in MACCFG1 */
-	tempval = gfar_read(&regs->maccfg1);
-	tempval |= (MACCFG1_RX_EN | MACCFG1_TX_EN);
-	gfar_write(&regs->maccfg1, tempval);
+	/* Enable Rx/Tx hw queues */
+	gfar_write(&regs->rqueue, priv->rqueue);
+	gfar_write(&regs->tqueue, priv->tqueue);
 
 	/* Initialize DMACTRL to have WWR and WOP */
 	tempval = gfar_read(&regs->dmactrl);
@@ -1824,9 +1820,14 @@ void gfar_start(struct net_device *dev)
 		gfar_write(&regs->rstat, priv->gfargrp[i].rstat);
 	}
 
+	/* Enable Rx/Tx DMA */
+	tempval = gfar_read(&regs->maccfg1);
+	tempval |= (MACCFG1_RX_EN | MACCFG1_TX_EN);
+	gfar_write(&regs->maccfg1, tempval);
+
 	gfar_ints_enable(priv);
 
-	dev->trans_start = jiffies; /* prevent tx timeout */
+	priv->ndev->trans_start = jiffies; /* prevent tx timeout */
 }
 
 static void gfar_configure_coalescing(struct gfar_private *priv,
@@ -1950,7 +1951,7 @@ int startup_gfar(struct net_device *ndev)
 	}
 
 	/* Start the controller */
-	gfar_start(ndev);
+	gfar_start(priv);
 
 	phy_start(priv->phydev);
 

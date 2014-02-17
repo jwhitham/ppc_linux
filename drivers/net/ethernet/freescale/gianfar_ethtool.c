@@ -45,7 +45,6 @@
 
 #include "gianfar.h"
 
-extern void gfar_start(struct net_device *dev);
 extern int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue,
 			      int rx_work_limit);
 
@@ -505,7 +504,7 @@ static int gfar_sringparam(struct net_device *dev,
 		lock_tx_qs(priv);
 		lock_rx_qs(priv);
 
-		gfar_halt(dev);
+		gfar_halt(priv);
 
 		unlock_rx_qs(priv);
 		unlock_tx_qs(priv);
@@ -628,7 +627,7 @@ int gfar_set_features(struct net_device *dev, netdev_features_t features)
 		lock_tx_qs(priv);
 		lock_rx_qs(priv);
 
-		gfar_halt(dev);
+		gfar_halt(priv);
 
 		unlock_tx_qs(priv);
 		unlock_rx_qs(priv);
