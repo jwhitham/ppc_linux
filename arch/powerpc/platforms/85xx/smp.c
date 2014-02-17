@@ -217,11 +217,8 @@ static void __cpuinit smp_85xx_mach_cpu_die(void)
 
 	mtspr(SPRN_TCR, 0);
 
-	if (is_core_down(cpu))
-		__flush_disable_L1();
-
-	if (cur_cpu_spec->l2cache_type == PPC_L2_CACHE_CORE)
-		disable_backside_L2_cache();
+	if (cur_cpu_spec && cur_cpu_spec->cpu_flush_caches)
+		cur_cpu_spec->cpu_flush_caches();
 
 	generic_set_cpu_dead(cpu);
 
@@ -257,7 +254,9 @@ static void smp_85xx_mach_cpu_die(void)
 
 	mtspr(SPRN_TCR, 0);
 
-	__flush_disable_L1();
+	if (cur_cpu_spec && cur_cpu_spec->cpu_flush_caches)
+		cur_cpu_spec->cpu_flush_caches();
+
 	tmp = (mfspr(SPRN_HID0) & ~(HID0_DOZE|HID0_SLEEP)) | HID0_NAP;
 	mtspr(SPRN_HID0, tmp);
 	isync();
