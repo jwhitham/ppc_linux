@@ -122,6 +122,10 @@ static inline void kvm_set_s2pmd_writable(pmd_t *pmd)
 	pmd_val(*pmd) |= PMD_S2_RDWR;
 }
 
+#define kvm_pgd_addr_end(addr, end)	pgd_addr_end(addr, end)
+#define kvm_pud_addr_end(addr, end)	pud_addr_end(addr, end)
+#define kvm_pmd_addr_end(addr, end)	pmd_addr_end(addr, end)
+
 struct kvm;
 
 static inline void coherent_icache_guest_page(struct kvm *kvm, hva_t hva,

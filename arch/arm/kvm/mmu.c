@@ -146,7 +146,7 @@ static void unmap_range(struct kvm *kvm, pgd_t *pgdp,
 		pud = pud_offset(pgd, addr);
 		pte = NULL;
 		if (pud_none(*pud)) {
-			addr = pud_addr_end(addr, end);
+			addr = kvm_pud_addr_end(addr, end);
 			continue;
 		}
 
@@ -156,13 +156,13 @@ static void unmap_range(struct kvm *kvm, pgd_t *pgdp,
 			 * move on.
 			 */
 			clear_pud_entry(kvm, pud, addr);
-			addr = pud_addr_end(addr, end);
+			addr = kvm_pud_addr_end(addr, end);
 			continue;
 		}
 
 		pmd = pmd_offset(pud, addr);
 		if (pmd_none(*pmd)) {
-			addr = pmd_addr_end(addr, end);
+			addr = kvm_pmd_addr_end(addr, end);
 			continue;
 		}
 
@@ -177,10 +177,10 @@ static void unmap_range(struct kvm *kvm, pgd_t *pgdp,
 		 */
 		if (kvm_pmd_huge(*pmd) || (pte && page_empty(pte))) {
 			clear_pmd_entry(kvm, pmd, addr);
-			next = pmd_addr_end(addr, end);
+			next = kvm_pmd_addr_end(addr, end);
 			if (page_empty(pmd) && !page_empty(pud)) {
 				clear_pud_entry(kvm, pud, addr);
-				next = pud_addr_end(addr, end);
+				next = kvm_pud_addr_end(addr, end);
 			}
 		}
 
