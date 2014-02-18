@@ -342,6 +342,16 @@ config FSL_RAID
           the capability to offload RAID5/RAID6 operations from CPU.
           RAID5 is XOR and memcpy. RAID6 is P/Q and memcpy
 
+config FSL_EDMA
+	tristate "Freescale eDMA engine support"
+	depends on OF
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	help
+	  Support the Freescale eDMA engine with programmable channel
+	  multiplexing capability for DMA request sources(slot).
+	  This module can be found on Freescale Vybrid and LS-1 SoCs.
+
 config DMA_ENGINE
 	bool
 
