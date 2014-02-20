@@ -259,7 +259,7 @@ struct dpa_bp {
 	/* virtual address of the contiguous memory used by the pool to store
 	 * the buffers
 	 */
-	void				*vaddr;
+	void __iomem			*vaddr;
 	/* current number of buffers in the bpool alloted to this CPU */
 	int *percpu_count;
 	atomic_t refs;

@@ -41,6 +41,7 @@
 #include <linux/fsl_qman.h>
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
+#include "dpaa_eth_base.h"
 
 static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 {
