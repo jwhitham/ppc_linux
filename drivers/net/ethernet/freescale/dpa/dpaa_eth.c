@@ -114,7 +114,7 @@ int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
 
 #define DPAA_ETH_MAX_PAD (L1_CACHE_BYTES * 8)
 
-uint8_t dpa_priv_common_bpid;
+static uint8_t dpa_priv_common_bpid;
 
 #ifdef CONFIG_PM
 
