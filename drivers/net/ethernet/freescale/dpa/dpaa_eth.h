@@ -261,7 +261,7 @@ struct dpa_bp {
 	 */
 	void __iomem			*vaddr;
 	/* current number of buffers in the bpool alloted to this CPU */
-	int *percpu_count;
+	int __percpu *percpu_count;
 	atomic_t refs;
 	/* some bpools need to be seeded before use by this cb */
 	int (*seed_cb)(struct dpa_bp *);
@@ -310,7 +310,7 @@ struct dpa_percpu_priv_s {
 };
 
 struct dpa_priv_s {
-	struct dpa_percpu_priv_s	*percpu_priv;
+	struct dpa_percpu_priv_s	__percpu *percpu_priv;
 	struct dpa_bp *dpa_bp;
 	/* Store here the needed Tx headroom for convenience and speed
 	 * (even though it can be computed based on the fields of buf_layout)
