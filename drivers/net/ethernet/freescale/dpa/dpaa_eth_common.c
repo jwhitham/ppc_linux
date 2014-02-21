@@ -784,7 +784,7 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 	if (bp->free_buf_cb)
 		dpa_bp_drain(bp);
 
-	dpa_bp_array[bp->bpid] = 0;
+	dpa_bp_array[bp->bpid] = NULL;
 	bman_free_pool(bp->pool);
 
 	if (bp->dev)
