@@ -1419,6 +1419,20 @@ dpaa_eth_init_rx_port(struct fm_port *port, struct dpa_bp *bp, size_t count,
 			   buf_layout, frag_enabled);
 }
 
+#if defined(CONFIG_FSL_FMAN_TEST)
+/* Defined as weak, to be implemented by fman pcd tester. */
+int dpa_alloc_pcd_fqids(struct device *, uint32_t, uint8_t, uint32_t *)
+__attribute__((weak));
+
+int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
+#else
+int dpa_alloc_pcd_fqids(struct device *, uint32_t, uint8_t, uint32_t *);
+
+int dpa_free_pcd_fqids(struct device *, uint32_t);
+
+#endif /* CONFIG_FSL_FMAN_TEST */
+
+
 int dpa_alloc_pcd_fqids(struct device *dev, uint32_t num,
 				uint8_t alignment, uint32_t *base_fqid)
 {

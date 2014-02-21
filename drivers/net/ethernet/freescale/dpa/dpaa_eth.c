@@ -102,14 +102,6 @@ static const char rtx[][3] = {
 	[TX] = "TX"
 };
 
-#if defined(CONFIG_FSL_FMAN_TEST)
-/* Defined as weak, to be implemented by fman pcd tester. */
-int dpa_alloc_pcd_fqids(struct device *, uint32_t, uint8_t, uint32_t *)
-__attribute__((weak));
-
-int dpa_free_pcd_fqids(struct device *, uint32_t) __attribute__((weak));
-#endif /* CONFIG_FSL_FMAN_TEST */
-
 /* BM */
 
 #define DPAA_ETH_MAX_PAD (L1_CACHE_BYTES * 8)
