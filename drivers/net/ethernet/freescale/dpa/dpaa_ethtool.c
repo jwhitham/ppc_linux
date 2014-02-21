@@ -42,6 +42,7 @@
 
 #include "dpaa_eth.h"
 #include "mac.h"                /* struct mac_device */
+#include "dpaa_eth_common.h"
 
 static int __cold dpa_get_settings(struct net_device *net_dev,
 		struct ethtool_cmd *et_cmd)
@@ -114,17 +115,18 @@ static void __cold dpa_get_drvinfo(struct net_device *net_dev,
 		sizeof(drvinfo->bus_info)-1)[sizeof(drvinfo->bus_info)-1] = 0;
 }
 
-uint32_t __cold dpa_get_msglevel(struct net_device *net_dev)
+static uint32_t __cold dpa_get_msglevel(struct net_device *net_dev)
 {
 	return ((struct dpa_priv_s *)netdev_priv(net_dev))->msg_enable;
 }
 
-void __cold dpa_set_msglevel(struct net_device *net_dev, uint32_t msg_enable)
+static void __cold dpa_set_msglevel(struct net_device *net_dev,
+		uint32_t msg_enable)
 {
 	((struct dpa_priv_s *)netdev_priv(net_dev))->msg_enable = msg_enable;
 }
 
-int __cold dpa_nway_reset(struct net_device *net_dev)
+static int __cold dpa_nway_reset(struct net_device *net_dev)
 {
 	int			 _errno;
 	struct dpa_priv_s	*priv;
@@ -151,7 +153,7 @@ int __cold dpa_nway_reset(struct net_device *net_dev)
 	return _errno;
 }
 
-void __cold dpa_get_ringparam(struct net_device *net_dev,
+static void __cold dpa_get_ringparam(struct net_device *net_dev,
 		struct ethtool_ringparam *et_ringparam)
 {
 	et_ringparam->rx_max_pending	   = 0;
@@ -165,7 +167,7 @@ void __cold dpa_get_ringparam(struct net_device *net_dev,
 	et_ringparam->tx_pending	   = 0;
 }
 
-void __cold dpa_get_pauseparam(struct net_device *net_dev,
+static void __cold dpa_get_pauseparam(struct net_device *net_dev,
 		struct ethtool_pauseparam *et_pauseparam)
 {
 	struct dpa_priv_s	*priv;
@@ -186,7 +188,7 @@ void __cold dpa_get_pauseparam(struct net_device *net_dev,
 	et_pauseparam->tx_pause	= priv->mac_dev->tx_pause;
 }
 
-int __cold dpa_set_pauseparam(struct net_device *net_dev,
+static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 		struct ethtool_pauseparam *et_pauseparam)
 {
 	struct dpa_priv_s	*priv;
