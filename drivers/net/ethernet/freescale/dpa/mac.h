@@ -46,7 +46,7 @@ struct mac_device {
 	void			*priv;
 	uint8_t			 cell_index;
 	struct resource		*res;
-	void			*vaddr;
+	void __iomem		*vaddr;
 	uint8_t			 addr[ETH_ALEN];
 	bool			 promisc;
 
