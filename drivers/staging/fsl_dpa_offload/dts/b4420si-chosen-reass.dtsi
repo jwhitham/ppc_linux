@@ -9,7 +9,7 @@ chosen {
 			fman0_rx3-extd-args {
 				cell-index = <3>;
 				compatible = "fsl,fman-port-1g-rx-extended-args";
-				errors-to-discard = <0x00420000>;
+				errors-to-discard = <0x00020000>;
 				/* Define Virtual storage profile */
 				/* <number of profiles, default profile id> */
 				vsp-window = <8 0>;
