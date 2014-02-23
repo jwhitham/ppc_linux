@@ -1373,7 +1373,7 @@ Status: feature not supported
                     RETURN_ERROR(MINOR, E_NO_MEMORY, ("IOCTL FM PCD"));
                 }
 
-                memset(compat_param, 0, sizeof(ioc_fm_pcd_plcr_profile_params_t));
+                memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_plcr_profile_params_t));
                 if (copy_from_user(compat_param, (
                             ioc_compat_fm_pcd_plcr_profile_params_t *)compat_ptr(arg),
                             sizeof(ioc_compat_fm_pcd_plcr_profile_params_t)))
@@ -2719,7 +2719,7 @@ invalid_port_id:
 		if (!param)
 			RETURN_ERROR(MINOR, E_NO_MEMORY, ("IOCTL FM PCD"));
 
-		memset(param, 0, sizeof(ioc_fm_pcd_plcr_profile_params_t));
+		memset(param, 0, sizeof(ioc_fm_pcd_frm_replic_group_params_t));
 
 #if defined(CONFIG_COMPAT)
 		if (compat)
@@ -2729,7 +2729,7 @@ invalid_port_id:
 
 			compat_param =
 				(ioc_compat_fm_pcd_frm_replic_group_params_t *)
-					XX_Malloc(sizeof(*compat_param));
+					XX_Malloc(sizeof(ioc_compat_fm_pcd_frm_replic_group_params_t));
 			if (!compat_param)
 			{
 				XX_Free(param);
@@ -2737,11 +2737,11 @@ invalid_port_id:
 						("IOCTL FM PCD"));
 			}
 
-			memset(compat_param, 0, sizeof(*compat_param));
+			memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_frm_replic_group_params_t));
 			if (copy_from_user(compat_param,
 				(ioc_compat_fm_pcd_frm_replic_group_params_t *)
 					compat_ptr(arg),
-					sizeof(*compat_param))) {
+					sizeof(ioc_compat_fm_pcd_frm_replic_group_params_t))) {
 				XX_Free(compat_param);
 				XX_Free(param);
 				RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
@@ -2786,7 +2786,7 @@ invalid_port_id:
 
 			compat_param =
 				(ioc_compat_fm_pcd_frm_replic_group_params_t *)
-					XX_Malloc(sizeof(*compat_param));
+					XX_Malloc(sizeof(ioc_compat_fm_pcd_frm_replic_group_params_t));
 			if (!compat_param)
 			{
 				XX_Free(param);
@@ -2794,14 +2794,14 @@ invalid_port_id:
 						("IOCTL FM PCD"));
 			}
 
-			memset(compat_param, 0, sizeof(*compat_param));
+			memset(compat_param, 0, sizeof(ioc_compat_fm_pcd_frm_replic_group_params_t));
 			compat_copy_fm_pcd_frm_replic_group_params(compat_param,
 					param, COMPAT_K_TO_US);
 			if (copy_to_user(
 				(ioc_compat_fm_pcd_frm_replic_group_params_t *)
 					compat_ptr(arg),
 					compat_param,
-					sizeof(*compat_param)))
+					sizeof(ioc_compat_fm_pcd_frm_replic_group_params_t)))
 				err = E_WRITE_FAILED;
 
 			XX_Free(compat_param);
