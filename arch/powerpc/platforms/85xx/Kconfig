@@ -276,6 +276,7 @@ config CORENET_GENERIC
 	select HAS_FSL_QBMAN
 	select MDIO_BUS_MUX if FSL_DPAA_ETH
 	select MDIO_BUS_MUX_MMIOREG if FSL_DPAA_ETH
+	select MDIO_BUS_MUX_GPIO if FSL_DPAA_ETH
 	help
 	  This option enables support for the FSL CoreNet based boards.
 	  For 32bit kernel, the following boards are supported:
