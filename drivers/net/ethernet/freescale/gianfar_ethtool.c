@@ -488,6 +488,9 @@ static int gfar_sringparam(struct net_device *dev,
 		return -EINVAL;
 	}
 
+	while (test_and_set_bit_lock(GFAR_RESETTING, &priv->state))
+		cpu_relax();
+
 	if (dev->flags & IFF_UP)
 		stop_gfar(dev);
 
@@ -499,10 +502,11 @@ static int gfar_sringparam(struct net_device *dev,
 		priv->tx_queue[i]->tx_ring_size = rvals->tx_pending;
 
 	/* Rebuild the rings with the new size */
-	if (dev->flags & IFF_UP) {
+	if (dev->flags & IFF_UP)
 		err = startup_gfar(dev);
-		netif_tx_wake_all_queues(dev);
-	}
+
+	clear_bit_unlock(GFAR_RESETTING, &priv->state);
+
 	return err;
 }
 
@@ -581,11 +585,15 @@ static int gfar_spauseparam(struct net_device *dev,
 int gfar_set_features(struct net_device *dev, netdev_features_t features)
 {
 	netdev_features_t changed = dev->features ^ features;
+	struct gfar_private *priv = netdev_priv(dev);
 	int err = 0;
 
 	if (!(changed & (NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_CTAG_RX |
 			 NETIF_F_RXCSUM)))
 		return 0;
+
+	while (test_and_set_bit_lock(GFAR_RESETTING, &priv->state))
+		cpu_relax();
 
 	dev->features = features;
 
@@ -593,8 +601,12 @@ int gfar_set_features(struct net_device *dev, netdev_features_t features)
 		/* Now we take down the rings to rebuild them */
 		stop_gfar(dev);
 		err = startup_gfar(dev);
-		netif_tx_wake_all_queues(dev);
+	} else {
+		gfar_mac_reset(priv);
 	}
+
+	clear_bit_unlock(GFAR_RESETTING, &priv->state);
+
 	return err;
 }
 
@@ -1560,9 +1572,6 @@ static int gfar_write_filer_table(struct gfar_private *priv,
 	if (tab->index > MAX_FILER_IDX - 1)
 		return -EBUSY;
 
-	/* Avoid inconsistent filer table to be processed */
-	lock_rx_qs(priv);
-
 	/* Fill regular entries */
 	for (; i < MAX_FILER_IDX - 1 && (tab->fe[i].ctrl | tab->fe[i].ctrl);
 	     i++)
@@ -1574,8 +1583,6 @@ static int gfar_write_filer_table(struct gfar_private *priv,
 	 * because that's what people expect
 	 */
 	gfar_write_filer(priv, i, 0x20, 0x0);
-
-	unlock_rx_qs(priv);
 
 	return 0;
 }
@@ -1780,6 +1787,9 @@ static int gfar_set_nfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 	int ret = 0;
+
+	if (test_bit(GFAR_RESETTING, &priv->state))
+		return -EBUSY;
 
 	mutex_lock(&priv->rx_queue_access);
 
