@@ -152,7 +152,7 @@ static ssize_t show_fm_port_stats(struct device *dev,
 	}
 
 	local_irq_save(flags);
-	n = snprintf(buf, PAGE_SIZE, "\t%s counter: %lu\n",
+	n = snprintf(buf, PAGE_SIZE, "\t%s counter: %u\n",
 		p_LnxWrpFmPortDev->name,
 		FM_PORT_GetCounter(p_LnxWrpFmPortDev->h_Dev,
 					(e_FmPortCounters) counter));
