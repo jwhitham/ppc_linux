@@ -56,6 +56,8 @@
 	| SUPPORTED_100baseT_Half \
 	| SUPPORTED_100baseT_Full \
 	| SUPPORTED_Autoneg \
+	| SUPPORTED_Pause \
+	| SUPPORTED_Asym_Pause \
 	| SUPPORTED_MII)
 
 static const char phy_str[][11] = {
