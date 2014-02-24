@@ -100,7 +100,8 @@
 #define MEMAC_ALL_ERRS_IMASK			\
 		((uint32_t)(MEMAC_IMASK_TSECC_ER	| \
 			MEMAC_IMASK_TECC_ER	| \
-			MEMAC_IMASK_RECC_ER))
+			MEMAC_IMASK_RECC_ER	| \
+			MEMAC_IMASK_MGI))
 
 #define MEMAC_IEVNT_PCS			0x80000000 /* PCS (XG). Link sync (G) */
 #define MEMAC_IEVNT_AN			0x40000000 /* Auto-negotiation */
@@ -325,6 +326,7 @@ struct memac_cfg {
 	bool		rx_pbl_fwd;
 	bool		tx_pbl_fwd;
 	bool		debug_mode;
+	bool		wake_on_lan;
 	uint16_t	max_frame_length;
 	uint16_t	pause_quanta;
 	uint32_t	tx_ipg_length;
@@ -383,6 +385,8 @@ void fman_memac_set_hash_table(struct memac_regs *regs, uint32_t val);
 
 void fman_memac_set_rx_ignore_pause_frames(struct memac_regs *regs,
 	bool enable);
+
+void fman_memac_set_wol(struct memac_regs *regs, bool enable);
 
 uint32_t fman_memac_get_event(struct memac_regs *regs, uint32_t ev_mask);
 

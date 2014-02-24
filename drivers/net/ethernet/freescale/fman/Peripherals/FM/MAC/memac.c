@@ -217,6 +217,8 @@ static void MemacErrException(t_Handle h_Memac)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_1TX_ECC_ER);
     if (event & MEMAC_IEVNT_RX_ECC_ER)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_RX_ECC_ER);
+    if (event & MEMAC_IEVNT_MGI)
+        p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_MAGIC_PACKET_INDICATION);
 }
 
 /* ......................................................................... */
@@ -481,6 +483,20 @@ static t_Error MemacSetRxIgnorePauseFrames(t_Handle h_Memac, bool en)
     SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
 
     fman_memac_set_rx_ignore_pause_frames(p_Memac->p_MemMap, en);
+
+    return E_OK;
+}
+
+/* ......................................................................... */
+
+static t_Error MemacSetWakeOnLan(t_Handle h_Memac, bool en)
+{
+    t_Memac     *p_Memac = (t_Memac *)h_Memac;
+
+    SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_STATE);
+    SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
+
+    fman_memac_set_wol(p_Memac->p_MemMap, en);
 
     return E_OK;
 }
@@ -1001,6 +1017,8 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
     p_FmMacControllerDriver->f_FM_MAC_SetTxAutoPauseFrames      = MemacSetTxAutoPauseFrames;
     p_FmMacControllerDriver->f_FM_MAC_SetTxPauseFrames          = MemacSetTxPauseFrames;
     p_FmMacControllerDriver->f_FM_MAC_SetRxIgnorePauseFrames    = MemacSetRxIgnorePauseFrames;
+
+    p_FmMacControllerDriver->f_FM_MAC_SetWakeOnLan              = MemacSetWakeOnLan;
 
     p_FmMacControllerDriver->f_FM_MAC_ResetCounters             = MemacResetCounters;
     p_FmMacControllerDriver->f_FM_MAC_GetStatistics             = MemacGetStatistics;

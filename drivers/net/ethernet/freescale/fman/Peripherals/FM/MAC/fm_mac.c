@@ -375,6 +375,20 @@ t_Error FM_MAC_SetRxIgnorePauseFrames (t_Handle h_FmMac, bool en)
 
 /* ......................................................................... */
 
+t_Error FM_MAC_SetWakeOnLan (t_Handle h_FmMac, bool en)
+{
+    t_FmMacControllerDriver *p_FmMacControllerDriver = (t_FmMacControllerDriver *)h_FmMac;
+
+    SANITY_CHECK_RETURN_ERROR(p_FmMacControllerDriver, E_INVALID_HANDLE);
+
+    if (p_FmMacControllerDriver->f_FM_MAC_SetWakeOnLan)
+        return p_FmMacControllerDriver->f_FM_MAC_SetWakeOnLan(h_FmMac, en);
+
+    RETURN_ERROR(MINOR, E_NOT_SUPPORTED, NO_MSG);
+}
+
+/* ......................................................................... */
+
 t_Error FM_MAC_ResetCounters (t_Handle h_FmMac)
 {
     t_FmMacControllerDriver *p_FmMacControllerDriver = (t_FmMacControllerDriver *)h_FmMac;

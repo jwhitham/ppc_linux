@@ -103,6 +103,8 @@ typedef enum e_FmMacExceptions {
    ,e_FM_MAC_EX_1G_RX_MIB_CNT_OVFL                              /**< dTSEC MIB counter overflow */
    ,e_FM_MAC_EX_TS_FIFO_ECC_ERR                                 /**< mEMAC Time-stamp FIFO ECC error interrupt;
                                                                      not supported on T4240/B4860 rev1 chips */
+   ,e_FM_MAC_EX_MAGIC_PACKET_INDICATION = e_FM_MAC_EX_1G_MAG_PCKT
+                                                                /**< mEMAC Magic Packet Indication Interrupt */
 } e_FmMacExceptions;
 
 /**************************************************************************//**
@@ -558,6 +560,21 @@ t_Error FM_MAC_SetTxPauseFrames(t_Handle h_FmMac,
  @Cautions      Allowed only following FM_MAC_Init().
 *//***************************************************************************/
 t_Error FM_MAC_SetRxIgnorePauseFrames(t_Handle h_FmMac, bool en);
+
+/**************************************************************************//**
+ @Function      FM_MAC_SetWakeOnLan
+
+ @Description   Enable/Disable Wake On Lan support
+
+ @Param[in]     h_FmMac    - A handle to a FM MAC Module.
+ @Param[in]     en         - boolean indicates whether to enable Wake On Lan
+                             support or not.
+
+ @Return        E_OK on success; Error code otherwise.
+
+ @Cautions      Allowed only following FM_MAC_Init().
+*//***************************************************************************/
+t_Error FM_MAC_SetWakeOnLan(t_Handle h_FmMac, bool en);
 
 /**************************************************************************//**
  @Function      FM_MAC_ResetCounters

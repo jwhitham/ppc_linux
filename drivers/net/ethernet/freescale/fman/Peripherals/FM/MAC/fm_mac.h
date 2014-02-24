@@ -116,6 +116,8 @@ typedef struct {
     t_Error (*f_FM_MAC_AdjustLink)     (t_Handle h_FmMac, e_EnetSpeed speed, bool fullDuplex);
     t_Error (*f_FM_MAC_RestartAutoneg) (t_Handle h_FmMac);
 
+    t_Error (*f_FM_MAC_SetWakeOnLan)   (t_Handle h_FmMac, bool en);
+
     t_Error (*f_FM_MAC_GetId) (t_Handle h_FmMac, uint32_t *macId);
 
     t_Error (*f_FM_MAC_GetVersion) (t_Handle h_FmMac, uint32_t *macVersion);

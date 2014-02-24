@@ -96,6 +96,7 @@ void fman_dtsec_defconfig(struct dtsec_cfg *cfg)
 	cfg->back_to_back_ipg = DEFAULT_BACK_TO_BACK_IPG;
 	cfg->maximum_frame = DEFAULT_MAXIMUM_FRAME;
 	cfg->tbi_phy_addr = DEFAULT_TBI_PHY_ADDR;
+	cfg->wake_on_lan = DEFAULT_WAKE_ON_LAN;
 }
 
 int fman_dtsec_init(struct dtsec_regs *regs, struct dtsec_cfg *cfg,
@@ -437,6 +438,18 @@ int fman_dtsec_set_tbi_phy_addr(struct dtsec_regs *regs,
 		return -EINVAL;
 
 	return 0;
+}
+
+void fman_dtsec_set_wol(struct dtsec_regs *regs, bool en)
+{
+	uint32_t tmp;
+
+	tmp = ioread32be(&regs->maccfg2);
+	if (en)
+		tmp |= MACCFG2_MAGIC_PACKET_EN;
+	else
+		tmp &= ~MACCFG2_MAGIC_PACKET_EN;
+	iowrite32be(tmp, &regs->maccfg2);
 }
 
 int fman_dtsec_adjust_link(struct dtsec_regs *regs,

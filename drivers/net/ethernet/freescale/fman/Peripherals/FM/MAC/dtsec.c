@@ -1074,6 +1074,20 @@ static t_Error DtsecSetStatistics(t_Handle h_Dtsec, e_FmMacStatisticsLevel stati
 
 /* .............................................................................. */
 
+static t_Error DtsecSetWakeOnLan(t_Handle h_Dtsec, bool en)
+{
+    t_Dtsec         *p_Dtsec = (t_Dtsec *)h_Dtsec;
+
+    SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_STATE);
+    SANITY_CHECK_RETURN_ERROR(!p_Dtsec->p_DtsecDriverParam, E_INVALID_STATE);
+
+    fman_dtsec_set_wol(p_Dtsec->p_MemMap, en);
+
+    return E_OK;
+}
+
+/* .............................................................................. */
+
 static t_Error DtsecAdjustLink(t_Handle h_Dtsec, e_EnetSpeed speed, bool fullDuplex)
 {
     t_Dtsec             *p_Dtsec = (t_Dtsec *)h_Dtsec;
@@ -1412,6 +1426,7 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
 
     p_FmMacControllerDriver->f_FM_MAC_SetPromiscuous            = DtsecSetPromiscuous;
     p_FmMacControllerDriver->f_FM_MAC_AdjustLink                = DtsecAdjustLink;
+    p_FmMacControllerDriver->f_FM_MAC_SetWakeOnLan              = DtsecSetWakeOnLan;
     p_FmMacControllerDriver->f_FM_MAC_RestartAutoneg            = DtsecRestartAutoneg;
 
     p_FmMacControllerDriver->f_FM_MAC_Enable1588TimeStamp       = DtsecEnable1588TimeStamp;

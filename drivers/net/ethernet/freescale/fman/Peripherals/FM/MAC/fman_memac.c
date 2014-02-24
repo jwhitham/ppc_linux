@@ -184,6 +184,8 @@ int fman_memac_init(struct memac_regs *regs,
         tmp |= CMD_CFG_SFD_ANY;
     if (cfg->pad_enable)
         tmp |= CMD_CFG_TX_PAD_EN;
+    if (cfg->wake_on_lan)
+        tmp |= CMD_CFG_MG;
 
     tmp |= CMD_CFG_CRC_FWD;
 
@@ -309,6 +311,20 @@ void fman_memac_set_rx_ignore_pause_frames(struct memac_regs    *regs,bool enabl
         tmp |= CMD_CFG_PAUSE_IGNORE;
     else
         tmp &= ~CMD_CFG_PAUSE_IGNORE;
+
+    iowrite32be(tmp, &regs->command_config);
+}
+
+void fman_memac_set_wol(struct memac_regs *regs, bool enable)
+{
+    uint32_t tmp;
+
+    tmp = ioread32be(&regs->command_config);
+
+    if (enable)
+        tmp |= CMD_CFG_MG;
+    else
+        tmp &= ~CMD_CFG_MG;
 
     iowrite32be(tmp, &regs->command_config);
 }
@@ -473,4 +489,5 @@ void fman_memac_defconfig(struct memac_cfg *cfg)
     cfg->rx_pbl_fwd			= FALSE;
     cfg->tx_pbl_fwd			= FALSE;
     cfg->debug_mode			= FALSE;
+    cfg->wake_on_lan        = FALSE;
 }

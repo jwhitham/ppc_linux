@@ -931,6 +931,7 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
 
     p_FmMacControllerDriver->f_FM_MAC_SetPromiscuous            = TgecSetPromiscuous;
     p_FmMacControllerDriver->f_FM_MAC_AdjustLink                = NULL;
+    p_FmMacControllerDriver->f_FM_MAC_SetWakeOnLan              = NULL;
     p_FmMacControllerDriver->f_FM_MAC_RestartAutoneg            = NULL;
 
     p_FmMacControllerDriver->f_FM_MAC_Enable                    = TgecEnable;

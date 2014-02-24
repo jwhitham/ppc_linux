@@ -245,6 +245,7 @@
 #define DEFAULT_BACK_TO_BACK_IPG	0x60
 #define DEFAULT_MAXIMUM_FRAME		0x600
 #define DEFAULT_TBI_PHY_ADDR		5
+#define DEFAULT_WAKE_ON_LAN			FALSE
 
 /* register related defines (bits, field offsets..) */
 #define DTSEC_ID1_ID			0xffff0000
@@ -730,6 +731,7 @@ struct dtsec_cfg {
 	uint32_t	non_back_to_back_ipg2;
 	uint32_t	min_ifg_enforcement;
 	uint32_t	back_to_back_ipg;
+	bool		wake_on_lan;
 };
 
 
@@ -831,6 +833,15 @@ void fman_dtsec_get_mac_address(struct dtsec_regs *regs, uint8_t *macaddr);
  * multicast addresses.
  */
 void fman_dtsec_set_uc_promisc(struct dtsec_regs *regs, bool enable);
+
+/**
+ * fman_dtsec_set_wol() - Enable/Disable wake on lan
+ *                        (magic packet support)
+ * @regs:   Pointer to dTSEC register block
+ * @en:     Enable Wake On Lan support in dTSEC
+ *
+ */
+void fman_dtsec_set_wol(struct dtsec_regs *regs, bool en);
 
 /**
  * fman_dtsec_adjust_link() - Adjust dTSEC speed/duplex settings
