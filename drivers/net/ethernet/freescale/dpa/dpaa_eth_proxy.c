@@ -195,6 +195,10 @@ static int dpaa_eth_proxy_probe(struct platform_device *_of_dev)
 			goto port_enable_fail;
 	}
 
+	dev_info(dev, "probed MAC device with MAC address: %02hx:%02hx:%02hx:%02hx:%02hx:%02hx\n",
+		     mac_dev->addr[0], mac_dev->addr[1], mac_dev->addr[2],
+		     mac_dev->addr[3], mac_dev->addr[4], mac_dev->addr[5]);
+
 	return 0; /* Proxy interface initialization ended */
 
 port_enable_fail:
