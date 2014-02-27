@@ -36,7 +36,7 @@
 #include "common/general.h"
 #include "fsl_enet.h"
 /* MII Management Registers */
-#define MDIO_CFG_CLK_DIV_MASK       0x0000ff80
+#define MDIO_CFG_CLK_DIV_MASK       0x0080ff80
 #define MDIO_CFG_CLK_DIV_SHIFT      7
 #define MDIO_CFG_HOLD_MASK          0x0000001c
 #define MDIO_CFG_ENC45              0x00000040

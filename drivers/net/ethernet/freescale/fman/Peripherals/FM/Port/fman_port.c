@@ -724,7 +724,9 @@ static uint8_t fman_port_find_bpool(struct fman_port *port, uint8_t bpid)
 
     /* Find the pool */
     bp_reg = port->bmi_regs->rx.fmbm_ebmpi;
-    for (i = 0; i < port->ext_pools_num; i++) {
+    for (i = 0;
+         (i < port->ext_pools_num && (i < FMAN_PORT_MAX_EXT_POOLS_NUM));
+         i++) {
         tmp = ioread32be(&bp_reg[i]);
         id = (uint8_t)((tmp & BMI_EXT_BUF_POOL_ID_MASK) >>
                 BMI_EXT_BUF_POOL_ID_SHIFT);
@@ -916,7 +918,9 @@ int fman_port_set_bpools(const struct fman_port *port,
 
     if (rx_port) {
         /* Check buffers are provided in ascending order */
-        for (i = 0; i < (bp->count-1); i++) {
+        for (i = 0;
+             (i < (bp->count-1) && (i < FMAN_PORT_MAX_EXT_POOLS_NUM - 1));
+             i++) {
             if (bp->bpool[i].size > bp->bpool[i+1].size)
                 return -EINVAL;
         }
@@ -1291,7 +1295,7 @@ int fman_port_set_bpool_cnt_mode(struct fman_port *port,
 
     /* Find the pool */
     index = fman_port_find_bpool(port, bpid);
-    if (index == port->ext_pools_num)
+    if (index == port->ext_pools_num || index == FMAN_PORT_MAX_EXT_POOLS_NUM)
         /* Not found */
         return -EINVAL;
 
@@ -1465,7 +1469,7 @@ uint32_t fman_port_get_bpool_counter(struct fman_port *port, uint8_t bpid)
 
     /* Find the pool */
     index = fman_port_find_bpool(port, bpid);
-    if (index == port->ext_pools_num)
+    if (index == port->ext_pools_num || index == FMAN_PORT_MAX_EXT_POOLS_NUM)
         /* Not found */
         return 0;
 
@@ -1489,7 +1493,7 @@ void fman_port_set_bpool_counter(struct fman_port *port,
 
     /* Find the pool */
     index = fman_port_find_bpool(port, bpid);
-    if (index == port->ext_pools_num)
+    if (index == port->ext_pools_num || index == FMAN_PORT_MAX_EXT_POOLS_NUM)
         /* Not found */
         return;
 

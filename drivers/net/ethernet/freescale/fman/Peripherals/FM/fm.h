@@ -340,9 +340,9 @@ switch (exception){                                         \
 #define DEFAULT_VerifyUcode                 FALSE
 
 #if (DPAA_VERSION < 11)
-#define DEFAULT_totalFifoSize(major)    \
-    (((major == 2) || (major == 5)) ?   \
-     (100*KILOBYTE) : ((major == 4) ?   \
+#define DEFAULT_totalFifoSize(major, minor)     \
+    (((major == 2) || (major == 5)) ?           \
+     (100*KILOBYTE) : ((major == 4) ?           \
      (46*KILOBYTE) : (122*KILOBYTE)))
 #define DEFAULT_totalNumOfTasks             BMI_MAX_NUM_OF_TASKS
 
@@ -369,7 +369,9 @@ switch (exception){                                         \
 
 #else  /* (DPAA_VERSION < 11) */
 /* Defaults are registers' reset values */
-#define DEFAULT_totalFifoSize(major)        (295 * KILOBYTE )
+#define DEFAULT_totalFifoSize(major, minor)	\
+    (((major == 6) && (minor == 1)) ? (128*KILOBYTE) : (295*KILOBYTE))
+
 #define DEFAULT_totalNumOfTasks             124
 
 #define DEFAULT_dmaCommQLow                 0x2A

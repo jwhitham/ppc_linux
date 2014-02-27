@@ -317,6 +317,9 @@ void fman_set_liodn_per_port(struct fman_rg *fman_rg, uint8_t port_id,
 {
 	uint32_t tmp;
 
+	if ((port_id > 63) || (port_id < 1))
+	        return;
+
 	/* set LIODN base for this port */
 	tmp = ioread32be(&fman_rg->dma_rg->fmdmplr[port_id / 2]);
 	if (port_id % 2) {
@@ -405,6 +408,9 @@ uint16_t fman_get_size_of_fifo(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 {
 	uint32_t tmp_reg;
 
+    if ((port_id > 63) || (port_id < 1))
+            return 0;
+
 	tmp_reg = ioread32be(&bmi_rg->fmbm_pfs[port_id - 1]);
 	return (uint16_t)((tmp_reg & BMI_FIFO_SIZE_MASK) + 1);
 }
@@ -423,6 +429,9 @@ uint16_t fman_get_size_of_extra_fifo(struct fman_bmi_regs *bmi_rg,
 {
 	uint32_t tmp_reg;
 
+    if ((port_id > 63) || (port_id < 1))
+            return 0;
+
 	tmp_reg = ioread32be(&bmi_rg->fmbm_pfs[port_id-1]);
 	return (uint16_t)((tmp_reg & BMI_EXTRA_FIFO_SIZE_MASK) >>
 				BMI_EXTRA_FIFO_SIZE_SHIFT);
@@ -435,6 +444,9 @@ void fman_set_size_of_fifo(struct fman_bmi_regs *bmi_rg,
 {
 	uint32_t tmp;
 
+	if ((port_id > 63) || (port_id < 1))
+	        return;
+
 	/* calculate reg */
 	tmp = (uint32_t)((sz_fifo / FMAN_BMI_FIFO_UNITS - 1) |
 		((extra_sz_fifo / FMAN_BMI_FIFO_UNITS) <<
@@ -446,6 +458,9 @@ uint8_t fman_get_num_of_tasks(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 {
 	uint32_t tmp;
 
+    if ((port_id > 63) || (port_id < 1))
+        return 0;
+
 	tmp = ioread32be(&bmi_rg->fmbm_pp[port_id - 1]);
 	return (uint8_t)(((tmp & BMI_NUM_OF_TASKS_MASK) >>
 				BMI_NUM_OF_TASKS_SHIFT) + 1);
@@ -454,6 +469,9 @@ uint8_t fman_get_num_of_tasks(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 uint8_t fman_get_num_extra_tasks(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 {
 	uint32_t tmp;
+
+    if ((port_id > 63) || (port_id < 1))
+        return 0;
 
 	tmp = ioread32be(&bmi_rg->fmbm_pp[port_id - 1]);
 	return (uint8_t)((tmp & BMI_NUM_OF_EXTRA_TASKS_MASK) >>
@@ -467,6 +485,9 @@ void fman_set_num_of_tasks(struct fman_bmi_regs *bmi_rg,
 {
 	uint32_t tmp;
 
+	if ((port_id > 63) || (port_id < 1))
+	    return;
+
 	/* calculate reg */
 	tmp = ioread32be(&bmi_rg->fmbm_pp[port_id - 1]) &
 			~(BMI_NUM_OF_TASKS_MASK | BMI_NUM_OF_EXTRA_TASKS_MASK);
@@ -479,6 +500,9 @@ uint8_t fman_get_num_of_dmas(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 {
 	uint32_t tmp;
 
+    if ((port_id > 63) || (port_id < 1))
+            return 0;
+
 	tmp = ioread32be(&bmi_rg->fmbm_pp[port_id - 1]);
 	return (uint8_t)(((tmp & BMI_NUM_OF_DMAS_MASK) >>
 			BMI_NUM_OF_DMAS_SHIFT) + 1);
@@ -487,6 +511,9 @@ uint8_t fman_get_num_of_dmas(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 uint8_t fman_get_num_extra_dmas(struct fman_bmi_regs *bmi_rg, uint8_t port_id)
 {
 	uint32_t tmp;
+
+	if ((port_id > 63) || (port_id < 1))
+	        return 0;
 
 	tmp = ioread32be(&bmi_rg->fmbm_pp[port_id - 1]);
 	return (uint8_t)((tmp & BMI_NUM_OF_EXTRA_DMAS_MASK) >>
@@ -500,6 +527,10 @@ void fman_set_num_of_open_dmas(struct fman_bmi_regs *bmi_rg,
 				uint8_t total_num_dmas)
 {
 	uint32_t tmp = 0;
+
+	if ((port_id > 63) || (port_id < 1))
+	    return;
+
 	/* calculate reg */
 	tmp = ioread32be(&bmi_rg->fmbm_pp[port_id - 1]) &
 			~(BMI_NUM_OF_DMAS_MASK | BMI_NUM_OF_EXTRA_DMAS_MASK);
@@ -523,12 +554,15 @@ void fman_set_vsp_window(struct fman_bmi_regs *bmi_rg,
 				         uint8_t log2_num_of_profiles)
 {
 	uint32_t tmp = 0;
+	if ((port_id > 63) || (port_id < 1))
+	    return;
 
     tmp = ioread32be(&bmi_rg->fmbm_spliodn[port_id-1]);
     tmp |= (uint32_t)((uint32_t)base_storage_profile & 0x3f) << 16;
     tmp |= (uint32_t)log2_num_of_profiles << 28;
     iowrite32be(tmp, &bmi_rg->fmbm_spliodn[port_id-1]);
 }
+
 void fman_set_congestion_group_pfc_priority(uint32_t *cpg_rg,
 			    	                        uint32_t congestion_group_id,
 				                            uint8_t priority_bit_map)

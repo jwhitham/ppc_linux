@@ -211,16 +211,19 @@ int fman_memac_init(struct memac_regs *regs,
             tmp |= IF_MODE_RGMII | IF_MODE_RGMII_AUTO;
     }
     iowrite32be(tmp, &regs->if_mode);
-    
-    /* from RM: For 10G rate mac tx_fifo_sections[TX_AVAIL] should be 0x19 */
-    if (enet_interface == E_ENET_IF_XGMII || 
-        enet_interface == E_ENET_IF_XFI) {
-        tmp = ioread32be(&regs->tx_fifo_sections);
-        tmp &= 0xffff0000;
-        tmp |= 0x00000019;
-        iowrite32be(tmp, &regs->tx_fifo_sections);
-    }
-    
+
+	/* TX_FIFO_SECTIONS */
+	tmp = 0;
+	if (enet_interface == E_ENET_IF_XGMII ||
+		enet_interface == E_ENET_IF_XFI) {
+		tmp |= (TX_FIFO_SECTIONS_TX_AVAIL_10G |
+				TX_FIFO_SECTIONS_TX_EMPTY_DEFAULT_10G);
+	} else {
+		tmp |= (TX_FIFO_SECTIONS_TX_AVAIL_1G |
+				TX_FIFO_SECTIONS_TX_EMPTY_DEFAULT_1G);
+	}
+	iowrite32be(tmp, &regs->tx_fifo_sections);
+
     /* clear all pending events and set-up interrupts */
     fman_memac_ack_event(regs, 0xffffffff);
     fman_memac_set_exception(regs, exceptions, TRUE);
@@ -275,13 +278,21 @@ void fman_memac_set_tx_pause_frames(struct memac_regs *regs,
 {
     uint32_t tmp;
 
-    tmp = ioread32be(&regs->command_config);
-    if (priority == 0xff) {
-        tmp &= ~CMD_CFG_PFC_MODE;
-        priority = 0;
+	tmp = ioread32be(&regs->tx_fifo_sections);
+
+	if (priority == 0xff) {
+		GET_TX_EMPTY_DEFAULT_VALUE(tmp);
+		iowrite32be(tmp, &regs->tx_fifo_sections);
+
+		tmp &= ~CMD_CFG_PFC_MODE;
+		priority = 0;
+	} else {
+		GET_TX_EMPTY_PFC_VALUE(tmp);
+		iowrite32be(tmp, &regs->tx_fifo_sections);
+
+		tmp = ioread32be(&regs->command_config);
+		tmp |= CMD_CFG_PFC_MODE;
     }
-    else
-        tmp |= CMD_CFG_PFC_MODE;
 
     iowrite32be(tmp, &regs->command_config);
 

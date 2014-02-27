@@ -3466,7 +3466,8 @@ t_Error FM_Init(t_Handle h_Fm)
          * according to chip. otherwise, we use user's configuration.
          */
         if (p_Fm->p_FmStateStruct->totalFifoSize == 0)
-            p_Fm->p_FmStateStruct->totalFifoSize = DEFAULT_totalFifoSize(p_Fm->p_FmStateStruct->revInfo.majorRev);
+            p_Fm->p_FmStateStruct->totalFifoSize = DEFAULT_totalFifoSize(p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                                                         p_Fm->p_FmStateStruct->revInfo.minorRev);
 #endif  /* FM_NO_GUARANTEED_RESET_VALUES */
 
     CHECK_INIT_PARAMETERS(p_Fm, CheckFmParameters);

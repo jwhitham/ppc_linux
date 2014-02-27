@@ -38,7 +38,7 @@
 /** @Collection  Registers bit fields */
 
 /** @Description  BMI defines */
-#define BMI_EBD_EN				0x80000000
+#define BMI_EBD_EN                              0x80000000
 
 #define BMI_PORT_CFG_EN				0x80000000
 #define BMI_PORT_CFG_FDOVR			0x02000000
