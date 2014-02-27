@@ -619,15 +619,19 @@ int built_encap_extra_material(struct dpa_ipsec_sa *sa,
 	uint32_t len, off_b, off_w, off, opt;
 	unsigned char job_desc_len, block_size;
 
-	/* sec_desc_extra_cmds is the address were the first SEC extra command
+	/*
+	 * sec_desc_extra_cmds is the address were the first SEC extra command
 	 * is located, from here SEC will overwrite Job descriptor part. Need
 	 * to insert a dummy command because the LINUX CAAM API uses first word
-	 * for storing the length of the descriptor. */
+	 * for storing the length of the descriptor.
+	 */
 	extra_cmds = sa->sec_desc_extra_cmds - 1;
 
-	/* Dummy command - will not be executed at all. Only for setting to 1
+	/*
+	 * Dummy command - will not be executed at all. Only for setting to 1
 	 * the length of the extra_cmds descriptor so that first extra material
-	 * command will be located exactly at sec_desc_extra_cmds address. */
+	 * command will be located exactly at sec_desc_extra_cmds address.
+	 */
 	append_cmd(extra_cmds, 0xdead0000);
 
 	/* Start Extra Material Group 1 */
@@ -665,8 +669,10 @@ int built_encap_extra_material(struct dpa_ipsec_sa *sa,
 	len   = (10 * sizeof(uint32_t)) << MOVE_LEN_SHIFT;
 	append_move(extra_cmds, opt | (off_b << MOVE_OFFSET_SHIFT) | len);
 
-	/* Jump to the beginning of the JOB Descriptor to start executing
-	 * the extra material group 2 */
+	/*
+	 * Jump to the beginning of the JOB Descriptor to start executing
+	 * the extra material group 2
+	 */
 	append_cmd(extra_cmds, 0xa00000f6);
 
 	/* End of Extra Material Group 1 */
@@ -716,22 +722,26 @@ int built_encap_extra_material(struct dpa_ipsec_sa *sa,
 	 * Perform 32-bit left shift of DEST and concatenate with left 32 bits
 	 * of SRC1 i.e MATH REG 2 = 0x00bytecount_00000000
 	 */
-	append_math_shld(extra_cmds, REG2, REG0, REG2, MATH_LEN_8BYTE);
+	append_math_ldshift(extra_cmds, REG2, REG0, REG2, MATH_LEN_8BYTE);
 
 	/* MATH REG 0  = MATH REG 0 + MATH REG 2 */
 	append_math_add(extra_cmds, REG0, REG0, REG2, MATH_LEN_8BYTE);
 
-	/* Overwrite the job-desc location (word 51 or 53) with the third
-	 * group (11 words) */
+	/*
+	 * Overwrite the job-desc location (word 51 or 53) with the third
+	 * group (11 words)
+	 */
 	opt   = MOVE_SRC_INFIFO | MOVE_DEST_DESCBUF | MOVE_WAITCOMP;
 	off_w = MAX_CAAM_DESCSIZE - job_desc_len;
 	off_b = off_w * sizeof(uint32_t); /* calculate off in bytes */
 	len   = (11 * sizeof(uint32_t)) << MOVE_LEN_SHIFT;
 	append_move(extra_cmds, opt | (off_b << MOVE_OFFSET_SHIFT) | len);
 
-	/* Jump to the beginning of the JOB Descriptor to start executing
+	/*
+	 * Jump to the beginning of the JOB Descriptor to start executing
 	 * the extra material group 3. The command for jumping back is already
-	 * here from extra material group 1 */
+	 * here from extra material group 1
+	 */
 
 	/* End of Extra Material Group 2 */
 
@@ -774,9 +784,11 @@ int built_encap_extra_material(struct dpa_ipsec_sa *sa,
 			 sa->cipher_data.cipher_type | sa->auth_data.auth_type);
 
 	if (sa->enable_stats) {
-		/* Store command: in the case of the Descriptor Buffer the
+		/*
+		 * Store command: in the case of the Descriptor Buffer the
 		 * length is specified in 4-byte words, but in all other cases
-		 * the length is specified in bytes. Offset in 4 byte words */
+		 * the length is specified in bytes. Offset in 4 byte words
+		 */
 		off_w = sa->stats_indx;
 		append_store(extra_cmds, 0, DPA_IPSEC_STATS_LEN,
 			     LDST_CLASS_DECO | (off_w << LDST_OFFSET_SHIFT) |
@@ -802,15 +814,19 @@ void built_decap_extra_material(struct dpa_ipsec_sa *sa,
 	uint32_t *extra_cmds;
 	uint32_t off_b, off_w, data;
 
-	/* sec_desc_extra_cmds is the address were the first SEC extra command
+	/*
+	 * sec_desc_extra_cmds is the address were the first SEC extra command
 	 * is located, from here SEC will overwrite Job descriptor part. Need
 	 * to insert a dummy command because the LINUX CAAM API uses first word
-	 * for storing the length of the descriptor. */
+	 * for storing the length of the descriptor.
+	 */
 	extra_cmds = sa->sec_desc_extra_cmds - 1;
 
-	/* Dummy command - will not be executed at all. Only for setting to 1
+	/*
+	 * Dummy command - will not be executed at all. Only for setting to 1
 	 * the length of the extra_cmds descriptor so that first extra material
-	 * command will be located exactly at sec_desc_extra_cmds address. */
+	 * command will be located exactly at sec_desc_extra_cmds address.
+	 */
 	append_cmd(extra_cmds, 0xdead0000);
 
 	data = 16;
@@ -856,9 +872,11 @@ void built_decap_extra_material(struct dpa_ipsec_sa *sa,
 	append_operation(extra_cmds, OP_PCLID_IPSEC | OP_TYPE_DECAP_PROTOCOL |
 			 sa->cipher_data.cipher_type | sa->auth_data.auth_type);
 
-	/* Store command: in the case of the Descriptor Buffer the length
+	/*
+	 * Store command: in the case of the Descriptor Buffer the length
 	 * is specified in 4-byte words, but in all other cases the length
-	 * is specified in bytes. Offset in 4 byte words */
+	 * is specified in bytes. Offset in 4 byte words
+	 */
 	off_w = sa->stats_indx;
 	append_store(extra_cmds, 0, DPA_IPSEC_STATS_LEN,
 		     LDST_CLASS_DECO | (off_w << LDST_OFFSET_SHIFT) |
@@ -1516,12 +1534,6 @@ int build_rjob_desc_ars_update(struct dpa_ipsec_sa *sa, enum dpa_ipsec_arw arw,
 
 	/* Check input parameters */
 	BUG_ON(!sa);
-	if (sa->sa_dir != DPA_IPSEC_INBOUND) {
-		log_err("ARS update not supported for outbound SA %d\n",
-			sa->id);
-		return -EINVAL;
-	}
-
 	BUG_ON(!sa->sec_desc);
 	desc = (uint32_t *)sa->sec_desc->desc;
 	options = (uint8_t)(*(desc + 1) & 0x000000FF);
@@ -1931,7 +1943,7 @@ int build_rjob_desc_seq_write(struct dpa_ipsec_sa *sa, u32 msg_len)
 	return 0;
 }
 
-static void split_key_done(struct device *dev, u32 * desc, u32 err,
+static void split_key_done(struct device *dev, u32 *desc, u32 err,
 			   void *context)
 {
 	register atomic_t *done = context;

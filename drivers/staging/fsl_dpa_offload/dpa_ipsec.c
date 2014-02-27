@@ -33,6 +33,7 @@
 #include <linux/delay.h>
 #include <linux/in.h>
 #include <linux/in6.h>
+#include <linux/wait.h>
 
 #include "dpa_ipsec.h"
 #include "dpa_ipsec_desc.h"
@@ -48,11 +49,21 @@ struct ipsec_alg_suite ipsec_algs[] = IPSEC_ALGS;
 static t_FmPcdCcNodeParams cc_node_prms;
 
 /* Global dpa_ipsec component */
-struct dpa_ipsec *gbl_dpa_ipsec;
+struct dpa_ipsec *gbl_dpa_ipsec[MAX_DPA_IPSEC_INSTANCES];
+
+/* Spinlock protecting the global dpa ipsec vector */
+DEFINE_SPINLOCK(gbl_dpa_ipsec_lock);
+
+/* Wait for other tasks to finish when doing instance free */
+DECLARE_WAIT_QUEUE_HEAD(wait_queue);
 
 static int sa_flush_policies(struct dpa_ipsec_sa *sa);
 static int sa_rekeying_outbound(struct dpa_ipsec_sa *new_sa);
 static void *alloc_ipsec_manip(struct dpa_ipsec *dpa_ipsec);
+static void mark_unused_gbl_dpa_ipsec(int instance);
+static int remove_inbound_sa(struct dpa_ipsec_sa *sa);
+static int remove_outbound_sa(struct dpa_ipsec_sa *sa);
+static inline bool table_in_use(int td);
 
 /* Debug support functions */
 
@@ -240,9 +251,9 @@ static int check_ipsec_params(const struct dpa_ipsec_params *prms)
 
 	/* check outbound policy tables */
 	pre_sec_out_prms = &prms->pre_sec_out_params;
-	for (i = 0; i < DPA_IPSEC_MAX_SUPPORTED_PROTOS; i++)
-		if (pre_sec_out_prms->table[i].dpa_cls_td !=
-						DPA_OFFLD_DESC_NONE) {
+	for (i = 0; i < DPA_IPSEC_MAX_SUPPORTED_PROTOS; i++) {
+		int dpa_cls_td = pre_sec_out_prms->table[i].dpa_cls_td;
+		if (dpa_cls_td != DPA_OFFLD_DESC_NONE) {
 			/* verify that a valid key structure was configured */
 			if (!pre_sec_out_prms->table[i].key_fields) {
 				log_err("Invalid key struct. for out table %d\n",
@@ -251,9 +262,8 @@ static int check_ipsec_params(const struct dpa_ipsec_params *prms)
 			}
 
 			/* verify that it is not an indexed table */
-			err = dpa_classif_table_get_params(
-					pre_sec_out_prms->table[i].dpa_cls_td,
-				       &table_params);
+			err = dpa_classif_table_get_params(dpa_cls_td,
+							   &table_params);
 			if (err < 0) {
 				log_err("Couldn't check type of outbound policy lookup table\n");
 				return -EINVAL;
@@ -264,7 +274,15 @@ static int check_ipsec_params(const struct dpa_ipsec_params *prms)
 				return -EINVAL;
 			}
 			valid_tables++;
+
+			/* Check if this table is in use on other DPA instance*/
+			if (table_in_use(dpa_cls_td)) {
+				log_err("Table with ID %d is in use by another DPA IPsec instance\n",
+					dpa_cls_td);
+				return -EINVAL;
+			}
 		}
+	}
 
 	if (!valid_tables) {
 		log_err("Specify at least one table for outbound policy lookup\n");
@@ -308,12 +326,26 @@ static int check_ipsec_params(const struct dpa_ipsec_params *prms)
 		return -EINVAL;
 	}
 
+	if (prms->post_sec_in_params.dpa_cls_td > 0 &&
+	    table_in_use(prms->post_sec_in_params.dpa_cls_td)) {
+		log_err("Table with ID %d is in use by another DPA IPsec instance\n",
+			prms->post_sec_in_params.dpa_cls_td);
+		return -EINVAL;
+	}
+
+
 skip_post_decryption_check:
 	/* check pre decryption SA lookup tables */
 	valid_tables = 0;
 	pre_sec_in_prms = &prms->pre_sec_in_params;
 	for (i = 0; i < DPA_IPSEC_MAX_SA_TYPE; i++)
 		if (pre_sec_in_prms->dpa_cls_td[i] != DPA_OFFLD_DESC_NONE) {
+			if (table_in_use(pre_sec_in_prms->dpa_cls_td[i])) {
+				log_err("Table with ID %d is in use by another DPA IPsec instance\n",
+					pre_sec_in_prms->dpa_cls_td[i]);
+				return -EINVAL;
+			}
+
 			/* verify that it is not an indexed table */
 			err = dpa_classif_table_get_params(
 						pre_sec_in_prms->dpa_cls_td[i],
@@ -638,9 +670,9 @@ static int get_free_ipsec_manip_node(struct dpa_ipsec *dpa_ipsec, void **hm)
 	BUG_ON(!dpa_ipsec);
 	BUG_ON(!hm);
 
-	/*
-	 * Lock IPSec manip node list
-	 */
+	mutex_lock(&dpa_ipsec->lock);
+
+	/* Lock IPSec manip node list */
 	mutex_lock(&dpa_ipsec->sa_mng.ipsec_manip_node_lock);
 
 	head = &dpa_ipsec->sa_mng.ipsec_manip_node_list;
@@ -658,10 +690,9 @@ static int get_free_ipsec_manip_node(struct dpa_ipsec *dpa_ipsec, void **hm)
 		ret = -ENOMEM;
 	}
 
-	/*
-	 * Unlock IPSec manip node list
-	 */
+	/* Unlock IPSec manip node list */
 	mutex_unlock(&dpa_ipsec->sa_mng.ipsec_manip_node_lock);
+	mutex_unlock(&dpa_ipsec->lock);
 
 	return ret;
 }
@@ -675,9 +706,9 @@ static void put_free_ipsec_manip_node(struct dpa_ipsec *dpa_ipsec, void *hm)
 	BUG_ON(!dpa_ipsec);
 	BUG_ON(!hm);
 
-	/*
-	 * Lock IPSec manip node list
-	 */
+	mutex_lock(&dpa_ipsec->lock);
+
+	/* Lock IPSec manip node list */
 	mutex_lock(&dpa_ipsec->sa_mng.ipsec_manip_node_lock);
 
 	head = &dpa_ipsec->sa_mng.ipsec_manip_node_list;
@@ -695,10 +726,9 @@ static void put_free_ipsec_manip_node(struct dpa_ipsec *dpa_ipsec, void *hm)
 	else
 		pr_warn("IPSec manip node %p is not used\n", hm);
 
-	/*
-	 * Unlock IPSec manip node list
-	 */
+	/* Unlock IPSec manip node list */
 	mutex_unlock(&dpa_ipsec->sa_mng.ipsec_manip_node_lock);
+	mutex_unlock(&dpa_ipsec->lock);
 }
 
 static void replace_ipsec_manip_node(struct dpa_ipsec *dpa_ipsec, void *hm_old,
@@ -778,10 +808,111 @@ static inline void destroy_fqid_cq(struct dpa_ipsec *dpa_ipsec)
 	}
 }
 
+/* Determine if get_instance returned error */
+static inline int check_instance(struct dpa_ipsec *instance)
+{
+	if (PTR_ERR(instance) == -EPERM) {
+		log_err("Instance is not initialized\n");
+		return -EPERM;
+	}
+
+	if (PTR_ERR(instance) == -EINVAL) {
+		log_err("Instance is being freed\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static struct dpa_ipsec *get_instance(int instance_id)
+{
+	struct dpa_ipsec *dpa_ipsec;
+	int ret = 0;
+
+	BUG_ON(instance_id < 0 || instance_id >= MAX_DPA_IPSEC_INSTANCES);
+
+	spin_lock(&gbl_dpa_ipsec_lock);
+
+	if (!gbl_dpa_ipsec[instance_id])
+		ret = -EPERM;
+
+	dpa_ipsec = gbl_dpa_ipsec[instance_id];
+
+	if (ret == 0 && !atomic_read(&dpa_ipsec->valid))
+		ret = -EINVAL;
+
+	if (!ret)
+		instance_refinc(dpa_ipsec);
+
+	spin_unlock(&gbl_dpa_ipsec_lock);
+
+	return !ret ? dpa_ipsec : ERR_PTR(ret);
+}
+
+static void put_instance(struct dpa_ipsec *dpa_ipsec)
+{
+	BUG_ON(!dpa_ipsec);
+	instance_refdec(dpa_ipsec);
+	if (atomic_read(&dpa_ipsec->ref) == 1)
+		wake_up(&wait_queue);
+}
+
+/* Returns true it table is in use on other DPA instance */
+static inline bool table_in_use(int td)
+{
+	struct dpa_ipsec *instance;
+	int i, j;
+
+	for (i = 0; i < MAX_DPA_IPSEC_INSTANCES; i++) {
+		struct dpa_ipsec_pre_sec_out_params *pre_sec_out_prms;
+		struct dpa_ipsec_pre_sec_in_params  *pre_sec_in_params;
+
+		instance = get_instance(i);
+		if (IS_ERR(instance))
+			continue;
+
+		/* Acquire instance lock */
+		mutex_lock(&instance->lock);
+
+		pre_sec_out_prms = &instance->config.pre_sec_out_params;
+		for (j = 0; j < DPA_IPSEC_MAX_SUPPORTED_PROTOS; j++) {
+			int dpa_cls_td = pre_sec_out_prms->table[i].dpa_cls_td;
+			if (td == dpa_cls_td) {
+				mutex_unlock(&instance->lock);
+				put_instance(instance);
+				return true;
+			}
+		}
+
+		if (!ignore_post_ipsec_action(instance) &&
+		    td == instance->config.post_sec_in_params.dpa_cls_td) {
+			mutex_unlock(&instance->lock);
+			put_instance(instance);
+			return true;
+		}
+
+		pre_sec_in_params = &instance->config.pre_sec_in_params;
+		for (j = 0; j < DPA_IPSEC_MAX_SA_TYPE; j++) {
+			int dpa_cls_td = pre_sec_in_params->dpa_cls_td[j];
+			if (td == dpa_cls_td) {
+				mutex_unlock(&instance->lock);
+				put_instance(instance);
+				return true;
+			}
+		}
+
+		/* Release the instance lock */
+		mutex_unlock(&instance->lock);
+		put_instance(instance);
+	}
+
+	return false;
+}
+
 /*
  * Create a circular queue with id's for aquiring SA's handles
  * Allocate a maximum number of SA internal structures to be used at runtime.
- * Param[in]	dpa_ipsec - Instance for which SaMng is initialized
+ * Param[in]	dpa_ipsec - Instance for which SA manager is initialized
  * Return value	0 on success. Error code otherwise.
  * Cleanup provided by free_sa_mng().
  */
@@ -789,7 +920,7 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 {
 	struct dpa_ipsec_sa_mng *sa_mng;
 	struct dpa_ipsec_sa *sa;
-	int i = 0, err;
+	int i = 0, err, start_sa_id;
 
 	BUG_ON(!dpa_ipsec);
 
@@ -810,7 +941,8 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 	}
 
 	/* fill with IDs */
-	for (i = 0; i < sa_mng->max_num_sa; i++)
+	start_sa_id = dpa_ipsec->id * MAX_NUM_OF_SA;
+	for (i = start_sa_id; i < start_sa_id + sa_mng->max_num_sa; i++)
 		if (cq_put_4bytes(sa_mng->sa_id_cq, i) < 0) {
 			log_err("Could not fill SA ID management CQ\n");
 			return -EDOM;
@@ -893,7 +1025,7 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 					  L1_CACHE_BYTES);
 		if (sa[i].sec_desc_extra_cmds_unaligned ==
 		    sa[i].sec_desc_extra_cmds)
-			sa[i].sec_desc_extra_cmds += L1_CACHE_BYTES;
+			sa[i].sec_desc_extra_cmds += L1_CACHE_BYTES / 4;
 
 		/*
 		 * Allocate space for the SEC replacement job descriptor
@@ -1018,8 +1150,10 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 	INIT_LIST_HEAD(&dpa_ipsec->sa_mng.sa_rekeying_headlist);
 	mutex_init(&sa_mng->sa_rekeying_headlist_lock);
 
-	/* Creating a single thread work queue used to defer work when there are
-	 * inbound SA's in rekeying process */
+	/*
+	 * Creating a single thread work queue used to defer work when there are
+	 * inbound SAs in rekeying process
+	 */
 	dpa_ipsec->sa_mng.sa_rekeying_wq =
 		create_singlethread_workqueue("sa_rekeying_wq");
 	if (!dpa_ipsec->sa_mng.sa_rekeying_wq) {
@@ -1089,6 +1223,8 @@ static void free_sa_mng(struct dpa_ipsec *dpa_ipsec)
 
 			kfree(sa_mng->sa[i].rjob_desc_unaligned);
 			sa_mng->sa[i].rjob_desc_unaligned = NULL;
+
+			mutex_destroy(&sa_mng->sa[i].lock);
 		}
 
 		kfree(sa_mng->sa);
@@ -1122,26 +1258,31 @@ static void free_sa_mng(struct dpa_ipsec *dpa_ipsec)
 		kfree(node->hm);
 		kfree(node);
 	}
+
+	mutex_destroy(&sa_mng->inpol_tables_lock);
+	mutex_destroy(&sa_mng->sa_rekeying_headlist_lock);
+	mutex_destroy(&sa_mng->ipsec_manip_node_lock);
+
 }
 
-/* cleanup Ipsec */
-static void free_resources(void)
+/* Cleanup for DPA IPsec instance */
+static void free_resources(int dpa_ipsec_id)
 {
 	struct dpa_ipsec *dpa_ipsec;
 
-	/* sanity checks */
-	if (!gbl_dpa_ipsec) {
-		log_err("There is no DPA IPSec instance initialized\n");
-		return;
-	}
-	dpa_ipsec = gbl_dpa_ipsec;
+	BUG_ON(dpa_ipsec_id < 0 || dpa_ipsec_id >= MAX_DPA_IPSEC_INSTANCES);
+
+	dpa_ipsec = gbl_dpa_ipsec[dpa_ipsec_id];
 
 	/* free all SA related stuff */
 	free_sa_mng(dpa_ipsec);
 
 	kfree(dpa_ipsec->used_sa_ids);
+
+	mutex_destroy(&dpa_ipsec->lock);
 	kfree(dpa_ipsec);
-	gbl_dpa_ipsec = NULL;
+
+	mark_unused_gbl_dpa_ipsec(dpa_ipsec_id);
 }
 
 /* Runtime functions */
@@ -1396,8 +1537,7 @@ static int create_ipsec_manip(struct dpa_ipsec_sa *sa, int next_hmd, int *hmd)
 
 	err = dpa_classif_import_static_hm(hm, next_hmd, hmd);
 	if (err < 0)
-		log_err("%s: Failed to import header manipulation into DPA "
-			"Classifier.\n", __func__);
+		log_err("Failed to import header manipulation into DPA Classifier.\n");
 
 	return err;
 }
@@ -1504,8 +1644,7 @@ static int update_ipsec_manip(struct dpa_ipsec_sa *sa, int next_hmd, int *hmd)
 
 	ret = dpa_classif_import_static_hm(new_hm, next_hmd, hmd);
 	if (ret < 0) {
-		log_err("%s: Failed to import header manipulation into DPA "
-			"Classifier.\n", __func__);
+		log_err("Failed to import header manipulation into DPA Classifier.\n");
 		put_free_ipsec_manip_node(sa->dpa_ipsec, new_hm);
 	}
 
@@ -2012,8 +2151,7 @@ static int get_new_fqid(struct dpa_ipsec *dpa_ipsec, uint32_t *fqid)
 	if (dpa_ipsec->sa_mng.fqid_cq != NULL) {
 		err = cq_get_4bytes(dpa_ipsec->sa_mng.fqid_cq, fqid);
 		if (err < 0)
-			log_err("FQID allocation (from range) failure."
-				   "QMan error code %d\n", err);
+			log_err("FQID allocation (from range) failure.\n");
 		return err;
 	}
 
@@ -2027,23 +2165,19 @@ static int get_new_fqid(struct dpa_ipsec *dpa_ipsec, uint32_t *fqid)
 	return 0;
 }
 
-static void put_free_fqid(uint32_t fqid)
+static void put_free_fqid(struct dpa_ipsec *dpa_ipsec, uint32_t fqid)
 {
-	struct dpa_ipsec *dpa_ipsec;
 	int err;
 
-	if (!gbl_dpa_ipsec) {
-		log_err("There is no DPA IPSec instance initialized\n");
-		return;
-	}
-	dpa_ipsec = gbl_dpa_ipsec;
+	BUG_ON(!dpa_ipsec);
 
 	/* recycle the FQID */
 	if (dpa_ipsec->sa_mng.fqid_cq != NULL) {
 		err = cq_put_4bytes(dpa_ipsec->sa_mng.fqid_cq, fqid);
 		BUG_ON(err < 0);
-	} else
+	} else {
 		qman_release_fqid(fqid);
+	}
 }
 
 static int wait_until_fq_empty(struct qman_fq *fq, int timeout)
@@ -2067,10 +2201,12 @@ static int wait_until_fq_empty(struct qman_fq *fq, int timeout)
 	return 0;
 }
 
-static int remove_sa_sec_fq(struct qman_fq *sec_fq)
+static int remove_sa_sec_fq(struct dpa_ipsec_sa *sa, struct qman_fq *sec_fq)
 {
 	int err, flags, timeout = WAIT4_FQ_EMPTY_TIMEOUT;
 
+	BUG_ON(!sa);
+	BUG_ON(!sa->dpa_ipsec);
 	BUG_ON(!sec_fq);
 
 	/* Check if already removed, and return success if so. */
@@ -2096,7 +2232,7 @@ static int remove_sa_sec_fq(struct qman_fq *sec_fq)
 	qman_destroy_fq(sec_fq, 0);
 
 	/* release FQID */
-	put_free_fqid(sec_fq->fqid);
+	put_free_fqid(sa->dpa_ipsec, sec_fq->fqid);
 
 	/* Clean the FQ structure for reuse */
 	memset(sec_fq, 0, sizeof(struct qman_fq));
@@ -2110,12 +2246,12 @@ static int remove_sa_fq_pair(struct dpa_ipsec_sa *sa)
 
 	BUG_ON(!sa);
 
-	err = remove_sa_sec_fq(sa->to_sec_fq);
+	err = remove_sa_sec_fq(sa, sa->to_sec_fq);
 	if (err < 0)
 		return err;
 
 	if (sa_is_single(sa)) {
-		err = remove_sa_sec_fq(sa->from_sec_fq);
+		err = remove_sa_sec_fq(sa, sa->from_sec_fq);
 		if (err < 0)
 			return err;
 	}
@@ -2304,12 +2440,12 @@ static int create_sa_fq_pair(struct dpa_ipsec_sa *sa,
 
  create_fq_pair_err:
 	if (qman_fq_fqid(sa->from_sec_fq) != 0)
-		remove_sa_sec_fq(sa->from_sec_fq);
+		remove_sa_sec_fq(sa, sa->from_sec_fq);
 	else
-		put_free_fqid(fqid_from_sec);	/*just recycle the FQID*/
+		put_free_fqid(dpa_ipsec, fqid_from_sec); /* recycle the FQID */
 
 	if (fqid_to_sec != 0)
-		put_free_fqid(fqid_to_sec); /*a FQID was allocated;recycle it*/
+		put_free_fqid(dpa_ipsec, fqid_to_sec); /*recycle the FQID */
 
 	return err;
 }
@@ -2935,31 +3071,23 @@ static int remove_policy(struct dpa_ipsec_sa *sa,
 	return 0;
 }
 
-static struct dpa_ipsec_sa *get_sa_from_sa_id(int sa_id)
+static struct dpa_ipsec_sa *get_sa_from_sa_id(struct dpa_ipsec *dpa_ipsec,
+					      int sa_id)
 {
-	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa_mng *sa_mng;
 	struct dpa_ipsec_sa *sa = NULL;
 
-	if (!gbl_dpa_ipsec) {
-		log_err("There is no dpa_ipsec component initialized\n");
-		return NULL;
-	}
+	BUG_ON(!dpa_ipsec);
 
-	dpa_ipsec = gbl_dpa_ipsec;
 	sa_mng = &dpa_ipsec->sa_mng;
 
-	if (sa_id < 0 || sa_id > sa_mng->max_num_sa) {
+	if (sa_id < dpa_ipsec->id * MAX_NUM_OF_SA ||
+	    sa_id >= dpa_ipsec->id * MAX_NUM_OF_SA + sa_mng->max_num_sa) {
 		log_err("Invalid SA id %d provided\n", sa_id);
 		return NULL;
 	}
-	sa = &sa_mng->sa[sa_id];
 
-	/* Validity check for this SA */
-	if (sa->used_sa_index == -1) {
-		log_err("SA with id %d is not valid\n", sa_id);
-		return NULL;
-	}
+	sa = &sa_mng->sa[sa_id_to_sa_index(sa_id)];
 
 	return sa;
 }
@@ -3003,8 +3131,7 @@ static int check_sa_params(struct dpa_ipsec_sa_params *sa_params)
 	if (sa_params->sa_dir == DPA_IPSEC_OUTBOUND) {
 		if (sa_params->sa_out_params.ip_hdr_size == 0 ||
 		    !sa_params->sa_out_params.outer_ip_header) {
-			log_err("Transport mode is not currently supported."
-				   "Specify a valid encapsulation header\n");
+			log_err("Transport mode is not currently supported. Specify a valid encapsulation header\n");
 			return -EINVAL;
 		}
 
@@ -3077,7 +3204,7 @@ static int get_new_sa(struct dpa_ipsec *dpa_ipsec,
 	}
 
 	/* Acquire a preallocated SA structure */
-	sa = &dpa_ipsec->sa_mng.sa[id];
+	sa = &dpa_ipsec->sa_mng.sa[sa_id_to_sa_index(id)];
 	sa->id = id;
 	sa->used_sa_index = i;
 	dpa_ipsec->used_sa_ids[sa->used_sa_index] = sa->id;
@@ -3255,36 +3382,71 @@ remove_fq_pair:
 	return err_rb;
 }
 
+/* Find unused global DPA IPsec instance holder */
+int find_unused_gbl_dpa_ipsec(void)
+{
+	int i, instance_id = -1;
+
+	spin_lock(&gbl_dpa_ipsec_lock);
+
+	for (i = 0; i < MAX_DPA_IPSEC_INSTANCES; i++)
+		if (!gbl_dpa_ipsec[i]) {
+			instance_id = i;
+			/* mark this as used */
+			gbl_dpa_ipsec[i] = (struct dpa_ipsec *)i;
+			break;
+		}
+
+	spin_unlock(&gbl_dpa_ipsec_lock);
+
+	return instance_id;
+}
+
+/* Mark unused global DPA IPsec instance holder */
+static void mark_unused_gbl_dpa_ipsec(int instance)
+{
+	BUG_ON(instance < 0 || instance >= MAX_DPA_IPSEC_INSTANCES);
+
+	spin_lock(&gbl_dpa_ipsec_lock);
+
+	gbl_dpa_ipsec[instance] = NULL;
+
+	spin_unlock(&gbl_dpa_ipsec_lock);
+}
+
 int dpa_ipsec_init(const struct dpa_ipsec_params *params, int *dpa_ipsec_id)
 {
 	struct dpa_ipsec *dpa_ipsec = NULL;
 	uint32_t max_num_sa;
-	int err = 0;
+	int err = 0, instance_id;
 
-	/* multiple DPA IPSec instances are not currently supported */
-	unused(dpa_ipsec_id);
-
-	/* sanity checks */
-	if (gbl_dpa_ipsec) {
-		log_err("There is already an initialized dpa_ipsec component.\n");
-		log_err("Multiple DPA IPSec Instances aren't currently supported.\n");
-		return -EPERM;
-	}
-
-	/* make sure all user params are ok and init can start */
+	/* make sure all user params are OK and init can start */
 	err = check_ipsec_params(params);
 	if (err < 0)
 		return err;
+
+	instance_id = find_unused_gbl_dpa_ipsec();
+	if (instance_id < 0) {
+		log_err("The limit of active DPA IPsec instances has been reached\n");
+		return -EDOM;
+	}
 
 	/* alloc control block */
 	dpa_ipsec = kzalloc(sizeof(*dpa_ipsec), GFP_KERNEL);
 	if (!dpa_ipsec) {
 		log_err("Could not allocate memory for control block.\n");
+		mark_unused_gbl_dpa_ipsec(instance_id);
 		return -ENOMEM;
 	}
 
-	/* store the control block so rollback can occur in case of error */
-	gbl_dpa_ipsec = dpa_ipsec;
+	/* Set instance reference count to 1 */
+	atomic_set(&dpa_ipsec->ref, 1);
+
+	/* store the control block */
+	spin_lock(&gbl_dpa_ipsec_lock);
+	gbl_dpa_ipsec[instance_id] = dpa_ipsec;
+	spin_unlock(&gbl_dpa_ipsec_lock);
+	dpa_ipsec->id = instance_id;
 
 	/* Initialize DPA IPSec instance lock */
 	mutex_init(&dpa_ipsec->lock);
@@ -3295,7 +3457,7 @@ int dpa_ipsec_init(const struct dpa_ipsec_params *params, int *dpa_ipsec_id)
 	/* init SA manager */
 	err = init_sa_manager(dpa_ipsec);
 	if (err < 0) {
-		free_resources();
+		free_resources(instance_id);
 		return err;
 	}
 
@@ -3304,7 +3466,7 @@ int dpa_ipsec_init(const struct dpa_ipsec_params *params, int *dpa_ipsec_id)
 	dpa_ipsec->used_sa_ids = kmalloc(max_num_sa * sizeof(u32), GFP_KERNEL);
 	if (!dpa_ipsec->used_sa_ids) {
 		log_err("No more memory for used sa id's vector ");
-		free_resources();
+		free_resources(instance_id);
 		return -ENOMEM;
 	}
 	memset(dpa_ipsec->used_sa_ids, DPA_OFFLD_INVALID_OBJECT_ID,
@@ -3314,9 +3476,13 @@ int dpa_ipsec_init(const struct dpa_ipsec_params *params, int *dpa_ipsec_id)
 	/* retrieve and store SEC ERA information */
 	err = get_sec_info(dpa_ipsec);
 	if (err < 0) {
-		free_resources();
+		free_resources(instance_id);
 		return err;
 	}
+
+	/* Give to the user the valid DPA IPsec instance ID */
+	*dpa_ipsec_id = instance_id;
+	atomic_set(&dpa_ipsec->valid, 1);
 
 	return 0;
 }
@@ -3324,19 +3490,52 @@ EXPORT_SYMBOL(dpa_ipsec_init);
 
 int dpa_ipsec_free(int dpa_ipsec_id)
 {
-	int err = 0;
+	struct dpa_ipsec *instance;
+	struct dpa_ipsec_sa *sa;
+	int i, sa_id;
+	DEFINE_WAIT(wait);
 
-	/* multiple DPA IPSec instances are not currently supported */
-	unused(dpa_ipsec_id);
+	instance = get_instance(dpa_ipsec_id);
+	if (PTR_ERR(instance) == -EPERM || PTR_ERR(instance) == -EINVAL)
+		return PTR_ERR(instance);
 
-	/* destroy all SAs offloaded in this DPA IPSec instance */
-	err = dpa_ipsec_flush_all_sa(0);
-	if (err < 0) {
-		log_err("Could not remove all SAs from this instance!\n");
-		return err;
+	/* Invalidate instance */
+	atomic_set(&instance->valid, 0);
+
+	put_instance(instance);
+
+	add_wait_queue(&wait_queue, &wait);
+	while (1) {
+		prepare_to_wait(&wait_queue, &wait, TASK_UNINTERRUPTIBLE);
+		/* Avoid sleeping if condition became true */
+		if (atomic_dec_and_test(&instance->ref))
+			break;
+		schedule();
+	}
+	finish_wait(&wait_queue, &wait);
+
+	/* destroy all SAs offloaded in this DPA IPsec instance */
+	flush_delayed_work(&instance->sa_mng.sa_rekeying_work);
+	for (i = 0; i < instance->sa_mng.max_num_sa; i++) {
+		sa_id = instance->used_sa_ids[i];
+		if (sa_id != DPA_OFFLD_INVALID_OBJECT_ID) {
+			sa = get_sa_from_sa_id(instance, sa_id);
+			if (sa_is_inbound(sa)) {
+				if (sa_is_child(sa))
+					remove_inbound_sa(sa->parent_sa);
+				remove_inbound_sa(sa);
+			} /* outbound */
+			else {
+				if (sa_is_child(sa))
+					remove_outbound_sa(sa->parent_sa);
+				remove_outbound_sa(sa);
+			}
+		}
 	}
 
-	free_resources();
+	free_resources(dpa_ipsec_id);
+
+	mark_unused_gbl_dpa_ipsec(instance->id);
 
 	return 0;
 }
@@ -3350,13 +3549,8 @@ int dpa_ipsec_create_sa(int dpa_ipsec_id,
 	uint32_t id;
 	int err = 0, err_rb = 0;
 
-	/* multiple DPA IPSec instances are not currently supported */
-	unused(dpa_ipsec_id);
-
-	if (!gbl_dpa_ipsec) {
-		log_err("There is no dpa_ipsec component initialized\n");
-		return -EPERM;
-	}
+	if (!valid_instance_id(dpa_ipsec_id))
+		return -EINVAL;
 
 	if (!sa_id) {
 		log_err("Invalid SA ID holder\n");
@@ -3364,20 +3558,28 @@ int dpa_ipsec_create_sa(int dpa_ipsec_id,
 	}
 	*sa_id = DPA_OFFLD_INVALID_OBJECT_ID;
 
-	err = check_sa_params(sa_params);
-	if (err < 0)
+	/* Get the DPA IPsec instance */
+	dpa_ipsec = get_instance(dpa_ipsec_id);
+	err = check_instance(dpa_ipsec);
+	if (unlikely(err < 0))
 		return err;
 
-	dpa_ipsec = gbl_dpa_ipsec;
+	err = check_sa_params(sa_params);
+	if (err < 0) {
+		put_instance(dpa_ipsec);
+		return err;
+	}
 
 	err = get_new_sa(dpa_ipsec, &sa, &id);
 	if (err < 0) {
 		log_err("Failed retrieving a preallocated SA\n");
+		put_instance(dpa_ipsec);
 		return err;
 	}
 
 	/* Update internal SA structure. First acquire its lock */
 	mutex_lock(&sa->lock);
+
 	sa->sa_dir = sa_params->sa_dir;
 	sa->dpa_ipsec = dpa_ipsec;
 	sa->parent_sa = NULL;
@@ -3485,6 +3687,9 @@ sa_done:
 	/* Unlock the SA structure */
 	mutex_unlock(&sa->lock);
 
+	/* Release the DPA IPsec instance */
+	put_instance(dpa_ipsec);
+
 	return 0;
 
 	/* Something went wrong. Begin roll-back */
@@ -3500,6 +3705,9 @@ sa_done:
 
 	/* Unlock the SA structure */
 	mutex_unlock(&sa->lock);
+
+	/* Release the DPA IPsec instance */
+	put_instance(dpa_ipsec);
 
 	return err;
 }
@@ -3602,7 +3810,7 @@ static int remove_inbound_sa(struct dpa_ipsec_sa *sa)
 			child_sa->rekey_event_cb(0, child_sa->id, 0);
 
 		/* Now free the parent SA structure and all its resources */
-		err = remove_sa_sec_fq(sa->to_sec_fq);
+		err = remove_sa_sec_fq(sa, sa->to_sec_fq);
 		if (err < 0) {
 			log_err("Couln't remove SA %d TO SEC FQ\n", sa->id);
 			return -EUCLEAN;
@@ -3831,23 +4039,45 @@ static int remove_outbound_sa(struct dpa_ipsec_sa *sa)
 int dpa_ipsec_remove_sa(int sa_id)
 {
 	struct dpa_ipsec_sa *sa, *child_sa = NULL;
+	struct dpa_ipsec *dpa_ipsec;
 	int ret = 0;
 
-	sa = get_sa_from_sa_id(sa_id);
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
 	if (!sa) {
 		log_err("Invalid SA handle for SA id %d\n", sa_id);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	/* Always acquire parent lock before child's lock */
 	ret = mutex_trylock(&sa->lock);
-	if (ret == 0)
-		return -EAGAIN;
+	if (ret == 0) {
+		log_err("Failed to acquire lock for SA %d\n", sa->id);
+		ret = -EAGAIN;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
+	}
 
 	if (sa_is_child(sa)) {
 		log_err("This SA %d is a child in rekeying process\n", sa_id);
 		mutex_unlock(&sa->lock);
-		return -EINPROGRESS;
+		ret = -EINPROGRESS;
+		goto out;
 	}
 
 	/* SA is parent? If so acquire its child's lock */
@@ -3856,7 +4086,8 @@ int dpa_ipsec_remove_sa(int sa_id)
 		ret = mutex_trylock(&child_sa->lock);
 		if (ret == 0) {
 			mutex_unlock(&sa->lock);
-			return -EAGAIN;
+			ret = -EAGAIN;
+			goto out;
 		}
 	}
 
@@ -3872,6 +4103,9 @@ int dpa_ipsec_remove_sa(int sa_id)
 	/* Release parent lock */
 	mutex_unlock(&sa->lock);
 
+out:
+	put_instance(dpa_ipsec);
+
 	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_remove_sa);
@@ -3880,24 +4114,43 @@ int dpa_ipsec_sa_add_policy(int sa_id,
 			    struct dpa_ipsec_policy_params *policy_params)
 {
 	struct dpa_ipsec_policy_entry *policy_entry;
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
-	int ret;
+	int ret = 0;
 
 	if (!policy_params) {
 		log_err("Invalid policy params handle\n");
 		return -EINVAL;
 	}
 
-	sa = get_sa_from_sa_id(sa_id);
-	if (!sa) {
-		log_err("Invalid SA handle\n");
+	if (!valid_sa_id(sa_id))
 		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("Failed to acquire lock for SA %d\n", sa->id);
-		return -EBUSY;
+		ret = -EAGAIN;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	BUG_ON(!sa->dpa_ipsec);
@@ -3907,26 +4160,29 @@ int dpa_ipsec_sa_add_policy(int sa_id,
 		log_err("Inbound policy verification is disabled.\n");
 		mutex_unlock(&sa->dpa_ipsec->lock);
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 	mutex_unlock(&sa->dpa_ipsec->lock);
 
 	ret = check_policy_params(sa, policy_params);
 	if (ret < 0) {
 		mutex_unlock(&sa->lock);
-		return ret;
+		goto out;
 	}
 
 	if (sa_is_parent(sa) && sa_is_outbound(sa)) {
 		log_err("Illegal to set out policy - parent SA %d\n", sa->id);
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	if (sa_is_child(sa) && sa_is_inbound(sa)) {
 		log_err("Illegal to set in policy on child SA %d\n", sa->id);
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	/*
@@ -3939,7 +4195,7 @@ int dpa_ipsec_sa_add_policy(int sa_id,
 	if (ret < 0) {
 		log_err("Could not store the policy in the SA\n");
 		mutex_unlock(&sa->lock);
-		return ret;
+		goto out;
 	}
 
 	/*Insert inbound or outbound policy for this SA depending on it's type*/
@@ -3958,6 +4214,8 @@ int dpa_ipsec_sa_add_policy(int sa_id,
 	}
 
 	mutex_unlock(&sa->lock);
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
@@ -3967,6 +4225,7 @@ int dpa_ipsec_sa_remove_policy(int sa_id,
 			       struct dpa_ipsec_policy_params *policy_params)
 {
 	struct dpa_ipsec_policy_entry *policy_entry;
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	int ret = 0;
 
@@ -3975,42 +4234,63 @@ int dpa_ipsec_sa_remove_policy(int sa_id,
 		return -EINVAL;
 	}
 
-	sa = get_sa_from_sa_id(sa_id);
-	if (!sa) {
-		log_err("Invalid SA handle provided\n");
+	if (!valid_sa_id(sa_id))
 		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("Failed to acquire lock for SA %d\n", sa->id);
-		return -EBUSY;
+		ret = -EAGAIN;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	if (sa_is_inbound(sa) &&
 	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
 		log_err("Inbound policy verification is disabled.\n");
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	if (sa_is_parent(sa) && sa_is_outbound(sa)) {
 		log_err("Illegal removing out policy parent SA %d\n", sa->id);
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	if (sa_is_child(sa) && sa_is_inbound(sa)) {
 		log_err("Illegal removing in policy, child SA %d\n", sa->id);
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	ret = find_policy(sa, policy_params, &policy_entry);
 	if (ret < 0) {
 		log_err("Could not find policy entry in SA policy list\n");
 		mutex_unlock(&sa->lock);
-		return ret;
+		goto out;
 	}
 
 	/*
@@ -4021,6 +4301,9 @@ int dpa_ipsec_sa_remove_policy(int sa_id,
 	ret = remove_policy(sa, policy_entry);
 
 	mutex_unlock(&sa->lock);
+
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
@@ -4045,13 +4328,7 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 	struct timeval timeval;
 	unsigned long jiffies_to_wait;
 	uint32_t id;
-	int err = 0, err_rb;
-
-	if (!gbl_dpa_ipsec) {
-		log_err("There is no dpa_ipsec instance initialized\n");
-		return -EPERM;
-	}
-	dpa_ipsec = gbl_dpa_ipsec;
+	int ret = 0, err_rb;
 
 	if (!new_sa_id) {
 		log_err("Invalid SA ID holder\n");
@@ -4059,21 +4336,39 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 	}
 	*new_sa_id = DPA_OFFLD_INVALID_OBJECT_ID;
 
-	err = check_sa_params(sa_params);
-	if (err < 0)
-		return err;
+	ret = check_sa_params(sa_params);
+	if (ret < 0)
+		return ret;
 
-	old_sa = get_sa_from_sa_id(sa_id);
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	old_sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
 	if (!old_sa) {
-		log_err("Invalid SA handle provided\n");
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		put_instance(dpa_ipsec);
 		return -EINVAL;
 	}
 
 	/* Acquire parent SA's lock */
-	err = mutex_trylock(&old_sa->lock);
-	if (err == 0) {
-		log_err("SA %d is being used\n", old_sa->id);
+	ret = mutex_trylock(&old_sa->lock);
+	if (ret == 0) {
+		log_err("Failed to acquire lock for SA %d\n", old_sa->id);
+		put_instance(dpa_ipsec);
 		return -EBUSY;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(old_sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&old_sa->lock);
+		put_instance(dpa_ipsec);
+		return -ENODEV;
 	}
 
 	/* Check if SA is currently in rekeying process */
@@ -4081,6 +4376,7 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 		log_err("SA with id %d is already in rekeying process\n",
 			  old_sa->id);
 		mutex_unlock(&old_sa->lock);
+		put_instance(dpa_ipsec);
 		return -EEXIST;
 	}
 
@@ -4089,14 +4385,16 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 		log_err("New SA parameters don't match the parent SA %d\n",
 			  old_sa->sa_dir);
 		mutex_unlock(&old_sa->lock);
+		put_instance(dpa_ipsec);
 		return -EINVAL;
 	}
 
-	err = get_new_sa(dpa_ipsec, &new_sa, &id);
-	if (err < 0) {
+	ret = get_new_sa(dpa_ipsec, &new_sa, &id);
+	if (ret < 0) {
 		log_err("Failed retrieving a preallocated SA\n");
 		mutex_unlock(&old_sa->lock);
-		return err;
+		put_instance(dpa_ipsec);
+		return ret;
 	}
 
 	/* Update the new SA structure */
@@ -4115,11 +4413,11 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 
 	/* Copy SA params into the internal SA structure */
 	if (sa_is_outbound(old_sa))
-		err = copy_sa_params_to_out_sa(new_sa, sa_params);
+		ret = copy_sa_params_to_out_sa(new_sa, sa_params);
 	else
-		err = copy_sa_params_to_in_sa(new_sa, sa_params, true);
+		ret = copy_sa_params_to_in_sa(new_sa, sa_params, true);
 
-	if (err < 0) {
+	if (ret < 0) {
 		log_err("Could not copy SA parameters into SA\n");
 		goto rekey_sa_err;
 	}
@@ -4127,20 +4425,20 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 	/* Initialize the IPSec Manip. object (if required) for inbound SAs */
 	if (sa_is_inbound(new_sa)) {
 		if (new_sa->dpa_ipsec->config.max_sa_manip_ops == 0)
-			err = create_ipsec_manip(new_sa, DPA_OFFLD_DESC_NONE,
+			ret = create_ipsec_manip(new_sa, DPA_OFFLD_DESC_NONE,
 						 &new_sa->ipsec_hmd);
 		else
-			err = update_ipsec_manip(new_sa, DPA_OFFLD_DESC_NONE,
+			ret = update_ipsec_manip(new_sa, DPA_OFFLD_DESC_NONE,
 						 &new_sa->ipsec_hmd);
-		if (err < 0) {
+		if (ret < 0) {
 			log_err("Could not create Manip object for in SA!\n");
 			goto rekey_sa_err;
 		}
 	}
 
 	/* Generate the split key from the normal auth key */
-	err = generate_split_key(&new_sa->auth_data);
-	if (err < 0)
+	ret = generate_split_key(&new_sa->auth_data);
+	if (ret < 0)
 		goto rekey_sa_err;
 
 	/*
@@ -4154,8 +4452,8 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 	new_sa->em_inpol_td = old_sa->em_inpol_td;
 
 	/* Create SEC queues according to SA parameters */
-	err = create_sa_fq_pair(new_sa, true, true);
-	if (err < 0) {
+	ret = create_sa_fq_pair(new_sa, true, true);
+	if (ret < 0) {
 		log_err("Could not create SEC frame queues\n");
 		goto rekey_sa_err;
 	}
@@ -4173,18 +4471,14 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 
 		/* Update child's SA policies if its parent SA has policies */
 		list_for_each_entry_safe(policy_entry, tmp_policy_entry,
-					 &old_sa->policy_headlist,
-					 node) {
-			err = update_outbound_policy(new_sa,
-						     policy_entry,
+					 &old_sa->policy_headlist, node) {
+			ret = update_outbound_policy(new_sa, policy_entry,
 						     MNG_OP_MODIFY);
-			if (err < 0) {
-				/*
-				 * Keep both SAs. Both must be removed
-				 * using remove_sa
-				 */
+			if (ret < 0) {
+				/* Keep both SAs and delete the using remove*/
 				*new_sa_id = new_sa->id;
-				log_err("Could't modify outbound policy\n");
+				log_err("Could't modify outbound policy for rekeying SA %d\n",
+					new_sa->id);
 				new_sa->parent_sa = NULL;
 				new_sa->child_sa  = NULL;
 				old_sa->child_sa  = NULL;
@@ -4196,6 +4490,7 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 				 */
 				mutex_unlock(&new_sa->lock);
 				mutex_unlock(&old_sa->lock);
+				put_instance(dpa_ipsec);
 				return -EUSERS;
 			}
 			list_del(&policy_entry->node);
@@ -4210,16 +4505,16 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 
 		mutex_lock(&sa_mng->sa_rekeying_headlist_lock);
 		list_add_tail(&new_sa->sa_rekeying_node,
-			 &sa_mng->sa_rekeying_headlist);
+			      &sa_mng->sa_rekeying_headlist);
 		mutex_unlock(&sa_mng->sa_rekeying_headlist_lock);
 
 		queue_delayed_work(sa_mng->sa_rekeying_wq,
 				   &sa_mng->sa_rekeying_work,
 				   jiffies_to_wait);
-	} else {		/* DPA_IPSEC_INBOUND */
+	} else {	/* DPA_IPSEC_INBOUND */
 		/* Need to update the IN SA PCD entry */
-		err = update_pre_sec_inbound_table(new_sa, MNG_OP_ADD);
-		if (err < 0) {
+		ret = update_pre_sec_inbound_table(new_sa, MNG_OP_ADD);
+		if (ret < 0) {
 			log_err("Could not add PCD entry for new SA\n");
 			goto rekey_sa_err;
 		}
@@ -4229,7 +4524,7 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 			/* Add new SA into the sa_rekeying_headlist */
 			mutex_lock(&sa_mng->sa_rekeying_headlist_lock);
 			list_add_tail(&new_sa->sa_rekeying_node,
-				 &sa_mng->sa_rekeying_headlist);
+				      &sa_mng->sa_rekeying_headlist);
 			mutex_unlock(&sa_mng->sa_rekeying_headlist_lock);
 
 			/* schedule inbound SA's rekeying */
@@ -4246,11 +4541,12 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 			 * can be several seconds it is required to schedule the
 			 * TO SEC FQ of the new SA.
 			 */
-			err = qman_schedule_fq(new_sa->to_sec_fq);
-			if (err < 0) {
+			ret = qman_schedule_fq(new_sa->to_sec_fq);
+			if (ret < 0) {
 				mutex_unlock(&new_sa->lock);
 				mutex_unlock(&old_sa->lock);
-				return err;
+				put_instance(dpa_ipsec);
+				return ret;
 			}
 		}
 	}
@@ -4259,6 +4555,8 @@ int dpa_ipsec_sa_rekeying(int sa_id,
 	*new_sa_id = new_sa->id;
 	mutex_unlock(&new_sa->lock);
 	mutex_unlock(&old_sa->lock);
+
+	put_instance(dpa_ipsec);
 
 	return 0;
 
@@ -4280,7 +4578,9 @@ rekey_sa_err:
 	mutex_unlock(&new_sa->lock);
 	mutex_unlock(&old_sa->lock);
 
-	return err;
+	put_instance(dpa_ipsec);
+
+	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_rekeying);
 
@@ -4333,7 +4633,7 @@ static int sa_rekeying_outbound(struct dpa_ipsec_sa *new_sa)
 	}
 
 	/* Now free the old SA structure and all its resources */
-	err = remove_sa_sec_fq(old_sa->to_sec_fq);
+	err = remove_sa_sec_fq(old_sa, old_sa->to_sec_fq);
 	if (err < 0) {
 		log_err("Couln't remove old SA's %d TO SEC FQ\n", old_sa->id);
 		rekey_err_report(new_sa->rekey_event_cb, 0, new_sa->id,
@@ -4456,7 +4756,7 @@ static int sa_rekeying_inbound(struct dpa_ipsec_sa *new_sa)
 				 &new_sa->policy_headlist);
 
 	/* Now free the old SA structure and all its resources */
-	err = remove_sa_sec_fq(old_sa->to_sec_fq);
+	err = remove_sa_sec_fq(old_sa, old_sa->to_sec_fq);
 	if (err < 0) {
 		log_err("Couln't remove old SA's %d TO SEC FQ\n", old_sa->id);
 		rekey_err_report(new_sa->rekey_event_cb, 0, new_sa->id,
@@ -4572,6 +4872,7 @@ void sa_rekeying_work_func(struct work_struct *work)
 
 	/* Reschedule work if there is at least one SA in rekeying process */
 	if (!list_empty(head)) {
+		struct dpa_ipsec *instance;
 		struct timeval timeval;
 		unsigned long jiffies_to_wait;
 
@@ -4579,9 +4880,11 @@ void sa_rekeying_work_func(struct work_struct *work)
 		timeval.tv_usec = REKEY_SCHED_DELAY;
 		jiffies_to_wait = timeval_to_jiffies(&timeval);
 
-		queue_delayed_work(sa_mng->sa_rekeying_wq,
-				   &sa_mng->sa_rekeying_work,
-				   jiffies_to_wait);
+		instance = container_of(sa_mng, struct dpa_ipsec, sa_mng);
+		if (atomic_read(&instance->valid))
+			queue_delayed_work(sa_mng->sa_rekeying_wq,
+					   &sa_mng->sa_rekeying_work,
+					   jiffies_to_wait);
 	}
 
 	/* Release protective lock for the SA rekeying list */
@@ -4604,24 +4907,45 @@ void sa_rekeying_work_func(struct work_struct *work)
  */
 int dpa_ipsec_disable_sa(int sa_id)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	int ret = 0, err = 0;
 
-	sa = get_sa_from_sa_id(sa_id);
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
 	if (!sa) {
 		log_err("Invalid SA handle for SA id %d\n", sa_id);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	/* Acquire protective lock for this SA */
 	ret = mutex_trylock(&sa->lock);
-	if (ret == 0)
-		return -EAGAIN;
+	if (ret == 0) {
+		ret = -EAGAIN;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
+	}
 
 	if (!sa_is_single(sa)) {
 		log_err("SA %d is a parent or child in rekeying\n", sa_id);
 		mutex_unlock(&sa->lock);
-		return -EINPROGRESS;
+		ret = -EINPROGRESS;
+		goto out;
 	}
 
 	if (sa_is_inbound(sa) &&
@@ -4635,6 +4959,8 @@ int dpa_ipsec_disable_sa(int sa_id)
 
 	/* Release protective lock for this SA */
 	mutex_unlock(&sa->lock);
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
@@ -4651,14 +4977,10 @@ int dpa_ipsec_flush_all_sa(int dpa_ipsec_id)
 	uint32_t i, sa_id;
 	int err = 0, ret;
 
-	/* multiple DPA IPSec instances are not currently supported */
-	unused(dpa_ipsec_id);
-
-	if (!gbl_dpa_ipsec) {
-		log_err("There is no dpa_ipsec component initialized\n");
-		return -EPERM;
-	}
-	dpa_ipsec = gbl_dpa_ipsec;
+	dpa_ipsec = get_instance(dpa_ipsec_id);
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
 
 	flush_delayed_work(&dpa_ipsec->sa_mng.sa_rekeying_work);
 
@@ -4674,6 +4996,8 @@ int dpa_ipsec_flush_all_sa(int dpa_ipsec_id)
 		}
 	}
 
+	put_instance(dpa_ipsec);
+
 	return err;
 }
 EXPORT_SYMBOL(dpa_ipsec_flush_all_sa);
@@ -4682,48 +5006,66 @@ int dpa_ipsec_sa_get_policies(int sa_id,
 			      struct dpa_ipsec_policy_params *policy_params,
 			      int *num_pol)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	int ret;
-
-	if (sa_id < 0) {
-		log_err("Invalid SA id");
-		return -EINVAL;
-	}
 
 	if (!num_pol) {
 		log_err("Invalid num_pol parameter handle\n");
 		return -EINVAL;
 	}
 
-	sa = get_sa_from_sa_id(sa_id);
-	if (!sa) {
-		log_err("Invalid SA handle\n");
+	if (!valid_sa_id(sa_id))
 		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("Failed to acquire lock for SA %d\n", sa->id);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	if (sa_is_inbound(sa) &&
 	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
 		log_err("Inbound policy verification is disabled.\n");
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	if (!policy_params) {
 		/* get the number of policies for SA with id sa_id */
 		*num_pol = get_policy_count_for_sa(sa);
 		mutex_unlock(&sa->lock);
-		return 0;
+		ret = 0;
+		goto out;
 	}
 
 	ret = copy_all_policies(sa, policy_params, *num_pol);
 
 	mutex_unlock(&sa->lock);
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
@@ -4754,31 +5096,53 @@ static int sa_flush_policies(struct dpa_ipsec_sa *sa)
 
 int dpa_ipsec_sa_flush_policies(int sa_id)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	int ret = 0;
 
-	sa = get_sa_from_sa_id(sa_id);
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
 	if (!sa) {
 		log_err("Invalid SA handle for SA id %d\n", sa_id);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("Failed to acquire lock for SA %d\n", sa->id);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	if (sa_is_inbound(sa) &&
 	    !sa->dpa_ipsec->config.post_sec_in_params.do_pol_check) {
 		log_err("Inbound policy verification is disabled.\n");
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	ret = sa_flush_policies(sa);
 
 	mutex_unlock(&sa->lock);
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
@@ -4786,6 +5150,7 @@ EXPORT_SYMBOL(dpa_ipsec_sa_flush_policies);
 
 int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	int ret = 0;
 	uint32_t *desc;
@@ -4796,16 +5161,34 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 		return -EINVAL;
 	}
 
-	sa = get_sa_from_sa_id(sa_id);
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
 	if (!sa) {
 		log_err("Invalid SA handle for SA id %d\n", sa_id);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("Failed to acquire lock for SA %d\n", sa->id);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	memset(sa_stats, 0, sizeof(*sa_stats));
@@ -4813,7 +5196,8 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 	if (!sa->enable_stats) {
 		log_err("Statistics are not enabled for SA id %d\n", sa_id);
 		mutex_unlock(&sa->lock);
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	desc = (uint32_t *)sa->sec_desc->desc;
@@ -4839,7 +5223,7 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 			log_err("Failed to acquire total packets counter for inbound SA Id=%d.\n",
 				sa_id);
 			mutex_unlock(&sa->lock);
-			return ret;
+			goto out;
 		} else {
 			sa_stats->input_packets	= stats.pkts;
 		}
@@ -4851,8 +5235,7 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 
 		psop = &sa->dpa_ipsec->config.pre_sec_out_params;
 
-		list_for_each_entry(out_policy, &sa->policy_headlist,
-									node) {
+		list_for_each_entry(out_policy, &sa->policy_headlist, node) {
 			policy_params = &out_policy->pol_params;
 			if (IP_ADDR_TYPE_IPV4(policy_params->dest_addr))
 				table_idx = GET_POL_TABLE_IDX(
@@ -4871,7 +5254,7 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 				log_err("Failed to acquire total packets counter for outbound SA Id=%d. Failure occured on outbound policy table %d (td=%d).\n",
 					sa_id, table_idx, td);
 				mutex_unlock(&sa->lock);
-				return ret;
+				goto out;
 			} else {
 				sa_stats->input_packets	+= stats.pkts;
 			}
@@ -4880,27 +5263,32 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 
 sa_get_stats_return:
 	mutex_unlock(&sa->lock);
+/* fall through */
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_get_stats);
 
-int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
+int dpa_ipsec_get_stats(int dpa_ipsec_id, struct dpa_ipsec_stats *stats)
 {
 	t_FmPcdCcKeyStatistics		miss_stats;
 	struct dpa_cls_tbl_params	table_params;
-	int				i, j, td;
+	int				i, j, td, ret;
 	t_Error				err;
 	struct dpa_ipsec		*dpa_ipsec;
-
-	dpa_ipsec = gbl_dpa_ipsec;
 
 	if (!stats) {
 		log_err("\"stats\" cannot be NULL.\n");
 		return -EINVAL;
 	}
-
 	memset(stats, 0, sizeof(*stats));
+
+	dpa_ipsec = get_instance(dpa_ipsec_id);
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
 
 	mutex_lock(&dpa_ipsec->lock);
 
@@ -4919,6 +5307,7 @@ int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
 			log_err("Failed to acquire params for inbound table type %d (td=%d).\n",
 				i, td);
 			mutex_unlock(&dpa_ipsec->lock);
+			put_instance(dpa_ipsec);
 			return -EINVAL;
 		}
 		if (table_params.type == DPA_CLS_TBL_HASH)
@@ -4933,6 +5322,7 @@ int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
 			log_err("Failed to acquire miss statistics for inbound table type %d (td=%d, Cc node handle=0x%p).\n",
 				i, td, table_params.cc_node);
 			mutex_unlock(&dpa_ipsec->lock);
+			put_instance(dpa_ipsec);
 			return -EINVAL;
 		} else {
 			stats->inbound_miss_pkts += miss_stats.frameCount;
@@ -4940,10 +5330,7 @@ int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
 		}
 	}
 
-	/*
-     * On outbound add up miss statistics from all
-     * outbound pre-SEC tables:
-     */
+	/* On outbound add miss statistics from all outbound pre-SEC tables: */
 	for (i = 0; i < DPA_IPSEC_MAX_SUPPORTED_PROTOS; i++) {
 		td = dpa_ipsec->config.pre_sec_out_params.table[i].dpa_cls_td;
 
@@ -4972,6 +5359,7 @@ int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
 			log_err("Failed to acquire table params for outbound proto type #%d (td=%d).\n",
 				i, td);
 			mutex_unlock(&dpa_ipsec->lock);
+			put_instance(dpa_ipsec);
 			return -EINVAL;
 		}
 		if (table_params.type == DPA_CLS_TBL_HASH)
@@ -4986,6 +5374,7 @@ int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
 			log_err("Failed to acquire miss statistics for outbound proto type %d (td=%d, Cc node handle=0x%p).\n",
 				i, td, table_params.cc_node);
 			mutex_unlock(&dpa_ipsec->lock);
+			put_instance(dpa_ipsec);
 			return -EINVAL;
 		} else {
 			stats->outbound_miss_pkts += miss_stats.frameCount;
@@ -4994,6 +5383,7 @@ int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats)
 	}
 
 	mutex_unlock(&dpa_ipsec->lock);
+	put_instance(dpa_ipsec);
 
 	return 0;
 }
@@ -5001,6 +5391,7 @@ EXPORT_SYMBOL(dpa_ipsec_get_stats);
 
 int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	dma_addr_t dma_rjobd;
 	uint32_t *rjobd;
@@ -5014,16 +5405,34 @@ int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 		return -EINVAL;
 	}
 
-	sa = get_sa_from_sa_id(sa_id);
-	if (!sa) {
-		log_err("Invalid SA id provided\n");
+	if (!valid_sa_id(sa_id))
 		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("SA %d is being used\n", sa->id);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	BUG_ON(!sa->dpa_ipsec);
@@ -5034,9 +5443,14 @@ int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 	switch (modify_prm->type) {
 	case DPA_IPSEC_SA_MODIFY_ARS:
 		msg[0] = DPA_IPSEC_SA_MODIFY_ARS_DONE;
+		if (sa_is_outbound(sa)) {
+			log_err("ARS update supported only for inbound SA\n");
+			ret = -EINVAL;
+			goto out;
+		}
 		ret = build_rjob_desc_ars_update(sa, modify_prm->arw, msg_len);
 		if (ret < 0)
-			return ret;
+			goto out;
 		break;
 	case DPA_IPSEC_SA_MODIFY_SEQ_NUM:
 		msg[0] = DPA_IPSEC_SA_MODIFY_SEQ_NUM_DONE;
@@ -5044,7 +5458,7 @@ int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 
 		ret = build_rjob_desc_seq_write(sa, msg_len);
 		if (ret < 0)
-			return ret;
+			goto out;
 		break;
 	case DPA_IPSEC_SA_MODIFY_EXT_SEQ_NUM:
 		msg[0] = DPA_IPSEC_SA_MODIFY_EXT_SEQ_NUM_DONE;
@@ -5052,15 +5466,17 @@ int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 
 		ret = build_rjob_desc_seq_write(sa, msg_len);
 		if (ret < 0)
-			return ret;
+			goto out;
 		break;
 	case DPA_IPSEC_SA_MODIFY_CRYPTO:
 		log_err("Modifying cryptographic parameters is unsupported\n");
-		return -EOPNOTSUPP;
+		ret = -EOPNOTSUPP;
+		goto out;
 	default:
 		log_err("Invalid type for modify parameters\n");
 		mutex_unlock(&sa->lock);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	rjobd = sa->rjob_desc;
@@ -5074,7 +5490,8 @@ int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 	if (!dma_rjobd) {
 		log_err("Failed DMA mapping the RJD for SA %d\n", sa->id);
 		mutex_unlock(&sa->lock);
-		return -ENXIO;
+		ret = -ENXIO;
+		goto out;
 	}
 
 	memset(&fd, 0x00, sizeof(struct qm_fd));
@@ -5097,12 +5514,16 @@ int dpa_ipsec_sa_modify(int sa_id, struct dpa_ipsec_sa_modify_prm *modify_prm)
 			 DMA_BIDIRECTIONAL);
 
 	mutex_unlock(&sa->lock);
+out:
+	put_instance(dpa_ipsec);
 
 	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_modify);
+
 int dpa_ipsec_sa_request_seq_number(int sa_id)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	dma_addr_t dma_rjobd;
 	uint32_t *rjobd;
@@ -5111,16 +5532,34 @@ int dpa_ipsec_sa_request_seq_number(int sa_id)
 	const size_t msg_len = 5;
 	int ret;
 
-	sa = get_sa_from_sa_id(sa_id);
-	if (!sa) {
-		log_err("Invalid SA id provided\n");
+	if (!valid_sa_id(sa_id))
 		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
 	}
 
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("SA %d is being used\n", sa->id);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	BUG_ON(!sa->dpa_ipsec);
@@ -5129,7 +5568,8 @@ int dpa_ipsec_sa_request_seq_number(int sa_id)
 		log_err("A new request for SA %d can be done only after a get SEQ is done\n",
 			sa->id);
 		mutex_unlock(&sa->lock);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
 	}
 
 	msg[0] = DPA_IPSEC_SA_GET_SEQ_NUM_DONE;
@@ -5139,7 +5579,7 @@ int dpa_ipsec_sa_request_seq_number(int sa_id)
 	if (ret < 0) {
 		log_err("Failed to create RJOB for reading SEQ number\n");
 		mutex_unlock(&sa->lock);
-		return ret;
+		goto out;
 	}
 
 	rjobd = sa->rjob_desc;
@@ -5153,7 +5593,8 @@ int dpa_ipsec_sa_request_seq_number(int sa_id)
 	if (!dma_rjobd) {
 		log_err("Failed DMA mapping the RJD for SA %d\n", sa->id);
 		mutex_unlock(&sa->lock);
-		return -ENXIO;
+		ret = -ENXIO;
+		goto out;
 	}
 
 	memset(&fd, 0x00, sizeof(struct qm_fd));
@@ -5180,30 +5621,52 @@ int dpa_ipsec_sa_request_seq_number(int sa_id)
 
 	mutex_unlock(&sa->lock);
 
+out:
+	put_instance(dpa_ipsec);
+
 	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_request_seq_number);
 
 int dpa_ipsec_sa_get_seq_number(int sa_id, uint64_t *seq)
 {
+	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
 	int ret;
-
-	sa = get_sa_from_sa_id(sa_id);
-	if (!sa) {
-		log_err("Invalid SA id provided\n");
-		return -EINVAL;
-	}
 
 	if (!seq) {
 		log_err("Invalid SEQ parameter handle\n");
 		return -EINVAL;
 	}
 
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA id %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
+	}
+
 	ret = mutex_trylock(&sa->lock);
 	if (ret == 0) {
 		log_err("SA %d is being used\n", sa_id);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
+	}
+
+	/* Abort if this SA is not being used */
+	if (!sa_in_use(sa)) {
+		log_err("SA with id %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
 	}
 
 	BUG_ON(!sa->dpa_ipsec);
@@ -5212,13 +5675,16 @@ int dpa_ipsec_sa_get_seq_number(int sa_id, uint64_t *seq)
 		log_err("Prior to getting the SEQ number for SA %d a request must be made\n",
 			sa->id);
 		mutex_unlock(&sa->lock);
-		return -EBUSY;
+		ret = -EBUSY;
+		goto out;
 	}
 
 	*seq = sa->r_seq_num;
 	sa->read_seq_in_progress = false;
 
 	mutex_unlock(&sa->lock);
+out:
+	put_instance(dpa_ipsec);
 
 	return 0;
 }

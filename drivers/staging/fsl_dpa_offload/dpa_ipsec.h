@@ -163,7 +163,9 @@
 #define SEQ_NUM_HI_MASK		0xFFFFFFFF00000000
 #define SEQ_NUM_LOW_MASK	0x00000000FFFFFFFF
 
-#define MAX_NUM_OF_SA       2000
+#define MAX_DPA_IPSEC_INSTANCES		10
+
+#define MAX_NUM_OF_SA       1000
 #define MAX_CIPHER_KEY_LEN  100
 #define MAX_AUTH_KEY_LEN    256
 #define MAX_BUFFER_POOL_ID  63
@@ -174,7 +176,7 @@
 #define UDP_HEADER_LEN		8
 #define NEXT_HEADER_IS_IPv4	0x04
 
-#define WAIT4_FQ_EMPTY_TIMEOUT	10000 /* Time in microseconds */
+#define WAIT4_FQ_EMPTY_TIMEOUT	100000 /* Time in microseconds */
 #define REKEY_SCHED_DELAY	100   /* Time in microseconds */
 
 #define INVALID_INB_FLOW_ID	0xFFFF
@@ -361,16 +363,19 @@ struct dpa_ipsec_sa_mng {
 	struct cq *fqid_cq; /* Circular queue with FQIDs for internal FQs     */
 };
 
-/* DPA IPSEC - Control Block */
+/* DPA IPsec - Control Block */
 struct dpa_ipsec {
+	int id; /* the instance ID */
 	/* Configuration parameters as provided in dap_ipsec_config_and_init */
 	struct dpa_ipsec_params config;
 	struct dpa_ipsec_sa_mng sa_mng;	/* Internal DPA IPsec SA manager      */
-	int *used_sa_ids;	/* Sa ids used by this dpa ipsec instance     */
+	int *used_sa_ids;	/* SA IDs used by this DPA IPsec instance     */
 	int num_used_sas;  /* The current number of sa's used by this instance*/
 	int sec_era; /* SEC ERA information */
 	int sec_ver; /* SEC version information */
 	struct device *jrdev; /* Job ring device */
+	atomic_t ref;
+	atomic_t valid;
 	struct mutex lock; /* Lock for this dpa_ipsec instance */
 };
 
@@ -467,6 +472,61 @@ static inline int ignore_post_ipsec_action(struct dpa_ipsec *dpa_ipsec)
 	if (dpa_ipsec->config.post_sec_in_params.dpa_cls_td > 0)
 		return FALSE;
 	return TRUE;
+}
+
+static inline void instance_refinc(struct dpa_ipsec *instance)
+{
+	BUG_ON(atomic_read(&instance->ref) <= 0);
+	atomic_inc(&instance->ref);
+}
+
+static inline void instance_refdec(struct dpa_ipsec *instance)
+{
+	atomic_dec(&instance->ref);
+}
+
+static inline int sa_id_to_instance_id(int sa_id)
+{
+	return sa_id / MAX_NUM_OF_SA;
+}
+
+/* SA index refers to the position of SA with id sa_id in the sa_mng.sa */
+static inline int sa_id_to_sa_index(int sa_id)
+{
+	if (sa_id_to_instance_id(sa_id) == 0)
+		return sa_id;
+
+	return sa_id % (sa_id_to_instance_id(sa_id) * MAX_NUM_OF_SA);
+}
+
+/* Check if SA ID is in possible range */
+static inline int valid_sa_id(int sa_id)
+{
+	if (sa_id < 0 || sa_id >= MAX_DPA_IPSEC_INSTANCES * MAX_NUM_OF_SA) {
+		log_err("Invalid SA id %d provided\n", sa_id);
+		return false;
+	}
+
+	return true;
+}
+
+static inline int valid_instance_id(int instance_id)
+{
+	if (instance_id < 0 || instance_id >= MAX_DPA_IPSEC_INSTANCES) {
+		log_err("Invalid DPA IPsec instance ID\n");
+		return false;
+	}
+
+	return true;
+}
+
+/* Check if SA is being used i.e created */
+static inline int sa_in_use(struct dpa_ipsec_sa *sa)
+{
+	if (sa->used_sa_index == -1)
+		return false;
+
+	return true;
 }
 
 #endif	/* __DPA_IPSEC_H__ */

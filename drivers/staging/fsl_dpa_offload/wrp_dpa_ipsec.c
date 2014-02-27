@@ -1319,7 +1319,7 @@ long wrp_dpa_ipsec_do_ioctl(struct file *filp, unsigned int cmd,
 	case DPA_IPSEC_IOC_GET_STATS: {
 		struct dpa_ipsec_stats ipsec_stats;
 
-		ret = dpa_ipsec_get_stats(&ipsec_stats);
+		ret = dpa_ipsec_get_stats(0, &ipsec_stats);
 		if (ret < 0) {
 			log_err("Getting stats failed\n");
 			break;

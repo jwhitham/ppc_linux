@@ -290,17 +290,18 @@ enum dpa_ipsec_sa_proto {
 
 /* DPA-IPSec Security Association Out Parameters */
 struct dpa_ipsec_sa_out_params {
-	struct dpa_ipsec_init_vector *init_vector; /* Initialization vector
-						    * (IV). Null for using the
-						    * internal random number
-						    * generator               */
+	/*
+	 * Initialization vector (IV). Null for using the internal random
+	 * number generator
+	 */
+	struct dpa_ipsec_init_vector *init_vector;
 	unsigned int ip_ver;	/* IPv4 or IPv6 address type		      */
 	uint16_t ip_hdr_size;	/* IP header size including any IP options    */
 	void *outer_ip_header;	/* IP encapsulation header		      */
-	void *outer_udp_header;	/* UDP encapsulation header
-				 * (for SAs using NAT-T)		      */
-	uint16_t post_sec_flow_id;  /* Flow ID used to mark frames encrypted
-				     * using this SA                          */
+	/* UDP encapsulation header (for SAs using NAT-T)		      */
+	void *outer_udp_header;
+	/* Flow ID used to mark frames encrypted using this SA		      */
+	uint16_t post_sec_flow_id;
 };
 
 /* DPA-IPSec Security Association In Parameters */
@@ -312,13 +313,13 @@ struct dpa_ipsec_sa_in_params {
 	bool use_udp_encap;	/* NAT-T is activated (UDP encapsulated ESP)  */
 	uint16_t src_port;	/* Source UDP port (UDP encapsulated ESP)     */
 	uint16_t dest_port;	/* Destination UDP port (UDP encapsulated ESP)*/
-	struct dpa_cls_tbl_action policy_miss_action; /* Action for frames that
-						       * fail inbound policy
-						       * verification         */
-	struct dpa_cls_tbl_action post_ipsec_action; /* Action to be performed
-						      * on the frames after
-						      * inbound IPSec processing
-						      * is completed          */
+	/* Action for frames that fail inbound policy verification	      */
+	struct dpa_cls_tbl_action policy_miss_action;
+	/*
+	 * Action to be performed on the frames after inbound IPSec processing
+	 * is completed
+	 */
+	struct dpa_cls_tbl_action post_ipsec_action;
 };
 
 /* DPA-IPSec Security Association Parameters */
@@ -523,7 +524,7 @@ struct dpa_ipsec_stats {
 int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats);
 
 /* Return IPSec global statistics in the "stats" data structure */
-int dpa_ipsec_get_stats(struct dpa_ipsec_stats *stats);
+int dpa_ipsec_get_stats(int dpa_ipsec_id, struct dpa_ipsec_stats *stats);
 
 enum dpa_ipsec_sa_modify_type {
 	DPA_IPSEC_SA_MODIFY_ARS = 0, /* Set the anti replay window size	      */
