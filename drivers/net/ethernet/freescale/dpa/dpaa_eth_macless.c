@@ -360,6 +360,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	priv->msg_enable = netif_msg_init(debug, -1);
 
 	priv->peer = NULL;
+	priv->mac_dev = NULL;
 	if (proxy_dev) {
 		/* This is a temporary solution for the need of
 		 * having main driver upstreamability: adjust_link
@@ -393,8 +394,6 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	if (err < 0)
 		goto bp_create_failed;
-
-	priv->mac_dev = NULL;
 
 	priv->channel = dpa_get_channel();
 
