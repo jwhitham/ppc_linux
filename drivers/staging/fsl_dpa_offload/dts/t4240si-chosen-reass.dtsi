@@ -6,8 +6,8 @@ chosen {
 			cell-index = <0>;
 			compatible = "fsl,fman-extended-args";
 			dma-aid-mode = "port";
-			fman0_rx1-extd-args {
-				cell-index = <1>;
+			fman0_rx4-extd-args {
+				cell-index = <4>;
 				compatible = "fsl,fman-port-1g-rx-extended-args";
 				errors-to-discard = <0x00020000>;
 				/* Define Virtual storage profile */
