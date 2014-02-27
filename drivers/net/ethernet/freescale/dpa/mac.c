@@ -232,12 +232,8 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 		goto _return_dev_set_drvdata;
 	}
 
-	/* XXX: Warning, future versions of Linux will most likely not even
-	 * call the driver code to allow us to override the TBIPA value,
-	 * we'll need to address this when we move to newer kernel rev
-	 */
 #define TBIPA_OFFSET		0x1c
-#define TBIPA_DEFAULT_ADDR	5
+#define TBIPA_DEFAULT_ADDR	5 /* override if used as external PHY addr. */
 	mac_dev->tbi_node = of_parse_phandle(mac_node, "tbi-handle", 0);
 	if (mac_dev->tbi_node) {
 		u32 tbiaddr = TBIPA_DEFAULT_ADDR;
