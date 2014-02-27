@@ -5482,6 +5482,10 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     struct arOffsets* of;
     uint8_t tmp = 0;
     t_Handle *h_FmPcd;
+    t_FmGetSetParams fmGetSetParams;
+    memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+    fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
+    fmGetSetParams.setParams.sleep = 1;    
 
     err = DsarCheckParams(params, p_FmPort->deepSleepVars.autoResMaxSizes);
     if (err != E_OK)
@@ -5778,7 +5782,10 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, 0x2E);
     // Stage 8: We don't support magic packet for now.
     // Stage 9: Accumulate mode
-//    WRITE_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg, GET_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg) | BMI_PORT_CFG_AM);
+    p_FmPort->deepSleepVars.fmbm_rcfg = GET_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg);
+    WRITE_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg, p_FmPort->deepSleepVars.fmbm_rcfg | BMI_PORT_CFG_AM);
+    FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+
     ARDesc = UINT_TO_PTR(XX_VirtToPhys(ArCommonDescPtr));
     return E_OK;
 }
@@ -5793,6 +5800,10 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
 {
     t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
     t_FmPort *p_FmPortTx = (t_FmPort *)h_FmPortTx;
+    t_FmGetSetParams fmGetSetParams;
+    memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+    fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
+    fmGetSetParams.setParams.sleep = 0;
     if (p_FmPort->deepSleepVars.autoResOffsets)
     {
         XX_Free(p_FmPort->deepSleepVars.autoResOffsets);
@@ -5808,6 +5819,8 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
         PrsDisable(FmGetPcd(p_FmPort->h_Fm));
     WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, p_FmPort->deepSleepVars.fmbm_rfpne);
     WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne, p_FmPort->deepSleepVars.fmbm_rfne);
+    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rcfg, p_FmPort->deepSleepVars.fmbm_rcfg);
+    FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, p_FmPort->deepSleepVars.fmbm_tcmne);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, p_FmPort->deepSleepVars.fmbm_tcfg);
 }

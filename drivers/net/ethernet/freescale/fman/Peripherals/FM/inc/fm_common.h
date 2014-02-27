@@ -258,6 +258,16 @@ typedef struct {
     t_SetCcParams setCcParams;
 } t_FmPortGetSetCcParams;
 
+typedef struct {
+    uint32_t    type;
+    bool        sleep;
+} t_FmSetParams;
+
+typedef struct {
+    t_FmSetParams setParams;
+} t_FmGetSetParams; 
+
+t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params);
 
 static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 {
@@ -324,6 +334,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 #define UPDATE_KG_NIA                           0x04000000
 /* @} */
 
+#define UPDATE_FPM_BRKC_SLP                     0x80000000
 #define FM_MAX_NUM_OF_PORTS     (FM_MAX_NUM_OF_OH_PORTS +     \
                                  FM_MAX_NUM_OF_1G_RX_PORTS +  \
                                  FM_MAX_NUM_OF_10G_RX_PORTS + \
@@ -768,6 +779,7 @@ typedef enum e_FmPortGprFuncType
 
 t_Error     FmPortSetGprFunc(t_Handle h_FmPort, e_FmPortGprFuncType gprFunc, void **p_Value);
 #endif /* DPAA_VERSION >= 11) */
+t_Error     FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_FmGetSetParams);
 t_Error     FmPortGetSetCcParams(t_Handle h_FmPort, t_FmPortGetSetCcParams *p_FmPortGetSetCcParams);
 uint8_t     FmPortGetNetEnvId(t_Handle h_FmPort);
 uint8_t     FmPortGetHardwarePortId(t_Handle h_FmPort);

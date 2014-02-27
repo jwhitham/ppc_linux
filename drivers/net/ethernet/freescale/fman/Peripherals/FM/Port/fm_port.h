@@ -495,6 +495,7 @@ typedef _Packed struct
 #define BMI_PORT_CFG_EN_MACSEC                  0x00800000
 #define BMI_PORT_CFG_FDOVR                      0x02000000
 #define BMI_PORT_CFG_IM                         0x01000000
+#define BMI_PORT_CFG_AM                         0x00000040
 #define BMI_PORT_STATUS_BSY                     0x80000000
 #define BMI_COUNTERS_EN                         0x80000000
 
@@ -861,6 +862,7 @@ typedef struct t_FmPortDsarVars {
     uint32_t                    fmbm_tcmne;
     uint32_t                    fmbm_rfne;
     uint32_t                    fmbm_rfpne;
+    uint32_t                    fmbm_rcfg;
     bool                        dsarEnabledParser;
 } t_FmPortDsarVars;
 typedef struct {

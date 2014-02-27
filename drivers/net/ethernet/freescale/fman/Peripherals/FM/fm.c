@@ -5207,3 +5207,18 @@ t_Handle FmGetPcd(t_Handle h_Fm)
 {
 	return ((t_Fm*)h_Fm)->h_Pcd;
 }
+
+t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
+{
+	t_Fm* p_Fm = (t_Fm*)h_Fm;
+	if (p_Params->setParams.type == UPDATE_FPM_BRKC_SLP)
+	{
+		if (p_Params->setParams.sleep)
+			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
+				p_Fm->p_FmFpmRegs->fmfp_brkc) | FPM_BRKC_SLP);
+		else
+			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
+				p_Fm->p_FmFpmRegs->fmfp_brkc) & ~FPM_BRKC_SLP);
+	}
+	return E_OK;
+}
