@@ -472,7 +472,7 @@ t_Error FmHcPcdKgCcGetSetParams(t_Handle h_FmHc, t_Handle  h_Scheme, uint32_t re
     if ( relativeSchemeId == FM_PCD_KG_NUM_OF_SCHEMES)
         RETURN_ERROR(MAJOR, E_NOT_IN_RANGE, NO_MSG);
 
-    if (!FmPcdKgGetPointedOwners(p_FmHc->h_FmPcd, relativeSchemeId) ||
+    if (!FmPcdKgGetRequiredActionFlag(p_FmHc->h_FmPcd, relativeSchemeId) ||
        !(FmPcdKgGetRequiredAction(p_FmHc->h_FmPcd, relativeSchemeId) & requiredAction))
     {
         if ((requiredAction & UPDATE_NIA_ENQ_WITHOUT_DMA) &&
@@ -805,7 +805,7 @@ t_Error FmHcPcdPlcrCcGetSetParams(t_Handle h_FmHc,uint16_t absoluteProfileId, ui
     t_DpaaFD            fmFd;
     t_Error             err;
     uint32_t            tmpReg32 = 0;
-    uint32_t            requiredActionTmp, pointedOwnersTmp;
+    uint32_t            requiredActionTmp, requiredActionFlag;
     uint32_t            seqNum;
 
     SANITY_CHECK_RETURN_VALUE(h_FmHc, E_INVALID_HANDLE,0);
@@ -816,9 +816,9 @@ t_Error FmHcPcdPlcrCcGetSetParams(t_Handle h_FmHc,uint16_t absoluteProfileId, ui
      */
 
     requiredActionTmp = FmPcdPlcrGetRequiredAction(p_FmHc->h_FmPcd, absoluteProfileId);
-    pointedOwnersTmp = FmPcdPlcrGetPointedOwners(p_FmHc->h_FmPcd, absoluteProfileId);
+    requiredActionFlag = FmPcdPlcrGetRequiredActionFlag(p_FmHc->h_FmPcd, absoluteProfileId);
 
-    if (!pointedOwnersTmp || !(requiredActionTmp & requiredAction))
+    if (!requiredActionFlag || !(requiredActionTmp & requiredAction))
     {
         if (requiredAction & UPDATE_NIA_ENQ_WITHOUT_DMA)
         {

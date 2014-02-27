@@ -585,6 +585,20 @@ static void FreeSharedProfiles(t_FmPcd *p_FmPcd, uint16_t numOfProfiles, uint16_
     }
 }
 
+static void UpdateRequiredActionFlag(t_Handle h_FmPcd, uint16_t absoluteProfileId, bool set)
+{
+    t_FmPcd     *p_FmPcd = (t_FmPcd*)h_FmPcd;
+
+    /* this routine is protected by calling routine */
+
+    ASSERT_COND(p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].valid);
+
+    if (set)
+        p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredActionFlag = TRUE;
+    else
+        p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredActionFlag = FALSE;
+}
+
 /*********************************************/
 /*............Policer Exception..............*/
 /*********************************************/
@@ -1176,7 +1190,7 @@ t_Error FmPcdPlcrCcGetSetParams(t_Handle h_FmPcd, uint16_t profileIndx ,uint32_t
     {
         err = FmHcPcdPlcrCcGetSetParams(p_FmPcd->h_Hc, profileIndx, requiredAction);
 
-        FmPcdPlcrUpatePointedOwner(p_FmPcd, profileIndx, TRUE);
+        UpdateRequiredActionFlag(p_FmPcd, profileIndx, TRUE);
         FmPcdPlcrUpdateRequiredAction(p_FmPcd, profileIndx, requiredAction);
 
         /*PlcrProfileUnlock(&p_FmPcd->p_FmPcdPlcr->profiles[profileIndx], intFlags);*/
@@ -1189,7 +1203,7 @@ t_Error FmPcdPlcrCcGetSetParams(t_Handle h_FmPcd, uint16_t profileIndx ,uint32_t
     intFlags = PlcrHwLock(p_FmPcdPlcr);
     WritePar(p_FmPcd, FmPcdPlcrBuildReadPlcrActionReg(profileIndx));
 
-    if (!p_FmPcd->p_FmPcdPlcr->profiles[profileIndx].pointedOwners ||
+    if (!p_FmPcd->p_FmPcdPlcr->profiles[profileIndx].requiredActionFlag ||
        !(p_FmPcd->p_FmPcdPlcr->profiles[profileIndx].requiredAction & requiredAction))
     {
         if (requiredAction & UPDATE_NIA_ENQ_WITHOUT_DMA)
@@ -1256,7 +1270,7 @@ t_Error FmPcdPlcrCcGetSetParams(t_Handle h_FmPcd, uint16_t profileIndx ,uint32_t
     }
     PlcrHwUnlock(p_FmPcdPlcr, intFlags);
 
-    FmPcdPlcrUpatePointedOwner(p_FmPcd, profileIndx, TRUE);
+    UpdateRequiredActionFlag(p_FmPcd, profileIndx, TRUE);
     FmPcdPlcrUpdateRequiredAction(p_FmPcd, profileIndx, requiredAction);
 
     /*PlcrProfileUnlock(&p_FmPcd->p_FmPcdPlcr->profiles[profileIndx], intFlags);*/
@@ -1264,27 +1278,13 @@ t_Error FmPcdPlcrCcGetSetParams(t_Handle h_FmPcd, uint16_t profileIndx ,uint32_t
     return E_OK;
 }
 
-void FmPcdPlcrUpatePointedOwner(t_Handle h_FmPcd, uint16_t absoluteProfileId, bool add)
-{
-    t_FmPcd     *p_FmPcd = (t_FmPcd*)h_FmPcd;
-
-    /* this routine is protected by calling routine */
-
-    ASSERT_COND(p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].valid);
-
-    if (add)
-        p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].pointedOwners++;
-    else
-        p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].pointedOwners--;
-}
-
-uint32_t FmPcdPlcrGetPointedOwners(t_Handle h_FmPcd, uint16_t absoluteProfileId)
+uint32_t FmPcdPlcrGetRequiredActionFlag(t_Handle h_FmPcd, uint16_t absoluteProfileId)
 {
     t_FmPcd     *p_FmPcd = (t_FmPcd*)h_FmPcd;
 
    ASSERT_COND(p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].valid);
 
-    return p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].pointedOwners;
+    return p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredActionFlag;
 }
 
 uint32_t FmPcdPlcrGetRequiredAction(t_Handle h_FmPcd, uint16_t absoluteProfileId)
@@ -1468,6 +1468,7 @@ void FmPcdPlcrUpdateRequiredAction(t_Handle h_FmPcd, uint16_t absoluteProfileId,
 
     p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredAction |= requiredAction;
 }
+
 /*********************** End of inter-module routines ************************/
 
 
@@ -1738,6 +1739,8 @@ t_Error FM_PCD_PlcrProfileDelete(t_Handle h_Profile)
     SANITY_CHECK_RETURN_ERROR(p_FmPcd, E_INVALID_HANDLE);
 
     profileIndx = p_Profile->absoluteProfileId;
+
+    UpdateRequiredActionFlag(p_FmPcd, profileIndx, FALSE);
 
     FmPcdPlcrInvalidateProfileSw(p_FmPcd,profileIndx);
 

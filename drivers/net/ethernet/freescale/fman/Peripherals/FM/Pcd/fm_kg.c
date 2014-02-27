@@ -746,16 +746,16 @@ static void DecSchemeOwners(t_FmPcd *p_FmPcd, t_FmPcdKgInterModuleBindPortToSche
     }
 }
 
-static void UpateSchemePointedOwner(t_FmPcdKgScheme *p_Scheme, bool add)
+static void UpdateRequiredActionFlag(t_FmPcdKgScheme *p_Scheme, bool set)
 {
     /* this routine is locked by the calling routine */
     ASSERT_COND(p_Scheme);
     ASSERT_COND(p_Scheme->valid);
 
-    if (add)
-        p_Scheme->pointedOwners++;
+    if (set)
+        p_Scheme->requiredActionFlag = TRUE;
     else
-        p_Scheme->pointedOwners--;
+        p_Scheme->requiredActionFlag = FALSE;
 }
 
 static t_Error KgWriteSp(t_FmPcd *p_FmPcd, uint8_t hardwarePortId, uint32_t spReg, bool add)
@@ -2558,13 +2558,13 @@ uint32_t FmPcdKgGetRequiredAction(t_Handle h_FmPcd, uint8_t schemeId)
     return p_FmPcd->p_FmPcdKg->schemes[schemeId].requiredAction;
 }
 
-uint32_t FmPcdKgGetPointedOwners(t_Handle h_FmPcd, uint8_t schemeId)
+uint32_t FmPcdKgGetRequiredActionFlag(t_Handle h_FmPcd, uint8_t schemeId)
 {
     t_FmPcd     *p_FmPcd = (t_FmPcd*)h_FmPcd;
 
    ASSERT_COND(p_FmPcd->p_FmPcdKg->schemes[schemeId].valid);
 
-    return p_FmPcd->p_FmPcdKg->schemes[schemeId].pointedOwners;
+    return p_FmPcd->p_FmPcdKg->schemes[schemeId].requiredActionFlag;
 }
 
 bool FmPcdKgIsDirectPlcr(t_Handle h_FmPcd, uint8_t schemeId)
@@ -2765,7 +2765,7 @@ t_Error FmPcdKgCcGetSetParams(t_Handle h_FmPcd, t_Handle h_Scheme, uint32_t requ
     {
         err = FmHcPcdKgCcGetSetParams(p_FmPcd->h_Hc, h_Scheme, requiredAction, value);
 
-        UpateSchemePointedOwner(h_Scheme,TRUE);
+        UpdateRequiredActionFlag(h_Scheme,TRUE);
         FmPcdKgUpdateRequiredAction(h_Scheme,requiredAction);
         return err;
     }
@@ -2776,7 +2776,7 @@ t_Error FmPcdKgCcGetSetParams(t_Handle h_FmPcd, t_Handle h_Scheme, uint32_t requ
     if (relativeSchemeId >= FM_PCD_KG_NUM_OF_SCHEMES)
         RETURN_ERROR(MAJOR, E_NOT_IN_RANGE, NO_MSG);
 
-    if (!p_FmPcd->p_FmPcdKg->schemes[relativeSchemeId].pointedOwners ||
+    if (!p_FmPcd->p_FmPcdKg->schemes[relativeSchemeId].requiredActionFlag ||
         !(p_FmPcd->p_FmPcdKg->schemes[relativeSchemeId].requiredAction & requiredAction))
     {
         if (requiredAction & UPDATE_NIA_ENQ_WITHOUT_DMA)
@@ -2860,7 +2860,7 @@ t_Error FmPcdKgCcGetSetParams(t_Handle h_FmPcd, t_Handle h_Scheme, uint32_t requ
         }
     }
 
-    UpateSchemePointedOwner(h_Scheme, TRUE);
+    UpdateRequiredActionFlag(h_Scheme, TRUE);
     FmPcdKgUpdateRequiredAction(h_Scheme, requiredAction);
 
     return E_OK;
@@ -3018,6 +3018,8 @@ t_Error  FM_PCD_KgSchemeDelete(t_Handle h_Scheme)
     SANITY_CHECK_RETURN_ERROR(h_Scheme, E_INVALID_HANDLE);
 
     p_FmPcd = (t_FmPcd*)(p_Scheme->h_FmPcd);
+
+    UpdateRequiredActionFlag(h_Scheme, FALSE);
 
     /* check that no port is bound to this scheme */
     err = InvalidateSchemeSw(h_Scheme);

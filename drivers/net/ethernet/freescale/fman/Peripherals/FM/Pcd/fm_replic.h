@@ -87,9 +87,6 @@ typedef struct t_FmPcdFrmReplicMember
 typedef struct t_FmPcdFrmReplicGroup
 {
     t_Handle                    h_FmPcd;
-#ifdef UNDER_CONSTRUCTION_STATISTICS_SUPPORT
-    e_FmPcdCcStatsMode          statisticsMode;
-#endif /* UNDER_CONSTRUCTION_STATISTICS_SUPPORT */
 
     uint8_t                     maxNumOfEntries;/**< maximal number of members in the group */
     uint8_t                     numOfEntries;   /**< actual number of members in the group */

@@ -670,8 +670,6 @@ bool        FmPcdLockTryLockAll(t_Handle h_FmPcd);
 void        FmPcdLockUnlockAll(t_Handle h_FmPcd);
 t_Error     FmPcdHcSync(t_Handle h_FmPcd);
 t_Handle    FmGetPcd(t_Handle h_Fm);
-
-
 /***********************************************************************/
 /*          Common API for FM-PCD KG module                            */
 /***********************************************************************/
@@ -699,7 +697,7 @@ bool        FmPcdKgIsSchemeValidSw(t_Handle h_Scheme);
 t_Error     FmPcdKgBindPortToSchemes(t_Handle h_FmPcd , t_FmPcdKgInterModuleBindPortToSchemes  *p_SchemeBind);
 t_Error     FmPcdKgUnbindPortToSchemes(t_Handle h_FmPcd , t_FmPcdKgInterModuleBindPortToSchemes *p_SchemeBind);
 uint32_t    FmPcdKgGetRequiredAction(t_Handle h_FmPcd, uint8_t schemeId);
-uint32_t    FmPcdKgGetPointedOwners(t_Handle h_FmPcd, uint8_t schemeId);
+uint32_t    FmPcdKgGetRequiredActionFlag(t_Handle h_FmPcd, uint8_t schemeId);
 e_FmPcdDoneAction FmPcdKgGetDoneAction(t_Handle h_FmPcd, uint8_t schemeId);
 e_FmPcdEngine FmPcdKgGetNextEngine(t_Handle h_FmPcd, uint8_t schemeId);
 void        FmPcdKgUpdateRequiredAction(t_Handle h_Scheme, uint32_t requiredAction);
@@ -737,8 +735,7 @@ void        FmPcdPlcrInvalidateProfileSw(t_Handle h_FmPcd, uint16_t absoluteProf
 void        FmPcdPlcrValidateProfileSw(t_Handle h_FmPcd, uint16_t absoluteProfileId);
 bool        FmPcdPlcrHwProfileIsValid(uint32_t profileModeReg);
 uint32_t    FmPcdPlcrGetRequiredAction(t_Handle h_FmPcd, uint16_t absoluteProfileId);
-uint32_t    FmPcdPlcrGetPointedOwners(t_Handle h_FmPcd, uint16_t absoluteProfileId);
-void        FmPcdPlcrUpatePointedOwner(t_Handle h_FmPcd, uint16_t absoluteProfileId, bool add);
+uint32_t    FmPcdPlcrGetRequiredActionFlag(t_Handle h_FmPcd, uint16_t absoluteProfileId);
 uint32_t    FmPcdPlcrBuildNiaProfileReg(bool green, bool yellow, bool red);
 void        FmPcdPlcrUpdateRequiredAction(t_Handle h_FmPcd, uint16_t absoluteProfileId, uint32_t requiredAction);
 t_Error     FmPcdPlcrCcGetSetParams(t_Handle h_FmPcd, uint16_t profileIndx,uint32_t requiredAction);
@@ -765,7 +762,6 @@ t_Error     FmPcdCcUnbindTree(t_Handle h_FmPcd, t_Handle h_CcTree);
 /*          Common API for FM-PCD Manip module                            */
 /***********************************************************************/
 t_Error     FmPcdManipUpdate(t_Handle h_FmPcd, t_Handle h_PcdParams, t_Handle h_FmPort, t_Handle h_Manip, t_Handle h_Ad, bool validate, int level, t_Handle h_FmTree, bool modify);
-uint32_t    FmPcdManipGetRequiredAction (t_Handle h_Manip);
 
 /***********************************************************************/
 /*          Common API for FM-Port module                            */

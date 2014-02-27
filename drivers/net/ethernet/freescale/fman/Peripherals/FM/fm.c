@@ -384,7 +384,6 @@ static void EnableTimeStamp(t_Fm *p_Fm)
 {
     struct fman_fpm_regs *fpm_rg = p_Fm->p_FmFpmRegs;
 
-    ASSERT_COND(p_Fm);
     ASSERT_COND(p_Fm->p_FmStateStruct);
     ASSERT_COND(p_Fm->p_FmStateStruct->count1MicroBit);
 
@@ -611,7 +610,7 @@ static t_Error SetVSPWindow(t_Handle  h_Fm,
     t_Fm                    *p_Fm = (t_Fm *)h_Fm;
 
     ASSERT_COND(h_Fm);
-    ASSERT_COND(hardwarePortId);
+    ASSERT_COND(IN_RANGE(1, hardwarePortId, 63));
 
     if ((p_Fm->guestId != NCSW_MASTER_ID) &&
         !p_Fm->p_FmBmiRegs &&
@@ -4434,6 +4433,7 @@ t_Error FM_SetPortsBandwidth(t_Handle h_Fm, t_FmPortsBandwidthParams *p_PortsBan
                                  p_PortsBandwidth->portsBandwidths[i].type,
                                  p_PortsBandwidth->portsBandwidths[i].relativePortId);
 
+        ASSERT_COND(IN_RANGE(1, hardwarePortId, 63));
         weights[hardwarePortId] = weight;
     }
 

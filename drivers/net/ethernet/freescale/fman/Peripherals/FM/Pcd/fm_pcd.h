@@ -228,7 +228,7 @@ typedef struct {
     t_FmPcdKgKeyOrder   orderedArray;
     e_FmPcdEngine       nextEngine;
     e_FmPcdDoneAction   doneAction;
-    uint8_t             pointedOwners;
+    bool                requiredActionFlag;
     uint32_t            requiredAction;
     bool                extractedOrs;
     uint8_t             bitOffsetInPlcrProfile;
@@ -270,7 +270,7 @@ typedef struct {
     bool                                valid;
     t_FmPcdLock                         *p_Lock;
     t_FmPcdAllocMng                     profilesMng;
-    uint8_t                             pointedOwners;
+    bool                                requiredActionFlag;
     uint32_t                            requiredAction;
     e_FmPcdEngine                       nextEngineOnGreen;          /**< Green next engine type */
     u_FmPcdPlcrNextEngineParams         paramsOnGreen;              /**< Green next engine params */

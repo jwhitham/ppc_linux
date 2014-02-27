@@ -6850,14 +6850,14 @@ t_Handle FM_PCD_HashTableSet(t_Handle h_FmPcd, t_FmPcdHashTableParams *p_Param)
     p_CcNodeHashTbl = FM_PCD_MatchTableSet(h_FmPcd, p_IndxHashCcNodeParam);
 
     if (p_CcNodeHashTbl)
+    {
         p_CcNodeHashTbl->kgHashShift = p_Param->kgHashShift;
 
-    /* Storing the allocated counters for buckets 'miss' in the hash table
-       and is statistics for miss wre enabled. */
-    p_CcNodeHashTbl->h_MissStatsCounters = h_MissStatsCounters;
-    p_CcNodeHashTbl->statsEnForMiss = statsEnForMiss;
-
-    XX_Print("Hash 0x%x: 0x%x\n", p_CcNodeHashTbl, h_MissStatsCounters);
+        /* Storing the allocated counters for buckets 'miss' in the hash table
+        and is statistics for miss wre enabled. */
+        p_CcNodeHashTbl->h_MissStatsCounters = h_MissStatsCounters;
+        p_CcNodeHashTbl->statsEnForMiss = statsEnForMiss;
+    }
 
     XX_Free(p_IndxHashCcNodeParam);
     XX_Free(p_ExactMatchCcNodeParam);
