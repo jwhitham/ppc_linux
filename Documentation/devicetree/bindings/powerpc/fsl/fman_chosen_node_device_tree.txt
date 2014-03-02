@@ -123,7 +123,7 @@ PROPERTIES
         and the dfault virtual port relative id (second value). Note that the
         kernel FMan driver automatically initializes the default VSP (using
         the configuration from the Linux dpaa Ethernet Driver of the equivalent
-        port) while the rest of the VSPs should be initialized by the user 
+        port) while the rest of the VSPs should be initialized by the user
         (using the appropriate IOCTLs).
         For more information please refer to the FMan User's guide
 
@@ -132,7 +132,35 @@ PROPERTIES
       Value type: <u32>
       Definition: Specifies which errors should be discarded.
         Errors that are not in the mask, will not be discarded;
-        I.e. those errors will be enqueued and sent to the default error queue.        
+        I.e. those errors will be enqueued and sent to the default error queue.
+
+  - ar-tables-sizes
+      Usage: optional
+      Value type: <prop-encoded-array>
+      Definition: Specifies the max number of entries which would be allocated
+        to each protocol in the auto response module. 0 value means protocol is
+        not supported. This field is only relevant for Rx ports.
+        A special value is the SNMP_char which stands for total
+        number of characters that would be available for the SNMP protocol in
+        auto response; Since all memory for the auto response must be pre
+        allocated, this is the only value that can't be auto calculated from
+        number of entries.
+        For example, if SNMP table uses among other values 3 strings:
+        "General printer", "idle", "Floor 2",
+        then the number of characters used is 15+4+7=26. The SNMP_char should
+        be a maximal value for such cases, i.e. worst case for such combination.
+        the location of the protocols is as followes:
+        < ARP ICMPv4 NDP ICMPv6 SNMP_ipv4 SNMP_ipv6 SNMP_oid SNMP_char >
+
+  - ar-filters-sizes
+      Usage: optional
+      Value type: <prop-encoded-array>
+      Definition: Specifies the max number of entries which would be allocated
+        to each filtering table in the auto response module.
+        0 value means such filtering table will not be used.
+        This field is only relevant for Rx ports.
+        the location of the filtering tables is as followes:
+        < IP_prot TCP_port UDP_port >
 
 Example
 
@@ -168,7 +196,7 @@ chosen {
                 fifo-size = <0x3000 0>;
                 buffer-layout = <64 128>;
                 vsp-window = <8 0>;
-                errors-to-discard = <0x00020000>;                
+                errors-to-discard = <0x00020000>;
             };
 
             fman1_tx4-extd-args {
