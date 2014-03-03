@@ -773,7 +773,7 @@ static int ucc_tdm_probe(struct platform_device *pdev)
 	}
 
 	ucc_num = *prop - 1;
-	if ((ucc_num > 7) && (ucc_num < 0)) {
+	if ((ucc_num > 7) || (ucc_num < 0)) {
 		dev_err(&pdev->dev, ": Invalid UCC num\n");
 		return -EINVAL;
 	}
