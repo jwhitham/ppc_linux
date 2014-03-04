@@ -722,7 +722,7 @@ int built_encap_extra_material(struct dpa_ipsec_sa *sa,
 	 * Perform 32-bit left shift of DEST and concatenate with left 32 bits
 	 * of SRC1 i.e MATH REG 2 = 0x00bytecount_00000000
 	 */
-	append_math_ldshift(extra_cmds, REG2, REG0, REG2, MATH_LEN_8BYTE);
+	append_math_shld(extra_cmds, REG2, REG0, REG2, MATH_LEN_8BYTE);
 
 	/* MATH REG 0  = MATH REG 0 + MATH REG 2 */
 	append_math_add(extra_cmds, REG0, REG0, REG2, MATH_LEN_8BYTE);
