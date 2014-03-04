@@ -168,63 +168,113 @@ static void __cold dpa_get_ringparam(struct net_device *net_dev,
 }
 
 static void __cold dpa_get_pauseparam(struct net_device *net_dev,
-		struct ethtool_pauseparam *et_pauseparam)
+		struct ethtool_pauseparam *epause)
 {
 	struct dpa_priv_s	*priv;
+	struct mac_device       *mac_dev;
+	struct phy_device       *phy_dev;
 
 	priv = netdev_priv(net_dev);
+	mac_dev = priv->mac_dev;
 
-	if (priv->mac_dev == NULL) {
+	if (mac_dev == NULL) {
 		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return;
 	}
-	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
+
+	phy_dev = mac_dev->phy_dev;
+	if (unlikely(phy_dev == NULL)) {
 		netdev_err(net_dev, "phy device not initialized\n");
 		return;
 	}
 
-	et_pauseparam->autoneg	= priv->mac_dev->autoneg_pause;
-	et_pauseparam->rx_pause	= priv->mac_dev->rx_pause;
-	et_pauseparam->tx_pause	= priv->mac_dev->tx_pause;
+	epause->autoneg = mac_dev->autoneg_pause;
+	epause->rx_pause = mac_dev->rx_pause;
+	epause->tx_pause = mac_dev->tx_pause;
 }
 
 static int __cold dpa_set_pauseparam(struct net_device *net_dev,
-		struct ethtool_pauseparam *et_pauseparam)
+		struct ethtool_pauseparam *epause)
 {
 	struct dpa_priv_s	*priv;
+	struct mac_device       *mac_dev;
+	struct phy_device       *phy_dev;
+	struct fm_mac_dev       *fm_mac_dev;
 	int _errno;
-	bool en;
+	u32 newadv, oldadv;
 
 	priv = netdev_priv(net_dev);
+	mac_dev = priv->mac_dev;
 
-	if (priv->mac_dev == NULL) {
+	if (mac_dev == NULL) {
 		netdev_info(net_dev, "This is a MAC-less interface\n");
 		return -ENODEV;
 	}
-	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
+
+	phy_dev = mac_dev->phy_dev;
+	if (unlikely(phy_dev == NULL)) {
 		netdev_err(net_dev, "phy device not initialized\n");
 		return -ENODEV;
 	}
 
-	en = et_pauseparam->rx_pause ? true : false;
-	_errno = priv->mac_dev->set_rx_pause(
-			priv->mac_dev->get_mac_handle(priv->mac_dev), en);
+	if (!(phy_dev->supported & SUPPORTED_Pause) ||
+			(!(phy_dev->supported & SUPPORTED_Asym_Pause) &&
+			(epause->rx_pause != epause->tx_pause)))
+		return -EINVAL;
+
+	/* The MAC should know how to handle PAUSE frame autonegotiation before
+	 * adjust_link is triggered by a forced renegotiation of sym/asym PAUSE
+	 * settings.
+	 */
+	mac_dev->autoneg_pause = epause->autoneg;
+
+	/* Determine the sym/asym advertised PAUSE capabilities from the desired
+	 * rx/tx pause settings.
+	 */
+	newadv = 0;
+	if (epause->rx_pause)
+		newadv = ADVERTISED_Pause | ADVERTISED_Asym_Pause;
+	if (epause->tx_pause)
+		newadv |= ADVERTISED_Asym_Pause;
+
+	oldadv = phy_dev->advertising &
+			(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+
+	/* If there are differences between the old and the new advertised
+	 * values, restart PHY autonegotiation and advertise the new values.
+	 */
+	if (oldadv != newadv) {
+		phy_dev->advertising &= ~(ADVERTISED_Pause
+				| ADVERTISED_Asym_Pause);
+		phy_dev->advertising |= newadv;
+		if (phy_dev->autoneg) {
+			_errno = phy_start_aneg(phy_dev);
+			if (unlikely(_errno < 0))
+				netdev_err(net_dev, "phy_start_aneg() = %d\n",
+						_errno);
+		}
+	}
+
+	if (epause->autoneg)
+		return 0;
+
+	/* If PAUSE frame autonegotiation is disabled,
+	 * ethtool rx/tx settings are enforced.
+	 */
+	fm_mac_dev = mac_dev->get_mac_handle(mac_dev);
+	_errno = set_mac_rx_pause(mac_dev, fm_mac_dev,
+			!!epause->rx_pause);
 	if (unlikely(_errno < 0)) {
-		netdev_err(net_dev, "set_rx_pause() = %d\n", _errno);
+		netdev_err(net_dev, "set_mac_rx_pause() = %d\n", _errno);
 		return _errno;
 	}
 
-	en = et_pauseparam->tx_pause ? true : false;
-	_errno = priv->mac_dev->set_tx_pause(
-			priv->mac_dev->get_mac_handle(priv->mac_dev), en);
+	_errno = set_mac_tx_pause(mac_dev, fm_mac_dev,
+			!!epause->tx_pause);
 	if (unlikely(_errno < 0)) {
-		netdev_err(net_dev, "set_tx_pause() = %d\n", _errno);
+		netdev_err(net_dev, "set_mac_tx_pause() = %d\n", _errno);
 		return _errno;
 	}
-
-	priv->mac_dev->autoneg_pause = et_pauseparam->autoneg;
-	priv->mac_dev->rx_pause = et_pauseparam->rx_pause;
-	priv->mac_dev->tx_pause = et_pauseparam->tx_pause;
 
 	return 0;
 }
