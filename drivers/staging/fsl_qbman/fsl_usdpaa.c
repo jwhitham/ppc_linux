@@ -976,7 +976,8 @@ do_map:
 	strncpy(start_frag->name, i->name, USDPAA_DMA_NAME_MAX);
 	start_frag->has_locking = i->has_locking;
 	init_waitqueue_head(&start_frag->wq);
-	start_frag->owner = NULL;
+	if (i->did_create == 1)
+		start_frag->owner = NULL;
 
 	/* Setup the map entry */
 	map->root_frag = start_frag;
