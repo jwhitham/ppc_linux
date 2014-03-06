@@ -24,6 +24,7 @@
 #include <linux/smp.h>
 
 #include <asm/prom.h>
+#include <asm/smp.h>
 #include <asm/reg.h>
 #include <asm/machdep.h>
 
