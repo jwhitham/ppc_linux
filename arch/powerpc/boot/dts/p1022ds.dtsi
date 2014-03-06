@@ -66,18 +66,18 @@
 		};
 
 		partition@4400000 {
-			reg = <0x04400000 0x03b00000>;
+			reg = <0x04400000 0x03ac0000>;
 			label = "jffs2-nor";
 		};
 
-		partition@7f00000 {
-			reg = <0x07f00000 0x00080000>;
+		partition@7ec0000 {
+			reg = <0x07ec0000 0x00080000>;
 			label = "dtb-nor";
 			read-only;
 		};
 
-		partition@7f80000 {
-			reg = <0x07f80000 0x00080000>;
+		partition@7f40000 {
+			reg = <0x07f40000 0x000c0000>;
 			label = "u-boot-nor";
 			read-only;
 		};

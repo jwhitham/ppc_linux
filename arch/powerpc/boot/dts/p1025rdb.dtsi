@@ -69,16 +69,16 @@
 		};
 
 		partition@400000 {
-			/* 11MB for JFFS2 based Root file System */
-			reg = <0x00400000 0x00b00000>;
+			/* 10.75MB for JFFS2 based Root file System */
+			reg = <0x00400000 0x00ac0000>;
 			label = "NOR JFFS2 Root File System";
 		};
 
-		partition@f00000 {
+		partition@ec0000 {
 			/* This location must not be altered  */
-			/* 512KB for u-boot Bootloader Image */
+			/* 768KB for u-boot Bootloader Image */
 			/* 512KB for u-boot Environment Variables */
-			reg = <0x00f00000 0x00100000>;
+			reg = <0x00ec0000 0x00140000>;
 			label = "NOR U-Boot Image";
 			read-only;
 		};
@@ -149,33 +149,33 @@
 			spi-max-frequency = <40000000>; /* input clock */
 
 			partition@u-boot {
-				/* 512KB for u-boot Bootloader Image */
-				reg = <0x0 0x00080000>;
+				/* 1MB for u-boot Bootloader Image */
+				reg = <0x0 0x00100000>;
 				label = "u-boot";
 				read-only;
 			};
 
 			partition@dtb {
 				/* 512KB for DTB Image */
-				reg = <0x00080000 0x00080000>;
+				reg = <0x00100000 0x00080000>;
 				label = "dtb";
 			};
 
 			partition@kernel {
 				/* 4MB for Linux Kernel Image */
-				reg = <0x00100000 0x00400000>;
+				reg = <0x00180000 0x00400000>;
 				label = "kernel";
 			};
 
 			partition@fs {
 				/* 4MB for Compressed RFS Image */
-				reg = <0x00500000 0x00400000>;
+				reg = <0x00580000 0x00400000>;
 				label = "file system";
 			};
 
 			partition@jffs-fs {
-				/* 7MB for JFFS2 based RFS */
-				reg = <0x00900000 0x00700000>;
+				/* 6.5MB for JFFS2 based RFS */
+				reg = <0x00980000 0x00680000>;
 				label = "file system jffs2";
 			};
 		};

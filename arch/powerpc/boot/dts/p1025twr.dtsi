@@ -69,24 +69,24 @@
 		};
 
 		partition@400000 {
-			/* 58.75MB for JFFS2 based Root file System */
-			reg = <0x00400000 0x03ac0000>;
+			/* 58.5MB for JFFS2 based Root file System */
+			reg = <0x00400000 0x03a80000>;
 			label = "NOR JFFS2 Root File System";
 		};
 
-		partition@ec0000 {
+		partition@e80000 {
 			/* This location must not be altered  */
 			/* 256KB for QE ucode firmware*/
-			reg = <0x03ec0000 0x00040000>;
+			reg = <0x03e80000 0x00040000>;
 			label = "NOR QE microcode firmware";
 			read-only;
 		};
 
-		partition@f00000 {
+		partition@ec0000 {
 			/* This location must not be altered  */
-			/* 512KB for u-boot Bootloader Image */
+			/* 768KB for u-boot Bootloader Image */
 			/* 512KB for u-boot Environment Variables */
-			reg = <0x03f00000 0x00100000>;
+			reg = <0x03ec0000 0x00140000>;
 			label = "NOR U-Boot Image";
 			read-only;
 		};

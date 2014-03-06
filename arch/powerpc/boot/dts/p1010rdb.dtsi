@@ -59,11 +59,11 @@
 			label = "NOR JFFS2 Root File System";
 		};
 
-		partition@1f00000 {
+		partition@1ec0000 {
 			/* This location must not be altered  */
-			/* 512KB for u-boot Bootloader Image */
+			/* 768KB for u-boot Bootloader Image */
 			/* 512KB for u-boot Environment Variables */
-			reg = <0x01f00000 0x00100000>;
+			reg = <0x01ec0000 0x00140000>;
 			label = "NOR U-Boot Image";
 			read-only;
 		};

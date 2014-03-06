@@ -54,24 +54,24 @@
 		};
 
 		partition@400000 {
-			/* 58MB for Root file System */
-			reg = <0x00400000 0x03a00000>;
+			/* 57.75MB for Root file System */
+			reg = <0x00400000 0x039c0000>;
 			label = "NOR Root File System";
 		};
 
-		partition@3e00000 {
+		partition@3dc0000 {
 			/* This location must not be altered  */
 			/* 1M for Vitesse 7385 Switch firmware */
-			reg = <0x3e00000 0x00100000>;
+			reg = <0x3dc0000 0x00100000>;
 			label = "NOR Vitesse-7385 Firmware";
 			read-only;
 		};
 
-		partition@3f00000 {
+		partition@3ec0000 {
 			/* This location must not be altered  */
-			/* 512KB for u-boot Bootloader Image */
+			/* 768KB for u-boot Bootloader Image */
 			/* 512KB for u-boot Environment Variables */
-			reg = <0x03f00000 0x00100000>;
+			reg = <0x03ec0000 0x00140000>;
 			label = "NOR U-Boot Image";
 			read-only;
 		};
@@ -156,33 +156,33 @@
 			spi-max-frequency = <40000000>; /* input clock */
 
 			partition@u-boot {
-				/* 512KB for u-boot Bootloader Image */
-				reg = <0x0 0x00080000>;
+				/* 1MB for u-boot Bootloader Image */
+				reg = <0x0 0x00100000>;
 				label = "u-boot";
 				read-only;
 			};
 
 			partition@dtb {
 				/* 512KB for DTB Image*/
-				reg = <0x00080000 0x00080000>;
+				reg = <0x00100000 0x00080000>;
 				label = "dtb";
 			};
 
 			partition@kernel {
 				/* 4MB for Linux Kernel Image */
-				reg = <0x00100000 0x00400000>;
+				reg = <0x00180000 0x00400000>;
 				label = "kernel";
 			};
 
 			partition@fs {
 				/* 4MB for Compressed RFS Image */
-				reg = <0x00500000 0x00400000>;
+				reg = <0x00580000 0x00400000>;
 				label = "file system";
 			};
 
 			partition@jffs-fs {
-				/* 7MB for JFFS2 based RFS */
-				reg = <0x00900000 0x00700000>;
+				/* 6.5MB for JFFS2 based RFS */
+				reg = <0x00980000 0x00680000>;
 				label = "file system jffs2";
 			};
 		};
