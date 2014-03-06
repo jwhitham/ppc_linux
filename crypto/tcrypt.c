@@ -1246,6 +1246,14 @@ static int do_test(int m)
 		ret += tcrypt_test("authenc(hmac(sha1),cbc(aes))");
 		break;
 
+	case 156:
+		ret += tcrypt_test("authenc(hmac(md5),ecb(cipher_null))");
+		break;
+
+	case 157:
+		ret += tcrypt_test("authenc(hmac(sha1),ecb(cipher_null))");
+		break;
+
 	case 180:
 		ret += tcrypt_test("tls10(hmac(sha1),cbc(aes))");
 		break;
