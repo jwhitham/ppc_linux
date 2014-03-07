@@ -345,7 +345,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_SMT)
  * r14 = page table base
  * r13 = PACA
  * r11 = tlb_per_core ptr
- * r10 = crap (free to use)
+ * r10 = cpu number
  */
 tlb_miss_common_fsl_htw:
 	/*
@@ -355,21 +355,25 @@ tlb_miss_common_fsl_htw:
 	 * MAS6:IND should be already set based on MAS4
 	 */
 	mtocrf	0x01,r11
-	addi	r10,r11,PACA_TLB_LOCK-1 /* -1 to compensate for low bit set */
+	addi	r11,r11,PACA_TLB_LOCK-1 /* -1 to compensate for low bit set */
 	bf	31,1f		/* no lock if TLB_PER_CORE_HAS_LOCK clear */
-2:	lbarx	r15,0,r10
+2:	lbarx	r15,0,r11
+	lhz	r10,PACAPACAINDEX(r13)
 	cmpdi	r15,0
+	cmpdi	cr1,r15,1	/* set cr1.eq = 0 for non-recursive */
 	bne	3f
-	li	r15,1
-	stbcx.	r15,0,r10
+	stbcx.	r10,0,r11
 	bne	2b
+4:
 	.subsection 1
-3:	lbz	r15,0(r10)
+3:	cmpd	cr1,r15,r10	/* recursive lock due to mcheck/crit/etc? */
+	beq	cr1,4b		/* unlock will happen if cr1.eq = 0 */
+	lbz	r15,0(r11)
 	cmpdi	r15,0
 	bne	3b
 	b	2b
 	.previous
-1:
+1:	subi	r11,r11,PACA_TLB_LOCK-1
 
 	mfspr	r15,SPRN_MAS2
 
@@ -445,6 +449,7 @@ tlb_miss_common_fsl_htw:
 
 tlb_miss_done_fsl_htw:
 	.macro	tlb_unlock_fsl_htw
+	beq	cr1,1f		/* no unlock if lock was recursively grabbed */
 	mtocrf	0x01,r11
 	addi	r10,r11,PACA_TLB_LOCK-1
 	li	r15,0
