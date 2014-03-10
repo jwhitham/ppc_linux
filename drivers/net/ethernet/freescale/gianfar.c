@@ -120,6 +120,7 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev);
 static void gfar_reset_task(struct work_struct *work);
 static void gfar_timeout(struct net_device *dev);
 static int gfar_close(struct net_device *dev);
+static struct sk_buff *gfar_alloc_skb(struct net_device *dev);
 struct sk_buff *gfar_new_skb(struct net_device *dev);
 static void gfar_new_rxbdp(struct gfar_priv_rx_q *rx_queue, struct rxbd8 *bdp,
 			   struct sk_buff *skb);
@@ -156,6 +157,10 @@ static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
 MODULE_LICENSE("GPL");
+
+static DEFINE_PER_CPU(struct sk_buff_head, skb_recycle_list);
+
+#define GFAR_RXB_REC_SZ (DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)
 
 static void gfar_init_rxbdp(struct gfar_priv_rx_q *rx_queue, struct rxbd8 *bdp,
 			    dma_addr_t buf)
@@ -217,7 +222,7 @@ static int gfar_init_bds(struct net_device *ndev)
 				gfar_init_rxbdp(rx_queue, rxbdp,
 						rxbdp->bufPtr);
 			} else {
-				skb = gfar_new_skb(ndev);
+				skb = gfar_alloc_skb(ndev);
 				if (!skb) {
 					netdev_err(ndev, "Can't allocate RX buffers\n");
 					return -ENOMEM;
@@ -2478,6 +2483,28 @@ static void gfar_align_skb(struct sk_buff *skb)
 		    (((unsigned long) skb->data) & (RXBUF_ALIGNMENT - 1)));
 }
 
+static void gfar_recycle_skb(struct sk_buff *skb)
+{
+	struct sk_buff_head *h = &__get_cpu_var(skb_recycle_list);
+	int skb_size = SKB_DATA_ALIGN(GFAR_RXB_REC_SZ + NET_SKB_PAD);
+
+	if (skb_queue_len(h) < DEFAULT_RX_RING_SIZE &&
+	    !skb_cloned(skb) && !skb_is_nonlinear(skb) &&
+	    skb->fclone == SKB_FCLONE_UNAVAILABLE && !skb_shared(skb) &&
+	    skb_end_offset(skb) == skb_size) {
+
+		skb_recycle(skb);
+
+		gfar_align_skb(skb);
+
+		__skb_queue_head(h, skb);
+
+		return;
+	}
+
+	dev_kfree_skb_any(skb);
+}
+
 /* Interrupt Handler for Transmit complete */
 static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 {
@@ -2557,7 +2584,7 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 
 		bytes_sent += GFAR_CB(skb)->bytes_sent;
 
-		dev_kfree_skb_any(skb);
+		gfar_recycle_skb(skb);
 
 		tx_queue->tx_skbuff[skb_dirtytx] = NULL;
 
@@ -2611,6 +2638,17 @@ static struct sk_buff *gfar_alloc_skb(struct net_device *dev)
 
 struct sk_buff *gfar_new_skb(struct net_device *dev)
 {
+	struct gfar_private *priv = netdev_priv(dev);
+	struct sk_buff *skb;
+
+	if (likely(priv->rx_buffer_size <= DEFAULT_RX_BUFFER_SIZE)) {
+		struct sk_buff_head *h = &__get_cpu_var(skb_recycle_list);
+
+		skb = __skb_dequeue(h);
+		if (skb != NULL)
+			return skb;
+	}
+
 	return gfar_alloc_skb(dev);
 }
 EXPORT_SYMBOL(gfar_new_skb);
@@ -3477,4 +3515,29 @@ static struct platform_driver gfar_driver = {
 	.remove = gfar_remove,
 };
 
-module_platform_driver(gfar_driver);
+static int __init gfar_init(void)
+{
+	int i;
+
+	for_each_possible_cpu(i) {
+		struct sk_buff_head *h = &per_cpu(skb_recycle_list, i);
+		skb_queue_head_init(h);
+	}
+
+	return platform_driver_register(&gfar_driver);
+}
+
+static void __exit gfar_exit(void)
+{
+	int i;
+
+	for_each_possible_cpu(i) {
+		struct sk_buff_head *h = &per_cpu(skb_recycle_list, i);
+		skb_queue_purge(h);
+	}
+
+	platform_driver_unregister(&gfar_driver);
+}
+
+module_init(gfar_init);
+module_exit(gfar_exit);
