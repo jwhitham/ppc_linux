@@ -68,8 +68,8 @@ kvmppc_call_hv_entry:
 	mtspr	SPRN_DABRX,r6
 
 	/* Restore SPRG3 */
-	ld	r3,PACA_SPRG3(r13)
-	mtspr	SPRN_SPRG3,r3
+	ld	r3,PACA_SPRG_VDSO(r13)
+	mtspr	SPRN_SPRG_VDSO_WRITE,r3
 
 	/*
 	 * Reload DEC.  HDEC interrupts were disabled when
