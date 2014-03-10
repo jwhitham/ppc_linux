@@ -153,6 +153,15 @@ int mmu_vmemmap_psize;		/* Page size used for the virtual mem map */
 int book3e_htw_mode;		/* HW tablewalk?  Value is PPC_HTW_* */
 unsigned long linear_map_top;	/* Top of linear mapping */
 
+
+/*
+ * Number of bytes to add to SPRN_SPRG_TLB_EXFRAME on crit/mcheck/debug
+ * exceptions.  This is used for bolted and e6500 TLB miss handlers which
+ * do not modify this SPRG in the TLB miss code; for other TLB miss handlers,
+ * this is set to zero.
+ */
+int extlb_level_exc;
+
 #endif /* CONFIG_PPC64 */
 
 #ifdef CONFIG_PPC_FSL_BOOK3E
@@ -588,6 +597,7 @@ static void setup_mmu_htw(void)
 		patch_exception(0x1e0, exc_instruction_tlb_miss_htw_book3e);
 		break;
 	case PPC_HTW_FSL:
+		extlb_level_exc = EX_TLB_SIZE;
 		patch_exception(0x1c0, exc_data_tlb_miss_fsl_htw_book3e);
 		patch_exception(0x1e0, exc_instruction_tlb_miss_fsl_htw_book3e);
 		break;
@@ -682,6 +692,7 @@ static void __early_init_mmu(int boot_cpu)
 		}
 
 		if (book3e_htw_mode == PPC_HTW_NONE) {
+			extlb_level_exc = EX_TLB_SIZE;
 			patch_exception(0x1c0, exc_data_tlb_miss_bolted_book3e);
 			patch_exception(0x1e0, exc_instruction_tlb_miss_bolted_book3e);
 		}
