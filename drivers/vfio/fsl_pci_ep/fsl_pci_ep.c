@@ -881,15 +881,24 @@ msix_show(struct device *dev, struct device_attribute *attr, char *buf)
 	return str - buf;
 }
 
-struct device_attribute pci_ep_attrs[] = {
-	__ATTR_RO(ep_type),
-	__ATTR_RO(pf_idx),
-	__ATTR_RO(vf_idx),
-	__ATTR_RO(inbound_windows),
-	__ATTR_RO(outbound_windows),
-	__ATTR_RO(msix),
-	__ATTR_NULL,
+static DEVICE_ATTR_RO(ep_type);
+static DEVICE_ATTR_RO(pf_idx);
+static DEVICE_ATTR_RO(vf_idx);
+static DEVICE_ATTR_RO(inbound_windows);
+static DEVICE_ATTR_RO(outbound_windows);
+static DEVICE_ATTR_RO(msix);
+
+static struct attribute *pci_ep_attrs[] = {
+	&dev_attr_ep_type.attr,
+	&dev_attr_pf_idx.attr,
+	&dev_attr_vf_idx.attr,
+	&dev_attr_inbound_windows.attr,
+	&dev_attr_outbound_windows.attr,
+	&dev_attr_msix.attr,
+	NULL,
 };
+
+ATTRIBUTE_GROUPS(pci_ep);
 
 static void pci_ep_dev_release(struct device *dev)
 {
@@ -901,10 +910,9 @@ static void pci_ep_class_release(struct class *cls)
 	/* nothing to do */
 }
 
-
 static struct class pci_ep_class = {
 	.name = "pci_ep",
-	.dev_attrs = pci_ep_attrs,
+	.dev_groups = pci_ep_groups,
 	.dev_release = pci_ep_dev_release,
 	.class_release = pci_ep_class_release,
 };
@@ -1184,7 +1192,7 @@ static int fsl_pci_pf_atmu_init(struct pci_pf_dev *pf)
 
 		/* Setup VF outbound windows*/
 		win.cpu_addr = pf->mem_resources[0].start;
-		win.pci_addr = win.cpu_addr - pf->pci_mem_offset;
+		win.pci_addr = win.cpu_addr - pf->mem_offset[0];
 		win.size = sz;
 		win.attr = 0;
 		win.idx = 0;
@@ -1221,7 +1229,7 @@ static int fsl_pci_pf_atmu_init(struct pci_pf_dev *pf)
 
 	/* Setup PF outbound windows */
 	win.cpu_addr = pf->mem_resources[0].start + pf->vf_total * sz;
-	win.pci_addr = win.cpu_addr - pf->pci_mem_offset;
+	win.pci_addr = win.cpu_addr - pf->mem_offset[0];
 	free_sz = pf->mem_resources[0].end - win.cpu_addr - reserve_sz + 1;
 	if (free_sz < sz) {
 		bits = ilog2(free_sz);
@@ -1340,7 +1348,6 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 		pdev->hdr_type = PCI_HEADER_TYPE_NORMAL;
 		pos = pci_find_capability(pdev, PCI_CAP_ID_EXP);
 		if (pos) {
-			pdev->is_pcie = 1;
 			pdev->pcie_cap = pos;
 			pdev->cfg_size = 0x1000;
 		} else
@@ -1377,7 +1384,6 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 		if (pci_find_capability(pf->pdev, PCI_CAP_ID_MSIX))
 			pf->msix_enable = true;
 
-		pf->pci_mem_offset = host->pci_mem_offset;
 		for (i = 0; i < 3; i++) {
 			mem_size = resource_size(&host->mem_resources[i]);
 			if (!mem_size)
@@ -1388,6 +1394,7 @@ int fsl_pci_pf_setup(struct pci_bus *bus, int pf_num)
 				mem_size * pf->idx;
 			pf->mem_resources[i].end =
 				pf->mem_resources[i].start + mem_size - 1;
+			pf->mem_offset[i] = host->mem_offset[i];
 		}
 
 		fsl_pci_pf_cfg_ready(pf);
@@ -1462,7 +1469,7 @@ static void pci_process_of_ranges(struct pci_controller *hose,
 				continue;
 			}
 
-			hose->pci_mem_offset = cpu_addr - pci_addr;
+			hose->mem_offset[memno] = cpu_addr - pci_addr;
 
 			/* Build resource */
 			res = &hose->mem_resources[memno++];

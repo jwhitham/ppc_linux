@@ -71,7 +71,7 @@ struct pci_pf_dev {
 	u8			iw_num;
 	u8			ow_num;
 	bool			msix_enable;
-	resource_size_t pci_mem_offset;
+	resource_size_t mem_offset[3];
 	struct resource mem_resources[3];
 	/* VF info */
 	int			vf_pos;
