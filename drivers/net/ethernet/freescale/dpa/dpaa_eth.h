@@ -488,6 +488,7 @@ int fm_mac_dump_regs(struct mac_device *h_dev, char *buf, int n);
 
 void dpaa_eth_sysfs_remove(struct device *dev);
 void dpaa_eth_sysfs_init(struct device *dev);
+int dpaa_eth_poll(struct napi_struct *napi, int budget);
 
 void dpa_private_napi_del(struct net_device *net_dev);
 

@@ -316,7 +316,7 @@ void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 	*use_gro = 0;
 }
 
-static int dpaa_eth_poll(struct napi_struct *napi, int budget)
+int dpaa_eth_poll(struct napi_struct *napi, int budget)
 {
 	struct dpa_napi_portal *np =
 			container_of(napi, struct dpa_napi_portal, napi);
