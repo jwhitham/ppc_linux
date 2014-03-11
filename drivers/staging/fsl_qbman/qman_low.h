@@ -536,6 +536,30 @@ static inline void qm_dqrr_set_maxfill(struct qm_portal *portal, u8 mf)
 		((mf & (QM_DQRR_SIZE - 1)) << 20));
 }
 
+static inline void qm_dqrr_cci_consume(struct qm_portal *portal, u8 num)
+{
+	register struct qm_dqrr *dqrr = &portal->dqrr;
+	DPA_ASSERT(dqrr->cmode == qm_dqrr_cci);
+	dqrr->ci = (dqrr->ci + num) & (QM_DQRR_SIZE - 1);
+	qm_out(DQRR_CI_CINH, dqrr->ci);
+}
+
+static inline void qm_dqrr_cce_consume(struct qm_portal *portal, u8 num)
+{
+	register struct qm_dqrr *dqrr = &portal->dqrr;
+	DPA_ASSERT(dqrr->cmode == qm_dqrr_cce);
+	dqrr->ci = (dqrr->ci + num) & (QM_DQRR_SIZE - 1);
+	qm_cl_out(DQRR_CI, dqrr->ci);
+}
+
+static inline void qm_dqrr_cdc_consume_n(struct qm_portal *portal, u16 bitmask)
+{
+	__maybe_unused register struct qm_dqrr *dqrr = &portal->dqrr;
+	DPA_ASSERT(dqrr->cmode == qm_dqrr_cdc);
+	qm_out(DQRR_DCAP, (1 << 8) |		/* DQRR_DCAP::S */
+		((u32)bitmask << 16));		/* DQRR_DCAP::DCAP_CI */
+}
+
 static inline int qm_dqrr_init(struct qm_portal *portal,
 				const struct qm_portal_config *config,
 				enum qm_dqrr_dmode dmode,
@@ -557,6 +581,29 @@ static inline int qm_dqrr_init(struct qm_portal *portal,
 	dqrr->vbit = (qm_in(DQRR_PI_CINH) & QM_DQRR_SIZE) ?
 			QM_DQRR_VERB_VBIT : 0;
 	dqrr->ithresh = qm_in(DQRR_ITR);
+
+	/* Free up pending DQRR entries if any as per current DCM */
+	if (dqrr->fill) {
+		enum qm_dqrr_cmode dcm = (qm_in(CFG) >> 16) & 3;
+
+#ifdef CONFIG_FSL_DPA_CHECKING
+		dqrr->cmode = dcm;
+#endif
+		switch (dcm) {
+		case qm_dqrr_cci:
+			qm_dqrr_cci_consume(portal, dqrr->fill);
+			break;
+		case qm_dqrr_cce:
+			qm_dqrr_cce_consume(portal, dqrr->fill);
+			break;
+		case qm_dqrr_cdc:
+			qm_dqrr_cdc_consume_n(portal, (QM_DQRR_SIZE - 1));
+			break;
+		default:
+			DPA_ASSERT(0);
+		}
+	}
+
 #ifdef CONFIG_FSL_DPA_CHECKING
 	dqrr->dmode = dmode;
 	dqrr->pmode = pmode;
@@ -655,13 +702,6 @@ static inline void qm_dqrr_pvb_update(struct qm_portal *portal)
 	}
 }
 
-static inline void qm_dqrr_cci_consume(struct qm_portal *portal, u8 num)
-{
-	register struct qm_dqrr *dqrr = &portal->dqrr;
-	DPA_ASSERT(dqrr->cmode == qm_dqrr_cci);
-	dqrr->ci = (dqrr->ci + num) & (QM_DQRR_SIZE - 1);
-	qm_out(DQRR_CI_CINH, dqrr->ci);
-}
 
 static inline void qm_dqrr_cci_consume_to_current(struct qm_portal *portal)
 {
@@ -677,14 +717,6 @@ static inline void qm_dqrr_cce_prefetch(struct qm_portal *portal)
 	DPA_ASSERT(dqrr->cmode == qm_dqrr_cce);
 	qm_cl_invalidate(DQRR_CI);
 	qm_cl_touch_rw(DQRR_CI);
-}
-
-static inline void qm_dqrr_cce_consume(struct qm_portal *portal, u8 num)
-{
-	register struct qm_dqrr *dqrr = &portal->dqrr;
-	DPA_ASSERT(dqrr->cmode == qm_dqrr_cce);
-	dqrr->ci = (dqrr->ci + num) & (QM_DQRR_SIZE - 1);
-	qm_cl_out(DQRR_CI, dqrr->ci);
 }
 
 static inline void qm_dqrr_cce_consume_to_current(struct qm_portal *portal)
@@ -718,14 +750,6 @@ static inline void qm_dqrr_cdc_consume_1ptr(struct qm_portal *portal,
 	qm_out(DQRR_DCAP, (0 << 8) |		/* DQRR_DCAP::S */
 		((park ? 1 : 0) << 6) |		/* DQRR_DCAP::PK */
 		idx);				/* DQRR_DCAP::DCAP_CI */
-}
-
-static inline void qm_dqrr_cdc_consume_n(struct qm_portal *portal, u16 bitmask)
-{
-	__maybe_unused register struct qm_dqrr *dqrr = &portal->dqrr;
-	DPA_ASSERT(dqrr->cmode == qm_dqrr_cdc);
-	qm_out(DQRR_DCAP, (1 << 8) |		/* DQRR_DCAP::S */
-		((u32)bitmask << 16));		/* DQRR_DCAP::DCAP_CI */
 }
 
 static inline u8 qm_dqrr_cdc_cci(struct qm_portal *portal)

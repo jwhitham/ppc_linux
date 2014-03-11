@@ -323,11 +323,6 @@ static int init_qm_portal(struct qm_portal_config *config,
 		       " recover portal, portal will be leaked\n");
 		return 1;
 	}
-	/* Consume any items in the dequeue ring */
-	while (qm_dqrr_cdc_cci(portal) != qm_dqrr_cursor(portal)) {
-		qm_dqrr_cdc_consume_n(portal, 0xffff);
-		qm_dqrr_cdc_cce_prefetch(portal);
-	}
 
 	/* Initialize the EQCR */
 	if (qm_eqcr_init(portal, qm_eqcr_pvb,
