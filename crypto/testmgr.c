@@ -845,21 +845,14 @@ static int __test_tls(struct crypto_aead *tfm, int enc,
 	sg = kmalloc(sizeof(*sg) * 8 * (diff_dst ? 3 : 2), GFP_KERNEL);
 	if (!sg)
 		goto out_nosg;
-	asg = &sg[8];
-	sgout = &asg[8];
 
-	if (diff_dst)
-		d = "-ddst";
-	else
-		d = "";
+	asg = sg + 8;
+	sgout = sg + 16;
 
-	if (enc == ENCRYPT)
-		e = "encryption";
-	else
-		e = "decryption";
+	d = diff_dst ? "-ddst" : "";
+	e = enc ? "encryption" : "decryption";
 
 	init_completion(&result.completion);
-
 	req = aead_request_alloc(tfm, GFP_KERNEL);
 	if (!req) {
 		pr_err("alg: tls%s: Failed to allocate request for %s\n",
@@ -898,8 +891,6 @@ static int __test_tls(struct crypto_aead *tfm, int enc,
 		if (ret)
 			continue;
 
-		output = diff_dst ? xoutbuf[0] : input;
-
 		/* Allocate enough space in the input and output scatterlists.
 		 * They must accomodate the result for in-place encryption and
 		 * different-place decryption
@@ -915,7 +906,6 @@ static int __test_tls(struct crypto_aead *tfm, int enc,
 		}
 
 		sg_init_one(&asg[0], assoc, template[i].alen);
-
 		aead_request_set_assoc(req, asg, template[i].alen);
 		aead_request_set_crypt(req, sg, (diff_dst) ? sgout : sg,
 				       template[i].ilen, iv);
