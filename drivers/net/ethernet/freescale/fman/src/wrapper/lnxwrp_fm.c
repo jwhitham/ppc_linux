@@ -1845,6 +1845,28 @@ int fm_rtc_set_fiper(struct fm *fm_dev, uint32_t id,
 }
 EXPORT_SYMBOL(fm_rtc_set_fiper);
 
+int fm_mac_set_wol(struct fm_port *port, struct fm_mac_dev *fm_mac_dev, bool en)
+{
+	int _errno;
+	t_Error err;
+	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
+
+	/* Do not set WoL on AR ports */
+	if (FM_PORT_IsInDsar(p_LnxWrpFmPortDev->h_Dev)) {
+		printk(KERN_WARNING "Port is AutoResponse enabled! WoL will not be set on this port!\n");
+		return 0;
+	}
+
+	err = FM_MAC_SetWakeOnLan(fm_mac_dev, en);
+
+	_errno = -GET_ERROR_TYPE(err);
+	if (_errno < 0)
+		pr_err("FM_MAC_SetWakeOnLan() = 0x%08x\n", err);
+
+	return _errno;
+}
+EXPORT_SYMBOL(fm_mac_set_wol);
+
 void fm_mutex_lock(void)
 {
     mutex_lock(&lnxwrp_mutex);

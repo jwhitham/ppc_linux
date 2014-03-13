@@ -625,6 +625,9 @@ int fm_rtc_set_alarm(struct fm *fm_dev, uint32_t id,
 int fm_rtc_set_fiper(struct fm *fm_dev, uint32_t id,
 		uint64_t fiper);
 
+int fm_mac_set_wol(struct fm_port *port, struct fm_mac_dev *fm_mac_dev,
+			bool en);
+
 /** @} */ /* end of FM_LnxKern_ctrl_grp group */
 /** @} */ /* end of FM_LnxKern_grp group */
 
