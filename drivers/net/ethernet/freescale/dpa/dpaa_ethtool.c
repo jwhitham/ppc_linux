@@ -279,6 +279,54 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static void dpa_get_wol(struct net_device *net_dev, struct ethtool_wolinfo *wol)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+
+	wol->supported = 0;
+	wol->wolopts = 0;
+
+	if (!priv->wol || !device_can_wakeup(net_dev->dev.parent))
+		return;
+
+	if (priv->wol & DPAA_WOL_MAGIC) {
+		wol->supported = WAKE_MAGIC;
+		wol->wolopts = WAKE_MAGIC;
+	}
+}
+
+static int dpa_set_wol(struct net_device *net_dev, struct ethtool_wolinfo *wol)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+
+	if (priv->mac_dev == NULL) {
+		netdev_info(net_dev, "This is a MAC-less interface\n");
+		return -ENODEV;
+	}
+
+	if (unlikely(priv->mac_dev->phy_dev == NULL)) {
+		netdev_dbg(net_dev, "phy device not initialized\n");
+		return -ENODEV;
+	}
+
+	if (!device_can_wakeup(net_dev->dev.parent) ||
+		(wol->wolopts & ~WAKE_MAGIC))
+		return -EOPNOTSUPP;
+
+	priv->wol = 0;
+
+	if (wol->wolopts & WAKE_MAGIC) {
+		priv->wol = DPAA_WOL_MAGIC;
+		device_set_wakeup_enable(net_dev->dev.parent, 1);
+	} else {
+		device_set_wakeup_enable(net_dev->dev.parent, 0);
+	}
+
+	return 0;
+}
+#endif
+
 const struct ethtool_ops dpa_ethtool_ops = {
 	.get_settings = dpa_get_settings,
 	.set_settings = dpa_set_settings,
@@ -292,4 +340,8 @@ const struct ethtool_ops dpa_ethtool_ops = {
 	.self_test = NULL, /* TODO invoke the cold-boot unit-test? */
 	.get_ethtool_stats = NULL, /* TODO other stats, currently in debugfs */
 	.get_link = ethtool_op_get_link,
+#ifdef CONFIG_PM
+	.get_wol = dpa_get_wol,
+	.set_wol = dpa_set_wol,
+#endif
 };

@@ -130,6 +130,13 @@ static int dpaa_suspend_noirq(struct device *dev)
 		err = fm_port_suspend(mac_dev->port_dev[TX]);
 		if (err)
 			err = fm_port_resume(mac_dev->port_dev[RX]);
+
+		if (priv->wol & DPAA_WOL_MAGIC) {
+			err = priv->mac_dev->set_wol(mac_dev->port_dev[RX],
+				priv->mac_dev->get_mac_handle(mac_dev), true);
+			if (unlikely(err < 0))
+				netdev_err(net_dev, "set_wol() = %d\n", err);
+		}
 	}
 
 port_suspend_failed:
@@ -148,6 +155,13 @@ static int dpaa_resume_noirq(struct device *dev)
 	if (net_dev->flags & IFF_UP) {
 		priv = netdev_priv(net_dev);
 		mac_dev = priv->mac_dev;
+
+		if (priv->wol & DPAA_WOL_MAGIC) {
+			err = priv->mac_dev->set_wol(mac_dev->port_dev[RX],
+				priv->mac_dev->get_mac_handle(mac_dev), false);
+			if (unlikely(err < 0))
+				netdev_err(net_dev, "set_wol() = %d\n", err);
+		}
 
 		err = fm_port_resume(mac_dev->port_dev[TX]);
 		if (err)
@@ -999,6 +1013,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 		goto netdev_init_failed;
 
 	dpaa_eth_sysfs_init(&net_dev->dev);
+
+#ifdef CONFIG_PM
+	device_set_wakeup_capable(dev, true);
+#endif
 
 	pr_info("fsl_dpa: Probed interface %s\n", net_dev->name);
 

@@ -188,6 +188,11 @@ struct dpa_buffer_layout_s {
 #define DPAA_ETH_TX_QUEUES	NR_CPUS
 #define DPAA_ETH_RX_QUEUES	128
 
+#ifdef CONFIG_PM
+/* Magic Packet wakeup */
+#define DPAA_WOL_MAGIC		0x00000001
+#endif
+
 #if defined(CONFIG_FSL_FMAN_TEST)
 struct pcd_range {
 	uint32_t			 base;
@@ -374,6 +379,9 @@ struct dpa_priv_s {
 	char if_type[30];
 
 	void *peer;
+#ifdef CONFIG_PM
+	u32 wol;
+#endif
 };
 
 struct fm_port_fqs {

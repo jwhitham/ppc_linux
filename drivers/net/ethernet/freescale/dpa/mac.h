@@ -94,6 +94,8 @@ struct mac_device {
 	int (*fm_rtc_set_alarm)(struct fm *fm_dev, uint32_t id, uint64_t time);
 	int (*fm_rtc_set_fiper)(struct fm *fm_dev, uint32_t id,
 				uint64_t fiper);
+	int (*set_wol)(struct fm_port *port, struct fm_mac_dev *fm_mac_dev,
+			bool en);
 	int (*dump_mac_regs)(struct mac_device *h_mac, char *buf, int nn);
 
 };
