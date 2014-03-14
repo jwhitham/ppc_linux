@@ -137,10 +137,15 @@ static void free_skb_resources(struct gfar_private *priv);
 static void gfar_set_multi(struct net_device *dev);
 static void gfar_set_hash_for_addr(struct net_device *dev, u8 *addr);
 static void gfar_configure_serdes(struct net_device *dev);
-static int gfar_poll_rx(struct napi_struct *napi, int budget);
-static int gfar_poll_tx(struct napi_struct *napi, int budget);
 static int gfar_poll_rx_sq(struct napi_struct *napi, int budget);
 static int gfar_poll_tx_sq(struct napi_struct *napi, int budget);
+#ifdef GFAR_MQ_POLLING
+static int gfar_poll_rx(struct napi_struct *napi, int budget);
+static int gfar_poll_tx(struct napi_struct *napi, int budget);
+#else
+#define gfar_poll_rx gfar_poll_rx_sq
+#define gfar_poll_tx gfar_poll_tx_sq
+#endif
 #ifdef CONFIG_NET_POLL_CONTROLLER
 static void gfar_netpoll(struct net_device *dev);
 #endif
@@ -2975,6 +2980,7 @@ static int gfar_poll_tx_sq(struct napi_struct *napi, int budget)
 	return 0;
 }
 
+#ifdef GFAR_MQ_POLLING
 static int gfar_poll_rx(struct napi_struct *napi, int budget)
 {
 	struct gfar_priv_grp *gfargrp =
@@ -3074,7 +3080,7 @@ static int gfar_poll_tx(struct napi_struct *napi, int budget)
 
 	return 0;
 }
-
+#endif
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 /* Polling 'interrupt' - used by things like netconsole to send skbs
