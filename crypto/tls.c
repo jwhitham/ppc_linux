@@ -57,17 +57,6 @@ static void tls_async_op_done(struct crypto_async_request *req, int err)
 	complete(&areq->completion);
 }
 
-static void tls_request_done(struct crypto_async_request *req, int err)
-{
-	/* Mark the completion of the TLS request */
-	struct aead_request *areq = req->data;
-
-	if (err == -EINPROGRESS)
-		return;
-
-	aead_request_complete(areq, err);
-}
-
 static int crypto_tls_setkey(struct crypto_aead *tls, const u8 *key,
 				 unsigned int keylen)
 {
@@ -273,7 +262,7 @@ static int crypto_tls_encrypt(struct aead_request *req)
 				     req->iv);
 	/* mark the completion of the whole encryption request */
 	ablkcipher_request_set_callback(abreq, aead_request_flags(req),
-					tls_request_done, req);
+					req->base.complete, req->base.data);
 	/* Apply the cipher transform. The result will be in req->dst */
 	err = crypto_ablkcipher_encrypt(abreq);
 
