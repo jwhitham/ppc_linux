@@ -309,22 +309,27 @@
 		ethernet@0 {
 			compatible = "fsl,t1040-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet0>;
+			sleep = <&rcpm 0x80000008>;
 		};
 		ethernet@1 {
 			compatible = "fsl,t1040-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet1>;
+			sleep = <&rcpm 0x40000008>;
 		};
 		ethernet@2 {
 			compatible = "fsl,t1040-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet2>;
+			sleep = <&rcpm 0x20000008>;
 		};
 		ethernet@3 {
 			compatible = "fsl,t1040-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet3>;
+			sleep = <&rcpm 0x10000008>;
 		};
 		ethernet@4 {
 			compatible = "fsl,t1040-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet4>;
+			sleep = <&rcpm 0x08000008>;
 		};
 	};
 

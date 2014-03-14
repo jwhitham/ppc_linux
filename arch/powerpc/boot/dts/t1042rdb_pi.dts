@@ -267,10 +267,12 @@
 		ethernet@3 {
 			compatible = "fsl,t1042-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet3>;
+			sleep = <&rcpm 0x10000008>;
 		};
 		ethernet@4 {
 			compatible = "fsl,t1042-dpa-ethernet", "fsl,dpa-ethernet";
 			fsl,fman-mac = <&enet4>;
+			sleep = <&rcpm 0x08000008>;
 		};
 	};
 };
