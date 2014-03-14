@@ -845,6 +845,33 @@ static int tdm_fsl_remove(struct platform_device *ofdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int fsl_tdm_suspend(struct device *dev)
+{
+	struct tdm_priv *priv = dev_get_drvdata(dev);
+	if (!priv)
+		return -EINVAL;
+
+	tdm_fsl_stop(priv);
+
+	return 0;
+}
+
+static int fsl_tdm_resume(struct device *dev)
+{
+	struct tdm_priv *priv = dev_get_drvdata(dev);
+	if (!priv)
+		return -EINVAL;
+
+	tdm_fsl_reg_init(priv);
+	tdm_fsl_enable(priv->adap);
+
+	return 0;
+}
+
+SIMPLE_DEV_PM_OPS(fsl_tdm_pm_ops, fsl_tdm_suspend, fsl_tdm_resume);
+#endif
+
 static const struct of_device_id fsl_tdm_match[] = {
 	{
 	 .compatible = "fsl,tdm1.0",
@@ -859,6 +886,9 @@ static struct platform_driver tdm_fsl_driver = {
 		.owner	= THIS_MODULE,
 		.name	= DRV_NAME,
 		.of_match_table	= fsl_tdm_match,
+#ifdef CONFIG_PM
+		.pm = &fsl_tdm_pm_ops,
+#endif
 
 	},
 	.probe		= tdm_fsl_probe,
