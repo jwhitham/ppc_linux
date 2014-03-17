@@ -146,7 +146,7 @@ static int crypto_tls_genicv(u8 *hash, struct scatterlist *src,
 	if (srclen) {
 		sg_init_table(icv, 2);
 		sg_set_page(icv, sg_page(assoc), assoc->length, assoc->offset);
-		scatterwalk_crypto_chain(icv, src, 0, 2);
+		scatterwalk_sg_chain(icv, 2, src);
 	} else {
 		icv = assoc;
 	}
@@ -210,7 +210,7 @@ static int crypto_tls_encrypt(struct aead_request *req)
 
 	unsigned int cryptlen, phashlen;
 	struct scatterlist *cipher = treq_ctx->cipher;
-	struct scatterlist *icv = treq_ctx->icv;
+	struct scatterlist *sg, *src_last = NULL;
 	int err;
 	/*
 	 * The hash and the cipher are applied at different times and their
@@ -231,37 +231,65 @@ static int crypto_tls_encrypt(struct aead_request *req)
 			   crypto_ahash_alignmask(ctx->auth) + 1);
 
 	/*
-	 * STEP 1: create ICV and add necessary padding
+	 * STEP 1: create ICV together with necessary padding
 	 */
 	err = crypto_tls_gen_padicv(hash, &phashlen, req);
 	if (err)
 		return err;
 
-	/* we can reuse treq_cfr->icv because crypto_tls_gen_padicv finished */
-	sg_init_one(icv, hash, phashlen);
+	/*
+	 * STEP 2: Hash and padding are combined with the payload
+	 * depending on the form it arrives. Scatter tables must have at least
+	 * one page of data before chaining with another table and can't have
+	 * an empty data page. The following code addresses these requirements.
+	 *
+	 * For same-destination, hash is copied directly after the
+	 * payload since the buffers must have enough space for encryption.
+	 * For different destination there are several casess to check.
+	 * If the payload is empty, only the hash is encrypted, otherwise the
+	 * payload scatterlist is merged with the hash. A special merging case
+	 * is when the payload has only one page of data. In that case the
+	 * payload page is moved to another scatterlist and prepared there for
+	 * encryption.
+	 */
+
+	if (req->src == req->dst) {
+		scatterwalk_map_and_copy(hash, req->src, req->cryptlen,
+					 phashlen, 1);
+	} else {
+		if (req->cryptlen) {
+			sg_init_table(cipher, 2);
+			sg_set_buf(cipher + 1, hash, phashlen);
+			if (sg_is_last(req->src)) {
+				sg_set_page(cipher, sg_page(req->src),
+					req->src->length, req->src->offset);
+				req->src = cipher;
+			} else {
+				for (sg = req->src; sg; sg = sg_next(sg))
+					src_last = sg;
+				sg_set_page(cipher, sg_page(src_last),
+					src_last->length, src_last->offset);
+				scatterwalk_sg_chain(src_last, 1, cipher);
+			}
+		} else {
+			sg_init_one(req->src, hash, phashlen);
+		}
+	}
 
 	/*
-	 * STEP 2: encrypt the frame and return the result
-	 * Chain the payload with the hash. If the payload is empty, use
-	 * directly the hash scatterlist
+	 * STEP 3: encrypt the frame and return the result
 	 */
-	if (req->cryptlen) {
-		sg_init_table(cipher, 2);
-		sg_set_page(cipher, sg_page(req->src), req->cryptlen,
-			    req->src->offset);
-		scatterwalk_crypto_chain(cipher, icv, 0, 2);
-	} else {
-		cipher = icv;
-	}
-	/* prepare the cipher request */
 	cryptlen = req->cryptlen + phashlen;
 	ablkcipher_request_set_tfm(abreq, ctx->enc);
-	ablkcipher_request_set_crypt(abreq, cipher, req->dst, cryptlen,
+	ablkcipher_request_set_crypt(abreq, req->src, req->dst, cryptlen,
 				     req->iv);
-	/* mark the completion of the whole encryption request */
+	/* set the callback for encryption request termination */
 	ablkcipher_request_set_callback(abreq, aead_request_flags(req),
 					req->base.complete, req->base.data);
-	/* Apply the cipher transform. The result will be in req->dst */
+	/*
+	 * Apply the cipher transform. The result will be in req->dst when the
+	 * asynchronuous call terminates
+	 */
 	err = crypto_ablkcipher_encrypt(abreq);
 
 	return err;
