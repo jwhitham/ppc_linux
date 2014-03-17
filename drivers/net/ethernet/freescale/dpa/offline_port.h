@@ -35,6 +35,14 @@
 struct fm_port;
 struct qman_fq;
 
+/* fqs are defined in duples (base_fq, fq_count) */
+struct fq_duple {
+	struct qman_fq *fqs;
+	int fqs_count;
+	int channel_id;
+	struct list_head fq_list;
+};
+
 /* OH port configuration */
 struct dpa_oh_config_s {
 	uint32_t		error_fqid;
@@ -42,6 +50,10 @@ struct dpa_oh_config_s {
 	struct fm_port		*oh_port;
 	uint32_t		egress_cnt;
 	struct qman_fq		*egress_fqs;
+	uint16_t		channel;
+
+	struct list_head fqs_ingress_list;
+	struct list_head fqs_egress_list;
 };
 
 #endif /* __OFFLINE_PORT_H */
