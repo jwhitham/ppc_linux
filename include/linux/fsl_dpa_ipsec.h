@@ -43,6 +43,7 @@
 #define ESP_SPI_FIELD_LEN		4
 #define PORT_FIELD_LEN			2
 #define ICMP_HDR_FIELD_LEN		1
+#define DSCP_FIELD_LEN			1
 
 #define MAX_SIZE_IP_UDP_SPI_KEY	\
 		(1 * DPA_OFFLD_IPv6_ADDR_LEN_BYTES + \
@@ -89,11 +90,12 @@
 #define DPA_IPSEC_KEY_FIELD_SIP		0x01 /* Use source IP address in key  */
 #define DPA_IPSEC_KEY_FIELD_DIP		0x02 /* Use destination IP in key     */
 #define	DPA_IPSEC_KEY_FIELD_PROTO	0x04 /* Use IP protocol field in key  */
-#define DPA_IPSEC_KEY_FIELD_SPORT	0x08 /* Use source port in key        */
-#define DPA_IPSEC_KEY_FIELD_ICMP_TYPE	0x08 /* Use ICMP type field in key    */
-#define DPA_IPSEC_KEY_FIELD_DPORT	0x10 /* Use destination port in key   */
-#define DPA_IPSEC_KEY_FIELD_ICMP_CODE	0x10 /* Use ICMP code field in key    */
-#define	DPA_IPSEC_MAX_KEY_FIELDS	5    /* Maximum key components        */
+#define DPA_IPSEC_KEY_FIELD_DSCP	0x08 /* Use DSCP field in key         */
+#define DPA_IPSEC_KEY_FIELD_SPORT	0x10 /* Use source port in key        */
+#define DPA_IPSEC_KEY_FIELD_ICMP_TYPE	0x10 /* Use ICMP type field in key    */
+#define DPA_IPSEC_KEY_FIELD_DPORT	0x20 /* Use destination port in key   */
+#define DPA_IPSEC_KEY_FIELD_ICMP_CODE	0x20 /* Use ICMP code field in key    */
+#define	DPA_IPSEC_MAX_KEY_FIELDS	6    /* Maximum key components        */
 
 #define DPA_IPSEC_DEF_PAD_VAL		0xAA /* Value to be used as padding in
 					      * classification keys           */
@@ -302,6 +304,10 @@ struct dpa_ipsec_sa_out_params {
 	void *outer_udp_header;
 	/* Flow ID used to mark frames encrypted using this SA		      */
 	uint16_t post_sec_flow_id;
+	uint8_t dscp_start;	/* DSCP range start value; ignored if the DSCP
+				 * selector wasn't enabled for this SA */
+	uint8_t dscp_end;	/* DSCP range end value; ignored if the DSCP
+				 * selector wasn't enabled for this SA */
 };
 
 /* DPA-IPSec Security Association In Parameters */
@@ -464,6 +470,7 @@ struct dpa_ipsec_policy_params {
 	uint8_t dest_prefix_len; /* Destination network prefix		      */
 	uint8_t protocol;	/* Protocol				      */
 	bool masked_proto;	/* Mask the entire protocol field	      */
+	bool use_dscp;		/* Enable DSCP value in policy selector       */
 	union {
 		struct dpa_ipsec_l4_params	l4;	/* L4 protos params   */
 		struct dpa_ipsec_icmp_params	icmp;	/* ICMP proto params  */

@@ -440,6 +440,9 @@ static void calc_in_pol_key_size(struct dpa_ipsec *dpa_ipsec, uint8_t *key_size)
 		case DPA_IPSEC_KEY_FIELD_DPORT:
 			*key_size += PORT_FIELD_LEN;
 			break;
+		case DPA_IPSEC_KEY_FIELD_DSCP:
+			*key_size += DSCP_FIELD_LEN;
+			break;
 		}
 	}
 }
@@ -1347,7 +1350,8 @@ static int set_flow_id_action(struct dpa_ipsec_sa *sa,
 static int fill_policy_key(int td,
 			   struct dpa_ipsec_policy_params *pol_params,
 			   uint8_t key_fields,
-			   uint8_t *key, uint8_t *mask, uint8_t *key_len)
+			   uint8_t *key, uint8_t *mask, uint8_t *key_len,
+			   uint8_t dscp_value)
 {
 	struct dpa_cls_tbl_params tbl_params;
 	uint8_t offset = 0, field_mask = 0, tbl_key_size = 0;
@@ -1428,6 +1432,17 @@ static int fill_policy_key(int td,
 						 pol_params->l4.dest_port_mask);
 				offset += PORT_FIELD_LEN;
 			}
+			break;
+
+		case DPA_IPSEC_KEY_FIELD_DSCP:
+			if (pol_params->use_dscp) {
+				*(uint8_t *)(key + offset) = dscp_value << 2;
+				SET_BYTE_VAL_IN_ARRAY(mask, offset, 0xFC);
+			} else {
+				*(uint8_t *)(key + offset) = 0;
+				SET_BYTE_VAL_IN_ARRAY(mask, offset, 0);
+			}
+			offset += DSCP_FIELD_LEN;
 			break;
 		}
 	}
@@ -1741,7 +1756,7 @@ static int update_inbound_policy(struct dpa_ipsec_sa *sa,
 				      pol_params,
 				      dpa_ipsec->config.post_sec_in_params.
 				      key_fields, tbl_key.byte, tbl_key.mask,
-				      &key_len);
+				      &key_len, 0);
 		if (err < 0)
 			return err;
 
@@ -1759,10 +1774,10 @@ static int update_inbound_policy(struct dpa_ipsec_sa *sa,
 			log_err("Could not insert key in EM table\n");
 			return err;
 		}
-		policy_entry->entry_id = entry_id;
+		*policy_entry->entry_id = entry_id;
 		break;
 	case MNG_OP_REMOVE:
-		entry_id = policy_entry->entry_id;
+		entry_id = *policy_entry->entry_id;
 		err = dpa_classif_table_delete_entry_by_ref(sa->em_inpol_td,
 							    entry_id);
 		if (err < 0) {
@@ -1778,6 +1793,25 @@ static int update_inbound_policy(struct dpa_ipsec_sa *sa,
 	return 0;
 }
 
+static inline int remove_dscp_policy(struct dpa_ipsec_sa *sa,
+				     struct dpa_ipsec_policy_entry *pol_entry,
+				     int table)
+{
+	int dscp_idx = 0, err = 0, ret = 0;
+	do {
+		ret = dpa_classif_table_delete_entry_by_ref(
+						table,
+						pol_entry->entry_id[dscp_idx]);
+		if (ret < 0) {
+			log_err("Cannot remove key from EM table\n");
+			err = ret;
+		}
+		dscp_idx += 1;
+	} while (dscp_idx <= sa->dscp_end - sa->dscp_start);
+
+	return err;
+}
+
 static int update_outbound_policy(struct dpa_ipsec_sa *sa,
 				  struct dpa_ipsec_policy_entry *policy_entry,
 				  enum mng_op_type op_type)
@@ -1785,11 +1819,11 @@ static int update_outbound_policy(struct dpa_ipsec_sa *sa,
 	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_pre_sec_out_params *pre_sec_out_params;
 	struct dpa_ipsec_policy_params *pol_params;
-	uint8_t key_len, table_idx, key_fields;
+	uint8_t key_len, table_idx, key_fields, dscp_value;
 	struct dpa_offload_lookup_key tbl_key;
 	struct dpa_cls_tbl_action action;
 	struct dpa_cls_tbl_entry_mod_params params;
-	int table, err;
+	int table, err, dscp_idx = 0;
 	int manip_hmd = DPA_OFFLD_DESC_NONE, pol_hmd = DPA_OFFLD_DESC_NONE;
 	uint8_t key_data[DPA_OFFLD_MAXENTRYKEYSIZE];
 	uint8_t mask_data[DPA_OFFLD_MAXENTRYKEYSIZE];
@@ -1822,23 +1856,9 @@ static int update_outbound_policy(struct dpa_ipsec_sa *sa,
 
 	switch (op_type) {
 	case MNG_OP_ADD:
+		dscp_value = sa->dscp_start;
 		tbl_key.byte = key_data;
 		tbl_key.mask = mask_data;
-
-		/*
-		 * Key may contain:
-		 * IP SRC ADDR  - from Policy handle
-		 * IP DST ADDR  - from Policy handle
-		 * IP_PROTO     - from Policy handle
-		 * SRC_PORT     - from Policy handle (for UDP & TCP & SCTP)
-		 * DST_PORT     - from Policy handle (for UDP & TCP & SCTP)
-		 */
-		err = fill_policy_key(table, pol_params, key_fields,
-				tbl_key.byte, tbl_key.mask, &key_len);
-		if (err < 0)
-			return err;
-
-		tbl_key.size = key_len;
 
 		/* Configure fragmentation */
 		if (pol_params->dir_params.type ==
@@ -1900,21 +1920,80 @@ set_manipulation:
 		fill_cls_action_enq(&action,
 				    sa->enable_extended_stats ? true : false,
 				    qman_fq_fqid(sa->to_sec_fq), pol_hmd);
+		/*
+		 * Key may contain:
+		 * IP SRC ADDR  - from Policy handle
+		 * IP DST ADDR  - from Policy handle
+		 * IP_PROTO     - from Policy handle
+		 * DSCP         - from Policy handle
+		 * SRC_PORT     - from Policy handle (for UDP & TCP & SCTP)
+		 * DST_PORT     - from Policy handle (for UDP & TCP & SCTP)
+		 */
 
-		err = dpa_classif_table_insert_entry(table, &tbl_key, &action,
-					      policy_entry->pol_params.priority,
-					      &policy_entry->entry_id);
-		if (err < 0) {
-			log_err("Could not add key in exact match table\n");
-			return err;
+		/*
+		 * If SA per DSCP feature is disabled only one key is inserted
+		 * and then will go out
+		 */
+		if (!pol_params->use_dscp) {
+			err = fill_policy_key(table, pol_params, key_fields,
+					      tbl_key.byte, tbl_key.mask,
+					      &key_len, 0);
+			if (err < 0)
+				return err;
+
+			tbl_key.size = key_len;
+
+			err = dpa_classif_table_insert_entry(table, &tbl_key,
+					&action,
+					policy_entry->pol_params.priority,
+					&policy_entry->entry_id[dscp_idx]);
+			if (err < 0) {
+				log_err("Could not add key in exact match table\n");
+				return err;
+			}
+			break;
 		}
+
+		/*
+		 * In case the SA per DSCP feature will be used, it will iterate
+		 * through all DSCP values and insert a key for each one.
+		 */
+		do {
+			err = fill_policy_key(table, pol_params, key_fields,
+					      tbl_key.byte, tbl_key.mask,
+					      &key_len, dscp_value);
+			if (err < 0)
+				return err;
+
+			tbl_key.size = key_len;
+
+			err = dpa_classif_table_insert_entry(table, &tbl_key,
+					&action,
+					policy_entry->pol_params.priority,
+					&policy_entry->entry_id[dscp_idx]);
+			if (err < 0) {
+				log_err("Could not add key in exact match table\n");
+				return err;
+			}
+
+			dscp_value += 1;
+			dscp_idx += 1;
+		} while (dscp_value <= sa->dscp_end);
+
 		break;
 	case MNG_OP_REMOVE:
-		err = dpa_classif_table_delete_entry_by_ref(table,
-							policy_entry->entry_id);
-		if (err < 0) {
-			log_err("Could not remove key from EM table\n");
-			return err;
+		if (pol_params->use_dscp) {
+			err = remove_dscp_policy(sa, policy_entry, table);
+			if (err < 0)
+				return err;
+
+		} else {
+			err = dpa_classif_table_delete_entry_by_ref(table,
+					*policy_entry->entry_id);
+			if (err < 0) {
+				log_err("Could not remove key from EM table\n");
+				return err;
+			}
 		}
 
 		if (policy_entry->hmd != DPA_OFFLD_DESC_NONE) {
@@ -1947,8 +2026,8 @@ set_manipulation:
 		params.action = &action;
 
 		err = dpa_classif_table_modify_entry_by_ref(table,
-							 policy_entry->entry_id,
-							 &params);
+							*policy_entry->entry_id,
+							&params);
 		if (err < 0) {
 			log_err("Could not modify key in EM table\n");
 			return err;
@@ -2599,6 +2678,15 @@ static int copy_sa_params_to_out_sa(struct dpa_ipsec_sa *sa,
 	sa->l2_hdr_size = sa_params->l2_hdr_size;
 	sa->enable_stats = sa_params->enable_stats;
 	sa->enable_extended_stats = sa_params->enable_extended_stats;
+	if (sa_params->sa_out_params.dscp_end <
+					sa_params->sa_out_params.dscp_start) {
+		log_err("Wrong DSCP interval, dscp_start (%d) cannot be greater than dscp_end (%d)\n",
+			 sa_params->sa_out_params.dscp_start,
+			 sa_params->sa_out_params.dscp_end);
+		return -EINVAL;
+	}
+	sa->dscp_start = sa_params->sa_out_params.dscp_start;
+	sa->dscp_end = sa_params->sa_out_params.dscp_end;
 #ifdef DEBUG_PARAM
 	/* Printing all the parameters */
 	print_sa_sec_param(sa);
@@ -2824,6 +2912,7 @@ static int store_policy_param_to_sa_pol_list(struct dpa_ipsec_sa *sa,
 {
 	struct dpa_ipsec_policy_entry *pol_entry;
 	struct dpa_ipsec_pol_dir_params *dir = NULL;
+	int size = 1; /* By default the size of the entry_id array is one */
 
 	BUG_ON(!sa);
 	BUG_ON(!policy_params);
@@ -2859,6 +2948,15 @@ static int store_policy_param_to_sa_pol_list(struct dpa_ipsec_sa *sa,
 		pol_entry->pol_params.dir_params.in_action.
 		       enq_params.policer_params = plcr;
 	}
+
+	if (policy_params->use_dscp)
+		size = sa->dscp_end - sa->dscp_start + 1;
+
+	/*
+	 * allocate memory for entry id: a single value or an array in case
+	 * of SA per DSCP
+	 */
+	pol_entry->entry_id = kcalloc(size, sizeof(int), GFP_KERNEL);
 
 	/* add policy to the SA's policy list */
 	list_add(&pol_entry->node, &sa->policy_headlist);
@@ -3028,6 +3126,8 @@ static int remove_policy_from_sa_policy_list(struct dpa_ipsec_sa *sa,
 	    dir->in_action.enq_params.policer_params)
 		kfree(dir->in_action.enq_params.policer_params);
 
+	/* release memory used for holding policy entry id array*/
+	kfree(policy_entry->entry_id);
 	/* release memory used for holding policy general parameters */
 	kfree(policy_entry);
 
@@ -5152,7 +5252,7 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 {
 	struct dpa_ipsec *dpa_ipsec;
 	struct dpa_ipsec_sa *sa;
-	int ret = 0;
+	int ret = 0, dscp_idx = 0;
 	uint32_t *desc;
 	struct dpa_cls_tbl_entry_stats stats;
 
@@ -5246,18 +5346,50 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 						policy_params->protocol,
 						IPV6);
 			td = psop->table[table_idx].dpa_cls_td;
-			ret = dpa_classif_table_get_entry_stats_by_ref(
+
+			/*
+			 * In case the SA per DSCP feature is disabled, will
+			 * acquire statistics for the policy and exit
+			 */
+			if (!policy_params->use_dscp) {
+				ret = dpa_classif_table_get_entry_stats_by_ref(
 						td,
-						out_policy->entry_id,
+						*out_policy->entry_id,
 						&stats);
-			if (ret != 0) {
-				log_err("Failed to acquire total packets counter for outbound SA Id=%d. Failure occured on outbound policy table %d (td=%d).\n",
-					sa_id, table_idx, td);
-				mutex_unlock(&sa->lock);
-				goto out;
-			} else {
-				sa_stats->input_packets	+= stats.pkts;
+				if (ret != 0) {
+					log_err("Failed to acquire total packets counter for outbound SA Id=%d. Failure occured on outbound policy table %d (td=%d).\n",
+						sa_id, table_idx, td);
+					mutex_unlock(&sa->lock);
+					goto out;
+				} else {
+					sa_stats->input_packets	+= stats.pkts;
+					goto sa_get_stats_return;
+				}
 			}
+
+			/*
+			 * In case the SA per DSCP feature is enabled, will
+			 * iterate through all DSCP values defined for the
+			 * SA and totalize statistics
+			 */
+			do {
+				ret = dpa_classif_table_get_entry_stats_by_ref(
+						td,
+						out_policy->entry_id[dscp_idx],
+						&stats);
+
+				if (ret != 0) {
+					/*
+					 * In case of error just print the
+					 * message and get to the next value
+					 */
+					log_err("Failed to acquire packets counter for outbound SA Id=%d. Failure occured on outbound policy table %d (td=%d).\n",
+							sa_id, table_idx, td);
+				} else {
+					sa_stats->input_packets	+= stats.pkts;
+				}
+				dscp_idx += 1;
+			} while (dscp_idx <= sa->dscp_end - sa->dscp_start);
 		}
 	}
 

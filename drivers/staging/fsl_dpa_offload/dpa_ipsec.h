@@ -300,6 +300,8 @@ struct dpa_ipsec_sa {
 	dpa_ipsec_rekey_event_cb rekey_event_cb;
 	uint32_t l2_hdr_size; /* Size of the Ethernet header, including any
 			      * VLAN information.			      */
+	uint8_t dscp_start; /* DSCP range start value */
+	uint8_t dscp_end; /* DSCP range end value */
 	struct mutex lock; /* Lock for this SA structure */
 };
 
@@ -386,8 +388,11 @@ struct hmd_entry {
 
 /* DPA IPSEC - Security Policy Parameter Entry */
 struct dpa_ipsec_policy_entry {
-	struct dpa_ipsec_policy_params pol_params; /* Policy parameters       */
-	int entry_id;		/* Set by dpa_classif_table_insert_entry      */
+	/* Policy parameters */
+	struct dpa_ipsec_policy_params pol_params;
+
+	/* Entry id array that is set by dpa_classif_table_insert_entry */
+	int *entry_id;
 
 	/*
 	 * Header manip for IPSec special operation or
@@ -401,7 +406,9 @@ struct dpa_ipsec_policy_entry {
 	 * is hmd refers to an outside manip object
 	 */
 	bool hmd_special_op;
-	struct list_head node;	/* Node in linked list			      */
+
+	/* Node in linked list */
+	struct list_head node;
 };
 
 void sa_rekeying_work_func(struct work_struct *work);
