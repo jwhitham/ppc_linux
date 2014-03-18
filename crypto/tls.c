@@ -177,11 +177,10 @@ static int crypto_tls_genicv(u8 *hash, struct scatterlist *src,
  * crypto_tls_gen_padicv - Calculate and pad hmac digest for a TLS record
  * @hash:	(output) buffer to save the digest and padding into
  * @phashlen:	(output) the size of digest + padding
- * @cryptlen:	(output) the size of the total frame to be encrypted
  * @req:	(input) aead request
  **/
 static int crypto_tls_gen_padicv(u8 *hash, unsigned int *phashlen,
-			     unsigned int *cryptlen, struct aead_request *req)
+			     struct aead_request *req)
 {
 	struct crypto_aead *tls = crypto_aead_reqtfm(req);
 	unsigned int hash_size = crypto_aead_authsize(tls);
@@ -198,8 +197,6 @@ static int crypto_tls_gen_padicv(u8 *hash, unsigned int *phashlen,
 	padlen = block_size - (srclen % block_size);
 	memset(hash + hash_size, padlen - 1, padlen);
 
-	/* save the frame length to be encrypted */
-	*cryptlen = srclen + padlen;
 	*phashlen = hash_size + padlen;
 out:
 	return err;
@@ -236,7 +233,7 @@ static int crypto_tls_encrypt(struct aead_request *req)
 	/*
 	 * STEP 1: create ICV and add necessary padding
 	 */
-	err = crypto_tls_gen_padicv(hash, &phashlen, &cryptlen, req);
+	err = crypto_tls_gen_padicv(hash, &phashlen, req);
 	if (err)
 		return err;
 
@@ -257,6 +254,7 @@ static int crypto_tls_encrypt(struct aead_request *req)
 		cipher = icv;
 	}
 	/* prepare the cipher request */
+	cryptlen = req->cryptlen + phashlen;
 	ablkcipher_request_set_tfm(abreq, ctx->enc);
 	ablkcipher_request_set_crypt(abreq, cipher, req->dst, cryptlen,
 				     req->iv);
