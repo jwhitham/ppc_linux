@@ -675,7 +675,8 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	if (IS_ERR(dpa_bp))
 		return PTR_ERR(dpa_bp);
 
-	dpa_bp->seed_cb = dpa_bp_shared_port_seed;
+	for (i = 0; i < count; i++)
+		dpa_bp[i].seed_cb = dpa_bp_shared_port_seed;
 
 	/* Allocate this early, so we can store relevant information in
 	 * the private area (needed by 1588 code in dpa_mac_probe)
@@ -726,9 +727,8 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 		goto fq_probe_failed;
 
 	/* bp init */
-
+	priv->bp_count = count;
 	err = dpa_bp_create(net_dev, dpa_bp, count);
-
 	if (err < 0)
 		goto bp_create_failed;
 

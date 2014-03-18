@@ -686,8 +686,10 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp)
 	struct bman_pool_params	 bp_params;
 	struct platform_device *pdev;
 
-	BUG_ON(dpa_bp->size == 0);
-	BUG_ON(dpa_bp->config_count == 0);
+	if (dpa_bp->size == 0 || dpa_bp->config_count == 0) {
+		pr_err("Buffer pool is not properly initialized! Missing size or initial number of buffers");
+		return -EINVAL;
+	}
 
 	bp_params.flags = 0;
 
@@ -777,6 +779,13 @@ static void __cold __attribute__((nonnull))
 _dpa_bp_free(struct dpa_bp *dpa_bp)
 {
 	struct dpa_bp *bp = dpa_bpid2pool(dpa_bp->bpid);
+
+	/* the mapping between bpid and dpa_bp is done very late in the
+	 * allocation procedure; if something failed before the mapping, the bp
+	 * was not configured, therefore we don't need the below instructions
+	 */
+	if (!bp)
+		return;
 
 	if (!atomic_dec_and_test(&bp->refs))
 		return;
