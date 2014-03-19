@@ -616,12 +616,12 @@ struct txbd8
 {
 	union {
 		struct {
-			u16	status;	/* Status Fields */
-			u16	length;	/* Buffer length */
+			__be16	status;	/* Status Fields */
+			__be16	length;	/* Buffer length */
 		};
-		u32 lstatus;
+		__be32 lstatus;
 	};
-	u32	bufPtr;	/* Buffer Pointer */
+	__be32	bufPtr;	/* Buffer Pointer */
 };
 
 struct txfcb {
@@ -637,12 +637,12 @@ struct rxbd8
 {
 	union {
 		struct {
-			u16	status;	/* Status Fields */
-			u16	length;	/* Buffer Length */
+			__be16	status;	/* Status Fields */
+			__be16	length;	/* Buffer Length */
 		};
-		u32 lstatus;
+		__be32 lstatus;
 	};
-	u32	bufPtr;	/* Buffer Pointer */
+	__be32	bufPtr;	/* Buffer Pointer */
 };
 
 struct rxfcb {
@@ -1455,6 +1455,13 @@ static inline void gfar_wmb(void)
 #endif
 }
 
+static inline void gfar_clear_txbd_status(struct txbd8 *bdp)
+{
+	u32 lstatus = be32_to_cpu(bdp->lstatus);
+	lstatus &= BD_LFLAG(TXBD_WRAP);
+	bdp->lstatus = cpu_to_be32(lstatus);
+}
+
 irqreturn_t gfar_receive(int irq, void *dev_id);
 int startup_gfar(struct net_device *dev);
 void stop_gfar(struct net_device *dev);
@@ -1580,7 +1587,7 @@ static inline void gfar_init_rxbdp(struct gfar_priv_rx_q *rx_queue,
 {
 	u32 lstatus;
 
-	bdp->bufPtr = buf;
+	bdp->bufPtr = cpu_to_be32(buf);
 
 	lstatus = BD_LFLAG(RXBD_EMPTY | RXBD_INTERRUPT);
 	if (bdp == rx_queue->rx_bd_base + rx_queue->rx_ring_size - 1)
@@ -1588,7 +1595,7 @@ static inline void gfar_init_rxbdp(struct gfar_priv_rx_q *rx_queue,
 
 	gfar_wmb();
 
-	bdp->lstatus = lstatus;
+	bdp->lstatus = cpu_to_be32(lstatus);
 }
 
 static inline void gfar_new_rxbdp(struct gfar_priv_rx_q *rx_queue,
