@@ -294,8 +294,29 @@ static inline unsigned int qm_eqcr_get_ci_stashing(struct qm_portal *portal)
 static inline void qm_eqcr_finish(struct qm_portal *portal)
 {
 	register struct qm_eqcr *eqcr = &portal->eqcr;
-	u8 pi = qm_in(EQCR_PI_CINH) & (QM_EQCR_SIZE - 1);
-	u8 ci = qm_in(EQCR_CI_CINH) & (QM_EQCR_SIZE - 1);
+	u8 pi, ci;
+	u32 cfg;
+
+	/*
+	 * Disable EQCI stashing because the QMan only
+	 * presents the value it previously stashed to
+	 * maintain coherency.  Setting the stash threshold
+	 * to 1 then 0 ensures that QMan has resyncronized
+	 * its internal copy so that the portal is clean
+	 * when it is reinitialized in the future
+	 */
+	cfg = (qm_in(CFG) & 0x0fffffff) |
+		(1 << 28); /* QCSP_CFG: EST */
+	qm_out(CFG, cfg);
+	cfg &= 0x0fffffff; /* stash threshold = 0 */
+	qm_out(CFG, cfg);
+
+	pi = qm_in(EQCR_PI_CINH) & (QM_EQCR_SIZE - 1);
+	ci = qm_in(EQCR_CI_CINH) & (QM_EQCR_SIZE - 1);
+
+	/* Refresh EQCR CI cache value */
+	qm_cl_invalidate(EQCR_CI);
+	eqcr->ci = qm_cl_in(EQCR_CI) & (QM_EQCR_SIZE - 1);
 
 	DPA_ASSERT(!eqcr->busy);
 	if (pi != EQCR_PTR2IDX(eqcr->cursor))
