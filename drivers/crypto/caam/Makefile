@@ -14,3 +14,8 @@ obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_JR_UIO) += fsl_jr_uio.o
 
 caam-objs := ctrl.o
 caam_jr-objs := jr.o key_gen.o error.o
+ifeq ($(CONFIG_FSL_QMAN), y)
+        caam-objs += qi.o
+endif
+
+obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI) += caamalg_qi.o

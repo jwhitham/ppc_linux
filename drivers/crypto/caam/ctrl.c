@@ -15,6 +15,10 @@
 #include "desc_constr.h"
 #include "error.h"
 
+#ifdef CONFIG_FSL_QMAN
+#include "qi.h"
+#endif
+
 /*
  * Descriptor to instantiate RNG State Handle 0 in normal mode and
  * load the JDKEK, TDKEK and TDSK registers
@@ -283,6 +287,10 @@ static int caam_remove(struct platform_device *pdev)
 			of_device_unregister(ctrlpriv->jrpdev[ring]);
 	}
 
+#ifdef CONFIG_FSL_QMAN
+	if (ctrlpriv->qidev)
+		caam_qi_shutdown(ctrlpriv->qidev);
+#endif
 	/* De-initialize RNG state handles initialized by this driver. */
 	if (ctrlpriv->rng4_sh_init)
 		deinstantiate_rng(ctrldev, ctrlpriv->rng4_sh_init);
@@ -475,6 +483,12 @@ static int caam_probe(struct platform_device *pdev)
 		ctrlpriv->qi = (struct caam_queue_if __force *)&topregs->qi;
 		/* This is all that's required to physically enable QI */
 		wr_reg32(&topregs->qi.qi_control_lo, QICTL_DQEN);
+
+		/* If QMAN driver is present, init CAAM-QI backend */
+#ifdef CONFIG_FSL_QMAN
+		if (caam_qi_init(pdev, nprop))
+			dev_err(dev, "caam qi i/f init failed\n");
+#endif
 	}
 
 	/* If no QI and no rings specified, quit and go home */
