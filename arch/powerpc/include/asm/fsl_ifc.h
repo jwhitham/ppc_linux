@@ -261,6 +261,8 @@
  */
 /* Auto Boot Mode */
 #define IFC_NAND_NCFGR_BOOT		0x80000000
+/* SRAM INIT EN */
+#define IFC_NAND_SRAM_INIT_EN		0x20000000
 /* Addressing Mode-ROW0+n/COL0 */
 #define IFC_NAND_NCFGR_ADDR_MODE_RC0	0x00000000
 /* Addressing Mode-ROW0+n/COL0+n */
@@ -830,6 +832,10 @@ struct fsl_ifc_ctrl {
 
 	u32 nand_stat;
 	wait_queue_head_t nand_wait;
+#ifdef CONFIG_PM_SLEEP
+	/* save regs when system go to deep-sleep */
+	struct fsl_ifc_regs		*saved_regs;
+#endif
 };
 
 extern struct fsl_ifc_ctrl *fsl_ifc_ctrl_dev;

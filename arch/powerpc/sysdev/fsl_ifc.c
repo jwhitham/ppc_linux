@@ -24,6 +24,7 @@
 #include <linux/kernel.h>
 #include <linux/compiler.h>
 #include <linux/spinlock.h>
+#include <linux/delay.h>
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/io.h>
@@ -35,6 +36,8 @@
 
 struct fsl_ifc_ctrl *fsl_ifc_ctrl_dev;
 EXPORT_SYMBOL(fsl_ifc_ctrl_dev);
+#define FSL_IFC_V1_3_0	0x01030000
+#define IFC_TIMEOUT_MSECS	100000 /* 100ms */
 
 /*
  * convert_ifc_address - convert the base address
@@ -283,6 +286,53 @@ err:
 	return ret;
 }
 
+#ifdef CONFIG_PM_SLEEP
+/* save ifc registers */
+static int fsl_ifc_suspend(struct device *dev)
+{
+	struct fsl_ifc_ctrl *ctrl = dev_get_drvdata(dev);
+	struct fsl_ifc_regs __iomem *ifc = ctrl->regs;
+
+	ctrl->saved_regs = kzalloc(sizeof(struct fsl_ifc_regs), GFP_KERNEL);
+	if (!ctrl->saved_regs)
+		return -ENOMEM;
+
+	_memcpy_fromio(ctrl->saved_regs, ifc, sizeof(struct fsl_ifc_regs));
+
+	return 0;
+}
+
+/* restore ifc registers */
+static int fsl_ifc_resume(struct device *dev)
+{
+	struct fsl_ifc_ctrl *ctrl = dev_get_drvdata(dev);
+	struct fsl_ifc_regs __iomem *ifc = ctrl->regs;
+	uint32_t ver = 0, ncfgr, status;
+
+	if (ctrl->saved_regs) {
+		_memcpy_toio(ifc, ctrl->saved_regs,
+				sizeof(struct fsl_ifc_regs));
+		kfree(ctrl->saved_regs);
+		ctrl->saved_regs = NULL;
+	}
+
+	ver = in_be32(&ctrl->regs->ifc_rev);
+	ncfgr = in_be32(&ifc->ifc_nand.ncfgr);
+	if (ver >= FSL_IFC_V1_3_0) {
+		out_be32(&ifc->ifc_nand.ncfgr, ncfgr | IFC_NAND_SRAM_INIT_EN);
+
+		/* wait for  SRAM_INIT bit to be clear or timeout */
+		status = spin_event_timeout(!(in_be32(&ifc->ifc_nand.ncfgr)
+				   & IFC_NAND_SRAM_INIT_EN),
+				   IFC_TIMEOUT_MSECS, 0);
+		if (!status)
+			dev_err(ctrl->dev, "Timeout waiting for IFC SRAM INIT");
+	}
+
+	return 0;
+}
+#endif /* CONFIG_PM_SLEEP */
+
 static const struct of_device_id fsl_ifc_match[] = {
 	{
 		.compatible = "fsl,ifc",
@@ -290,16 +340,25 @@ static const struct of_device_id fsl_ifc_match[] = {
 	{},
 };
 
+static const struct dev_pm_ops ifc_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(fsl_ifc_suspend, fsl_ifc_resume)
+};
+
 static struct platform_driver fsl_ifc_ctrl_driver = {
 	.driver = {
 		.name	= "fsl-ifc",
 		.of_match_table = fsl_ifc_match,
+		.pm = &ifc_pm_ops,
 	},
 	.probe       = fsl_ifc_ctrl_probe,
 	.remove      = fsl_ifc_ctrl_remove,
 };
 
-module_platform_driver(fsl_ifc_ctrl_driver);
+static int __init fsl_ifc_init(void)
+{
+	return platform_driver_register(&fsl_ifc_ctrl_driver);
+}
+subsys_initcall(fsl_ifc_init);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Freescale Semiconductor");
