@@ -1,5 +1,5 @@
 /*
- * P1010 RDB Device Tree Source (36-bit address map)
+ * P1010 RDB-pb Device Tree Source stub (no addresses or top-level ranges)
  *
  * Copyright 2013 Freescale Semiconductor Inc.
  *
@@ -32,15 +32,48 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/include/ "fsl/p1010si-pre.dtsi"
+&ifc_nand {
+	partition@0 {
+		/* This location must not be altered  */
+		/* 2MB for u-boot Bootloader Image */
+		reg = <0x0 0x00200000>;
+		label = "NAND U-Boot Image";
+		read-only;
+	};
 
-/ {
-	model = "fsl,P1010RDB-PB";
-	compatible = "fsl,P1010RDB-PB";
+	partition@200000 {
+		/* 1MB for DTB Image */
+		reg = <0x00200000 0x00100000>;
+		label = "NAND DTB Image";
+	};
 
-	/include/ "p1010rdb_36b.dtsi"
+	partition@300000 {
+		/* 5MB for Linux Kernel Image */
+		reg = <0x00300000 0x00500000>;
+		label = "NAND Linux Kernel Image";
+	};
+
+	partition@800000 {
+		/* 56MB for Compressed Root file System Image */
+		reg = <0x00800000 0x03800000>;
+		label = "NAND Compressed RFS Image";
+	};
+
+	partition@4000000 {
+		/* 1984MB for User Area */
+		reg = <0x04000000 0x7c000000>;
+		label = "NAND User area";
+	};
 };
 
-/include/ "p1010rdb.dtsi"
-/include/ "p1010rdb-pb.dtsi"
-/include/ "fsl/p1010si-post.dtsi"
+&phy0 {
+	interrupts = <0 1 0 0>;
+};
+
+&phy1 {
+	interrupts = <2 1 0 0>;
+};
+
+&phy2 {
+	interrupts = <1 1 0 0>;
+};
