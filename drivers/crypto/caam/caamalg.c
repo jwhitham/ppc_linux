@@ -526,6 +526,9 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	/* cryptlen = payloadlen + icvlen + padlen */
 	append_math_add(desc, VARSEQOUTLEN, REG1, REG2, 4);
 
+	/* store encrypted payload, icv and padding */
+	append_seq_fifo_store(desc, 0, FIFOST_TYPE_MESSAGE_DATA | LDST_VLF);
+
 	/* if payload length is zero, jump to zero-payload commands */
 	append_math_add(desc, NONE, ZERO, VARSEQINLEN, 4);
 	zero_payload_jump_cmd = append_jump(desc, JUMP_TEST_ALL |
@@ -562,9 +565,6 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	append_load_imm_u32(desc, genpad, LDST_CLASS_IND_CCB |
 			    LDST_SRCDST_WORD_INFO_FIFO_SZM | LDST_IMM |
 			    (2 & LDST_LEN_MASK));
-
-	/* store encrypted payload, icv and padding */
-	append_seq_fifo_store(desc, 0, FIFOST_TYPE_MESSAGE_DATA | LDST_VLF);
 
 	ctx->sh_desc_enc_dma = dma_map_single(jrdev, desc,
 					      desc_bytes(desc),
