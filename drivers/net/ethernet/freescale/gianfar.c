@@ -2352,10 +2352,11 @@ static int gfar_enet_open(struct net_device *dev)
 
 	return err;
 }
+
 void inline gfar_tx_vlan(struct sk_buff *skb, struct txfcb *fcb)
 {
 	fcb->flags |= TXFCB_VLN;
-	fcb->vlctl = vlan_tx_tag_get(skb);
+	fcb->vlctl = cpu_to_be16(vlan_tx_tag_get(skb));
 }
 
 /* This is called by the kernel when a frame is ready for transmission.
@@ -2533,7 +2534,7 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		 */
 		vlan_ctrl = gfar_read(&regs->dfvlan);
 		vlan_ctrl &= ~0xFFFF;
-		vlan_ctrl |= (fcb->vlctl & 0xFFFF);
+		vlan_ctrl |= (be16_to_cpu(fcb->vlctl) & 0xFFFF);
 		gfar_write(&regs->dfvlan, vlan_ctrl);
 #endif
 	}
@@ -3007,8 +3008,9 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	 * RXFCB_VLN is pseudo randomly set.
 	 */
 	if (dev->features & NETIF_F_HW_VLAN_CTAG_RX &&
-	    fcb->flags & RXFCB_VLN)
-		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), fcb->vlctl);
+	    be16_to_cpu(fcb->flags) & RXFCB_VLN)
+		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q),
+				       be16_to_cpu(fcb->vlctl));
 
 	/* Send the packet up the stack */
 	napi_gro_receive(napi, skb);

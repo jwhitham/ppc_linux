@@ -629,8 +629,8 @@ struct txfcb {
 	u8	ptp;    /* Flag to enable tx timestamping */
 	u8	l4os;	/* Level 4 Header Offset */
 	u8	l3os; 	/* Level 3 Header Offset */
-	u16	phcs;	/* Pseudo-header Checksum */
-	u16	vlctl;	/* VLAN control word */
+	__be16	phcs;	/* Pseudo-header Checksum */
+	__be16	vlctl;	/* VLAN control word */
 };
 
 struct rxbd8
@@ -646,11 +646,11 @@ struct rxbd8
 };
 
 struct rxfcb {
-	u16	flags;
+	__be16	flags;
 	u8	rq;	/* Receive Queue index */
 	u8	pro;	/* Layer 4 Protocol */
 	u16	reserved;
-	u16	vlctl;	/* VLAN control word */
+	__be16	vlctl;	/* VLAN control word */
 };
 
 struct gianfar_skb_cb {
@@ -1541,30 +1541,31 @@ static inline struct txfcb *gfar_add_fcb(struct sk_buff *skb)
 }
 
 static inline void gfar_tx_checksum(struct sk_buff *skb, struct txfcb *fcb,
-								int fcb_length)
+				    int fcb_length)
 {
 	/* If we're here, it's a IP packet with a TCP or UDP
-	* payload.  We set it to checksum, using a pseudo-header
-	* we provide
-	*/
+	 * payload.  We set it to checksum, using a pseudo-header
+	 * we provide
+	 */
 	u8 flags = TXFCB_DEFAULT;
 
 	/* Tell the controller what the protocol is
-	* And provide the already calculated phcs
-	*/
+	 * And provide the already calculated phcs
+	 */
 	if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
 		flags |= TXFCB_UDP;
-		fcb->phcs = udp_hdr(skb)->check;
+		fcb->phcs = (__force __be16)(udp_hdr(skb)->check);
 	} else
-		fcb->phcs = tcp_hdr(skb)->check;
+		fcb->phcs = (__force __be16)(tcp_hdr(skb)->check);
 
 	/* l3os is the distance between the start of the
-	* frame (skb->data) and the start of the IP hdr.
-	* l4os is the distance between the start of the
-	* l3 hdr and the l4 hdr
-	*/
-	fcb->l3os = (u16)(skb_network_offset(skb) - fcb_length);
+	 * frame (skb->data) and the start of the IP hdr.
+	 * l4os is the distance between the start of the
+	 * l3 hdr and the l4 hdr
+	 */
+	fcb->l3os = (u8)(skb_network_offset(skb) - fcb_length);
 	fcb->l4os = skb_network_header_len(skb);
+
 	fcb->flags = flags;
 }
 
@@ -1653,7 +1654,8 @@ static inline void gfar_rx_checksum(struct sk_buff *skb, struct rxfcb *fcb)
 	 * were verified, then we tell the kernel that no
 	 * checksumming is necessary.  Otherwise, it is [FIXME]
 	 */
-	if ((fcb->flags & RXFCB_CSUM_MASK) == (RXFCB_CIP | RXFCB_CTU))
+	if ((be16_to_cpu(fcb->flags) & RXFCB_CSUM_MASK) ==
+	    (RXFCB_CIP | RXFCB_CTU))
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 	else
 		skb_checksum_none_assert(skb);
