@@ -2178,7 +2178,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	int i, rq = 0;
 	int do_tstamp, do_csum, do_vlan;
 	u32 bufaddr;
-	unsigned long flags;
 	unsigned int nr_frags, nr_txbds, bytes_sent, fcb_len = 0;
 
 #ifdef CONFIG_AS_FASTPATH
@@ -2348,19 +2347,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	netdev_tx_sent_queue(txq, bytes_sent);
 
-	/* We can work in parallel with gfar_clean_tx_ring(), except
-	 * when modifying num_txbdfree. Note that we didn't grab the lock
-	 * when we were reading the num_txbdfree and checking for available
-	 * space, that's because outside of this function it can only grow,
-	 * and once we've got needed space, it cannot suddenly disappear.
-	 *
-	 * The lock also protects us from gfar_error(), which can modify
-	 * regs->tstat and thus retrigger the transfers, which is why we
-	 * also must grab the lock before setting ready bit for the first
-	 * to be transmitted BD.
-	 */
-	spin_lock_irqsave(&tx_queue->txlock, flags);
-
 	/* The powerpc-specific eieio() is used, as wmb() has too strong
 	 * semantics (it requires synchronization between cacheable and
 	 * uncacheable mappings, which eieio doesn't provide and which we
@@ -2384,8 +2370,16 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	tx_queue->cur_tx = next_txbd(txbdp, base, tx_queue->tx_ring_size);
 
+	/* We can work in parallel with gfar_clean_tx_ring(), except
+	 * when modifying num_txbdfree. Note that we didn't grab the lock
+	 * when we were reading the num_txbdfree and checking for available
+	 * space, that's because outside of this function it can only grow,
+	 * and once we've got needed space, it cannot suddenly disappear.
+	 */
+	spin_lock_bh(&tx_queue->txlock);
 	/* reduce TxBD free count */
 	tx_queue->num_txbdfree -= (nr_txbds);
+	spin_unlock_bh(&tx_queue->txlock);
 
 	/* If the next BD still needs to be cleaned up, then the bds
 	 * are full.  We need to tell the kernel to stop sending us stuff.
@@ -2398,9 +2392,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	/* Tell the DMA to go go go */
 	gfar_write(&regs->tstat, TSTAT_CLEAR_THALT >> tx_queue->qindex);
-
-	/* Unlock priv */
-	spin_unlock_irqrestore(&tx_queue->txlock, flags);
 
 	return NETDEV_TX_OK;
 }
@@ -2545,7 +2536,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 	skb_dirtytx = tx_queue->skb_dirtytx;
 
 	while ((skb = tx_queue->tx_skbuff[skb_dirtytx])) {
-		unsigned long flags;
 
 		frags = skb_shinfo(skb)->nr_frags;
 
@@ -2607,9 +2597,9 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 			      TX_RING_MOD_MASK(tx_ring_size);
 
 		howmany++;
-		spin_lock_irqsave(&tx_queue->txlock, flags);
+		spin_lock(&tx_queue->txlock);
 		tx_queue->num_txbdfree += nr_txbds;
-		spin_unlock_irqrestore(&tx_queue->txlock, flags);
+		spin_unlock(&tx_queue->txlock);
 	}
 
 	/* If we freed a buffer, we can restart transmission, if necessary */
@@ -3459,21 +3449,12 @@ static irqreturn_t gfar_error(int irq, void *grp_id)
 		if (events & IEVENT_CRL)
 			dev->stats.tx_aborted_errors++;
 		if (events & IEVENT_XFUN) {
-			unsigned long flags;
-
 			netif_dbg(priv, tx_err, dev,
 				  "TX FIFO underrun, packet dropped\n");
 			dev->stats.tx_dropped++;
 			atomic64_inc(&priv->extra_stats.tx_underrun);
 
-			local_irq_save(flags);
-			lock_tx_qs(priv);
-
-			/* Reactivate the Tx Queues */
-			gfar_write(&regs->tstat, gfargrp->tstat);
-
-			unlock_tx_qs(priv);
-			local_irq_restore(flags);
+			schedule_work(&priv->reset_task);
 		}
 		netif_dbg(priv, tx_err, dev, "Transmit Error\n");
 	}
