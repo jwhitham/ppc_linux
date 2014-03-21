@@ -60,32 +60,6 @@
 			#size-cells = <1>;
 			compatible = "fsl,ifc-nand";
 			reg = <0x2 0x0 0x10000>;
-
-			partition@0 {
-				/* This location must not be altered  */
-				/* 1MB for u-boot Bootloader Image */
-				reg = <0x0 0x00100000>;
-				label = "NAND U-Boot Image";
-				read-only;
-			};
-
-			partition@100000 {
-				/* 1MB for DTB Image */
-				reg = <0x00100000 0x00100000>;
-				label = "NAND DTB Image";
-			};
-
-			partition@200000 {
-				/* 10MB for Linux Kernel Image */
-				reg = <0x00200000 0x00A00000>;
-				label = "NAND Linux Kernel Image";
-			};
-
-			partition@C00000 {
-				/* 500MB for Root file System Image */
-				reg = <0x00c00000 0x1F400000>;
-				label = "NAND RFS Image";
-			};
 		};
 
 		boardctrl: board-control@3,0 {
