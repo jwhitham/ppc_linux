@@ -4039,8 +4039,8 @@ int qman_ceetm_channel_get_group(struct qm_ceetm_channel *channel, int *group_b,
 		return -EINVAL;
 	}
 	*group_b = (query_result.gpc >> 6) & 0x1;
-	*prio_a = query_result.gpc & 0x3;
-	*prio_b = (query_result.gpc >> 3) & 0x3;
+	*prio_a = query_result.gpc & 0x7;
+	*prio_b = (query_result.gpc >> 3) & 0x7;
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_channel_get_group);
