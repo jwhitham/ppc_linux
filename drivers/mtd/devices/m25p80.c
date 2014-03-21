@@ -30,6 +30,7 @@
 #include <linux/mtd/cfi.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/of_address.h>
 #include <linux/of_platform.h>
 
 #include <linux/spi/spi.h>
@@ -934,9 +935,11 @@ static int m25p_probe(struct spi_device *spi)
 	struct flash_platform_data	*data;
 	struct m25p			*flash;
 	struct flash_info		*info;
-	unsigned			i;
+	unsigned			i, ret;
 	struct mtd_part_parser_data	ppdata;
 	struct device_node *np = spi->dev.of_node;
+	struct resource res;
+	struct device_node *mnp = spi->master->dev.of_node;
 
 	/* Platform data helps sort out which chip type we have, as
 	 * well as how this board partitions it.  If we don't have
@@ -1009,8 +1012,17 @@ static int m25p_probe(struct spi_device *spi)
 
 	if (data && data->name)
 		flash->mtd.name = data->name;
-	else
-		flash->mtd.name = dev_name(&spi->dev);
+	else {
+		ret = of_address_to_resource(mnp, 0, &res);
+		if (ret) {
+			dev_err(&spi->dev, "failed to get spi master resource\n");
+			return ret;
+		}
+		flash->mtd.name = kasprintf(GFP_KERNEL, "spi%x.%d",
+				(unsigned)res.start, spi->chip_select);
+		if (!flash->mtd.name)
+			return -ENOMEM;
+	}
 
 	flash->mtd.type = MTD_NORFLASH;
 	flash->mtd.writesize = 1;
