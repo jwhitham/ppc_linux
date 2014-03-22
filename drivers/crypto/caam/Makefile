@@ -18,4 +18,7 @@ ifeq ($(CONFIG_FSL_QMAN), y)
         caam-objs += qi.o
 endif
 
+obj-$(CONFIG_FSL_CAAM_PKC_SUPPORT) += caam_pkc.o
+caam_pkc-objs := caampkc.o pkc_desc.o
+
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI) += caamalg_qi.o

@@ -409,4 +409,10 @@ static inline int crypto_memneq(const void *a, const void *b, size_t size)
 	return __crypto_memneq(a, b, size) != 0UL ? 1 : 0;
 }
 
+/* RSA Request Completion handler */
+static inline void pkc_request_complete(struct pkc_request *req,
+					int err)
+{
+	req->base.complete(&req->base, err);
+}
 #endif	/* _CRYPTO_ALGAPI_H */
