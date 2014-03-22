@@ -176,9 +176,11 @@ struct rsa_edesc {
  */
 struct dsa_edesc_s {
 	enum pkc_req_type req_type;
+	enum curve_t curve_type;
 	uint32_t l_len;
 	uint32_t n_len;
 	dma_addr_t key_dma;
+	dma_addr_t s_dma;
 	dma_addr_t f_dma;
 	dma_addr_t q_dma;
 	dma_addr_t r_dma;
@@ -191,11 +193,30 @@ struct dsa_edesc_s {
 	u32 hw_desc[];
 };
 
+/*
+ * dh_edesc - s/w-extended for dh and ecdh descriptors
+ * @hw_desc: the h/w job descriptor
+ */
+struct dh_edesc_s {
+	enum pkc_req_type req_type;
+	enum curve_t curve_type;
+	uint32_t l_len;
+	uint32_t n_len;
+	dma_addr_t q_dma;
+	dma_addr_t ab_dma;
+	dma_addr_t w_dma;
+	dma_addr_t s_dma;
+	dma_addr_t z_dma;
+	u32 hw_desc[];
+};
+
 void *caam_rsa_pub_desc(struct rsa_edesc *);
 void *caam_rsa_priv_f1_desc(struct rsa_edesc *);
 void *caam_rsa_priv_f2_desc(struct rsa_edesc *);
 void *caam_rsa_priv_f3_desc(struct rsa_edesc *);
 void *caam_dsa_sign_desc(struct dsa_edesc_s *);
 void *caam_dsa_verify_desc(struct dsa_edesc_s *);
+void *caam_keygen_desc(struct dsa_edesc_s *);
+void *caam_dh_key_desc(struct dh_edesc_s *);
 
 #endif
