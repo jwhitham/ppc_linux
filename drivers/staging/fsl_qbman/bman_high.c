@@ -326,7 +326,6 @@ struct bman_portal *bman_create_affine_slave(struct bman_portal *redirect,
 	BUG_ON(!redirect->config->public_cfg.is_shared);
 	p->irq_sources = 0;
 	p->sharing_redirect = redirect;
-	put_affine_portal();
 	return p;
 #else
 	BUG();
