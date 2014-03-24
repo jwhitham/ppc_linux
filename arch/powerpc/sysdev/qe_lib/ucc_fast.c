@@ -328,7 +328,6 @@ int ucc_fast_init(struct ucc_fast_info * uf_info, struct ucc_fast_private ** ucc
 			ucc_fast_free(uccf);
 			return -EINVAL;
 		}
-#ifdef CONFIG_FSL_UCC_TDM
 	} else {
 		/* tdm Rx clock routing */
 		if ((uf_info->rx_clock != QE_CLK_NONE) &&
@@ -365,7 +364,6 @@ int ucc_fast_init(struct ucc_fast_info * uf_info, struct ucc_fast_private ** ucc
 			ucc_fast_free(uccf);
 			return -EINVAL;
 		}
-#endif
 	}
 
 	/* Set interrupt mask register at UCC level. */

@@ -4,7 +4,8 @@ Required properties:
 - device_type : should be "network", "hldc", "uart", "transparent"
   "bisync", "atm", "tdm" or "serial".
 - compatible : Describes the specific device attached to the UCC.
-  Examples include "ucc_geth", "fsl_atm", "ucc_uart" and "fsl,ucc-tdm".
+  Examples include "ucc_geth", "fsl_atm", "ucc_uart","fsl,ucc-tdm",
+  and "fsl,ucc_hdlc".
 - cell-index : the ucc number(1-8), corresponding to UCCx in UM.
 - reg : Offset and length of the register set for the device
 - interrupts : <a b> where a is the interrupt number and b is a

@@ -34,6 +34,7 @@
 #define T_W	0x20000000	/* wrap bit */
 #define T_I	0x10000000	/* interrupt on completion */
 #define T_L	0x08000000	/* last */
+#define T_TC	0x04000000	/* crc */
 #define T_CM	0x02000000	/* CM */
 
 /* Rx Data buffer must be 4 bytes aligned in most cases */
