@@ -484,6 +484,41 @@ static struct regmap_config fsl_sai_regmap_config = {
 	.writeable_reg = fsl_sai_writeable_reg,
 };
 
+static bool fsl_sai_filter(struct dma_chan *chan, void *param)
+{
+	struct snd_dmaengine_dai_dma_data *dma_data = param;
+
+	chan->private = dma_data->filter_data;
+
+	return true;
+}
+
+static const struct snd_pcm_hardware fsl_sai_pcm_hardware = {
+	.info = SNDRV_PCM_INFO_INTERLEAVED |
+		SNDRV_PCM_INFO_BLOCK_TRANSFER |
+		SNDRV_PCM_INFO_MMAP |
+		SNDRV_PCM_INFO_MMAP_VALID |
+		SNDRV_PCM_INFO_PAUSE |
+		SNDRV_PCM_INFO_RESUME,
+	.formats = SNDRV_PCM_FMTBIT_S16_LE,
+	.rate_min = 8000,
+	.channels_min = 2,
+	.channels_max = 2,
+	.buffer_bytes_max = FSL_SAI_DMABUF_SIZE,
+	.period_bytes_min = 128,
+	.period_bytes_max = 65535,
+	.periods_min = 2,
+	.periods_max = 255,
+	.fifo_size = 0,
+};
+
+static const struct snd_dmaengine_pcm_config fsl_sai_dmaengine_pcm_config = {
+	.pcm_hardware = &fsl_sai_pcm_hardware,
+	.prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config,
+	.compat_filter_fn = fsl_sai_filter,
+	.prealloc_buffer_size = FSL_SAI_DMABUF_SIZE,
+};
+
 static int fsl_sai_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -526,7 +561,8 @@ static int fsl_sai_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = snd_dmaengine_pcm_register(&pdev->dev, NULL,
+	ret = snd_dmaengine_pcm_register(&pdev->dev,
+			&fsl_sai_dmaengine_pcm_config,
 			SND_DMAENGINE_PCM_FLAG_NO_RESIDUE);
 	if (ret)
 		snd_soc_unregister_component(&pdev->dev);
@@ -550,7 +586,6 @@ static const struct of_device_id fsl_sai_ids[] = {
 static struct platform_driver fsl_sai_driver = {
 	.probe = fsl_sai_probe,
 	.remove = fsl_sai_remove,
-
 	.driver = {
 		.name = "fsl-sai",
 		.owner = THIS_MODULE,
