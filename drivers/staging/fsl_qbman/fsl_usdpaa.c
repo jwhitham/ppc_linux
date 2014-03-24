@@ -1031,6 +1031,8 @@ static long ioctl_dma_unmap(struct ctx *ctx, void __user *arg)
 	}
 	map = NULL;
 map_match:
+	list_del(&map->list);
+	compress_frags();
 	spin_unlock(&mem_lock);
 	if (map) {
 		unsigned long base = vma->vm_start;
