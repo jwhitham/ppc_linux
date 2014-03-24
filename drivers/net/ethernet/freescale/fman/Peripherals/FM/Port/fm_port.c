@@ -405,7 +405,7 @@ static t_Error VerifySizeOfFifo(t_FmPort *p_FmPort)
 
     /* Verify the size  */
     if (p_FmPort->fifoBufs.num < minFifoSizeRequired)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("FIFO size should be enlarged to %d bytes", minFifoSizeRequired));
+        DBG(INFO, ("FIFO size should be enlarged to %d bytes", minFifoSizeRequired));
     else if (p_FmPort->fifoBufs.num < optFifoSizeForB2B)
         DBG(INFO, ("For back-to-back frames processing, FIFO size may need to be enlarged to %d bytes", optFifoSizeForB2B));
 
