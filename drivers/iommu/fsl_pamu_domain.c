@@ -688,21 +688,15 @@ static int handle_attach_device(struct fsl_dma_domain *dma_domain,
 	return ret;
 }
 
-static int fsl_pamu_attach_device(struct iommu_domain *domain,
-				  struct device *dev)
+static struct device *get_dma_device(struct device *dev)
 {
-	struct fsl_dma_domain *dma_domain = domain->priv;
-	const u32 *liodn;
-	u32 liodn_cnt;
-	int len, ret = 0;
-	struct pci_dev *pdev = NULL;
-	struct pci_controller *pci_ctl;
+	struct device *dma_dev = dev;
+#ifdef CONFIG_PCI
 
-	/*
-	 * Use LIODN of the PCI controller while attaching a
-	 * PCI device.
-	 */
 	if (dev->bus == &pci_bus_type) {
+		struct pci_controller *pci_ctl;
+		struct pci_dev *pdev;
+
 		pdev = to_pci_dev(dev);
 		pci_ctl = pci_bus_to_host(pdev->bus);
 		/*
@@ -710,17 +704,31 @@ static int fsl_pamu_attach_device(struct iommu_domain *domain,
 		 * so we can get the LIODN programmed by
 		 * u-boot.
 		 */
-		dev = pci_ctl->parent;
+		dma_dev = pci_ctl->parent;
 	}
+#endif
+	return dma_dev;
+}
 
-	liodn = of_get_property(dev->of_node, "fsl,liodn", &len);
+static int fsl_pamu_attach_device(struct iommu_domain *domain,
+				  struct device *dev)
+{
+	struct fsl_dma_domain *dma_domain = domain->priv;
+	struct device *dma_dev;
+	const u32 *liodn;
+	u32 liodn_cnt;
+	int len, ret = 0;
+
+	dma_dev = get_dma_device(dev);
+
+	liodn = of_get_property(dma_dev->of_node, "fsl,liodn", &len);
 	if (liodn) {
 		liodn_cnt = len / sizeof(u32);
 		ret = handle_attach_device(dma_domain, dev,
 					 liodn, liodn_cnt);
 	} else {
 		pr_debug("missing fsl,liodn property at %s\n",
-		          dev->of_node->full_name);
+			dma_dev->of_node->full_name);
 			ret = -EINVAL;
 	}
 
@@ -731,32 +739,18 @@ static void fsl_pamu_detach_device(struct iommu_domain *domain,
 				      struct device *dev)
 {
 	struct fsl_dma_domain *dma_domain = domain->priv;
+	struct device *dma_dev;
 	const u32 *prop;
 	int len;
-	struct pci_dev *pdev = NULL;
-	struct pci_controller *pci_ctl;
 
-	/*
-	 * Use LIODN of the PCI controller while detaching a
-	 * PCI device.
-	 */
-	if (dev->bus == &pci_bus_type) {
-		pdev = to_pci_dev(dev);
-		pci_ctl = pci_bus_to_host(pdev->bus);
-		/*
-		 * make dev point to pci controller device
-		 * so we can get the LIODN programmed by
-		 * u-boot.
-		 */
-		dev = pci_ctl->parent;
-	}
+	dma_dev = get_dma_device(dev);
 
-	prop = of_get_property(dev->of_node, "fsl,liodn", &len);
+	prop = of_get_property(dma_dev->of_node, "fsl,liodn", &len);
 	if (prop)
 		detach_device(dev, dma_domain);
 	else
 		pr_debug("missing fsl,liodn property at %s\n",
-		          dev->of_node->full_name);
+			dma_dev->of_node->full_name);
 }
 
 static  int configure_domain_geometry(struct iommu_domain *domain, void *data)
@@ -1014,6 +1008,7 @@ static struct iommu_group *get_device_iommu_group(struct device *dev)
 	return group;
 }
 
+#ifdef CONFIG_PCI
 static  bool check_pci_ctl_endpt_part(struct pci_controller *pci_ctl)
 {
 	u32 version;
@@ -1054,13 +1049,18 @@ static struct iommu_group *get_shared_pci_device_group(struct pci_dev *pdev)
 	return NULL;
 }
 
-static struct iommu_group *get_pci_device_group(struct pci_dev *pdev)
+static struct iommu_group *get_pci_device_group(struct device *dev)
 {
 	struct pci_controller *pci_ctl;
 	bool pci_endpt_partioning;
 	struct iommu_group *group = NULL;
-	struct pci_dev *bridge, *dma_pdev = NULL;
+	struct pci_dev *bridge, *pdev;
+	struct pci_dev *dma_pdev = NULL;
 
+	pdev = to_pci_dev(dev);
+	/* Don't create device groups for virtual PCI bridges */
+	if (pdev->subordinate)
+		return NULL;
 	pci_ctl = pci_bus_to_host(pdev->bus);
 	pci_endpt_partioning = check_pci_ctl_endpt_part(pci_ctl);
 	/* We can partition PCIe devices so assign device group to the device */
@@ -1153,11 +1153,11 @@ root_bus:
 
 	return group;
 }
+#endif
 
 static int fsl_pamu_add_device(struct device *dev)
 {
 	struct iommu_group *group = NULL;
-	struct pci_dev *pdev;
 	const u32 *prop;
 	int ret, len;
 
@@ -1165,19 +1165,15 @@ static int fsl_pamu_add_device(struct device *dev)
 	 * For platform devices we allocate a separate group for
 	 * each of the devices.
 	 */
-	if (dev->bus == &pci_bus_type) {
-		pdev = to_pci_dev(dev);
-		/* Don't create device groups for virtual PCI bridges */
-		if (pdev->subordinate)
-			return 0;
-
-		group = get_pci_device_group(pdev);
-
-	} else {
+	if (dev->bus == &platform_bus_type) {
 		prop = of_get_property(dev->of_node, "fsl,liodn", &len);
 		if (prop)
 			group = get_device_iommu_group(dev);
 	}
+#ifdef CONFIG_PCI
+	else
+		group = get_pci_device_group(dev);
+#endif
 
 	if (!group || IS_ERR(group))
 		return PTR_ERR(group);
@@ -1286,7 +1282,9 @@ int pamu_domain_init()
 		return ret;
 
 	bus_set_iommu(&platform_bus_type, &fsl_pamu_ops);
+#ifdef CONFIG_PCI
 	bus_set_iommu(&pci_bus_type, &fsl_pamu_ops);
+#endif
 
 	return ret;
 }
