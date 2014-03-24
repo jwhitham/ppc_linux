@@ -22,6 +22,10 @@ obj-$(CONFIG_SND_SOC_FSL_SPDIF) += snd-soc-fsl-spdif.o
 obj-$(CONFIG_SND_SOC_FSL_UTILS) += snd-soc-fsl-utils.o
 obj-$(CONFIG_SND_SOC_POWERPC_DMA) += snd-soc-fsl-dma.o
 
+# VF610 Platform Support
+snd-soc-vf610-sgtl5000-objs := vf610-sgtl5000.o
+obj-$(CONFIG_SND_SOC_VF610_SGTL5000) += snd-soc-vf610-sgtl5000.o
+
 # MPC5200 Platform Support
 obj-$(CONFIG_SND_MPC52xx_DMA) += mpc5200_dma.o
 obj-$(CONFIG_SND_SOC_MPC5200_I2S) += mpc5200_psc_i2s.o
