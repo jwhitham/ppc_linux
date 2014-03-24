@@ -104,7 +104,7 @@ static void __init mpc85xx_rdb_setup_arch(void)
 
 #ifdef CONFIG_QUICC_ENGINE
 	mpc85xx_qe_init();
-
+	mpc85xx_qe_par_io_init();
 	np = of_find_node_by_name(NULL, "par_io");
 	if (np) {
 #ifdef CONFIG_SPI_FSL_SPI
