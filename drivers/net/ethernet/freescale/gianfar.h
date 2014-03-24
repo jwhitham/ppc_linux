@@ -1439,6 +1439,22 @@ static inline int gfar_is_rx_dma_stopped(struct gfar_private *priv)
 	return gfar_read(&regs->ievent) & IEVENT_GRSC;
 }
 
+static inline void gfar_wmb(void)
+{
+#if defined(CONFIG_PPC)
+	/* The powerpc-specific eieio() is used, as wmb() has too strong
+	 * semantics (it requires synchronization between cacheable and
+	 * uncacheable mappings, which eieio() doesn't provide and which we
+	 * don't need), thus requiring a more expensive sync instruction.  At
+	 * some point, the set of architecture-independent barrier functions
+	 * should be expanded to include weaker barriers.
+	 */
+	eieio();
+#else
+	wmb(); /* order write acesses for BD (or FCB) fields */
+#endif
+}
+
 irqreturn_t gfar_receive(int irq, void *dev_id);
 int startup_gfar(struct net_device *dev);
 void stop_gfar(struct net_device *dev);
@@ -1570,7 +1586,7 @@ static inline void gfar_init_rxbdp(struct gfar_priv_rx_q *rx_queue,
 	if (bdp == rx_queue->rx_bd_base + rx_queue->rx_ring_size - 1)
 		lstatus |= BD_LFLAG(RXBD_WRAP);
 
-	eieio();
+	gfar_wmb();
 
 	bdp->lstatus = lstatus;
 }

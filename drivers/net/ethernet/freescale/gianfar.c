@@ -2543,18 +2543,11 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		lstatus |= BD_LFLAG(TXBD_CRC | TXBD_READY) | skb_headlen(skb);
 	}
 
-	/* The powerpc-specific eieio() is used, as wmb() has too strong
-	 * semantics (it requires synchronization between cacheable and
-	 * uncacheable mappings, which eieio doesn't provide and which we
-	 * don't need), thus requiring a more expensive sync instruction.  At
-	 * some point, the set of architecture-independent barrier functions
-	 * should be expanded to include weaker barriers.
-	 */
-	eieio();
+	gfar_wmb();
 
 	txbdp_start->lstatus = lstatus;
 
-	eieio(); /* force lstatus write before tx_skbuff */
+	gfar_wmb(); /* force lstatus write before tx_skbuff */
 
 	tx_queue->tx_skbuff[tx_queue->skb_curtx] = skb;
 
