@@ -217,6 +217,24 @@ static void MemacErrException(t_Handle h_Memac)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_1TX_ECC_ER);
     if (event & MEMAC_IEVNT_RX_ECC_ER)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_10G_RX_ECC_ER);
+}
+
+static void MemacException(t_Handle h_Memac)
+{
+    t_Memac     *p_Memac = (t_Memac *)h_Memac;
+    uint32_t    event, imask;
+
+    event = fman_memac_get_event(p_Memac->p_MemMap, 0xffffffff);
+    imask = fman_memac_get_interrupt_mask(p_Memac->p_MemMap);
+
+    /* Imask include both error and notification/event bits.
+       Leaving only error bits enabled by imask.
+       The imask error bits are shifted by 16 bits offset from
+       their corresponding location in the ievent - hence the >> 16 */
+    event &= ((imask & MEMAC_ALL_ERRS_IMASK) >> 16);
+
+    fman_memac_ack_event(p_Memac->p_MemMap, event);
+
     if (event & MEMAC_IEVNT_MGI)
         p_Memac->f_Exception(p_Memac->h_App, e_FM_MAC_EX_MAGIC_PACKET_INDICATION);
 }
@@ -954,6 +972,13 @@ static t_Error MemacInit(t_Handle h_Memac)
                    p_Memac->macId,
                    e_FM_INTR_TYPE_ERR,
                    MemacErrException,
+                   p_Memac);
+
+    FmRegisterIntr(p_Memac->fmMacControllerDriver.h_Fm,
+                   (portType == e_FM_MAC_10G) ? e_FM_MOD_10G_MAC : e_FM_MOD_1G_MAC,
+                   p_Memac->macId,
+                   e_FM_INTR_TYPE_NORMAL,
+                   MemacException,
                    p_Memac);
 
     XX_Free(p_MemacDriverParam);
