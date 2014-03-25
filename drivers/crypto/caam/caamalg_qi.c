@@ -585,7 +585,7 @@ static inline void aead_done(struct caam_drv_req *drv_req, u32 status)
  * allocate and map the aead extended descriptor
  */
 static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
-					   bool *all_contig_ptr)
+					   bool *all_contig_ptr, bool encrypt)
 {
 	struct crypto_aead *aead = crypto_aead_reqtfm(req);
 	struct caam_ctx *ctx = crypto_aead_ctx(aead);
@@ -599,16 +599,26 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	bool all_contig = true;
 	bool assoc_chained = false, src_chained = false, dst_chained = false;
 	int ivsize = crypto_aead_ivsize(aead);
+	unsigned int authsize = ctx->authsize;
 
 	int qm_sg_index, qm_sg_ents = 0, qm_sg_bytes;
 	struct qm_sg_entry *sg_table, *fd_sgt;
 	struct caam_drv_req *drv_req;
 
 	assoc_nents = sg_count(req->assoc, req->assoclen, &assoc_chained);
-	src_nents = sg_count(req->src, req->cryptlen, &src_chained);
 
-	if (unlikely(req->dst != req->src))
-		dst_nents = sg_count(req->dst, req->cryptlen, &dst_chained);
+	if (unlikely(req->dst != req->src)) {
+		src_nents = sg_count(req->src, req->cryptlen, &src_chained);
+		dst_nents = sg_count(req->dst,
+				     req->cryptlen +
+					(encrypt ? authsize : (-authsize)),
+				     &dst_chained);
+	} else {
+		src_nents = sg_count(req->src,
+				     req->cryptlen +
+					(encrypt ? authsize : 0),
+				     &src_chained);
+	}
 
 	sgc = dma_map_sg_chained(qidev, req->assoc, assoc_nents ? : 1,
 				 DMA_BIDIRECTIONAL, assoc_chained);
@@ -777,10 +787,8 @@ static int aead_encrypt(struct aead_request *req)
 	if (unlikely(caam_drv_ctx_busy(drv_ctx)))
 		return -EAGAIN;
 
-	req->cryptlen += ctx->authsize;
-
 	/* allocate extended descriptor */
-	edesc = aead_edesc_alloc(req, &all_contig);
+	edesc = aead_edesc_alloc(req, &all_contig, true);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -788,9 +796,8 @@ static int aead_encrypt(struct aead_request *req)
 	drv_req = &edesc->drv_req;
 	drv_req->app_ctx = req;
 	drv_req->cbk = aead_done;
-	drv_req->fd_sgt[0].length = req->cryptlen;
-	drv_req->fd_sgt[1].length = req->assoclen + ivsize +
-					req->cryptlen - ctx->authsize;
+	drv_req->fd_sgt[0].length = req->cryptlen + ctx->authsize;
+	drv_req->fd_sgt[1].length = req->assoclen + ivsize + req->cryptlen;
 
 	drv_req->drv_ctx = drv_ctx;
 	ret = caam_qi_enqueue(qidev, drv_req);
@@ -824,7 +831,7 @@ static int aead_decrypt(struct aead_request *req)
 		return -EAGAIN;
 
 	/* allocate extended descriptor */
-	edesc = aead_edesc_alloc(req, &all_contig);
+	edesc = aead_edesc_alloc(req, &all_contig, false);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
 
@@ -875,7 +882,8 @@ static struct aead_edesc *aead_giv_edesc_alloc(struct aead_givcrypt_request
 	src_nents = sg_count(req->src, req->cryptlen, &src_chained);
 
 	if (unlikely(req->dst != req->src))
-		dst_nents = sg_count(req->dst, req->cryptlen, &dst_chained);
+		dst_nents = sg_count(req->dst, req->cryptlen + ctx->authsize,
+				     &dst_chained);
 
 	sgc = dma_map_sg_chained(qidev, req->assoc, assoc_nents ? : 1,
 				 DMA_BIDIRECTIONAL, assoc_chained);
@@ -1013,8 +1021,6 @@ static int aead_givencrypt(struct aead_givcrypt_request *areq)
 	if (unlikely(caam_drv_ctx_busy(drv_ctx)))
 		return -EAGAIN;
 
-	req->cryptlen += ctx->authsize;
-
 	/* allocate extended descriptor */
 	edesc = aead_giv_edesc_alloc(areq, &contig);
 	if (IS_ERR(edesc))
@@ -1023,9 +1029,8 @@ static int aead_givencrypt(struct aead_givcrypt_request *areq)
 	drv_req = &edesc->drv_req;
 	drv_req->app_ctx = req;
 	drv_req->cbk = aead_done;
-	drv_req->fd_sgt[0].length = ivsize + req->cryptlen;
-	drv_req->fd_sgt[1].length = req->assoclen + ivsize +
-			  req->cryptlen - ctx->authsize;
+	drv_req->fd_sgt[0].length = ivsize + req->cryptlen + ctx->authsize;
+	drv_req->fd_sgt[1].length = req->assoclen + ivsize + req->cryptlen;
 
 	drv_req->drv_ctx = drv_ctx;
 	ret = caam_qi_enqueue(qidev, drv_req);
