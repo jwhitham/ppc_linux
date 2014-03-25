@@ -207,6 +207,11 @@ struct ioc_dpa_ipsec_sa_get_stats {
 	struct dpa_ipsec_sa_stats sa_stats;
 };
 
+struct ioc_dpa_ipsec_instance_stats {
+	int instance_id;
+	struct dpa_ipsec_stats stats;
+};
+
 struct ioc_dpa_ipsec_sa_modify_prm {
 	int sa_id;		/* security association id */
 	struct dpa_ipsec_sa_modify_prm modify_prm;
@@ -307,7 +312,7 @@ struct ioc_compat_dpa_ipsec_sa_modify_prm {
 #endif
 
 #define DPA_IPSEC_IOC_GET_STATS \
-	_IOR(DPA_IPSEC_IOC_MAGIC, 13, struct dpa_ipsec_stats)
+	_IOWR(DPA_IPSEC_IOC_MAGIC, 13, struct ioc_dpa_ipsec_instance_stats)
 
 #define DPA_IPSEC_IOC_SA_REQUEST_SEQ_NUMBER \
 	_IOW(DPA_IPSEC_IOC_MAGIC, 14, int)
