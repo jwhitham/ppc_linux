@@ -148,6 +148,17 @@ config UIO_FSL_SEC
 	depends on CRYPTO_DEV_FSL_CAAM=n
 	default n
 
+config UIO_FSL_SRAM
+	bool "Freescale L2CACHE for SRAM support"
+	depends on FSL_85XX_CACHE_SRAM=n
+	default n
+	help
+	  UIO driver for the Freescale SRAM space. This driver will obtain
+	  the SRAM nodes from DTB structure, and expose the SRAM space to
+	  user space.
+
+	  If you don't know what to do here, say N.
+
 config UIO_MF624
 	tristate "Humusoft MF624 DAQ PCI card driver"
 	depends on PCI
