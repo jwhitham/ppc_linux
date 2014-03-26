@@ -246,15 +246,18 @@ config FSL_ERRATUM_A_006184_PERIOD
 config PPC_DISABLE_THREADS
 	bool "Avoid the use of hardware threads"
 	help
-	  Define this if running e6500 rev1 to avoid bugs
-	  relating to hardware threads.
+	  Define this to disable hardware threads, so that only one
+	  thread per core will be used.  Do not rely on runtime
+	  mechanisms to disable threads (e.g. kernel command line
+	  options or device tree modifciations), as those will cause the
+	  thread will be spinning rather than fully disabled in hardware.
 
-config FSL_ERRATUM_A_006198
-	bool "Work around e6500 rev1 erratum A-006198"
-	depends on PPC_E500MC && !PPC_DISABLE_THREADS
-	help
-	  Define this if running e6500 rev1, to avoid a source
-	  of hangs due to CPU erratum A-006198.
+	  This option is mainly useful for testing, though some workloads
+	  may benefit from not using hardware threads.  This option will
+	  have no effect on hardware that doesn't support multiple
+	  threads per core.
+
+	  If in doubt, say N.
 
 config PPC_FPU
 	bool
