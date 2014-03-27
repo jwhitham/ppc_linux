@@ -540,6 +540,20 @@ static t_KnownFieldsMasks GetKnownProtMask(t_FmPcd *p_FmPcd, e_NetHeaderType hdr
                         return (KG_SCH_KN_IPV6FL2 | KG_SCH_KN_IPTOS_TC2);
                     REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal IPv6 index"));
                     return 0;
+                case (NET_HEADER_FIELD_IPv6_VER | NET_HEADER_FIELD_IPv6_TC):
+                    if ((index == e_FM_PCD_HDR_INDEX_NONE) || (index == e_FM_PCD_HDR_INDEX_1))
+                        return KG_SCH_KN_IPTOS_TC1;
+                    if ((index == e_FM_PCD_HDR_INDEX_2) || (index == e_FM_PCD_HDR_INDEX_LAST))
+                        return KG_SCH_KN_IPTOS_TC2;
+                    REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal IPv6 index"));
+                    return 0;
+                case (NET_HEADER_FIELD_IPv6_FL):
+                    if ((index == e_FM_PCD_HDR_INDEX_NONE) || (index == e_FM_PCD_HDR_INDEX_1))
+                        return KG_SCH_KN_IPV6FL1;
+                    if ((index == e_FM_PCD_HDR_INDEX_2) || (index == e_FM_PCD_HDR_INDEX_LAST))
+                        return KG_SCH_KN_IPV6FL2;
+                    REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal IPv6 index"));
+                    return 0;
                 default:
                     REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
                     return 0;
