@@ -67,6 +67,7 @@
 }
 
 #define DPA_SGT_MAX_ENTRIES 16 /* maximum number of entries in SG Table */
+#define DPA_BUFF_RELEASE_MAX 8 /* maximum number of buffers released at once */
 
 /* return codes for the dpaa-eth hooks */
 enum dpaa_eth_hook_result {
@@ -200,8 +201,7 @@ void dpaa_eth_init_ports(struct mac_device *mac_dev,
 		struct fm_port_fqs *port_fqs,
 		struct dpa_buffer_layout_s *buf_layout,
 		struct device *dev);
-void dpa_release_sgt(struct qm_sg_entry *sgt,
-		struct bm_buffer *bmb);
+void dpa_release_sgt(struct qm_sg_entry *sgt);
 void __attribute__((nonnull))
 dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd);
 void count_ern(struct dpa_percpu_priv_s *percpu_priv,

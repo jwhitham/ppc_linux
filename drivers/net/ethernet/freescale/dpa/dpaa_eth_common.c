@@ -1479,9 +1479,10 @@ void dpaa_eth_init_ports(struct mac_device *mac_dev,
 	fm_port_pcd_bind(rxport, &rx_port_pcd_param);
 }
 
-void dpa_release_sgt(struct qm_sg_entry *sgt, struct bm_buffer *bmb)
+void dpa_release_sgt(struct qm_sg_entry *sgt)
 {
 	struct dpa_bp *dpa_bp;
+	struct bm_buffer bmb[DPA_BUFF_RELEASE_MAX];
 	uint8_t i = 0, j;
 
 	do {
@@ -1510,7 +1511,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 {
 	struct qm_sg_entry		*sgt;
 	struct dpa_bp			*_dpa_bp;
-	struct bm_buffer		 _bmb, bmb[8];
+	struct bm_buffer		 _bmb;
 
 	_bmb.hi	= fd->addr_hi;
 	_bmb.lo	= fd->addr_lo;
@@ -1520,7 +1521,7 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 
 	if (fd->format == qm_fd_sg) {
 		sgt = (phys_to_virt(bm_buf_addr(&_bmb)) + dpa_fd_offset(fd));
-		dpa_release_sgt(sgt, bmb);
+		dpa_release_sgt(sgt);
 	}
 
 	while (bman_release(_dpa_bp->pool, &_bmb, 1, 0))
