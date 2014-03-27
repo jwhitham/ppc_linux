@@ -596,7 +596,10 @@ static void UpdateRequiredActionFlag(t_Handle h_FmPcd, uint16_t absoluteProfileI
     if (set)
         p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredActionFlag = TRUE;
     else
+    {
+        p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredAction = 0;
         p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId].requiredActionFlag = FALSE;
+    }
 }
 
 /*********************************************/
@@ -1637,6 +1640,7 @@ t_Handle FM_PCD_PlcrProfileSet(t_Handle     h_FmPcd,
 
          /* initialize profile struct */
          p_Profile = &p_FmPcd->p_FmPcdPlcr->profiles[absoluteProfileId];
+
          p_Profile->h_FmPcd = p_FmPcd;
          p_Profile->absoluteProfileId = absoluteProfileId;
 
@@ -1761,10 +1765,13 @@ t_Error FM_PCD_PlcrProfileDelete(t_Handle h_Profile)
     WritePar(p_FmPcd, tmpReg32);
     PlcrHwUnlock(p_FmPcd->p_FmPcdPlcr, intFlags);
 
+
     if (p_Profile->p_Lock)
         /* release allocated Profile lock */
         FmPcdReleaseLock(p_FmPcd, p_Profile->p_Lock);
 
+    /* we do not memset profile as all its fields are being re-initialized at "set",
+     * plus its allocation information is still valid. */
     return E_OK;
 }
 

@@ -769,7 +769,10 @@ static void UpdateRequiredActionFlag(t_FmPcdKgScheme *p_Scheme, bool set)
     if (set)
         p_Scheme->requiredActionFlag = TRUE;
     else
+    {
+        p_Scheme->requiredAction = 0;
         p_Scheme->requiredActionFlag = FALSE;
+    }
 }
 
 static t_Error KgWriteSp(t_FmPcd *p_FmPcd, uint8_t hardwarePortId, uint32_t spReg, bool add)
@@ -2943,6 +2946,8 @@ t_Handle FM_PCD_KgSchemeSet(t_Handle h_FmPcd,  t_FmPcdKgSchemeParams *p_SchemePa
                          ("Scheme id (%d)!", relativeSchemeId));
             return NULL;
         }
+        /* Clear all fields, scheme may have beed previously used */
+        memset(p_Scheme, 0, sizeof(t_FmPcdKgScheme));
 
         p_Scheme->schemeId = p_FmPcd->p_FmPcdKg->schemesIds[relativeSchemeId];
         p_Scheme->h_FmPcd = p_FmPcd;
