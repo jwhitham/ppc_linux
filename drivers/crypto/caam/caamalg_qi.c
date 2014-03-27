@@ -259,7 +259,7 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 
 	/* assoclen + cryptlen = seqinlen - ivsize */
 	append_math_sub_imm_u32(desc, REG3, SEQINLEN, IMM,
-				ctx->authsize + tfm->ivsize)
+				ctx->authsize + tfm->ivsize);
 	/* assoclen = (assoclen + cryptlen) - cryptlen */
 	append_math_sub(desc, REG2, SEQOUTLEN, REG0, CAAM_CMD_SZ);
 	append_math_sub(desc, VARSEQINLEN, REG3, REG2, CAAM_CMD_SZ);
