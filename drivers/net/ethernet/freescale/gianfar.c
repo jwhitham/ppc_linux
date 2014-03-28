@@ -104,6 +104,10 @@
 
 #include "gianfar.h"
 
+#ifdef CONFIG_AS_FASTPATH
+#include "asf_gianfar.h"
+#endif
+
 #define TX_TIMEOUT      (1*HZ)
 
 const char gfar_driver_version[] = "1.3";
@@ -154,7 +158,7 @@ MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
 MODULE_LICENSE("GPL");
 
-static DEFINE_PER_CPU(struct sk_buff_head, skb_recycle_list);
+DEFINE_PER_CPU(struct sk_buff_head, skb_recycle_list);
 
 #define GFAR_RXB_REC_SZ (DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)
 
@@ -779,6 +783,11 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 		pr_err("Cannot do alloc_etherdev, aborting\n");
 		return -EINVAL;
 	}
+
+#ifdef CONFIG_AS_FASTPATH
+	/* Creating multilple queues for avoiding lock in xmit function.*/
+	num_tx_qs = (num_tx_qs < 2) ? 2 : num_tx_qs;
+#endif
 
 	*pdev = alloc_etherdev_mq(sizeof(*priv), num_tx_qs);
 	dev = *pdev;
@@ -2098,6 +2107,10 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	u32 bufaddr;
 	unsigned int nr_frags, nr_txbds, bytes_sent, fcb_len = 0;
 
+#ifdef CONFIG_AS_FASTPATH
+	return gfar_asf_start_xmit(skb, dev);
+#endif
+
 	rq = skb->queue_mapping;
 	tx_queue = priv->tx_queue[rq];
 	txq = netdev_get_tx_queue(dev, rq);
@@ -2623,6 +2636,7 @@ irqreturn_t gfar_receive(int irq, void *grp_id)
 
 	return IRQ_HANDLED;
 }
+EXPORT_SYMBOL(gfar_new_skb);
 
 /* Interrupt Handler for Transmit complete */
 static irqreturn_t gfar_transmit(int irq, void *grp_id)
@@ -2630,6 +2644,10 @@ static irqreturn_t gfar_transmit(int irq, void *grp_id)
 	struct gfar_priv_grp *grp = (struct gfar_priv_grp *)grp_id;
 	unsigned long flags;
 	u32 imask;
+
+#ifdef CONFIG_AS_FASTPATH
+	return gfar_enable_tx_queue(irq, grp_id);
+#endif
 
 	if (likely(napi_schedule_prep(&grp->napi_tx))) {
 		spin_lock_irqsave(&grp->grplock, flags);
@@ -2736,6 +2754,10 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 	int amount_pull;
 	int howmany = 0;
 	struct gfar_private *priv = netdev_priv(dev);
+
+#ifdef CONFIG_AS_FASTPATH
+	return gfar_asf_clean_rx_ring(rx_queue, rx_work_limit);
+#endif
 
 	/* Get the first full descriptor */
 	bdp = rx_queue->cur_rx;
