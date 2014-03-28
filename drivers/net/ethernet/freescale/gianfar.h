@@ -80,6 +80,10 @@ struct ethtool_rx_list {
 /* Number of bytes to align the rx bufs to */
 #define RXBUF_ALIGNMENT 64
 
+#ifdef CONFIG_AS_FASTPATH
+/* Headroom required for IPSec processing in ASF */
+#define EXTRA_HEADROOM 128
+#endif
 /* The number of bytes which composes a unit for the purpose of
  * allocating data buffers.  ie-for any given MTU, the data buffer
  * will be the next highest multiple of 512 bytes. */
@@ -1608,6 +1612,10 @@ static inline void gfar_rx_checksum(struct sk_buff *skb, struct rxfcb *fcb)
 
 static inline void gfar_align_skb(struct sk_buff *skb)
 {
+#ifdef CONFIG_AS_FASTPATH
+	/* Reserving the extra headroom required for ASF IPSec processing */
+	skb_reserve(skb, EXTRA_HEADROOM);
+#endif
 	/* We need the data buffer to be aligned properly.  We will reserve
 	* as many bytes as needed to align the data properly
 	*/

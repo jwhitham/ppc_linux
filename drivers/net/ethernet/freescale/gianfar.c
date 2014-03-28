@@ -2589,7 +2589,12 @@ static struct sk_buff *gfar_alloc_skb(struct net_device *dev)
 	struct gfar_private *priv = netdev_priv(dev);
 	struct sk_buff *skb;
 
+#ifndef CONFIG_AS_FASTPATH
 	skb = netdev_alloc_skb(dev, priv->rx_buffer_size + RXBUF_ALIGNMENT);
+#else
+	skb = netdev_alloc_skb(dev, priv->rx_buffer_size + RXBUF_ALIGNMENT +
+							EXTRA_HEADROOM);
+#endif
 	if (!skb)
 		return NULL;
 
