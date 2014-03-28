@@ -1408,6 +1408,37 @@ free:
 		break;
 	}
 
+	case DPA_IPSEC_IOC_SA_GET_OUT_PATH: {
+		struct ioc_dpa_ipsec_sa_get_out_path prm;
+
+		if (copy_from_user(&prm,
+				(struct ioc_dpa_ipsec_sa_get_out_path *)args,
+				sizeof(prm))) {
+			log_err("Could not copy from user out_path params\n");
+			return -EINVAL;
+		}
+
+		if (prm.sa_id < 0) {
+			log_err("Invalid input SA id\n");
+			return -EINVAL;
+		}
+
+		ret = dpa_ipsec_sa_get_out_path(prm.sa_id, &prm.fqid);
+		if (ret < 0) {
+			log_err("Get out path for SA %d failed\n", prm.sa_id);
+			break;
+		}
+
+		if (copy_to_user((struct ioc_dpa_ipsec_sa_get_out_path *)args,
+				 &prm, sizeof(prm))) {
+			log_err("Could not copy out_path to user for SA %d\n",
+				prm.sa_id);
+			return -EINVAL;
+		}
+
+		break;
+	}
+
 	default:
 		log_err("Invalid DPA IPsec ioctl (0x%x)\n", cmd);
 		ret = -EINVAL;

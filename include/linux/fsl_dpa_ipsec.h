@@ -614,4 +614,10 @@ enum dpa_ipsec_sa_operation_code {
 	DPA_IPSEC_SA_GET_SEQ_NUM_DONE
 };
 
+/*
+ * Get frame queue id to IPSec for a specified SA in order to bypass outbound
+ * policy lookup and directly apply IPSec processing.
+ */
+int dpa_ipsec_sa_get_out_path(int sa_id, uint32_t *fqid);
+
 #endif	/* __FSL_DPA_IPSEC_H */

@@ -5689,3 +5689,62 @@ out:
 	return 0;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_get_seq_number);
+
+int dpa_ipsec_sa_get_out_path(int sa_id, uint32_t *fqid)
+{
+	struct dpa_ipsec *dpa_ipsec;
+	struct dpa_ipsec_sa *sa;
+	int ret;
+
+	if (!fqid) {
+		log_err("Invalid fqid handle\n");
+		return -EINVAL;
+	}
+
+	if (!valid_sa_id(sa_id))
+		return -EINVAL;
+
+	dpa_ipsec = get_instance(sa_id_to_instance_id(sa_id));
+	ret = check_instance(dpa_ipsec);
+	if (unlikely(ret < 0))
+		return ret;
+
+	sa = get_sa_from_sa_id(dpa_ipsec, sa_id);
+	if (!sa) {
+		log_err("Invalid SA handle for SA %d\n", sa_id);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ret = mutex_trylock(&sa->lock);
+	if (ret == 0) {
+		log_err("SA %d is being used\n", sa_id);
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (!sa_in_use(sa)) {
+		log_err("SA %d is not in use\n", sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -ENODEV;
+		goto out;
+	}
+
+	if (sa_is_inbound(sa)) {
+		log_err("Illegal to acquire the to SEC frame queue ID for inbound SA %d.\n",
+				sa_id);
+		mutex_unlock(&sa->lock);
+		ret = -EPERM;
+		goto out;
+	}
+
+	*fqid = qman_fq_fqid(sa->to_sec_fq);
+
+	mutex_unlock(&sa->lock);
+	ret = 0;
+out:
+	put_instance(dpa_ipsec);
+
+	return ret;
+}
+EXPORT_SYMBOL(dpa_ipsec_sa_get_out_path);

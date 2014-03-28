@@ -239,6 +239,11 @@ struct ioc_compat_dpa_ipsec_sa_modify_prm {
 };
 #endif
 
+struct ioc_dpa_ipsec_sa_get_out_path {
+	int sa_id;	/* security association id */
+	uint32_t fqid;	/* where to write the frame queue id number */
+};
+
 #define DPA_IPSEC_IOC_MAGIC	0xee
 
 #define DPA_IPSEC_IOC_INIT \
@@ -319,5 +324,8 @@ struct ioc_compat_dpa_ipsec_sa_modify_prm {
 
 #define DPA_IPSEC_IOC_SA_GET_SEQ_NUMBER \
 	_IOWR(DPA_IPSEC_IOC_MAGIC, 15, struct ioc_dpa_ipsec_sa_get_seq_num)
+
+#define DPA_IPSEC_IOC_SA_GET_OUT_PATH \
+	_IOWR(DPA_IPSEC_IOC_MAGIC, 16, struct ioc_dpa_ipsec_sa_get_out_path)
 
 #endif	/* __DPA_IPSEC_IOCTL_H */
