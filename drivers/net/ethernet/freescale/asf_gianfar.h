@@ -35,4 +35,24 @@ int gfar_asf_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit);
 extern void gfar_asf_process_frame(struct net_device *dev, struct sk_buff *skb,
 				int amount_pull, struct napi_struct *napi);
 
+#define AS_FP_PROCEED  1
+#define AS_FP_STOLEN   2
+typedef        int (*devfp_hook_t)(struct sk_buff *skb, struct net_device *dev);
+extern devfp_hook_t    devfp_rx_hook;
+extern devfp_hook_t    devfp_tx_hook;
+
+/* Overwrite the Rx/Tx Hooks pointers
+ * if already configured.
+ */
+static inline int devfp_register_rx_hook(devfp_hook_t hook)
+{
+	devfp_rx_hook = hook;
+	return 0;
+}
+
+static inline int devfp_register_tx_hook(devfp_hook_t hook)
+{
+	devfp_tx_hook = hook;
+	return 0;
+}
 #endif /* __ASF_GIANFAR_H */

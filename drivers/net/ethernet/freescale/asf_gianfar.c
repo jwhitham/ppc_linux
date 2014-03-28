@@ -26,6 +26,12 @@
 
 #define GFAR_RXB_REC_SZ (DEFAULT_RX_BUFFER_SIZE + RXBUF_ALIGNMENT)
 
+devfp_hook_t   devfp_rx_hook;
+EXPORT_SYMBOL(devfp_rx_hook);
+
+devfp_hook_t   devfp_tx_hook;
+EXPORT_SYMBOL(devfp_tx_hook);
+
 static inline void gfar_recycle_skb(struct sk_buff *skb)
 {
 	struct sk_buff_head *h = &__get_cpu_var(skb_recycle_list);
@@ -81,6 +87,21 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	if (dev->features & NETIF_F_RXCSUM)
 		gfar_rx_checksum(skb, fcb);
 
+	if (devfp_rx_hook) {
+		/* Drop the packet silently if IP Checksum is not correct */
+		if ((fcb->flags & RXFCB_CIP) && (fcb->flags & RXFCB_EIP)) {
+			dev_kfree_skb_any(skb);
+			return;
+		}
+	if (dev->features & NETIF_F_HW_VLAN_CTAG_RX &&
+		fcb->flags & RXFCB_VLN)
+		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), fcb->vlctl);
+
+	skb->dev = dev;
+	if (devfp_rx_hook(skb, dev) == AS_FP_STOLEN)
+		return;
+	}
+
 	/* Tell the skb what kind of packet this is */
 	skb->protocol = eth_type_trans(skb, dev);
 
@@ -111,6 +132,10 @@ int gfar_asf_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	u32 bufaddr;
 	int skb_curtx = 0;
 	unsigned int nr_frags, nr_txbds, bytes_sent, fcb_len = 0;
+
+	if (devfp_tx_hook && (skb->pkt_type != PACKET_FASTROUTE))
+		if (devfp_tx_hook(skb, dev) == AS_FP_STOLEN)
+			return 0;
 
 	rq = smp_processor_id();
 
