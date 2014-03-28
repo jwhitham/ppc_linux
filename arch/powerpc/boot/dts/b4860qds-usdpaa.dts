@@ -85,6 +85,32 @@
 			fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
 	};
 
+	bp17: buffer-pool@17 {
+			compatible = "fsl,b4860-bpool", "fsl,bpool", "fsl,bpool-ethernet-seeds";
+			fsl,bpid = <17>;
+			fsl,bpool-ethernet-cfg = <0 2048 0 1728 0 0>;
+			fsl,bpool-thresholds = <0x100 0x300 0x0 0x0>;
+	};
+
+	chosen {
+		dpaa-extended-args {
+			fman0-extd-args {
+				cell-index = <0x0>;
+				compatible = "fsl,fman-extended-args";
+				dma-aid-mode = "port";
+				fman0_oh3-extd-args {
+					cell-index = <0x2>;
+					compatible = "fsl,fman-port-op-extended-args";
+					vsp-window = <0x8 0x0>;
+				};
+				fman0_oh4-extd-args {
+					cell-index = <0x3>;
+					compatible = "fsl,fman-port-op-extended-args";
+					vsp-window = <0x8 0x0>;
+				};
+			};
+		};
+	};
 
 	fsl,dpaa {
 		ethernet@0 {
@@ -147,7 +173,12 @@
                         fsl,qman-frame-queues-tx = <4008 8>;
                         local-mac-address = [00 11 22 33 44 55];
                 };
-
+		ethernet@17 {
+			compatible = "fsl,b4860-dpa-ethernet-generic", "fsl,dpa-ethernet-generic";
+			fsl,qman-frame-queues-tx = <4050 1>;
+			fsl,oh-ports = <&oh3 &oh4>;
+			local-mac-address = [00 11 22 33 44 66];
+		};
 		dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";
 			/* Define frame queues for the OH port*/
@@ -155,5 +186,18 @@
 			fsl,qman-frame-queues-oh = <0x6e 1 0x6f 1>;
 			fsl,fman-oh-port = <&fman0_oh2>;
 		};
+		oh3: dpa-fman0-oh@3 {
+			compatible = "fsl,dpa-oh";
+			fsl,bman-buffer-pools = <&bp17>;
+			fsl,qman-frame-queues-oh = <4054 1 4055 1>;
+			fsl,fman-oh-port = <&fman0_oh3>;
+		};
+		oh4: dpa-fman0-oh@4 {
+			compatible = "fsl,dpa-oh";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,qman-frame-queues-oh = <4052 1 4053 1>;
+			fsl,fman-oh-port = <&fman0_oh4>;
+		};
+
 	};
 };
