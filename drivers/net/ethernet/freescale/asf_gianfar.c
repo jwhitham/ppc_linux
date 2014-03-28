@@ -519,3 +519,106 @@ int gfar_asf_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 
 	return howmany;
 }
+
+/* This is function is called directly by ASF when ASF runs in Minimal mode
+* transmission.
+*/
+
+int gfar_fast_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	struct gfar_private *priv = netdev_priv(dev);
+	struct gfar_priv_tx_q *tx_queue = NULL;
+	struct netdev_queue *txq;
+	struct gfar __iomem *regs = NULL;
+	struct txbd8 *txbdp, *txbdp_start, *base;
+	u32 lstatus;
+	int rq = 0;
+	int skb_curtx = 0;
+	unsigned int fcb_length = GMAC_FCB_LEN;
+
+	rq = smp_processor_id();
+	tx_queue = priv->tx_queue[rq];
+	txq = netdev_get_tx_queue(dev, rq);
+	base = tx_queue->tx_bd_base;
+	regs = tx_queue->grp->regs;
+
+	txbdp = tx_queue->cur_tx;
+	skb_curtx = tx_queue->skb_curtx;
+
+	lstatus = txbdp->lstatus;
+	if ((lstatus & BD_LFLAG(TXBD_READY))) {
+		u32 imask;
+		/* BD not free for tx */
+		netif_tx_stop_queue(txq);
+		dev->stats.tx_fifo_errors++;
+		spin_lock_irq(&tx_queue->grp->grplock);
+		imask = gfar_read(&regs->imask);
+		imask |= IMASK_TX_DEFAULT;
+		gfar_write(&regs->imask, imask);
+		spin_unlock_irq(&tx_queue->grp->grplock);
+		return NETDEV_TX_BUSY;
+	}
+
+	/* BD is free to be used by s/w */
+	/* Free skb for this BD if not recycled */
+	txbdp->lstatus &= BD_LFLAG(TXBD_WRAP);
+	/* Update transmit stats */
+	tx_queue->stats.tx_bytes += skb->len;
+	tx_queue->stats.tx_packets++;
+
+	txbdp = txbdp_start = tx_queue->cur_tx;
+	lstatus = txbdp->lstatus | BD_LFLAG(TXBD_LAST | TXBD_INTERRUPT);
+
+	/* Set up checksumming */
+
+	if (CHECKSUM_PARTIAL == skb->ip_summed) {
+		struct txfcb *fcb = NULL;
+		fcb = gfar_add_fcb(skb);
+		lstatus |= BD_LFLAG(TXBD_TOE);
+		gfar_tx_checksum(skb, fcb, fcb_length);
+	}
+
+	txbdp_start->bufPtr = dma_map_single(priv->dev, skb->data,
+					skb_headlen(skb), DMA_TO_DEVICE);
+
+	lstatus |= BD_LFLAG(TXBD_CRC | TXBD_READY) | skb_headlen(skb);
+	/* The powerpc-specific eieio() is used, as wmb() has too strong
+	* semantics (it requires synchronization between cacheable and
+	* uncacheable mappings, which eieio doesn't provide and which we
+	* don't need), thus requiring a more expensive sync instruction.  At
+	* some point, the set of architecture-independent barrier functions
+	* should be expanded to include weaker barriers.
+	*/
+	eieio();
+
+	txbdp_start->lstatus = lstatus;
+
+	eieio(); /* force lstatus write before tx_skbuff */
+
+	skb_curtx = tx_queue->skb_curtx;
+
+	/* Update the current skb pointer to the next entry we will use
+	* (wrapping if necessary)
+	*/
+	tx_queue->skb_curtx = (tx_queue->skb_curtx + 1) &
+			TX_RING_MOD_MASK(tx_queue->tx_ring_size);
+
+	tx_queue->cur_tx = next_txbd(txbdp, base, tx_queue->tx_ring_size);
+
+	/* Tell the DMA to go go go */
+	gfar_write(&regs->tstat, TSTAT_CLEAR_THALT >> tx_queue->qindex);
+
+	if ((skb->owner != RT_PKT_ID) ||
+		(!skb_is_recycleable(skb, DEFAULT_RX_BUFFER_SIZE +
+						RXBUF_ALIGNMENT))) {
+		skb->new_skb = NULL;
+		gfar_recycle_skb(skb);
+	} else {
+		gfar_asf_reclaim_skb(skb);
+		gfar_align_skb(skb);
+		skb->new_skb = skb;
+	}
+	txq->trans_start = jiffies;
+	return NETDEV_TX_OK;
+}
+EXPORT_SYMBOL(gfar_fast_xmit);
