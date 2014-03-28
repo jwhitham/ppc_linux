@@ -110,10 +110,9 @@ extern struct device_node *GetFmPortAdvArgsDevTreeNode (struct device_node *fm_n
 #define FSL_FM_RX_EXTRA_HEADROOM_MIN 16
 #define FSL_FM_RX_EXTRA_HEADROOM_MAX 384
 
-#define TX_PAUSE_PRIO_DEFAULT 0xff
-#define TX_PAUSE_TIME_ENABLE 0xf000
-#define TX_PAUSE_TIME_DISABLE 0
-#define TX_PAUSE_THRESH_DEFAULT 0
+#define FSL_FM_PAUSE_TIME_ENABLE 0xf000
+#define FSL_FM_PAUSE_TIME_DISABLE 0
+#define FSL_FM_PAUSE_THRESH_DEFAULT 0
 
 /*
  * Max frame size, across all interfaces.
@@ -139,6 +138,15 @@ int fsl_fm_max_frm = CONFIG_FSL_FM_MAX_FRAME_SIZE;
  * forwarded frame.
  */
 int fsl_fm_rx_extra_headroom = CONFIG_FSL_FM_RX_EXTRA_HEADROOM;
+
+#ifdef CONFIG_FMAN_PFC
+static int fsl_fm_pfc_quanta[] = {
+		CONFIG_FMAN_PFC_QUANTA_0,
+		CONFIG_FMAN_PFC_QUANTA_1,
+		CONFIG_FMAN_PFC_QUANTA_2,
+		CONFIG_FMAN_PFC_QUANTA_3
+};
+#endif
 
 static t_LnxWrpFm   lnxWrpFm;
 
@@ -1410,6 +1418,25 @@ bool fm_port_is_in_auto_res_mode(struct fm_port *port)
 }
 EXPORT_SYMBOL(fm_port_is_in_auto_res_mode);
 
+#ifdef CONFIG_FMAN_PFC
+int fm_port_set_pfc_priorities_mapping_to_qman_wq(struct fm_port *port,
+		uint8_t prio, uint8_t wq)
+{
+	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
+	int err;
+	int _errno;
+
+	err = FM_PORT_SetPfcPrioritiesMappingToQmanWQ(p_LnxWrpFmPortDev->h_Dev,
+			prio, wq);
+	_errno = -GET_ERROR_TYPE(err);
+	if (unlikely(_errno < 0))
+		pr_err("FM_PORT_SetPfcPrioritiesMappingToQmanWQ() = 0x%08x\n", err);
+
+	return _errno;
+}
+EXPORT_SYMBOL(fm_port_set_pfc_priorities_mapping_to_qman_wq);
+#endif
+
 int fm_mac_set_exception(struct fm_mac_dev *fm_mac_dev,
 		e_FmMacExceptions exception, bool enable)
 {
@@ -1695,6 +1722,39 @@ int fm_mac_set_rx_pause_frames(
 }
 EXPORT_SYMBOL(fm_mac_set_rx_pause_frames);
 
+#ifdef CONFIG_FMAN_PFC
+int fm_mac_set_tx_pause_frames(struct fm_mac_dev *fm_mac_dev,
+					     bool en)
+{
+	int	_errno, i;
+	t_Error err;
+
+	if (en)
+		for (i = 0; i < CONFIG_FMAN_PFC_COS_COUNT; i++) {
+			err = FM_MAC_SetTxPauseFrames(fm_mac_dev,
+					i, fsl_fm_pfc_quanta[i],
+					FSL_FM_PAUSE_THRESH_DEFAULT);
+			_errno = -GET_ERROR_TYPE(err);
+			if (_errno < 0) {
+				pr_err("FM_MAC_SetTxPauseFrames() = 0x%08x\n", err);
+				return _errno;
+			}
+		}
+	else
+		for (i = 0; i < CONFIG_FMAN_PFC_COS_COUNT; i++) {
+			err = FM_MAC_SetTxPauseFrames(fm_mac_dev,
+					i, FSL_FM_PAUSE_TIME_DISABLE,
+					FSL_FM_PAUSE_THRESH_DEFAULT);
+			_errno = -GET_ERROR_TYPE(err);
+			if (_errno < 0) {
+				pr_err("FM_MAC_SetTxPauseFrames() = 0x%08x\n", err);
+				return _errno;
+			}
+		}
+
+	return _errno;
+}
+#else
 int fm_mac_set_tx_pause_frames(struct fm_mac_dev *fm_mac_dev,
 					     bool en)
 {
@@ -1702,22 +1762,19 @@ int fm_mac_set_tx_pause_frames(struct fm_mac_dev *fm_mac_dev,
 	t_Error err;
 
 	if (en)
-		err = FM_MAC_SetTxPauseFrames(fm_mac_dev,
-				TX_PAUSE_PRIO_DEFAULT,
-				TX_PAUSE_TIME_ENABLE,
-				TX_PAUSE_THRESH_DEFAULT);
+		err = FM_MAC_SetTxAutoPauseFrames(fm_mac_dev,
+				FSL_FM_PAUSE_TIME_ENABLE);
 	else
-		err = FM_MAC_SetTxPauseFrames(fm_mac_dev,
-				TX_PAUSE_PRIO_DEFAULT,
-				TX_PAUSE_TIME_DISABLE,
-				TX_PAUSE_THRESH_DEFAULT);
+		err = FM_MAC_SetTxAutoPauseFrames(fm_mac_dev,
+				FSL_FM_PAUSE_TIME_DISABLE);
 
 	_errno = -GET_ERROR_TYPE(err);
 	if (_errno < 0)
-		pr_err("FM_MAC_SetTxPauseFrames() = 0x%08x\n", err);
+		pr_err("FM_MAC_SetTxAutoPauseFrames() = 0x%08x\n", err);
 
 	return _errno;
 }
+#endif
 EXPORT_SYMBOL(fm_mac_set_tx_pause_frames);
 
 int fm_rtc_enable(struct fm *fm_dev)

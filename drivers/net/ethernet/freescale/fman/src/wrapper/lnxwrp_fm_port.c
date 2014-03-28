@@ -502,7 +502,17 @@ static t_Error CheckNConfigFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
     /*const char              *str_prop;*/
     int                     lenp;
 
-    
+#ifdef CONFIG_FMAN_PFC
+    if (p_LnxWrpFmPortDev->settings.param.portType == e_FM_PORT_TYPE_RX ||
+    		p_LnxWrpFmPortDev->settings.param.portType == e_FM_PORT_TYPE_RX_10G) {
+    	t_Error errCode = FM_PORT_ConfigPoolDepletion(p_LnxWrpFmPortDev->h_Dev,
+    			&p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.
+    						extBufPools.poolDepletion);
+    	if (errCode != E_OK)
+    		RETURN_ERROR(MAJOR, errCode, ("FM_PORT_ConfigPoolDepletion() failed"));
+    }
+#endif
+
     fm_node = GetFmAdvArgsDevTreeNode(((t_LnxWrpFmDev *) p_LnxWrpFmPortDev->h_LnxWrpFmDev)->id);
     if (!fm_node) /* no advance parameters for FMan */
         return E_OK;
@@ -925,6 +935,10 @@ void fm_set_rx_port_params(struct fm_port *port,
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *) port;
 	int i;
+#ifdef CONFIG_FMAN_PFC
+	uint8_t pfcv = 0;
+	uint8_t id;
+#endif
 
 	p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.errFqid =
 		params->errq;
@@ -932,6 +946,14 @@ void fm_set_rx_port_params(struct fm_port *port,
 		params->defq;
 	p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.extBufPools.
 		numOfPoolsUsed = params->num_pools;
+
+#ifdef CONFIG_FMAN_PFC
+	memset(&(p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.
+			extBufPools.poolDepletion), 0, sizeof(t_FmBufPoolDepletion));
+	p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.extBufPools.
+		poolDepletion.singlePoolModeEnable = true;
+#endif
+
 	for (i = 0; i < params->num_pools; i++) {
 		p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.
 			extBufPools.extBufPool[i].id =
@@ -939,7 +961,21 @@ void fm_set_rx_port_params(struct fm_port *port,
 		p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.
 			extBufPools.extBufPool[i].size =
 			params->pool_param[i].size;
+
+#ifdef CONFIG_FMAN_PFC
+		id = params->pool_param[i].id;
+		p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.
+			extBufPools.poolDepletion.poolsToConsiderForSingleMode[id] = true;
+		pfcv |= params->pool_param[i].pfcv;
+#endif
 	}
+
+#ifdef CONFIG_FMAN_PFC
+	for (i = 0; i < FM_MAX_NUM_OF_PFC_PRIORITIES; i++)
+		if (pfcv & (1 << i))
+			p_LnxWrpFmPortDev->settings.param.specificParams.rxParams.
+			extBufPools.poolDepletion.pfcPrioritiesEn[i] = true;
+#endif
 
 	p_LnxWrpFmPortDev->buffPrefixContent.privDataSize =
 		params->priv_data_size;

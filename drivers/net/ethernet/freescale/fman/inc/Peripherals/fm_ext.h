@@ -411,17 +411,6 @@ typedef struct t_FmExtPoolParams {
 } t_FmExtPoolParams;
 
 /**************************************************************************//**
- @Description   A structure for informing the driver about the external
-                buffer pools allocated in the BM and used by a port or a
-                storage-profile.
-*//***************************************************************************/
-typedef struct t_FmExtPools {
-    uint8_t                 numOfPoolsUsed;     /**< Number of pools use by this port */
-    t_FmExtPoolParams       extBufPool[FM_PORT_MAX_NUM_OF_EXT_POOLS];
-                                                /**< Parameters for each port */
-} t_FmExtPools;
-
-/**************************************************************************//**
  @Description   A structure for defining backup BM Pools.
 *//***************************************************************************/
 typedef struct t_FmBackupBmPools {
@@ -456,6 +445,21 @@ typedef struct t_FmBufPoolDepletion {
                                                     /**< This field is used by the MAC as the Priority Enable Vector in the PFC frame which is transmitted */
 #endif /* (DPAA_VERSION >= 11) */
 } t_FmBufPoolDepletion;
+
+/**************************************************************************//**
+ @Description   A structure for informing the driver about the external
+                buffer pools allocated in the BM and used by a port or a
+                storage-profile.
+*//***************************************************************************/
+typedef struct t_FmExtPools {
+    uint8_t                 numOfPoolsUsed;     /**< Number of pools use by this port */
+    t_FmExtPoolParams       extBufPool[FM_PORT_MAX_NUM_OF_EXT_POOLS];
+                                                /**< Parameters for each port */
+    /**< External buffer pool depletion parameters */
+#ifdef CONFIG_FMAN_PFC
+    t_FmBufPoolDepletion poolDepletion;
+#endif
+} t_FmExtPools;
 
 /**************************************************************************//**
  @Description   A Structure for defining Ucode patch for loading.

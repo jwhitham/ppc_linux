@@ -101,6 +101,12 @@ struct fm_port_pcd_param {
 struct fm_port_pool_param {
 	uint8_t		id;		/**< External buffer pool id */
 	uint16_t	size;		/**< External buffer pool buffer size */
+#ifdef CONFIG_FMAN_PFC
+	/**<The Priority Enable Vector in the PFC frame which is transmitted
+	 * when the buffer pool depletes;
+	 */
+	uint8_t		pfcv;
+#endif
 };
 
 /**************************************************************************//**
@@ -547,6 +553,25 @@ int fm_port_get_autores_stats(struct fm_port *port, struct auto_res_port_stats
 int fm_port_resume(struct fm_port *port);
 
 int fm_port_suspend(struct fm_port *port);
+
+#ifdef CONFIG_FMAN_PFC
+/**************************************************************************//**
+@Function     fm_port_set_pfc_priorities_mapping_to_qman_wq
+
+@Description  Associate a QMan Work Queue with a PFC priority on this
+		FM-port device (Tx port).
+
+@Param[in]    port   - A handle of the FM port device.
+
+@Param[in]    prio   - The PFC priority.
+
+@Param[in]    wq   - The Work Queue associated with the PFC priority.
+
+@Cautions     Allowed only after the port is initialized.
+*//***************************************************************************/
+int fm_port_set_pfc_priorities_mapping_to_qman_wq(struct fm_port *port,
+		uint8_t prio, uint8_t wq);
+#endif
 
 /**************************************************************************//**
 @Function     fm_mac_set_exception
