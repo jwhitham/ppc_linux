@@ -1,5 +1,4 @@
-/*
- * Copyright 2013 Freescale Semiconductor Inc.
+/* Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -70,8 +69,8 @@ static int dpa_generic_debugfs_show(struct seq_file *file, void *offset)
 
 	/* "Standard" counters */
 	seq_printf(file, "\nDPA counters for %s:\n", priv->net_dev->name);
-	seq_printf(file, "CPU           irqs        rx        tx   recycle   ");
-	seq_printf(file, "confirm     tx sg    tx err    rx err   bp count\n");
+	seq_puts(file, "CPU           irqs        rx        tx   recycle   ");
+	seq_puts(file, "confirm     tx sg    tx err    rx err   bp count\n");
 
 
 	for_each_online_cpu(i) {
@@ -118,7 +117,7 @@ static int dpa_generic_debugfs_show(struct seq_file *file, void *offset)
 	/* Draining Buffer Pool counters */
 	seq_printf(file, "\nCounters for Draining Buffer Pool (bpid:%d) %s:\n",
 			bp->bpid, priv->net_dev->name);
-	seq_printf(file, "CPU           bp count\n");
+	seq_puts(file, "CPU           bp count\n");
 
 	bp = priv->draining_tx_bp;
 	dpa_bp_count = 0;
@@ -135,8 +134,8 @@ static int dpa_generic_debugfs_show(struct seq_file *file, void *offset)
 
 
 	/* Rx Errors demultiplexing */
-	seq_printf(file, "\nDPA RX Errors:\nCPU        dma err  phys err");
-	seq_printf(file, "  size err   hdr err  csum err\n");
+	seq_puts(file, "\nDPA RX Errors:\nCPU        dma err  phys err");
+	seq_puts(file, "  size err   hdr err  csum err\n");
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 
@@ -163,9 +162,9 @@ static int dpa_generic_debugfs_show(struct seq_file *file, void *offset)
 			total.rx_errors.cse);
 
 	/* ERN demultiplexing */
-	seq_printf(file, "\nDPA ERN counters:\n  CPU     cg_td      wred  ");
-	seq_printf(file, "err_cond   early_w    late_w     fq_td    fq_ret");
-	seq_printf(file, "     orp_z\n");
+	seq_puts(file, "\nDPA ERN counters:\n  CPU     cg_td      wred  ");
+	seq_puts(file, "err_cond   early_w    late_w     fq_td    fq_ret");
+	seq_puts(file, "     orp_z\n");
 	for_each_online_cpu(i) {
 		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
 

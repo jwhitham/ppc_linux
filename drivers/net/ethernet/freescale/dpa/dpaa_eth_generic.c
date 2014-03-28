@@ -1,5 +1,4 @@
-/*
- * Copyright 2013 Freescale Semiconductor Inc.
+/* Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -79,6 +78,8 @@ MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
 struct rtnl_link_stats64 *__cold
 dpa_generic_get_stats64(struct net_device *netdev,
 			struct rtnl_link_stats64 *stats);
+static int dpa_generic_set_mac_address(struct net_device *net_dev,
+				       void *addr);
 static int __cold dpa_generic_start(struct net_device *netdev);
 static int __cold dpa_generic_stop(struct net_device *netdev);
 static int dpa_generic_eth_probe(struct platform_device *_of_dev);
@@ -93,6 +94,7 @@ static const struct net_device_ops dpa_generic_ops = {
 	.ndo_open = dpa_generic_start,
 	.ndo_start_xmit = dpa_generic_tx,
 	.ndo_stop = dpa_generic_stop,
+	.ndo_set_mac_address = dpa_generic_set_mac_address,
 	.ndo_tx_timeout = dpa_timeout,
 	.ndo_get_stats64 = dpa_generic_get_stats64,
 	.ndo_init = dpa_ndo_init,
@@ -121,6 +123,22 @@ dpa_generic_get_stats64(struct net_device *netdev,
 	}
 
 	return stats;
+}
+
+static int dpa_generic_set_mac_address(struct net_device *net_dev,
+				       void *addr)
+{
+	const struct dpa_generic_priv_s *priv = netdev_priv(net_dev);
+	int _errno;
+
+	_errno = eth_mac_addr(net_dev, addr);
+	if (_errno < 0) {
+		if (netif_msg_drv(priv))
+			netdev_err(net_dev, "eth_mac_addr() = %d\n", _errno);
+		return _errno;
+	}
+
+	return 0;
 }
 
 static const struct of_device_id dpa_generic_match[] = {
@@ -930,14 +948,10 @@ static int dpa_generic_rx_bp_probe(struct platform_device *_of_dev,
 		bpool_cfg = of_get_property(dev_node, "fsl,bpool-ethernet-cfg",
 				&lenp);
 		if (bpool_cfg && (lenp == (2 * ns + na) * sizeof(*bpool_cfg))) {
-			const uint32_t *seed_pool;
-
 			bp[i].config_count = (int)of_read_number(bpool_cfg, ns);
 			bp[i].size = of_read_number(bpool_cfg + ns, ns);
-			bp[i].paddr = of_read_number(bpool_cfg + 2 * ns, na);
-			seed_pool = of_get_property(dev_node,
-					"fsl,bpool-ethernet-seeds", &lenp);
-			bp[i].seed_pool = !!seed_pool;
+			bp[i].paddr = 0;
+			bp[i].seed_pool = false;
 		} else {
 			dev_err(dev, "Missing/invalid fsl,bpool-ethernet-cfg device tree entry for node %s\n",
 					dev_node->full_name);
@@ -1152,6 +1166,74 @@ static void dpa_generic_fq_setup(struct dpa_generic_priv_s *priv,
 	}
 }
 
+static int dpa_generic_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
+{
+	int			 _errno;
+	struct device		*dev;
+	struct qman_fq		*fq;
+	struct qm_mcc_initfq	 initfq;
+
+	dev = dpa_fq->net_dev->dev.parent;
+
+	if (dpa_fq->fqid == 0)
+		dpa_fq->flags |= QMAN_FQ_FLAG_DYNAMIC_FQID;
+
+	dpa_fq->init = !(dpa_fq->flags & QMAN_FQ_FLAG_NO_MODIFY);
+
+	_errno = qman_create_fq(dpa_fq->fqid, dpa_fq->flags, &dpa_fq->fq_base);
+	if (_errno) {
+		dev_err(dev, "qman_create_fq() failed\n");
+		return _errno;
+	}
+	fq = &dpa_fq->fq_base;
+
+	if (dpa_fq->init) {
+		initfq.we_mask = QM_INITFQ_WE_FQCTRL;
+		/* FIXME: why would we want to keep an empty FQ in cache? */
+		initfq.fqd.fq_ctrl = QM_FQCTRL_PREFERINCACHE;
+
+		/* FQ placement */
+		initfq.we_mask |= QM_INITFQ_WE_DESTWQ;
+
+		initfq.fqd.dest.channel	= dpa_fq->channel;
+		initfq.fqd.dest.wq = dpa_fq->wq;
+
+		if (dpa_fq->fq_type == FQ_TYPE_TX) {
+			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
+			/* CTXA[A2V] = 1 */
+			initfq.fqd.context_a.hi = 0x10000000;
+			initfq.fqd.context_a.lo = 0x80000000;
+			/* initfq.fqd.context_b = qman_fq_fqid(confq); */
+		}
+
+		/* Initialization common to all ingress queues */
+		if (dpa_fq->flags & QMAN_FQ_FLAG_NO_ENQUEUE) {
+			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
+			initfq.fqd.fq_ctrl |=
+				QM_FQCTRL_CTXASTASHING | QM_FQCTRL_AVOIDBLOCK;
+			initfq.fqd.context_a.stashing.exclusive =
+				QM_STASHING_EXCL_DATA | QM_STASHING_EXCL_CTX |
+				QM_STASHING_EXCL_ANNOTATION;
+			initfq.fqd.context_a.stashing.data_cl = 2;
+			initfq.fqd.context_a.stashing.annotation_cl = 1;
+			initfq.fqd.context_a.stashing.context_cl =
+				DIV_ROUND_UP(sizeof(struct qman_fq), 64);
+		};
+
+		_errno = qman_init_fq(fq, QMAN_INITFQ_FLAG_SCHED, &initfq);
+		if (_errno < 0) {
+			dev_err(dev, "qman_init_fq(%u) = %d\n",
+					qman_fq_fqid(fq), _errno);
+			qman_destroy_fq(fq, 0);
+			return _errno;
+		}
+	}
+
+	dpa_fq->fqid = qman_fq_fqid(fq);
+
+	return 0;
+}
+
 static int dpa_generic_fq_create(struct net_device *netdev,
 				 struct list_head *dpa_fq_list,
 				 struct fm_port *tx_port)
@@ -1184,7 +1266,7 @@ static int dpa_generic_fq_create(struct net_device *netdev,
 
 	/* Add the FQs to the interface, and make them active */
 	list_for_each_entry_safe(fqs, tmp, &priv->dpa_fq_list, list) {
-		err = dpa_fq_init(fqs, false);
+		err = dpa_generic_fq_init(fqs, false);
 		if (err)
 			return err;
 	}
