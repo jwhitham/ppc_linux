@@ -32,6 +32,26 @@ EXPORT_SYMBOL(devfp_rx_hook);
 devfp_hook_t   devfp_tx_hook;
 EXPORT_SYMBOL(devfp_tx_hook);
 
+static inline void gfar_asf_reclaim_skb(struct sk_buff *skb)
+{
+	/* Just reset the fields used in software DPA */
+	skb->next = skb->prev = NULL;
+	skb->dev = NULL;
+	skb->len = 0;
+	skb->ip_summed = 0;
+	skb->transport_header = 0;
+	skb->mac_header = 0;
+	skb->network_header = 0;
+	skb->pkt_type = 0;
+	skb->mac_len = 0;
+	skb->protocol = 0;
+	skb->vlan_tci = 0;
+	skb->data = 0;
+	/* reset data and tail pointers */
+	skb->data = skb->head + NET_SKB_PAD;
+	skb_reset_tail_pointer(skb);
+}
+
 static inline void gfar_recycle_skb(struct sk_buff *skb)
 {
 	struct sk_buff_head *h = &__get_cpu_var(skb_recycle_list);
@@ -42,7 +62,10 @@ static inline void gfar_recycle_skb(struct sk_buff *skb)
 		skb->fclone == SKB_FCLONE_UNAVAILABLE && !skb_shared(skb) &&
 		skb_end_offset(skb) == skb_size) {
 
-		skb_recycle(skb);
+		if (skb->pkt_type == PACKET_FASTROUTE)
+			gfar_asf_reclaim_skb(skb);
+		else
+			skb_recycle(skb);
 
 		gfar_align_skb(skb);
 
@@ -360,7 +383,10 @@ int gfar_asf_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		skb->new_skb = NULL;
 		gfar_recycle_skb(skb);
 	} else {
-		skb_recycle(skb);
+		if (skb->pkt_type == PACKET_FASTROUTE)
+			gfar_asf_reclaim_skb(skb);
+		else
+			skb_recycle(skb);
 		gfar_align_skb(skb);
 		skb->new_skb = skb;
 	}
