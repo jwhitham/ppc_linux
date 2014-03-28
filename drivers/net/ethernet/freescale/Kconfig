@@ -95,6 +95,16 @@ config GIANFAR
 	---help---
 	  This driver supports the Gigabit TSEC on the MPC83xx, MPC85xx,
 	  and MPC86xx family of chips, and the FEC on the 8540.
+
+config FSL_GIANFAR_1588
+	bool "Gianfar 1588"
+	depends on GIANFAR
+	---help---
+	  This driver supports Freescale eTSEC 1588 function.
+	  Integrate the IEEE 1588 specification v2 ioctls with the gianfar driver.
+	  The user space application should be IXXAT IEEE 1588 stack v1.04 or above.
+	  Say Y here if you want to use IXXAT 1588 stack.
+
 config RX_TX_BUFF_XCHG
         default y
 	 bool "RX and TX ring buffer exchange for Routed packets"

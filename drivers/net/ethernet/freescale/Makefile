@@ -17,5 +17,6 @@ obj-$(if $(CONFIG_FSL_DPAA_ETH),y) += dpa/
 obj-$(CONFIG_PTP_1588_CLOCK_GIANFAR) += gianfar_ptp.o
 gianfar_driver-objs := gianfar.o \
 		gianfar_ethtool.o
+gianfar_driver-$(CONFIG_FSL_GIANFAR_1588) += gianfar_1588.o
 obj-$(CONFIG_UCC_GETH) += ucc_geth_driver.o
 ucc_geth_driver-objs := ucc_geth.o ucc_geth_ethtool.o

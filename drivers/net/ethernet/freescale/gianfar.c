@@ -908,7 +908,11 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 
 	/* Find the TBI PHY.  If it's not there, we don't support SGMII */
 	priv->tbi_node = of_parse_phandle(np, "tbi-handle", 0);
-
+#if defined CONFIG_FSL_GIANFAR_1588
+	/* Handle IEEE1588 node */
+	if (!gfar_ptp_init(np, priv))
+		dev_info(&ofdev->dev, "ptp 1588 is initialized.\n");
+#endif
 	return 0;
 
 err_grp_init:
@@ -982,8 +986,15 @@ static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	if (!priv->phydev)
 		return -ENODEV;
-
+#if defined CONFIG_FSL_GIANFAR_1588
+	if ((cmd >= PTP_ENBL_TXTS_IOCTL) &&
+			(cmd <= PTP_CLEANUP_TS))
+		return gfar_ioctl_1588(dev, rq, cmd);
+	else
+		return phy_mii_ioctl(priv->phydev, rq, cmd);
+#else
 	return phy_mii_ioctl(priv->phydev, rq, cmd);
+#endif
 }
 
 static u32 cluster_entry_per_class(struct gfar_private *priv, u32 rqfar,
@@ -1424,6 +1435,9 @@ static int gfar_probe(struct platform_device *ofdev)
 	return 0;
 
 register_fail:
+#if defined CONFIG_FSL_GIANFAR_1588
+	gfar_ptp_cleanup(priv);
+#endif
 	unmap_group_regs(priv);
 	gfar_free_rx_queues(priv);
 	gfar_free_tx_queues(priv);
@@ -2193,9 +2207,13 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	do_csum = (CHECKSUM_PARTIAL == skb->ip_summed);
 	do_vlan = vlan_tx_tag_present(skb);
+#if defined CONFIG_FSL_GIANFAR_1588
+	do_tstamp = unlikely((skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
+		    priv->hwts_tx_en) || unlikely(priv->hwts_tx_en_ioctl);
+#else
 	do_tstamp = (skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
 		    priv->hwts_tx_en;
-
+#endif
 	if (do_csum || do_vlan)
 		fcb_len = GMAC_FCB_LEN;
 
@@ -2324,8 +2342,21 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	/* Setup tx hardware time stamping if requested */
 	if (unlikely(do_tstamp)) {
+#if defined CONFIG_FSL_GIANFAR_1588
+		u32 vlan_ctrl;
+#endif
 		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 		fcb->ptp = 1;
+#if defined CONFIG_FSL_GIANFAR_1588
+		/* When PTP in FCB is enabled, VLN in FCB is ignored.
+		 * Instead VLAN tag is read from DFVLAN register. Thus need
+		 * to copy VLCTL to DFVLAN register.
+		 */
+		vlan_ctrl = gfar_read(&regs->dfvlan);
+		vlan_ctrl &= ~0xFFFF;
+		vlan_ctrl |= (fcb->vlctl & 0xFFFF);
+		gfar_write(&regs->dfvlan, vlan_ctrl);
+#endif
 	}
 
 	txbdp_start->bufPtr = dma_map_single(priv->dev, skb->data,
@@ -2566,13 +2597,48 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 				 buflen, DMA_TO_DEVICE);
 
 		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_IN_PROGRESS)) {
+#if defined CONFIG_FSL_GIANFAR_1588
+			struct gfar __iomem *regs = priv->gfargrp[0].regs;
+#endif
 			struct skb_shared_hwtstamps shhwtstamps;
+#if defined CONFIG_FSL_GIANFAR_1588
+			u32 high, low;
+			struct gfar_ptp_time tx_ts;
+			u64 ns;
+
+			if (priv->device_flags &
+					FSL_GIANFAR_DEV_HAS_TS_TO_BUFFER) {
+				/* get tx timestamp out of frame */
+				void *ts;
+				ts = (void *)(((uintptr_t)skb->data + 0x10)
+						& ~0x7);
+				ns = be64_to_cpup(ts);
+			} else
+				/* get tx timestamp from register */
+				ns = gfar_get_tx_timestamp(regs);
+
+			if (unlikely(priv->hwts_tx_en))
+				shhwtstamps.hwtstamp = ns_to_ktime(ns);
+			if (likely(priv->hwts_tx_en_ioctl)) {
+				high = upper_32_bits(ns);
+				low = lower_32_bits(ns);
+				gfar_cnt_to_ptp_time(high, low, &tx_ts);
+			}
+			/* remove tx fcb */
+			skb_pull(skb, GMAC_FCB_LEN + GMAC_TXPAL_LEN);
+			/* pass timestamp back */
+			if (unlikely(priv->hwts_tx_en))
+				skb_tstamp_tx(skb, &shhwtstamps);
+			if (likely(priv->hwts_tx_en_ioctl))
+				gfar_ptp_store_txstamp(dev, skb, &tx_ts);
+#else
 			u64 *ns = (u64*) (((u32)skb->data + 0x10) & ~0x7);
 
 			memset(&shhwtstamps, 0, sizeof(shhwtstamps));
 			shhwtstamps.hwtstamp = ns_to_ktime(*ns);
 			skb_pull(skb, GMAC_FCB_LEN + GMAC_TXPAL_LEN);
 			skb_tstamp_tx(skb, &shhwtstamps);
+#endif
 			bdp->lstatus &= BD_LFLAG(TXBD_WRAP);
 			bdp = next;
 		}
@@ -2774,6 +2840,32 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	}
 
 	/* Get receive timestamp from the skb */
+#if defined CONFIG_FSL_GIANFAR_1588
+	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_TIMER) {
+		u32 high, low;
+
+		/* get timestamp */
+		high = *((u32 *)skb->data);
+		low = *(((u32 *)skb->data) + 1);
+		skb_pull(skb, 8);
+		/* proprietary PTP timestamping over ioctl */
+		if (unlikely(priv->hwts_rx_en_ioctl)) {
+			struct gfar_ptp_time rx_ts;
+			/* get rx timestamp */
+			gfar_cnt_to_ptp_time(high, low, &rx_ts);
+			/* parse and store rx timestamp */
+			gfar_ptp_store_rxstamp(dev, skb, &rx_ts);
+		} else if (unlikely(priv->hwts_rx_en)) {
+			/* kernel-API timestamping ? */
+			u64 nsec;
+			struct skb_shared_hwtstamps *hws;
+			hws = skb_hwtstamps(skb);
+			nsec = make64(high, low);
+			hws->hwtstamp = ns_to_ktime(nsec);
+		}
+	} else if (priv->padding)
+			skb_pull(skb, priv->padding);
+#else
 	if (priv->hwts_rx_en) {
 		struct skb_shared_hwtstamps *shhwtstamps = skb_hwtstamps(skb);
 		u64 *ns = (u64 *) skb->data;
@@ -2784,7 +2876,7 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 
 	if (priv->padding)
 		skb_pull(skb, priv->padding);
-
+#endif
 	if (dev->features & NETIF_F_RXCSUM)
 		gfar_rx_checksum(skb, fcb);
 
