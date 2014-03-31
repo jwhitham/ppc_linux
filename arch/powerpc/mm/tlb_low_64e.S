@@ -360,6 +360,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_SMT)
  * r10 = cpu number
  */
 tlb_miss_common_fsl_htw:
+BEGIN_FTR_SECTION
 	/*
 	 * Search if we already have an indirect entry for that virtual
 	 * address, and if we do, bail out.
@@ -400,6 +401,7 @@ tlb_miss_common_fsl_htw:
 //	ori	r10,r10,MAS1_IND
 	mtspr	SPRN_MAS1,r10
 	mtspr	SPRN_MAS2,r15
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 
 	/* Now, we need to walk the page tables. First check if we are in
 	 * range.
@@ -461,6 +463,7 @@ tlb_miss_common_fsl_htw:
 
 tlb_miss_done_fsl_htw:
 	.macro	tlb_unlock_fsl_htw
+BEGIN_FTR_SECTION
 	beq	cr1,1f		/* no unlock if lock was recursively grabbed */
 	mtocrf	0x01,r11
 	addi	r10,r11,PACA_TLB_LOCK-1
@@ -469,6 +472,7 @@ tlb_miss_done_fsl_htw:
 	isync
 	stb	r15,0(r10)
 1:
+END_FTR_SECTION_IFSET(CPU_FTR_SMT)
 	.endm
 
 	tlb_unlock_fsl_htw
