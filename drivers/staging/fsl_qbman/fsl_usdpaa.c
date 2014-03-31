@@ -1054,7 +1054,8 @@ static long ioctl_dma_stats(struct ctx *ctx, void __user *arg)
 	result.total_bytes = phys_size;
 
 	list_for_each_entry(frag, &mem_list, list) {
-		result.free_bytes += frag->len;
+		if (frag->refs == 0)
+			result.free_bytes += frag->len;
 	}
 
 	return copy_to_user(arg, &result, sizeof(result)); }
