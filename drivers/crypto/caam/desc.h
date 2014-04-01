@@ -302,6 +302,33 @@ struct sec4_sg_entry {
 #define CLRW_RESET_OFIFO             0x40000000u /* era 3 */
 #define CLRW_RESET_IFIFO_DFIFO       0x80000000u /* era 3 */
 
+/* CHA Control Register bits */
+#define CCTRL_RESET_CHA_ALL          0x1
+#define CCTRL_RESET_CHA_AESA         0x2
+#define CCTRL_RESET_CHA_DESA         0x4
+#define CCTRL_RESET_CHA_AFHA         0x8
+#define CCTRL_RESET_CHA_KFHA         0x10
+#define CCTRL_RESET_CHA_SF8A         0x20
+#define CCTRL_RESET_CHA_PKHA         0x40
+#define CCTRL_RESET_CHA_MDHA         0x80
+#define CCTRL_RESET_CHA_CRCA         0x100
+#define CCTRL_RESET_CHA_RNG          0x200
+#define CCTRL_RESET_CHA_SF9A         0x400
+#define CCTRL_RESET_CHA_ZUCE         0x800
+#define CCTRL_RESET_CHA_ZUCA         0x1000
+#define CCTRL_UNLOAD_PK_A0           0x10000
+#define CCTRL_UNLOAD_PK_A1           0x20000
+#define CCTRL_UNLOAD_PK_A2           0x40000
+#define CCTRL_UNLOAD_PK_A3           0x80000
+#define CCTRL_UNLOAD_PK_B0           0x100000
+#define CCTRL_UNLOAD_PK_B1           0x200000
+#define CCTRL_UNLOAD_PK_B2           0x400000
+#define CCTRL_UNLOAD_PK_B3           0x800000
+#define CCTRL_UNLOAD_PK_N            0x1000000
+#define CCTRL_UNLOAD_PK_A            0x4000000
+#define CCTRL_UNLOAD_PK_B            0x8000000
+#define CCTRL_UNLOAD_SBOX            0x10000000
+
 /*
  * FIFO_LOAD/FIFO_STORE/SEQ_FIFO_LOAD/SEQ_FIFO_STORE
  * Command Constructs
