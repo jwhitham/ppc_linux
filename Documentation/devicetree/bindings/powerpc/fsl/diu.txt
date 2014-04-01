@@ -6,7 +6,11 @@ drive DVI monitors.
 Required properties:
 - compatible : should be "fsl,diu" or "fsl,mpc5121-diu".
 - reg : should contain at least address and length of the DIU register
-  set.
+  set. The address and length for pixel clock register is optional, it's
+  not needed for the platforms with the pixel clock setting function, such
+  as P1022, MPC8610, MPC5121; for the platform without clock setting function,
+  the pixel clock register and settings in 'pixclk' node work together to
+  provide the pixel clock setting in the diu driver.
 - interrupts : one DIU interrupt should be described here.
 - interrupt-parent : the phandle for the interrupt controller that
   services interrupts for this device.
@@ -15,6 +19,8 @@ Optional properties:
 - edid : verbatim EDID data block describing attached display.
   Data from the detailed timing descriptor will be used to
   program the display controller.
+- pixclk : the pixel clock register setting, includeing PXCKDLYDIR, PXCK
+  and PXCKDLY.
 
 Example (MPC8610HPCD):
 	display@2c000 {
@@ -31,4 +37,12 @@ Example for MPC5121:
 		interrupts = <64 0x8>;
 		interrupt-parent = <&ipic>;
 		edid = [edid-data];
+	};
+
+Example for T1040:
+	display:display@180000 {
+		compatible = "fsl,t1040-diu", "fsl,diu";
+		reg = <0x180000 1000 0xfc028 4>;
+		pixclk = <0 255 0>;
+		interrupts = <74 2 0 0>;
 	};

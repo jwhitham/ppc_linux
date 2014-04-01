@@ -50,6 +50,7 @@
 #define INT_PARERR	0x08	/* Display parameters error interrupt */
 #define INT_LS_BF_VS	0x10	/* Lines before vsync. interrupt */
 
+#define PIXCLKCR_PXCKEN 0x80000000
 /*
  * List of supported video modes
  *
@@ -372,6 +373,8 @@ struct fsl_diu_data {
 	unsigned int irq;
 	enum fsl_diu_monitor_port monitor_port;
 	struct diu __iomem *diu_reg;
+	void __iomem *pixelclk_reg;
+	u32 pixclkcr[3];
 	spinlock_t reg_lock;
 	u8 dummy_aoi[4 * 4 * 4];
 	struct diu_ad dummy_ad __aligned(8);
@@ -479,7 +482,10 @@ static enum fsl_diu_monitor_port fsl_diu_name_to_port(const char *s)
 			port = FSL_DIU_PORT_DLVDS;
 	}
 
-	return diu_ops.valid_monitor_port(port);
+	if (diu_ops.valid_monitor_port)
+		return diu_ops.valid_monitor_port(port);
+
+	return port;
 }
 
 /*
@@ -798,6 +804,35 @@ static void set_fix(struct fb_info *info)
 	fix->ypanstep = 1;
 }
 
+static void set_pixel_clock(struct fsl_diu_data *data, unsigned int pixclock)
+{
+	unsigned long freq;
+	u64 temp;
+	u32 pxclk;
+	u32 pxclkdl_dir, pxckmax, pxclk_delay;
+
+	/* Convert pixclock from a wavelength to a frequency */
+	temp = 1000000000000ULL;
+	do_div(temp, pixclock);
+	freq = temp;
+
+	pxclkdl_dir = data->pixclkcr[0] << 30;
+	pxckmax =  data->pixclkcr[1];
+	pxclk_delay = data->pixclkcr[2] << 8;
+
+	/*
+	 * 'pxclk' is the ratio of the platform clock to the pixel clock.
+	 * This number is programmed into the PIXCLKCR register, and the valid
+	 * range of values is 2- pxckmax.
+	 */
+	pxclk = DIV_ROUND_CLOSEST(fsl_get_sys_freq(), freq);
+	pxclk = clamp_t(u32, pxclk, 2, pxckmax);
+
+	out_be32(data->pixelclk_reg, 0);
+	out_be32(data->pixelclk_reg, PIXCLKCR_PXCKEN
+			| pxclkdl_dir | (pxclk << 16) | pxclk_delay);
+}
+
 static void update_lcdc(struct fb_info *info)
 {
 	struct fb_var_screeninfo *var = &info->var;
@@ -846,7 +881,13 @@ static void update_lcdc(struct fb_info *info)
 
 	out_be32(&hw->vsyn_para, temp);
 
-	diu_ops.set_pixel_clock(var->pixclock);
+	/* If the pixel clock setting function can not be used on the platform,
+	 * then use the platform one.
+	 */
+	if (diu_ops.set_pixel_clock)
+		diu_ops.set_pixel_clock(var->pixclock);
+	else
+		set_pixel_clock(data, var->pixclock);
 
 #ifndef CONFIG_PPC_MPC512x
 	/*
@@ -1750,6 +1791,24 @@ static int fsl_diu_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "cannot map DIU registers\n");
 		ret = -EFAULT;
 		goto error;
+	}
+
+	if (!diu_ops.set_pixel_clock) {
+		data->pixelclk_reg = of_iomap(np, 1);
+		if (!data->pixelclk_reg) {
+			dev_err(&pdev->dev,
+				"Cannot map pixelclk register.\n");
+			ret = -EFAULT;
+			goto error;
+		}
+		/*Get the pixclkcr settings: PXCKDLYDIR; MAXPXCK, PXCKDLY*/
+		ret = of_property_read_u32_array(np, "pixclk",
+						data->pixclkcr, 3);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Cannot get pixelclk register information.\n");
+			goto error;
+		}
 	}
 
 	/* Get the IRQ of the DIU */
