@@ -517,7 +517,7 @@ struct sk_buff {
 	__be16			inner_protocol;
 	__u16			inner_transport_header;
 	__u16			inner_network_header;
-#ifdef CONFIG_RX_TX_BUFF_XCHG
+#if defined(CONFIG_GIANFAR) && defined(CONFIG_AS_FASTPATH)
 	__u8			owner;
 	struct sk_buff		*new_skb;
 #endif
