@@ -406,6 +406,7 @@ int dpa_classif_table_modify_miss_action(int			td,
 				const struct dpa_cls_tbl_action	*miss_action)
 {
 	int errno;
+	int old_hmd, hmd;
 	t_Error err;
 	t_FmPcdCcNextEngineParams miss_engine_params;
 	struct dpa_cls_table *ptable;
@@ -428,11 +429,35 @@ int dpa_classif_table_modify_miss_action(int			td,
 		return -ENOSYS;
 	}
 
+	/*
+	 * Check existing header manipulation descriptors and release if
+	 * found.
+	 */
+	switch (ptable->miss_action.type) {
+	case DPA_CLS_TBL_ACTION_ENQ:
+		old_hmd = ptable->miss_action.enq_params.hmd;
+		break;
+	case DPA_CLS_TBL_ACTION_NEXT_TABLE:
+		old_hmd = ptable->miss_action.next_table_params.hmd;
+		break;
+#if (DPAA_VERSION >= 11)
+	case DPA_CLS_TBL_ACTION_MCAST:
+		old_hmd = ptable->miss_action.mcast_params.hmd;
+		break;
+#endif /* (DPAA_VERSION >= 11) */
+	default:
+		old_hmd = DPA_OFFLD_DESC_NONE;
+		break;
+	}
+	dpa_classif_hm_release_chain(old_hmd);
+
 	/* Fill the [miss_engine_params] structure w/ data */
 	errno = action_to_next_engine_params(miss_action, &miss_engine_params,
-					NULL, ptable->params.distribution,
+					&hmd, ptable->params.distribution,
 					ptable->params.classification);
 	if (errno < 0) {
+		/* Lock back the old HM chain. */
+		dpa_classif_hm_lock_chain(old_hmd);
 		RELEASE_OBJECT(ptable);
 		log_err("Failed verification of miss action params for table "
 			"td=%d.\n", td);
@@ -443,6 +468,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 		err = FM_PCD_HashTableModifyMissNextEngine(ptable->params.
 			cc_node, &miss_engine_params);
 		if (err != E_OK) {
+			/* Lock back the old HM chain. */
+			dpa_classif_hm_lock_chain(old_hmd);
 			RELEASE_OBJECT(ptable);
 			log_err("FMan driver call failed - "
 				"FM_PCD_HashTableModifyMissNextEngine "
@@ -454,6 +481,8 @@ int dpa_classif_table_modify_miss_action(int			td,
 		err = FM_PCD_MatchTableModifyMissNextEngine((t_Handle)ptable->
 			int_cc_node[0].cc_node, &miss_engine_params);
 		if (err != E_OK) {
+			/* Lock back the old HM chain. */
+			dpa_classif_hm_lock_chain(old_hmd);
 			RELEASE_OBJECT(ptable);
 			log_err("FMan driver call failed - "
 				"FM_PCD_MatchTableModifyMissNextEngine (td=%d, "
@@ -463,6 +492,7 @@ int dpa_classif_table_modify_miss_action(int			td,
 		}
 	}
 
+	/* Store Miss Action (including its header manip chain). */
 	memcpy(&ptable->miss_action, miss_action, sizeof(*miss_action));
 
 	RELEASE_OBJECT(ptable);
