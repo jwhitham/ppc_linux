@@ -101,12 +101,6 @@ struct fm_port_pcd_param {
 struct fm_port_pool_param {
 	uint8_t		id;		/**< External buffer pool id */
 	uint16_t	size;		/**< External buffer pool buffer size */
-#ifdef CONFIG_FMAN_PFC
-	/**<The Priority Enable Vector in the PFC frame which is transmitted
-	 * when the buffer pool depletes;
-	 */
-	uint8_t		pfcv;
-#endif
 };
 
 /**************************************************************************//**
