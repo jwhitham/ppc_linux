@@ -1298,7 +1298,6 @@ static int gfar_probe(struct platform_device *ofdev)
 	priv->dev = &ofdev->dev;
 	SET_NETDEV_DEV(dev, &ofdev->dev);
 
-	spin_lock_init(&priv->bflock);
 	INIT_WORK(&priv->reset_task, gfar_reset_task);
 
 	platform_set_drvdata(ofdev, priv);
@@ -1392,9 +1391,8 @@ static int gfar_probe(struct platform_device *ofdev)
 	/* Carrier starts down, phylib will bring it up */
 	netif_carrier_off(dev);
 
-	device_init_wakeup(&dev->dev,
-			   priv->device_flags &
-			   FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
+	device_set_wakeup_capable(&ofdev->dev, priv->device_flags &
+				  FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
 
 	/* fill out IRQ number and name fields */
 	for (i = 0; i < priv->num_grps; i++) {
@@ -1469,48 +1467,37 @@ static int gfar_suspend(struct device *dev)
 	struct gfar_private *priv = dev_get_drvdata(dev);
 	struct net_device *ndev = priv->ndev;
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
-	unsigned long flags;
 	u32 tempval;
-
 	int magic_packet = priv->wol_en &&
 			   (priv->device_flags &
 			    FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
 
+	if (!netif_running(ndev))
+		return 0;
+
+	disable_napi(priv);
+	netif_tx_lock(ndev);
 	netif_device_detach(ndev);
+	netif_tx_unlock(ndev);
 
-	if (netif_running(ndev)) {
+	gfar_halt(priv);
 
-		local_irq_save(flags);
-		lock_tx_qs(priv);
+	if (magic_packet) {
+		/* Enable interrupt on Magic Packet */
+		gfar_write(&regs->imask, IMASK_MAG);
 
-		gfar_halt_nodisable(priv);
+		/* Enable Magic Packet mode */
+		tempval = gfar_read(&regs->maccfg2);
+		tempval |= MACCFG2_MPEN;
+		gfar_write(&regs->maccfg2, tempval);
 
-		/* Disable Tx, and Rx if wake-on-LAN is disabled. */
+		/* re-enable the Rx block */
 		tempval = gfar_read(&regs->maccfg1);
-
-		tempval &= ~MACCFG1_TX_EN;
-
-		if (!magic_packet)
-			tempval &= ~MACCFG1_RX_EN;
-
+		tempval |= MACCFG1_RX_EN;
 		gfar_write(&regs->maccfg1, tempval);
 
-		unlock_tx_qs(priv);
-		local_irq_restore(flags);
-
-		disable_napi(priv);
-
-		if (magic_packet) {
-			/* Enable interrupt on Magic Packet */
-			gfar_write(&regs->imask, IMASK_MAG);
-
-			/* Enable Magic Packet mode */
-			tempval = gfar_read(&regs->maccfg2);
-			tempval |= MACCFG2_MPEN;
-			gfar_write(&regs->maccfg2, tempval);
-		} else {
-			phy_stop(priv->phydev);
-		}
+	} else {
+		phy_stop(priv->phydev);
 	}
 
 	return 0;
@@ -1521,37 +1508,26 @@ static int gfar_resume(struct device *dev)
 	struct gfar_private *priv = dev_get_drvdata(dev);
 	struct net_device *ndev = priv->ndev;
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
-	unsigned long flags;
 	u32 tempval;
 	int magic_packet = priv->wol_en &&
 			   (priv->device_flags &
 			    FSL_GIANFAR_DEV_HAS_MAGIC_PACKET);
 
-	if (!netif_running(ndev)) {
-		netif_device_attach(ndev);
+	if (!netif_running(ndev))
 		return 0;
-	}
 
-	if (!magic_packet && priv->phydev)
+	if (magic_packet) {
+		/* Disable Magic Packet mode */
+		tempval = gfar_read(&regs->maccfg2);
+		tempval &= ~MACCFG2_MPEN;
+		gfar_write(&regs->maccfg2, tempval);
+	} else {
 		phy_start(priv->phydev);
-
-	/* Disable Magic Packet mode, in case something
-	 * else woke us up.
-	 */
-	local_irq_save(flags);
-	lock_tx_qs(priv);
-
-	tempval = gfar_read(&regs->maccfg2);
-	tempval &= ~MACCFG2_MPEN;
-	gfar_write(&regs->maccfg2, tempval);
+	}
 
 	gfar_start(priv);
 
-	unlock_tx_qs(priv);
-	local_irq_restore(flags);
-
 	netif_device_attach(ndev);
-
 	enable_napi(priv);
 
 	return 0;
@@ -1967,7 +1943,8 @@ static int register_grp_irqs(struct gfar_priv_grp *grp)
 		/* Install our interrupt handlers for Error,
 		 * Transmit, and Receive
 		 */
-		err = request_irq(gfar_irq(grp, ER)->irq, gfar_error, 0,
+		err = request_irq(gfar_irq(grp, ER)->irq, gfar_error,
+				  IRQF_NO_SUSPEND,
 				  gfar_irq(grp, ER)->name, grp);
 		if (err < 0) {
 			netif_err(priv, intr, dev, "Can't get IRQ %d\n",
@@ -1990,7 +1967,8 @@ static int register_grp_irqs(struct gfar_priv_grp *grp)
 			goto rx_irq_fail;
 		}
 	} else {
-		err = request_irq(gfar_irq(grp, TX)->irq, gfar_interrupt, 0,
+		err = request_irq(gfar_irq(grp, TX)->irq, gfar_interrupt,
+				  IRQF_NO_SUSPEND,
 				  gfar_irq(grp, TX)->name, grp);
 		if (err < 0) {
 			netif_err(priv, intr, dev, "Can't get IRQ %d\n",
@@ -2090,8 +2068,6 @@ static int gfar_enet_open(struct net_device *dev)
 	err = startup_gfar(dev);
 	if (err)
 		return err;
-
-	device_set_wakeup_enable(&dev->dev, priv->wol_en);
 
 	return err;
 }
