@@ -109,7 +109,7 @@ config FSL_FM_RX_EXTRA_HEADROOM
 		modifying the "bootargs" env variable.
 
 config FMAN_PFC
-	bool "FMan PFC support"
+	bool "FMan PFC support (EXPERIMENTAL)"
 	depends on FMAN_T4240 && FSL_FMAN
 	default n
 	---help---
@@ -122,7 +122,7 @@ config FMAN_PFC_COS_COUNT
 	int "Number of PFC Classes of Service"
 	depends on FMAN_PFC && FSL_FMAN
 	range 1 4
-	default "1"
+	default "3"
 	---help ---
 	  The number of Classes of Service controlled by PFC.
 
