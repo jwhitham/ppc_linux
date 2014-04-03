@@ -951,7 +951,7 @@ int fman_port_set_bpools(const struct fman_port *port,
 
     /* Pools depletion */
     tmp = 0;
-    for (i = 0; i < bp->count; i++) {
+    for (i = 0; i < FMAN_PORT_MAX_EXT_POOLS_NUM; i++) {
         if (bp->bpool[i].grp_bp_depleted) {
             grp_depl_used = TRUE;
             tmp |= 0x80000000 >> i;
