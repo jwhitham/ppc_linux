@@ -659,9 +659,8 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	init_sh_desc(desc, HDR_SHARE_SERIAL | stidx);
 
 	/* skip key loading if they are loaded due to sharing */
-	key_jump_cmd = append_jump(desc, JUMP_CLASS_BOTH | JUMP_JSL |
-				   JUMP_TEST_ALL | JUMP_COND_SHRD |
-				   JUMP_COND_SELF);
+	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
+				   JUMP_COND_SHRD);
 	if (keys_fit_inline) {
 		append_key_as_imm(desc, ctx->key, ctx->split_key_pad_len,
 				  ctx->split_key_len, CLASS_2 |
@@ -761,9 +760,8 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	init_sh_desc(desc, HDR_SHARE_SERIAL | stidx);
 
 	/* skip key loading if they are loaded due to sharing */
-	key_jump_cmd = append_jump(desc, JUMP_CLASS_BOTH | JUMP_JSL |
-				   JUMP_TEST_ALL | JUMP_COND_SHRD |
-				   JUMP_COND_SELF);
+	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
+				   JUMP_COND_SHRD);
 	append_key(desc, ctx->key_dma, ctx->split_key_len, CLASS_2 |
 		   KEY_DEST_MDHA_SPLIT | KEY_ENC);
 	append_key(desc, ctx->key_dma + ctx->split_key_pad_len,
@@ -953,7 +951,7 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 
 	/* skip key loading if they are loaded due to sharing */
 	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
-				   JUMP_COND_SHRD | JUMP_COND_SELF);
+				   JUMP_COND_SHRD);
 	if (keys_fit_inline)
 		append_key_as_imm(desc, (void *)ctx->key, ctx->enckeylen,
 				  ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
@@ -1059,9 +1057,8 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	init_sh_desc(desc, HDR_SHARE_SERIAL);
 
 	/* skip key loading if they are loaded due to sharing */
-	key_jump_cmd = append_jump(desc, JUMP_JSL |
-				   JUMP_TEST_ALL | JUMP_COND_SHRD |
-				   JUMP_COND_SELF);
+	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
+				   JUMP_COND_SHRD);
 	if (keys_fit_inline)
 		append_key_as_imm(desc, (void *)ctx->key, ctx->enckeylen,
 				  ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
