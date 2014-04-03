@@ -638,35 +638,57 @@ static void gfar_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 
-	if (priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) {
-		wol->supported = WAKE_MAGIC;
-		wol->wolopts = priv->wol_en ? WAKE_MAGIC : 0;
-	} else {
-		wol->supported = wol->wolopts = 0;
-	}
+	wol->supported = wol->wolopts = 0;
+
+	if (priv->wol_supported & GFAR_WOL_MAGIC)
+		wol->supported |= WAKE_MAGIC;
+
+	if (priv->wol_supported & GFAR_WOL_FILER_UCAST)
+		wol->supported |= WAKE_UCAST;
+
+	if (priv->wol_supported & GFAR_WOL_FILER_ARP)
+		wol->supported |= WAKE_ARP;
+
+	if (priv->wol_opts & GFAR_WOL_MAGIC)
+		wol->wolopts |= WAKE_MAGIC;
+
+	if (priv->wol_opts & GFAR_WOL_FILER_UCAST)
+		wol->wolopts |= WAKE_UCAST;
+
+	if (priv->wol_opts & GFAR_WOL_FILER_ARP)
+		wol->wolopts |= WAKE_ARP;
 }
 
 static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 	int err;
+	u16 wol_opts = 0;
 
-	if (!(priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) &&
-	    wol->wolopts != 0)
+	if (!priv->wol_supported && wol->wolopts)
 		return -EINVAL;
 
-	if (wol->wolopts & ~WAKE_MAGIC)
+	if (wol->wolopts & ~(WAKE_MAGIC | WAKE_UCAST | WAKE_ARP))
 		return -EINVAL;
 
-	device_set_wakeup_enable(priv->dev, wol->wolopts & WAKE_MAGIC);
+	if (wol->wolopts & WAKE_MAGIC) {
+		wol_opts |= GFAR_WOL_MAGIC;
+	} else {
+		if (wol->wolopts & WAKE_UCAST)
+			wol_opts |= GFAR_WOL_FILER_UCAST;
+		if (wol->wolopts & WAKE_ARP)
+			wol_opts |= GFAR_WOL_FILER_ARP;
+	}
 
-	err = mpc85xx_pmc_set_wake(priv->dev, wol->wolopts & WAKE_MAGIC);
+	priv->wol_opts = wol_opts & priv->wol_supported;
+
+	device_set_wakeup_enable(priv->dev, priv->wol_opts);
+
+	err = mpc85xx_pmc_set_wake(priv->dev, priv->wol_opts);
 	if (err) {
 		device_set_wakeup_enable(priv->dev, false);
 		return err;
 	}
-
-	priv->wol_en = !!device_may_wakeup(priv->dev);
 
 	return 0;
 }
