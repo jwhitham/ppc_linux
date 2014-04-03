@@ -1400,7 +1400,7 @@ static int gfar_probe(struct platform_device *ofdev)
 
 	if ((priv->device_flags & FSL_GIANFAR_DEV_HAS_WAKE_ON_FILER) &&
 	     priv->rx_filer_enable)
-		priv->wol_supported |= 0;
+		priv->wol_supported |= GFAR_WOL_FILER_UCAST;
 
 	device_set_wakeup_capable(&ofdev->dev, priv->wol_supported);
 
@@ -1496,6 +1496,7 @@ static void gfar_filer_config_wol(struct gfar_private *priv)
 {
 	u32 rqfcr, rqfpr;
 	unsigned int i;
+	u8 rqfcr_queue;
 
 	__gfar_filer_disable(priv);
 
@@ -1504,6 +1505,32 @@ static void gfar_filer_config_wol(struct gfar_private *priv)
 	rqfpr = 0x0;
 	for (i = 0; i <= MAX_FILER_IDX; i++)
 		gfar_write_filer(priv, i, rqfcr, rqfpr);
+
+	i = 0;
+	/* select a rx queue in group 0 */
+	rqfcr_queue = (u8)find_first_bit(&priv->gfargrp[0].rx_bit_map,
+					 priv->num_rx_queues);
+
+	if (priv->wol_opts & GFAR_WOL_FILER_UCAST) {
+		/* Unicast packet, accept it */
+		struct net_device *ndev = priv->ndev;
+		u32 dest_mac_addr = (ndev->dev_addr[0] << 16) |
+				    (ndev->dev_addr[1] << 8) |
+				     ndev->dev_addr[2];
+
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+			RQFCR_CMP_EXACT | RQFCR_PID_DAH;
+		rqfpr = dest_mac_addr;
+		gfar_write_filer(priv, i++, rqfcr, rqfpr);
+
+		dest_mac_addr = (ndev->dev_addr[3] << 16) |
+				(ndev->dev_addr[4] << 8) |
+				 ndev->dev_addr[5];
+		rqfcr = (rqfcr_queue << 10) | RQFCR_GPI |
+			RQFCR_CMP_EXACT | RQFCR_PID_DAL;
+		rqfpr = dest_mac_addr;
+		gfar_write_filer(priv, i++, rqfcr, rqfpr);
+	}
 
 	__gfar_filer_enable(priv);
 }
