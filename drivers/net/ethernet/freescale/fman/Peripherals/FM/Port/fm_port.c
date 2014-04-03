@@ -5476,7 +5476,7 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     t_DsarIcmpV4Descriptor* ICMPV4Descriptor;
     t_DsarIcmpV6Descriptor* ICMPV6Descriptor;
     t_DsarNdDescriptor* NDDescriptor;
-    uint64_t fmMuramVirtBaseAddr = (uint64_t)XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr);
+    uint64_t fmMuramVirtBaseAddr = (uint64_t)PTR_TO_UINT(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr));
     uint32_t *param_page = XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rgpr));
     t_ArCommonDesc *ArCommonDescPtr = (t_ArCommonDesc*)(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(*param_page)));
     struct arOffsets* of;
