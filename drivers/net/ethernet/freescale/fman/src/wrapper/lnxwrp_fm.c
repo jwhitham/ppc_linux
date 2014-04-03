@@ -571,7 +571,7 @@ static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
                uint32_t svr;
                 svr = mfspr(SPRN_SVR);
 
-                if ((svr & ~SVR_VER_IGNORE_MASK) == SVR_B4860_REV2_VALUE)
+                if ((svr & ~SVR_VER_IGNORE_MASK) >= SVR_B4860_REV2_VALUE)
                     p_LnxWrpFmDev->fmMuramMemSize = 0x80000;
             }
         }
