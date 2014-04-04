@@ -42,6 +42,9 @@
 #include <linux/phy.h>
 #include <linux/sort.h>
 #include <linux/if_vlan.h>
+#ifdef CONFIG_PM
+#include <sysdev/fsl_soc.h>
+#endif
 
 #include "gianfar.h"
 
@@ -646,6 +649,7 @@ static void gfar_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct gfar_private *priv = netdev_priv(dev);
+	int err;
 
 	if (!(priv->device_flags & FSL_GIANFAR_DEV_HAS_MAGIC_PACKET) &&
 	    wol->wolopts != 0)
@@ -655,6 +659,12 @@ static int gfar_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 		return -EINVAL;
 
 	device_set_wakeup_enable(priv->dev, wol->wolopts & WAKE_MAGIC);
+
+	err = mpc85xx_pmc_set_wake(priv->dev, wol->wolopts & WAKE_MAGIC);
+	if (err) {
+		device_set_wakeup_enable(priv->dev, false);
+		return err;
+	}
 
 	priv->wol_en = !!device_may_wakeup(priv->dev);
 
