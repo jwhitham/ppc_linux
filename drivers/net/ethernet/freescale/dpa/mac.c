@@ -173,13 +173,6 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 
 	INIT_LIST_HEAD(&mac_dev->mc_addr_list);
 
-	/* pause frame autonegotiation enabled*/
-	mac_dev->autoneg_pause = true;
-	/* does not ignore PAUSE frames */
-	mac_dev->rx_pause = true;
-	/* transmits PAUSE frames when congested */
-	mac_dev->tx_pause = true;
-
 	/* Get the FM node */
 	dev_node = of_get_parent(mac_node);
 	if (unlikely(dev_node == NULL)) {
@@ -363,6 +356,26 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	if (unlikely(_errno < 0)) {
 		dev_err(dev, "mac_dev->init() = %d\n", _errno);
 		goto _return_dev_set_drvdata;
+	}
+
+	/* pause frame autonegotiation enabled*/
+	mac_dev->autoneg_pause = true;
+
+	/* by intializing the values to false, force FMD to enable PAUSE frames
+	 * on RX and TX
+	 */
+	mac_dev->rx_pause = mac_dev->tx_pause = false;
+	/* does not ignore PAUSE frames */
+	_errno = set_mac_rx_pause(mac_dev, true);
+	if (unlikely(_errno < 0)) {
+		dev_err(dev, "set_mac_rx_pause() = %d\n", _errno);
+		return _errno;
+	}
+	/* transmits PAUSE frames when congested */
+	_errno = set_mac_tx_pause(mac_dev, true);
+	if (unlikely(_errno < 0)) {
+		dev_err(dev, "set_mac_tx_pause() = %d\n", _errno);
+		return _errno;
 	}
 
 	dev_info(dev,

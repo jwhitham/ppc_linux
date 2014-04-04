@@ -121,9 +121,7 @@ extern const char	*mac_driver_description;
 extern const size_t	 mac_sizeof_priv[];
 extern void (*const mac_setup[])(struct mac_device *mac_dev);
 
-int set_mac_rx_pause(struct mac_device *mac_dev,
-		struct fm_mac_dev *fm_mac_dev, bool en);
-int set_mac_tx_pause(struct mac_device *mac_dev,
-		struct fm_mac_dev *fm_mac_dev, bool en);
+int set_mac_rx_pause(struct mac_device *mac_dev, bool en);
+int set_mac_tx_pause(struct mac_device *mac_dev, bool en);
 
 #endif	/* __MAC_H */

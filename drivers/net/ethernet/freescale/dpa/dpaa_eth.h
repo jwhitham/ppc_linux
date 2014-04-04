@@ -43,6 +43,7 @@
 
 extern int dpa_rx_extra_headroom;
 extern int dpa_max_frm;
+extern int dpa_num_cpus;
 
 #define dpa_get_rx_extra_headroom() dpa_rx_extra_headroom
 #define dpa_get_max_frm() dpa_max_frm
@@ -185,7 +186,12 @@ struct dpa_buffer_layout_s {
 	((parse_result_ptr)->l4r & FM_L4_PARSE_RESULT_TCP)
 
 /* number of Tx queues to FMan */
+#ifdef CONFIG_FMAN_PFC
+#define DPAA_ETH_TX_QUEUES	(NR_CPUS * CONFIG_FMAN_PFC_COS_COUNT)
+#else
 #define DPAA_ETH_TX_QUEUES	NR_CPUS
+#endif
+
 #define DPAA_ETH_RX_QUEUES	128
 
 #ifdef CONFIG_PM
@@ -587,8 +593,17 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 /* Use in lieu of skb_get_queue_mapping() */
+#ifdef CONFIG_FMAN_PFC
+#define dpa_get_queue_mapping(skb) \
+	(((skb)->priority < CONFIG_FMAN_PFC_COS_COUNT) ? \
+		((skb)->priority * dpa_num_cpus + smp_processor_id()) : \
+		((CONFIG_FMAN_PFC_COS_COUNT - 1) * \
+			dpa_num_cpus + smp_processor_id()));
+
+#else
 #define dpa_get_queue_mapping(skb) \
 	smp_processor_id()
+#endif
 #else
 /* Use the queue selected by XPS */
 #define dpa_get_queue_mapping(skb) \

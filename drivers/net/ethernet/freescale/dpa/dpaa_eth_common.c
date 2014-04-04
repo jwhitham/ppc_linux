@@ -63,6 +63,7 @@ static struct dpa_bp *dpa_bp_array[64];
 
 int dpa_max_frm;
 int dpa_rx_extra_headroom;
+int dpa_num_cpus = NR_CPUS;
 
 static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
@@ -691,7 +692,14 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp)
 		return -EINVAL;
 	}
 
-	bp_params.flags = 0;
+	memset(&bp_params, 0, sizeof(struct bman_pool_params));
+#ifdef CONFIG_FMAN_PFC
+	bp_params.flags = BMAN_POOL_FLAG_THRESH;
+	bp_params.thresholds[0] = bp_params.thresholds[2] =
+			CONFIG_FSL_DPAA_ETH_REFILL_THRESHOLD;
+	bp_params.thresholds[1] = bp_params.thresholds[3] =
+			CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
+#endif
 
 	/* If the pool is already specified, we only create one per bpid */
 	if (dpa_bpid2pool_use(dpa_bp->bpid))
@@ -833,7 +841,7 @@ bool dpa_bpid2pool_use(int bpid)
 #ifdef CONFIG_FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
 u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
 {
-	return smp_processor_id();
+	return dpa_get_queue_mapping(skb);
 }
 #endif
 
@@ -852,9 +860,18 @@ struct dpa_fq *dpa_fq_alloc(struct device *dev,
 	for (i = 0; i < fqids->count; i++) {
 		dpa_fq[i].fq_type = fq_type;
 		dpa_fq[i].fqid = fqids->start ? fqids->start + i : 0;
-		_dpa_assign_wq(dpa_fq + i);
 		list_add_tail(&dpa_fq[i].list, list);
 	}
+
+#ifdef CONFIG_FMAN_PFC
+	if (fq_type == FQ_TYPE_TX ||
+			fq_type == FQ_TYPE_TX_RECYCLE)
+		for (i = 0; i < fqids->count; i++)
+			dpa_fq[i].wq = i / dpa_num_cpus;
+	else
+#endif
+		for (i = 0; i < fqids->count; i++)
+			_dpa_assign_wq(dpa_fq + i);
 
 	return dpa_fq;
 }

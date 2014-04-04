@@ -989,6 +989,17 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	dpaa_eth_init_ports(mac_dev, dpa_bp, count, &port_fqs,
 			buf_layout, dev);
 
+#ifdef CONFIG_FMAN_PFC
+	for (i = 0; i < CONFIG_FMAN_PFC_COS_COUNT; i++) {
+		err = fm_port_set_pfc_priorities_mapping_to_qman_wq(
+				mac_dev->port_dev[TX], i, i);
+		if (unlikely(err != 0)) {
+			dev_err(dev, "Error maping PFC %u to WQ %u\n", i, i);
+			goto pfc_mapping_failed;
+		}
+	}
+#endif
+
 	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
 
 	if (priv->percpu_priv == NULL) {
@@ -1026,6 +1037,9 @@ netdev_init_failed:
 napi_add_failed:
 	dpa_private_napi_del(net_dev);
 	free_percpu(priv->percpu_priv);
+#ifdef CONFIG_FMAN_PFC
+pfc_mapping_failed:
+#endif
 alloc_percpu_failed:
 	dpa_fq_free(dev, &priv->dpa_fq_list);
 fq_alloc_failed:
@@ -1080,6 +1094,7 @@ static int __init __cold dpa_load(void)
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
+	dpa_num_cpus = num_possible_cpus();
 
 	_errno = platform_driver_register(&dpa_driver);
 	if (unlikely(_errno < 0)) {

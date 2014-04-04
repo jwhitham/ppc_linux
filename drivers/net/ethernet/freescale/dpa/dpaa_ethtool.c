@@ -199,7 +199,6 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 	struct dpa_priv_s	*priv;
 	struct mac_device       *mac_dev;
 	struct phy_device       *phy_dev;
-	struct fm_mac_dev       *fm_mac_dev;
 	int _errno;
 	u32 newadv, oldadv;
 
@@ -261,16 +260,13 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 	/* If PAUSE frame autonegotiation is disabled,
 	 * ethtool rx/tx settings are enforced.
 	 */
-	fm_mac_dev = mac_dev->get_mac_handle(mac_dev);
-	_errno = set_mac_rx_pause(mac_dev, fm_mac_dev,
-			!!epause->rx_pause);
+	_errno = set_mac_rx_pause(mac_dev, !!epause->rx_pause);
 	if (unlikely(_errno < 0)) {
 		netdev_err(net_dev, "set_mac_rx_pause() = %d\n", _errno);
 		return _errno;
 	}
 
-	_errno = set_mac_tx_pause(mac_dev, fm_mac_dev,
-			!!epause->tx_pause);
+	_errno = set_mac_tx_pause(mac_dev, !!epause->tx_pause);
 	if (unlikely(_errno < 0)) {
 		netdev_err(net_dev, "set_mac_tx_pause() = %d\n", _errno);
 		return _errno;
