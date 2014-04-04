@@ -87,6 +87,9 @@
 #include <linux/udp.h>
 #include <linux/in.h>
 #include <linux/net_tstamp.h>
+#ifdef CONFIG_PM
+#include <linux/inetdevice.h>
+#endif
 
 #include <asm/io.h>
 #include <asm/reg.h>
@@ -1400,7 +1403,8 @@ static int gfar_probe(struct platform_device *ofdev)
 
 	if ((priv->device_flags & FSL_GIANFAR_DEV_HAS_WAKE_ON_FILER) &&
 	     priv->rx_filer_enable)
-		priv->wol_supported |= GFAR_WOL_FILER_UCAST;
+		priv->wol_supported |= GFAR_WOL_FILER_UCAST |
+				       GFAR_WOL_FILER_ARP;
 
 	device_set_wakeup_capable(&ofdev->dev, priv->wol_supported);
 
@@ -1492,11 +1496,34 @@ static void __gfar_filer_enable(struct gfar_private *priv)
 	gfar_write(&regs->rctrl, temp);
 }
 
-static void gfar_filer_config_wol(struct gfar_private *priv)
+/* Get the first IP address on this chain for this interface
+ * so that we can configure wakeup with WOL for ARP.
+ */
+static int gfar_get_ip(struct gfar_private *priv, __be32 *ip_addr)
 {
+	struct in_device *in_dev;
+	int err = -ENOENT;
+
+	rcu_read_lock();
+	in_dev = __in_dev_get_rcu(priv->ndev);
+	if (in_dev != NULL) {
+		for_primary_ifa(in_dev) {
+			*ip_addr = ifa->ifa_address;
+			err = 0;
+			break;
+		} endfor_ifa(in_dev);
+	}
+	rcu_read_unlock();
+	return err;
+}
+
+static int gfar_filer_config_wol(struct gfar_private *priv)
+{
+	struct net_device *ndev = priv->ndev;
 	u32 rqfcr, rqfpr;
 	unsigned int i;
 	u8 rqfcr_queue;
+	int err = 0;
 
 	__gfar_filer_disable(priv);
 
@@ -1513,7 +1540,6 @@ static void gfar_filer_config_wol(struct gfar_private *priv)
 
 	if (priv->wol_opts & GFAR_WOL_FILER_UCAST) {
 		/* Unicast packet, accept it */
-		struct net_device *ndev = priv->ndev;
 		u32 dest_mac_addr = (ndev->dev_addr[0] << 16) |
 				    (ndev->dev_addr[1] << 8) |
 				     ndev->dev_addr[2];
@@ -1532,7 +1558,40 @@ static void gfar_filer_config_wol(struct gfar_private *priv)
 		gfar_write_filer(priv, i++, rqfcr, rqfpr);
 	}
 
+	if (priv->wol_opts & GFAR_WOL_FILER_ARP) {
+		/* ARP request packet, accept it */
+		__be32 ip_addr;
+
+		err = gfar_get_ip(priv, &ip_addr);
+		if (err) {
+			netif_err(priv, wol, ndev, "Failed to get ip addr\n");
+			goto out;
+		}
+
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+			RQFCR_CMP_EXACT | RQFCR_PID_MASK;
+		rqfpr = RQFPR_ARQ;
+		gfar_write_filer(priv, i++, rqfcr, rqfpr);
+
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+			RQFCR_CMP_EXACT | RQFCR_PID_PARSE;
+		rqfpr = RQFPR_ARQ;
+		gfar_write_filer(priv, i++, rqfcr, rqfpr);
+
+		/* match DEST_IP address in ARP req packet */
+		rqfcr = (rqfcr_queue << 10) | RQFCR_AND |
+			RQFCR_CMP_EXACT | RQFCR_PID_MASK;
+		rqfpr = FPR_FILER_MASK;
+		gfar_write_filer(priv, i++, rqfcr, rqfpr);
+
+		rqfcr = (rqfcr_queue << 10) | RQFCR_GPI |
+			RQFCR_CMP_EXACT | RQFCR_PID_DIA;
+		rqfpr = ip_addr;
+		gfar_write_filer(priv, i++, rqfcr, rqfpr);
+	}
+out:
 	__gfar_filer_enable(priv);
+	return err;
 }
 
 static void gfar_filer_restore_table(struct gfar_private *priv)
@@ -1623,6 +1682,7 @@ static int gfar_suspend(struct device *dev)
 	struct gfar __iomem *regs = priv->gfargrp[0].regs;
 	u32 tempval;
 	u16 wol = priv->wol_opts;
+	int err = 0;
 
 	if (!netif_running(ndev))
 		return 0;
@@ -1649,14 +1709,14 @@ static int gfar_suspend(struct device *dev)
 		gfar_write(&regs->maccfg1, tempval);
 
 	} else if (wol & (GFAR_WOL_FILER_UCAST | GFAR_WOL_FILER_ARP)) {
-		gfar_filer_config_wol(priv);
+		err = gfar_filer_config_wol(priv);
 		gfar_start_wol_filer(priv);
 
 	} else {
 		phy_stop(priv->phydev);
 	}
 
-	return 0;
+	return err;
 }
 
 static int gfar_resume(struct device *dev)
