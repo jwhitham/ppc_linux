@@ -55,7 +55,8 @@ static inline void gfar_asf_reclaim_skb(struct sk_buff *skb)
 static inline void gfar_recycle_skb(struct sk_buff *skb)
 {
 	struct sk_buff_head *h = &__get_cpu_var(skb_recycle_list);
-	int skb_size = SKB_DATA_ALIGN(GFAR_RXB_REC_SZ + NET_SKB_PAD);
+	int skb_size = SKB_DATA_ALIGN(GFAR_RXB_REC_SZ + NET_SKB_PAD
+							 + EXTRA_HEADROOM);
 
 	if (skb_queue_len(h) < DEFAULT_RX_RING_SIZE &&
 		!skb_cloned(skb) && !skb_is_nonlinear(skb) &&
