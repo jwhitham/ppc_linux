@@ -28,12 +28,10 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #include "bman_private.h"
 #ifdef CONFIG_HOTPLUG_CPU
 #include <linux/cpu.h>
 #endif
-
 /*
  * Global variables of the max portal/pool number this bman version supported
  */
@@ -186,6 +184,10 @@ static struct bm_portal_config * __init parse_pcfg(struct device_node *node)
 				pcfg->addr_phys[DPA_PORTAL_CI].start,
 				resource_size(&pcfg->addr_phys[DPA_PORTAL_CI]),
 				_PAGE_GUARDED | _PAGE_NO_CACHE);
+
+	/* disable bp depletion */
+	__raw_writel(0x0, pcfg->addr_virt[DPA_PORTAL_CI] + 0x200);
+	__raw_writel(0x0, pcfg->addr_virt[DPA_PORTAL_CI] + 0x204);
 	return pcfg;
 err:
 	kfree(pcfg);
@@ -501,3 +503,45 @@ __init int bman_resource_init(void)
 	}
 	return 0;
 }
+
+#ifdef CONFIG_SUSPEND
+void suspend_unused_bportal(void)
+{
+	struct bm_portal_config *pcfg;
+
+	if (list_empty(&unused_pcfgs))
+		return;
+
+	list_for_each_entry(pcfg, &unused_pcfgs, list) {
+#ifdef CONFIG_PM_DEBUG
+		pr_info("Need to save bportal %d\n", pcfg->public_cfg.index);
+#endif
+		/* save isdr, disable all via isdr, clear isr */
+		pcfg->saved_isdr =
+			__raw_readl(pcfg->addr_virt[DPA_PORTAL_CI] + 0xe08);
+		__raw_writel(0xffffffff, pcfg->addr_virt[DPA_PORTAL_CI] +
+					0xe08);
+		__raw_writel(0xffffffff, pcfg->addr_virt[DPA_PORTAL_CI] +
+					0xe00);
+	}
+	return;
+}
+
+void resume_unused_bportal(void)
+{
+	struct bm_portal_config *pcfg;
+
+	if (list_empty(&unused_pcfgs))
+		return;
+
+	list_for_each_entry(pcfg, &unused_pcfgs, list) {
+#ifdef CONFIG_PM_DEBUG
+		pr_info("Need to resume bportal %d\n", pcfg->public_cfg.index);
+#endif
+		/* restore isdr */
+		__raw_writel(pcfg->saved_isdr,
+				pcfg->addr_virt[DPA_PORTAL_CI] + 0xe08);
+	}
+	return;
+}
+#endif

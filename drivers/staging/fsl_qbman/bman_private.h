@@ -60,6 +60,8 @@ struct bm_portal_config {
 	struct list_head list;
 	/* User-visible portal configuration settings */
 	struct bman_portal_config public_cfg;
+	/* power management saved data */
+	u32 saved_isdr;
 };
 
 #ifdef CONFIG_FSL_BMAN_CONFIG
@@ -153,4 +155,11 @@ __init int bman_resource_init(void);
 
 const struct bm_portal_config *bman_get_bm_portal_config(
 						struct bman_portal *portal);
+
+/* power management */
+#ifdef CONFIG_SUSPEND
+void suspend_unused_bportal(void);
+void resume_unused_bportal(void);
+#endif
+
 #endif /* CONFIG_FSL_BMAN_CONFIG */

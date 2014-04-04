@@ -1085,11 +1085,46 @@ static struct of_device_id of_fsl_qman_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, of_fsl_qman_ids);
 
+#ifdef CONFIG_PM
+
+static u32 saved_isdr;
+static int qman_pm_suspend_noirq(struct device *dev)
+{
+	suspend_unused_qportal();
+	/* save isdr, disable all, clear isr */
+	saved_isdr = qm_err_isr_disable_read(qm);
+	qm_err_isr_disable_write(qm, 0xffffffff);
+	qm_err_isr_status_clear(qm, 0xffffffff);
+	/* should be idle, otherwise abort ? */
+#ifdef CONFIG_PM_DEBUG
+	pr_info("Qman suspend code, IDLE_STAT = 0x%x\n", qm_in(IDLE_STAT));
+#endif
+	return 0;
+}
+
+static int qman_pm_resume_noirq(struct device *dev)
+{
+	/* restore isdr */
+	qm_err_isr_disable_write(qm, saved_isdr);
+	resume_unused_qportal();
+	return 0;
+}
+#else
+#define qman_pm_suspend_noirq	NULL
+#define qman_pm_resume_noirq	NULL
+#endif
+
+static const struct dev_pm_ops qman_pm_ops = {
+	.suspend_noirq = qman_pm_suspend_noirq,
+	.resume_noirq = qman_pm_resume_noirq,
+};
+
 static struct platform_driver of_fsl_qman_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = DRV_NAME,
 		.of_match_table = of_fsl_qman_ids,
+		.pm = &qman_pm_ops,
 	},
 	.probe = of_fsl_qman_probe,
 	.remove      = of_fsl_qman_remove,

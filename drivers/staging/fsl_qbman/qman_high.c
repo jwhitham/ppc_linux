@@ -123,6 +123,8 @@ struct qman_portal {
 	spinlock_t ccgr_lock;
 	/* track if memory was allocated by the driver */
 	u8 alloced;
+	/* power management data */
+	u32 save_isdr;
 };
 
 #ifdef CONFIG_FSL_DPA_PORTAL_SHARE
@@ -361,6 +363,44 @@ loop:
 	goto loop;
 }
 
+#ifdef CONFIG_SUSPEND
+static int _qman_portal_suspend_noirq(struct device *dev)
+{
+	struct qman_portal *p = (struct qman_portal *)dev->platform_data;
+#ifdef CONFIG_PM_DEBUG
+	struct platform_device *pdev = to_platform_device(dev);
+#endif
+
+	p->save_isdr = qm_isr_disable_read(&p->p);
+	qm_isr_disable_write(&p->p, 0xffffffff);
+	qm_isr_status_clear(&p->p, 0xffffffff);
+#ifdef CONFIG_PM_DEBUG
+	pr_info("Suspend for %s\n", pdev->name);
+#endif
+	return 0;
+}
+
+static int _qman_portal_resume_noirq(struct device *dev)
+{
+	struct qman_portal *p = (struct qman_portal *)dev->platform_data;
+
+	/* restore isdr */
+	qm_isr_disable_write(&p->p, p->save_isdr);
+	return 0;
+}
+#else
+#define _qman_portal_suspend_noirq NULL
+#define _qman_portal_resume_noirq NULL
+#endif
+
+struct dev_pm_domain qman_portal_device_pm_domain = {
+	.ops = {
+		USE_PLATFORM_PM_SLEEP_OPS
+		.suspend_noirq = _qman_portal_suspend_noirq,
+		.resume_noirq = _qman_portal_resume_noirq,
+	}
+};
+
 struct qman_portal *qman_create_portal(
 			struct qman_portal *portal,
 			const struct qm_portal_config *config,
@@ -464,6 +504,8 @@ struct qman_portal *qman_create_portal(
 		goto fail_devalloc;
 	if (dma_set_mask(&portal->pdev->dev, DMA_BIT_MASK(40)))
 		goto fail_devadd;
+	portal->pdev->dev.pm_domain = &qman_portal_device_pm_domain;
+	portal->pdev->dev.platform_data = portal;
 	ret = platform_device_add(portal->pdev);
 	if (ret)
 		goto fail_devadd;

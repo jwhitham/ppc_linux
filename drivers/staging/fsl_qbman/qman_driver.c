@@ -897,3 +897,46 @@ __init int qman_resource_init(void)
 	}
 	return 0;
 }
+
+#ifdef CONFIG_SUSPEND
+void suspend_unused_qportal(void)
+{
+	struct qm_portal_config *pcfg;
+
+	if (list_empty(&unused_pcfgs))
+		return;
+
+	list_for_each_entry(pcfg, &unused_pcfgs, list) {
+#ifdef CONFIG_PM_DEBUG
+		pr_info("Need to save qportal %d\n", pcfg->public_cfg.index);
+#endif
+		/* save isdr, disable all via isdr, clear isr */
+		pcfg->saved_isdr =
+			__raw_readl(pcfg->addr_virt[DPA_PORTAL_CI] + 0xe08);
+		__raw_writel(0xffffffff, pcfg->addr_virt[DPA_PORTAL_CI] +
+					0xe08);
+		__raw_writel(0xffffffff, pcfg->addr_virt[DPA_PORTAL_CI] +
+					0xe00);
+	}
+	return;
+}
+
+void resume_unused_qportal(void)
+{
+	struct qm_portal_config *pcfg;
+
+	if (list_empty(&unused_pcfgs))
+		return;
+
+	list_for_each_entry(pcfg, &unused_pcfgs, list) {
+#ifdef CONFIG_PM_DEBUG
+		pr_info("Need to resume qportal %d\n", pcfg->public_cfg.index);
+#endif
+		/* restore isdr */
+		__raw_writel(pcfg->saved_isdr,
+				pcfg->addr_virt[DPA_PORTAL_CI] + 0xe08);
+	}
+	return;
+}
+#endif
+

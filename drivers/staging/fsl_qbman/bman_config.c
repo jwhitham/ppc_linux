@@ -43,6 +43,8 @@ struct bman;
 #define REG_POOL_HWDXT(n)	(0x0300 + ((n) * 0x04))
 #define REG_POOL_CONTENT(n)	(0x0600 + ((n) * 0x04))
 #define REG_FBPR_FPC		0x0800
+#define REG_STATE_IDLE		0x960
+#define REG_STATE_STOP		0x964
 #define REG_ECSR		0x0a00
 #define REG_ECIR		0x0a04
 #define REG_EADR		0x0a08
@@ -663,11 +665,46 @@ static struct of_device_id of_fsl_bman_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, of_fsl_bman_ids);
 
+#ifdef CONFIG_SUSPEND
+static u32 saved_isdr;
+
+static int bman_pm_suspend_noirq(struct device *dev)
+{
+	suspend_unused_bportal();
+	/* save isdr, disable all, clear isr */
+	saved_isdr = bm_err_isr_disable_read(bm);
+	bm_err_isr_disable_write(bm, 0xffffffff);
+	bm_err_isr_status_clear(bm, 0xffffffff);
+	/* should be idle, otherwise abort ? */
+#ifdef CONFIG_PM_DEBUG
+	pr_info("Bman suspend code, IDLE_STAT = 0x%x\n", bm_in(STATE_IDLE));
+#endif
+	return 0;
+}
+
+static int bman_pm_resume_noirq(struct device *dev)
+{
+	/* restore isdr */
+	bm_err_isr_disable_write(bm, saved_isdr);
+	resume_unused_bportal();
+	return 0;
+}
+#else
+#define bman_pm_suspend_noirq	NULL
+#define bman_pm_resume_noirq	NULL
+#endif
+
+static const struct dev_pm_ops bman_pm_ops = {
+	.suspend_noirq = bman_pm_suspend_noirq,
+	.resume_noirq = bman_pm_resume_noirq,
+};
+
 static struct platform_driver of_fsl_bman_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = DRV_NAME,
 		.of_match_table = of_fsl_bman_ids,
+		.pm = &bman_pm_ops,
 	},
 	.probe = of_fsl_bman_probe,
 	.remove = of_fsl_bman_remove,

@@ -53,6 +53,8 @@ struct bman_portal {
 #endif
 	/* When the cpu-affine portal is activated, this is non-NULL */
 	const struct bm_portal_config *config;
+	/* This is needed for power management */
+	struct platform_device *pdev;
 	/* 64-entry hash-table of pool objects that are tracking depletion
 	 * entry/exit (ie. BMAN_POOL_FLAG_DEPLETION). This isn't fast-path, so
 	 * we're not fussy about cache-misses and so forth - whereas the above
@@ -63,6 +65,8 @@ struct bman_portal {
 	char irqname[MAX_IRQNAME];
 	/* Track if the portal was alloced by the driver */
 	u8 alloced;
+	/* power management data */
+	u32 save_isdr;
 };
 
 /* For an explanation of the locking, redirection, or affine-portal logic,
@@ -193,6 +197,42 @@ static irqreturn_t portal_isr(__always_unused int irq, void *ptr)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_SUSPEND
+static int _bman_portal_suspend_noirq(struct device *dev)
+{
+	struct bman_portal *p = (struct bman_portal *)dev->platform_data;
+#ifdef CONFIG_PM_DEBUG
+	struct platform_device *pdev = to_platform_device(dev);
+#endif
+	p->save_isdr = bm_isr_disable_read(&p->p);
+	bm_isr_disable_write(&p->p, 0xffffffff);
+	bm_isr_status_clear(&p->p, 0xffffffff);
+#ifdef CONFIG_PM_DEBUG
+	pr_info("Suspend for %s\n", pdev->name);
+#endif
+	return 0;
+}
+
+static int _bman_portal_resume_noirq(struct device *dev)
+{
+	struct bman_portal *p = (struct bman_portal *)dev->platform_data;
+
+	/* restore isdr */
+	bm_isr_disable_write(&p->p, p->save_isdr);
+	return 0;
+}
+#else
+#define _bman_portal_suspend_noirq NULL
+#define _bman_portal_resume_noirq NULL
+#endif
+
+struct dev_pm_domain bman_portal_device_pm_domain = {
+	.ops = {
+		USE_PLATFORM_PM_SLEEP_OPS
+		.suspend_noirq = _bman_portal_suspend_noirq,
+		.resume_noirq = _bman_portal_resume_noirq,
+	}
+};
 
 struct bman_portal *bman_create_portal(
 				       struct bman_portal *portal,
@@ -202,6 +242,7 @@ struct bman_portal *bman_create_portal(
 	const struct bman_depletion *pools = &config->public_cfg.mask;
 	int ret;
 	u8 bpid = 0;
+	char buf[16];
 
 	if (!portal) {
 		portal = kmalloc(sizeof(*portal), GFP_KERNEL);
@@ -250,6 +291,15 @@ struct bman_portal *bman_create_portal(
 	portal->is_shared = config->public_cfg.is_shared;
 	portal->sharing_redirect = NULL;
 #endif
+	sprintf(buf, "bportal-%u", config->public_cfg.index);
+	portal->pdev = platform_device_alloc(buf, -1);
+	if (!portal->pdev)
+		goto fail_devalloc;
+	portal->pdev->dev.pm_domain = &bman_portal_device_pm_domain;
+	portal->pdev->dev.platform_data = portal;
+	ret = platform_device_add(portal->pdev);
+	if (ret)
+		goto fail_devadd;
 	memset(&portal->cb, 0, sizeof(portal->cb));
 	/* Write-to-clear any stale interrupt status bits */
 	bm_isr_disable_write(__p, 0xffffffff);
@@ -286,6 +336,10 @@ fail_rcr_empty:
 fail_affinity:
 	free_irq(config->public_cfg.irq, portal);
 fail_irq:
+	platform_device_del(portal->pdev);
+fail_devadd:
+	platform_device_put(portal->pdev);
+fail_devalloc:
 	kfree(portal->pools);
 fail_pools:
 	bm_isr_finish(__p);
