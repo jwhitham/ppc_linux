@@ -915,18 +915,6 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 #endif
 
 
-#if defined(CONFIG_FMAN_RESOURCE_ALLOCATION_ALGORITHM) && defined(CONFIG_FMAN_P3040_P4080_P5020)
-    /* Enable 14g w/ jumbo frames following HW suggestion. */
-    FM_ConfigTotalFifoSize(p_LnxWrpFmDev->h_Dev, 128*KILOBYTE);
-#elif defined(CONFIG_FMAN_RESOURCE_ALLOCATION_ALGORITHM) && defined(CONFIG_FMAN_P1023)
-    FM_ConfigTotalFifoSize(p_LnxWrpFmDev->h_Dev, 48*KILOBYTE);
-#endif
-#if (DPAA_VERSION >= 11)
-#define DEFAULT_TOTAL_FIFO_SIZE_FOR_FMAN_V3H 295*KILOBYTE
-    FM_ConfigTotalFifoSize(p_LnxWrpFmDev->h_Dev,
-                           DEFAULT_TOTAL_FIFO_SIZE_FOR_FMAN_V3H);
-#endif /* (DPAA_VERSION >= 11) */
-
     CheckNConfigFmAdvArgs(p_LnxWrpFmDev);
 
     if (FM_Init(p_LnxWrpFmDev->h_Dev) != E_OK)
@@ -1065,44 +1053,6 @@ static int /*__devinit*/ fm_probe(struct platform_device *of_dev)
     }
 
     DBG(TRACE, ("FM%d probed", p_LnxWrpFmDev->id));
-
-#if defined(CONFIG_FMAN_RESOURCE_ALLOCATION_ALGORITHM)
-    /* Precalculate resources for FMAN based on number of
-     * FMan ports available
-     */
-    if(fm_set_active_fman_ports(of_dev, p_LnxWrpFmDev)!= 0)
-        return -EIO;
-
-#if defined(CONFIG_FMAN_P3040_P4080_P5020)
-    /* 128K MURAM for p3,p4 and p5 */
-    if(fm_precalculate_fifosizes(
-        p_LnxWrpFmDev,
-        128*KILOBYTE)
-        != 0)
-    return -EIO;
-#else
-    /* for all other platforms: MURAM Space for fifosize=3/4 * MURAM_SIZE*/
-    if(fm_precalculate_fifosizes(
-        p_LnxWrpFmDev,
-        48*KILOBYTE)
-        != 0)
-    return -EIO;
-#endif
-    if(fm_precalculate_open_dma(
-        p_LnxWrpFmDev,
-        BMI_MAX_NUM_OF_DMAS,        /* max open dmas:dpaa_integration_ext.h */
-        FM_DEFAULT_TX10G_OPENDMA,   /* default TX 10g open dmas */
-        FM_DEFAULT_RX10G_OPENDMA,   /* default RX 10g open dmas */
-        FM_10G_OPENDMA_MIN_TRESHOLD,/* TX 10g minimum treshold */
-        FM_10G_OPENDMA_MIN_TRESHOLD)/* RX 10g minimum treshold */
-        != 0)
-        return -EIO;
-    if(fm_precalculate_tnums(
-        p_LnxWrpFmDev,
-        BMI_MAX_NUM_OF_TASKS) /* max TNUMS: dpa integration file. */
-        != 0)
-        return -EIO;
-#endif
 
     return 0;
 }

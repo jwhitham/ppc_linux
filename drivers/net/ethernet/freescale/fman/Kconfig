@@ -32,11 +32,6 @@ config FMAN_T4240
 endchoice
 endmenu
 
-config FMAN_RESOURCE_ALLOCATION_ALGORITHM
-	bool "Enable FMan dynamic resource allocation algorithm"
-	default y if (FMAN_P3040_P4080_P5020 || FMAN_P1023)
-	---help---
-		Enables algorithm for dynamic resource allocation
 
 config FMAN_DISABLE_OH_TO_REUSE_RESOURCES
 	depends on FMAN_RESOURCE_ALLOCATION_ALGORITHM
@@ -93,12 +88,6 @@ config FSL_FM_RX_EXTRA_HEADROOM
 		before Internal Context fields are copied. This is in addition
 		to the private data area already reserved for driver internal
 		use. The provided value must be a multiple of 16.
-
-		This option does not affect in any way the layout of
-		transmitted buffers. You may be required to enable the config
-		option FMAN_RESOURCE_ALLOCATION_ALGORITHM and also
-		FMAN_DISABLE_OH_TO_REUSE_RESOURCES to have enough resources
-		when using this option and also supporting jumbo frames.
 
 		This setting can be overridden by specifying
 		"fsl_fm_rx_extra_headroom" in the kernel bootargs:

@@ -15,6 +15,5 @@ obj-y		+= fsl-ncsw-PFM.o
 obj-$(CONFIG_FSL_FMAN_TEST)	+= fman_test.o
 
 fsl-ncsw-PFM-objs	:=	lnxwrp_fm.o lnxwrp_fm_port.o lnxwrp_ioctls_fm.o \
-				lnxwrp_sysfs.o lnxwrp_sysfs_fm.o lnxwrp_sysfs_fm_port.o \
-				lnxwrp_resources.o
+				lnxwrp_sysfs.o lnxwrp_sysfs_fm.o lnxwrp_sysfs_fm_port.o 
 obj-$(CONFIG_COMPAT)     +=   lnxwrp_ioctls_fm_compat.o
