@@ -461,6 +461,7 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	int err;
 	void *dpa_bp_vaddr;
 	fm_prs_result_t parse_results;
+	fm_prs_result_t *parse_results_ref;
 
 	priv = netdev_priv(net_dev);
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
@@ -504,9 +505,20 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 					  dpa_fd_length(&fd));
 
 		/* if no mac device or peer set it's macless */
-		if (!priv->mac_dev || priv->peer)
-			fd.cmd |= FM_FD_CMD_DTC;
-		else {
+		if (!priv->mac_dev || priv->peer) {
+			parse_results_ref = (fm_prs_result_t *) (dpa_bp_vaddr +
+				DPA_TX_PRIV_DATA_SIZE);
+			/* Default values; FMan will not generate/validate
+			 * CSUM;
+			 */
+			parse_results_ref->l3r = 0;
+			parse_results_ref->l4r = 0;
+			parse_results_ref->ip_off[0] = 0xff;
+			parse_results_ref->ip_off[1] = 0xff;
+			parse_results_ref->l4_off = 0xff;
+
+			fd.cmd |= FM_FD_CMD_DTC | FM_FD_CMD_RPD;
+		} else {
 			/* Enable L3/L4 hardware checksum computation,
 			* if applicable
 			*/
@@ -523,9 +535,18 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 		}
 
 	} else {
-		if (!priv->mac_dev || priv->peer)
-			fd.cmd |= FM_FD_CMD_DTC;
-		else {
+		if (!priv->mac_dev || priv->peer) {
+			/* Default values; FMan will not generate/validate
+			 * CSUM;
+			 */
+			parse_results.l3r = 0;
+			parse_results.l4r = 0;
+			parse_results.ip_off[0] = 0xff;
+			parse_results.ip_off[1] = 0xff;
+			parse_results.l4_off = 0xff;
+
+			fd.cmd |= FM_FD_CMD_DTC | FM_FD_CMD_RPD;
+		} else {
 			/* Enable L3/L4 hardware checksum computation,
 			 * if applicable
 			 */
