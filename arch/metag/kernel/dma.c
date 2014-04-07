@@ -305,7 +305,9 @@ void dma_free_coherent(struct device *dev, size_t size,
 
 			if (pfn_valid(pfn)) {
 				struct page *page = pfn_to_page(pfn);
-				__free_reserved_page(page);
+				ClearPageReserved(page);
+
+				__free_page(page);
 				continue;
 			}
 		}

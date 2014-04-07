@@ -32,9 +32,9 @@
 #include "device.h"
 #include "wcmd.h"
 
-void RXvWorkItem(struct work_struct *work);
+void RXvWorkItem(void *Context);
 
-void RXvMngWorkItem(struct work_struct *work);
+void RXvMngWorkItem(void *Context);
 
 void RXvFreeRCB(struct vnt_rcb *pRCB, int bReAllocSkb);
 

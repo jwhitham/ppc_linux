@@ -79,7 +79,7 @@ static int timeriomem_rng_data_read(struct hwrng *rng, u32 *data)
 	priv->expires = cur + delay;
 	priv->present = 0;
 
-	reinit_completion(&priv->completion);
+	INIT_COMPLETION(priv->completion);
 	mod_timer(&priv->timer, priv->expires);
 
 	return 4;

@@ -128,8 +128,7 @@ static void max77693_irq_sync_unlock(struct irq_data *data)
 static const inline struct max77693_irq_data *
 irq_to_max77693_irq(struct max77693_dev *max77693, int irq)
 {
-	struct irq_data *data = irq_get_irq_data(irq);
-	return &max77693_irqs[data->hwirq];
+	return &max77693_irqs[irq];
 }
 
 static void max77693_irq_mask(struct irq_data *data)

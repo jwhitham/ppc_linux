@@ -1615,7 +1615,7 @@ struct ncb {
 	spinlock_t	smp_lock;	/* Lock for SMP threading       */
 
 	/*----------------------------------------------------------------
-	**	Chip and controller identification.
+	**	Chip and controller indentification.
 	**----------------------------------------------------------------
 	*/
 	int		unit;		/* Unit number			*/

@@ -135,8 +135,8 @@ extern char initial_stab[];
 #ifndef __ASSEMBLY__
 
 struct hash_pte {
-	__be64 v;
-	__be64 r;
+	unsigned long v;
+	unsigned long r;
 };
 
 extern struct hash_pte *htab_address;

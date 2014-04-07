@@ -253,6 +253,15 @@ static inline int ad5755_get_offset(struct ad5755_state *st,
 	return (min * (1 << chan->scan_type.realbits)) / (max - min);
 }
 
+static inline int ad5755_get_scale(struct ad5755_state *st,
+	struct iio_chan_spec const *chan)
+{
+	int min, max;
+
+	ad5755_get_min_max(st, chan, &min, &max);
+	return ((max - min) * 1000000000ULL) >> chan->scan_type.realbits;
+}
+
 static int ad5755_chan_reg_info(struct ad5755_state *st,
 	struct iio_chan_spec const *chan, long info, bool write,
 	unsigned int *reg, unsigned int *shift, unsigned int *offset)
@@ -294,15 +303,13 @@ static int ad5755_read_raw(struct iio_dev *indio_dev,
 {
 	struct ad5755_state *st = iio_priv(indio_dev);
 	unsigned int reg, shift, offset;
-	int min, max;
 	int ret;
 
 	switch (info) {
 	case IIO_CHAN_INFO_SCALE:
-		ad5755_get_min_max(st, chan, &min, &max);
-		*val = max - min;
-		*val2 = chan->scan_type.realbits;
-		return IIO_VAL_FRACTIONAL_LOG2;
+		*val = 0;
+		*val2 = ad5755_get_scale(st, chan);
+		return IIO_VAL_INT_PLUS_NANO;
 	case IIO_CHAN_INFO_OFFSET:
 		*val = ad5755_get_offset(st, chan);
 		return IIO_VAL_INT;
@@ -379,7 +386,6 @@ static const struct iio_chan_spec_ext_info ad5755_ext_info[] = {
 		.name = "powerdown",
 		.read = ad5755_read_powerdown,
 		.write = ad5755_write_powerdown,
-		.shared = IIO_SEPARATE,
 	},
 	{ },
 };
@@ -589,7 +595,13 @@ static int ad5755_probe(struct spi_device *spi)
 	if (ret)
 		return ret;
 
-	return iio_device_register(indio_dev);
+	ret = iio_device_register(indio_dev);
+	if (ret) {
+		dev_err(&spi->dev, "Failed to register iio device: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
 static int ad5755_remove(struct spi_device *spi)

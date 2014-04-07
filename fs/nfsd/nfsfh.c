@@ -47,7 +47,7 @@ static int nfsd_acceptable(void *expv, struct dentry *dentry)
 		tdentry = parent;
 	}
 	if (tdentry != exp->ex_path.dentry)
-		dprintk("nfsd_acceptable failed at %p %pd\n", tdentry, tdentry);
+		dprintk("nfsd_acceptable failed at %p %s\n", tdentry, tdentry->d_name.name);
 	rv = (tdentry == exp->ex_path.dentry);
 	dput(tdentry);
 	return rv;
@@ -253,8 +253,8 @@ static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 
 	if (S_ISDIR(dentry->d_inode->i_mode) &&
 			(dentry->d_flags & DCACHE_DISCONNECTED)) {
-		printk("nfsd: find_fh_dentry returned a DISCONNECTED directory: %pd2\n",
-				dentry);
+		printk("nfsd: find_fh_dentry returned a DISCONNECTED directory: %s/%s\n",
+				dentry->d_parent->d_name.name, dentry->d_name.name);
 	}
 
 	fhp->fh_dentry = dentry;
@@ -361,9 +361,10 @@ skip_pseudoflavor_check:
 	error = nfsd_permission(rqstp, exp, dentry, access);
 
 	if (error) {
-		dprintk("fh_verify: %pd2 permission failure, "
+		dprintk("fh_verify: %s/%s permission failure, "
 			"acc=%x, error=%d\n",
-			dentry,
+			dentry->d_parent->d_name.name,
+			dentry->d_name.name,
 			access, ntohl(error));
 	}
 out:
@@ -513,13 +514,14 @@ fh_compose(struct svc_fh *fhp, struct svc_export *exp, struct dentry *dentry,
 	 */
 
 	struct inode * inode = dentry->d_inode;
+	struct dentry *parent = dentry->d_parent;
 	__u32 *datap;
 	dev_t ex_dev = exp_sb(exp)->s_dev;
 
-	dprintk("nfsd: fh_compose(exp %02x:%02x/%ld %pd2, ino=%ld)\n",
+	dprintk("nfsd: fh_compose(exp %02x:%02x/%ld %s/%s, ino=%ld)\n",
 		MAJOR(ex_dev), MINOR(ex_dev),
 		(long) exp->ex_path.dentry->d_inode->i_ino,
-		dentry,
+		parent->d_name.name, dentry->d_name.name,
 		(inode ? inode->i_ino : 0));
 
 	/* Choose filehandle version and fsid type based on
@@ -532,13 +534,13 @@ fh_compose(struct svc_fh *fhp, struct svc_export *exp, struct dentry *dentry,
 		fh_put(ref_fh);
 
 	if (fhp->fh_locked || fhp->fh_dentry) {
-		printk(KERN_ERR "fh_compose: fh %pd2 not initialized!\n",
-		       dentry);
+		printk(KERN_ERR "fh_compose: fh %s/%s not initialized!\n",
+		       parent->d_name.name, dentry->d_name.name);
 	}
 	if (fhp->fh_maxsize < NFS_FHSIZE)
-		printk(KERN_ERR "fh_compose: called with maxsize %d! %pd2\n",
+		printk(KERN_ERR "fh_compose: called with maxsize %d! %s/%s\n",
 		       fhp->fh_maxsize,
-		       dentry);
+		       parent->d_name.name, dentry->d_name.name);
 
 	fhp->fh_dentry = dget(dentry); /* our internal copy */
 	fhp->fh_export = exp;
@@ -598,20 +600,22 @@ fh_update(struct svc_fh *fhp)
 		_fh_update_old(dentry, fhp->fh_export, &fhp->fh_handle);
 	} else {
 		if (fhp->fh_handle.fh_fileid_type != FILEID_ROOT)
-			return 0;
+			goto out;
 
 		_fh_update(fhp, fhp->fh_export, dentry);
 		if (fhp->fh_handle.fh_fileid_type == FILEID_INVALID)
 			return nfserr_opnotsupp;
 	}
+out:
 	return 0;
+
 out_bad:
 	printk(KERN_ERR "fh_update: fh not verified!\n");
-	return nfserr_serverfault;
+	goto out;
 out_negative:
-	printk(KERN_ERR "fh_update: %pd2 still negative!\n",
-		dentry);
-	return nfserr_serverfault;
+	printk(KERN_ERR "fh_update: %s/%s still negative!\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name);
+	goto out;
 }
 
 /*

@@ -289,8 +289,7 @@ static int bfin_kpad_probe(struct platform_device *pdev)
 		__set_bit(EV_REP, input->evbit);
 
 	for (i = 0; i < input->keycodemax; i++)
-		if (bf54x_kpad->keycode[i] <= KEY_MAX)
-			__set_bit(bf54x_kpad->keycode[i], input->keybit);
+		__set_bit(bf54x_kpad->keycode[i] & KEY_MAX, input->keybit);
 	__clear_bit(KEY_RESERVED, input->keybit);
 
 	error = input_register_device(input);

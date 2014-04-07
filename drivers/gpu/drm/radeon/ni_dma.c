@@ -24,7 +24,6 @@
 #include <drm/drmP.h>
 #include "radeon.h"
 #include "radeon_asic.h"
-#include "radeon_trace.h"
 #include "nid.h"
 
 u32 cayman_gpu_check_soft_reset(struct radeon_device *rdev);
@@ -246,7 +245,8 @@ bool cayman_dma_is_lockup(struct radeon_device *rdev, struct radeon_ring *ring)
  * @addr: dst addr to write into pe
  * @count: number of page entries to update
  * @incr: increase next addr by incr bytes
- * @flags: hw access flags 
+ * @flags: access flags
+ * @r600_flags: hw access flags 
  *
  * Update the page tables using the DMA (cayman/TN).
  */
@@ -256,12 +256,11 @@ void cayman_dma_vm_set_page(struct radeon_device *rdev,
 			    uint64_t addr, unsigned count,
 			    uint32_t incr, uint32_t flags)
 {
+	uint32_t r600_flags = cayman_vm_page_flags(rdev, flags);
 	uint64_t value;
 	unsigned ndw;
 
-	trace_radeon_vm_set_page(pe, addr, count, incr, flags);
-
-	if ((flags & R600_PTE_SYSTEM) || (count == 1)) {
+	if ((flags & RADEON_VM_PAGE_SYSTEM) || (count == 1)) {
 		while (count) {
 			ndw = count * 2;
 			if (ndw > 0xFFFFE)
@@ -272,16 +271,16 @@ void cayman_dma_vm_set_page(struct radeon_device *rdev,
 			ib->ptr[ib->length_dw++] = pe;
 			ib->ptr[ib->length_dw++] = upper_32_bits(pe) & 0xff;
 			for (; ndw > 0; ndw -= 2, --count, pe += 8) {
-				if (flags & R600_PTE_SYSTEM) {
+				if (flags & RADEON_VM_PAGE_SYSTEM) {
 					value = radeon_vm_map_gart(rdev, addr);
 					value &= 0xFFFFFFFFFFFFF000ULL;
-				} else if (flags & R600_PTE_VALID) {
+				} else if (flags & RADEON_VM_PAGE_VALID) {
 					value = addr;
 				} else {
 					value = 0;
 				}
 				addr += incr;
-				value |= flags;
+				value |= r600_flags;
 				ib->ptr[ib->length_dw++] = value;
 				ib->ptr[ib->length_dw++] = upper_32_bits(value);
 			}
@@ -292,7 +291,7 @@ void cayman_dma_vm_set_page(struct radeon_device *rdev,
 			if (ndw > 0xFFFFE)
 				ndw = 0xFFFFE;
 
-			if (flags & R600_PTE_VALID)
+			if (flags & RADEON_VM_PAGE_VALID)
 				value = addr;
 			else
 				value = 0;
@@ -300,7 +299,7 @@ void cayman_dma_vm_set_page(struct radeon_device *rdev,
 			ib->ptr[ib->length_dw++] = DMA_PTE_PDE_PACKET(ndw);
 			ib->ptr[ib->length_dw++] = pe; /* dst addr */
 			ib->ptr[ib->length_dw++] = upper_32_bits(pe) & 0xff;
-			ib->ptr[ib->length_dw++] = flags; /* mask */
+			ib->ptr[ib->length_dw++] = r600_flags; /* mask */
 			ib->ptr[ib->length_dw++] = 0;
 			ib->ptr[ib->length_dw++] = value; /* value */
 			ib->ptr[ib->length_dw++] = upper_32_bits(value);

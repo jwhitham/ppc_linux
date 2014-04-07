@@ -21,11 +21,8 @@
 #include <linux/bitops.h>
 #include <linux/perf_event.h>
 #include <linux/ratelimit.h>
-#include <linux/context_tracking.h>
 #include <asm/fpumacro.h>
 #include <asm/cacheflush.h>
-
-#include "entry.h"
 
 enum direction {
 	load,    /* ld, ldd, ldh, ldsh */
@@ -421,6 +418,9 @@ int handle_popc(u32 insn, struct pt_regs *regs)
 
 extern void do_fpother(struct pt_regs *regs);
 extern void do_privact(struct pt_regs *regs);
+extern void spitfire_data_access_exception(struct pt_regs *regs,
+					   unsigned long sfsr,
+					   unsigned long sfar);
 extern void sun4v_data_access_exception(struct pt_regs *regs,
 					unsigned long addr,
 					unsigned long type_ctx);
@@ -578,7 +578,6 @@ void handle_ld_nf(u32 insn, struct pt_regs *regs)
 
 void handle_lddfmna(struct pt_regs *regs, unsigned long sfar, unsigned long sfsr)
 {
-	enum ctx_state prev_state = exception_enter();
 	unsigned long pc = regs->tpc;
 	unsigned long tstate = regs->tstate;
 	u32 insn;
@@ -633,16 +632,13 @@ daex:
 			sun4v_data_access_exception(regs, sfar, sfsr);
 		else
 			spitfire_data_access_exception(regs, sfsr, sfar);
-		goto out;
+		return;
 	}
 	advance(regs);
-out:
-	exception_exit(prev_state);
 }
 
 void handle_stdfmna(struct pt_regs *regs, unsigned long sfar, unsigned long sfsr)
 {
-	enum ctx_state prev_state = exception_enter();
 	unsigned long pc = regs->tpc;
 	unsigned long tstate = regs->tstate;
 	u32 insn;
@@ -684,9 +680,7 @@ daex:
 			sun4v_data_access_exception(regs, sfar, sfsr);
 		else
 			spitfire_data_access_exception(regs, sfsr, sfar);
-		goto out;
+		return;
 	}
 	advance(regs);
-out:
-	exception_exit(prev_state);
 }

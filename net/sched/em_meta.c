@@ -793,10 +793,8 @@ static int em_meta_change(struct tcf_proto *tp, void *data, int len,
 		goto errout;
 
 	meta = kzalloc(sizeof(*meta), GFP_KERNEL);
-	if (meta == NULL) {
-		err = -ENOMEM;
+	if (meta == NULL)
 		goto errout;
-	}
 
 	memcpy(&meta->lvalue.hdr, &hdr->left, sizeof(hdr->left));
 	memcpy(&meta->rvalue.hdr, &hdr->right, sizeof(hdr->right));

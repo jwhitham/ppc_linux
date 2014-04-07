@@ -329,7 +329,6 @@ static struct platform_driver corgi_driver = {
 	.driver		= {
 		.name	= "corgi-audio",
 		.owner	= THIS_MODULE,
-		.pm     = &snd_soc_pm_ops,
 	},
 	.probe		= corgi_probe,
 	.remove		= corgi_remove,

@@ -438,19 +438,17 @@ phy_id_show(struct device *dev, struct device_attribute *attr, char *buf)
 
 	return sprintf(buf, "0x%.8lx\n", (unsigned long)phydev->phy_id);
 }
-static DEVICE_ATTR_RO(phy_id);
 
-static struct attribute *mdio_dev_attrs[] = {
-	&dev_attr_phy_id.attr,
-	NULL,
+static struct device_attribute mdio_dev_attrs[] = {
+	__ATTR_RO(phy_id),
+	__ATTR_NULL
 };
-ATTRIBUTE_GROUPS(mdio_dev);
 
 struct bus_type mdio_bus_type = {
 	.name		= "mdio_bus",
 	.match		= mdio_bus_match,
 	.pm		= MDIO_BUS_PM_OPS,
-	.dev_groups	= mdio_dev_groups,
+	.dev_attrs	= mdio_dev_attrs,
 };
 EXPORT_SYMBOL(mdio_bus_type);
 

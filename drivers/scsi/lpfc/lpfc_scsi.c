@@ -1012,25 +1012,20 @@ lpfc_new_scsi_buf_s4(struct lpfc_vport *vport, int num_to_alloc)
 			break;
 		}
 
-
-		lxri = lpfc_sli4_next_xritag(phba);
-		if (lxri == NO_XRI) {
-			pci_pool_free(phba->lpfc_scsi_dma_buf_pool,
-			      psb->data, psb->dma_handle);
-			kfree(psb);
-			break;
-		}
-
 		/* Allocate iotag for psb->cur_iocbq. */
 		iotag = lpfc_sli_next_iotag(phba, &psb->cur_iocbq);
 		if (iotag == 0) {
 			pci_pool_free(phba->lpfc_scsi_dma_buf_pool,
 				psb->data, psb->dma_handle);
 			kfree(psb);
-			lpfc_printf_log(phba, KERN_ERR, LOG_FCP,
-					"3368 Failed to allocated IOTAG for"
-					" XRI:0x%x\n", lxri);
-			lpfc_sli4_free_xri(phba, lxri);
+			break;
+		}
+
+		lxri = lpfc_sli4_next_xritag(phba);
+		if (lxri == NO_XRI) {
+			pci_pool_free(phba->lpfc_scsi_dma_buf_pool,
+			      psb->data, psb->dma_handle);
+			kfree(psb);
 			break;
 		}
 		psb->cur_iocbq.sli4_lxritag = lxri;
@@ -4490,7 +4485,9 @@ lpfc_scsi_prep_task_mgmt_cmd(struct lpfc_vport *vport,
 		piocb->ulpContext =
 		  vport->phba->sli4_hba.rpi_ids[ndlp->nlp_rpi];
 	}
-	piocb->ulpFCP2Rcvy = (ndlp->nlp_fcp_info & NLP_FCP_2_DEVICE) ? 1 : 0;
+	if (ndlp->nlp_fcp_info & NLP_FCP_2_DEVICE) {
+		piocb->ulpFCP2Rcvy = 1;
+	}
 	piocb->ulpClass = (ndlp->nlp_fcp_info & 0x0f);
 
 	/* ulpTimeout is only one byte */
@@ -4984,73 +4981,6 @@ lpfc_taskmgmt_name(uint8_t task_mgmt_cmd)
 	}
 }
 
-
-/**
- * lpfc_check_fcp_rsp - check the returned fcp_rsp to see if task failed
- * @vport: The virtual port for which this call is being executed.
- * @lpfc_cmd: Pointer to lpfc_scsi_buf data structure.
- *
- * This routine checks the FCP RSP INFO to see if the tsk mgmt command succeded
- *
- * Return code :
- *   0x2003 - Error
- *   0x2002 - Success
- **/
-static int
-lpfc_check_fcp_rsp(struct lpfc_vport *vport, struct lpfc_scsi_buf *lpfc_cmd)
-{
-	struct fcp_rsp *fcprsp = lpfc_cmd->fcp_rsp;
-	uint32_t rsp_info;
-	uint32_t rsp_len;
-	uint8_t  rsp_info_code;
-	int ret = FAILED;
-
-
-	if (fcprsp == NULL)
-		lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
-				 "0703 fcp_rsp is missing\n");
-	else {
-		rsp_info = fcprsp->rspStatus2;
-		rsp_len = be32_to_cpu(fcprsp->rspRspLen);
-		rsp_info_code = fcprsp->rspInfo3;
-
-
-		lpfc_printf_vlog(vport, KERN_INFO,
-				 LOG_FCP,
-				 "0706 fcp_rsp valid 0x%x,"
-				 " rsp len=%d code 0x%x\n",
-				 rsp_info,
-				 rsp_len, rsp_info_code);
-
-		if ((fcprsp->rspStatus2&RSP_LEN_VALID) && (rsp_len == 8)) {
-			switch (rsp_info_code) {
-			case RSP_NO_FAILURE:
-				lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
-						 "0715 Task Mgmt No Failure\n");
-				ret = SUCCESS;
-				break;
-			case RSP_TM_NOT_SUPPORTED: /* TM rejected */
-				lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
-						 "0716 Task Mgmt Target "
-						"reject\n");
-				break;
-			case RSP_TM_NOT_COMPLETED: /* TM failed */
-				lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
-						 "0717 Task Mgmt Target "
-						"failed TM\n");
-				break;
-			case RSP_TM_INVALID_LU: /* TM to invalid LU! */
-				lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
-						 "0718 Task Mgmt to invalid "
-						"LUN\n");
-				break;
-			}
-		}
-	}
-	return ret;
-}
-
-
 /**
  * lpfc_send_taskmgmt - Generic SCSI Task Mgmt Handler
  * @vport: The virtual port for which this call is being executed.
@@ -5112,8 +5042,12 @@ lpfc_send_taskmgmt(struct lpfc_vport *vport, struct lpfc_rport_data *rdata,
 
 	status = lpfc_sli_issue_iocb_wait(phba, LPFC_FCP_RING,
 					  iocbq, iocbqrsp, lpfc_cmd->timeout);
-	if ((status != IOCB_SUCCESS) ||
-	    (iocbqrsp->iocb.ulpStatus != IOSTAT_SUCCESS)) {
+	if (status != IOCB_SUCCESS) {
+		if (status == IOCB_TIMEDOUT) {
+			ret = TIMEOUT_ERROR;
+		} else
+			ret = FAILED;
+		lpfc_cmd->status = IOSTAT_DRIVER_REJECT;
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_FCP,
 			 "0727 TMF %s to TGT %d LUN %d failed (%d, %d) "
 			 "iocb_flag x%x\n",
@@ -5121,21 +5055,9 @@ lpfc_send_taskmgmt(struct lpfc_vport *vport, struct lpfc_rport_data *rdata,
 			 tgt_id, lun_id, iocbqrsp->iocb.ulpStatus,
 			 iocbqrsp->iocb.un.ulpWord[4],
 			 iocbq->iocb_flag);
-		/* if ulpStatus != IOCB_SUCCESS, then status == IOCB_SUCCESS */
-		if (status == IOCB_SUCCESS) {
-			if (iocbqrsp->iocb.ulpStatus == IOSTAT_FCP_RSP_ERROR)
-				/* Something in the FCP_RSP was invalid.
-				 * Check conditions */
-				ret = lpfc_check_fcp_rsp(vport, lpfc_cmd);
-			else
-				ret = FAILED;
-		} else if (status == IOCB_TIMEDOUT) {
-			ret = TIMEOUT_ERROR;
-		} else {
-			ret = FAILED;
-		}
-		lpfc_cmd->status = IOSTAT_DRIVER_REJECT;
-	} else
+	} else if (status == IOCB_BUSY)
+		ret = FAILED;
+	else
 		ret = SUCCESS;
 
 	lpfc_sli_release_iocbq(phba, iocbqrsp);
@@ -5259,7 +5181,7 @@ lpfc_device_reset_handler(struct scsi_cmnd *cmnd)
 	unsigned tgt_id = cmnd->device->id;
 	unsigned int lun_id = cmnd->device->lun;
 	struct lpfc_scsi_event_header scsi_event;
-	int status;
+	int status, ret = SUCCESS;
 
 	if (!rdata) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_FCP,
@@ -5300,11 +5222,9 @@ lpfc_device_reset_handler(struct scsi_cmnd *cmnd)
 	 * So, continue on.
 	 * We will report success if all the i/o aborts successfully.
 	 */
-	if (status == SUCCESS)
-		status = lpfc_reset_flush_io_context(vport, tgt_id, lun_id,
+	ret = lpfc_reset_flush_io_context(vport, tgt_id, lun_id,
 						LPFC_CTX_LUN);
-
-	return status;
+	return ret;
 }
 
 /**
@@ -5328,7 +5248,7 @@ lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 	unsigned tgt_id = cmnd->device->id;
 	unsigned int lun_id = cmnd->device->lun;
 	struct lpfc_scsi_event_header scsi_event;
-	int status;
+	int status, ret = SUCCESS;
 
 	if (!rdata) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_FCP,
@@ -5369,10 +5289,9 @@ lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 	 * So, continue on.
 	 * We will report success if all the i/o aborts successfully.
 	 */
-	if (status == SUCCESS)
-		status = lpfc_reset_flush_io_context(vport, tgt_id, lun_id,
+	ret = lpfc_reset_flush_io_context(vport, tgt_id, lun_id,
 					  LPFC_CTX_TGT);
-	return status;
+	return ret;
 }
 
 /**

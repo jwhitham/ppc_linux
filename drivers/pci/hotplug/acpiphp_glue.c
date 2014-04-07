@@ -39,8 +39,6 @@
  *    bus. It loses the refcount when the the driver unloads.
  */
 
-#define pr_fmt(fmt) "acpiphp_glue: " fmt
-
 #include <linux/init.h>
 #include <linux/module.h>
 
@@ -59,6 +57,8 @@
 static LIST_HEAD(bridge_list);
 static DEFINE_MUTEX(bridge_mutex);
 static DEFINE_MUTEX(acpiphp_context_lock);
+
+#define MY_NAME "acpiphp_glue"
 
 static void handle_hotplug_event(acpi_handle handle, u32 type, void *data);
 static void acpiphp_sanitize_bus(struct pci_bus *bus);
@@ -325,7 +325,7 @@ static acpi_status register_slot(acpi_handle handle, u32 lvl, void *data,
 
 	list_add_tail(&slot->node, &bridge->slots);
 
-	/* Register slots for ejectable functions only. */
+	/* Register slots for ejectable funtions only. */
 	if (acpi_pci_check_ejectable(pbus, handle)  || is_dock_device(handle)) {
 		unsigned long long sun;
 		int retval;
@@ -335,7 +335,7 @@ static acpi_status register_slot(acpi_handle handle, u32 lvl, void *data,
 		if (ACPI_FAILURE(status))
 			sun = bridge->nr_slots;
 
-		pr_debug("found ACPI PCI Hotplug slot %llu at PCI %04x:%02x:%02x\n",
+		dbg("found ACPI PCI Hotplug slot %llu at PCI %04x:%02x:%02x\n",
 		    sun, pci_domain_nr(pbus), pbus->number, device);
 
 		retval = acpiphp_register_hotplug_slot(slot, sun);
@@ -343,10 +343,10 @@ static acpi_status register_slot(acpi_handle handle, u32 lvl, void *data,
 			slot->slot = NULL;
 			bridge->nr_slots--;
 			if (retval == -EBUSY)
-				pr_warn("Slot %llu already registered by another "
+				warn("Slot %llu already registered by another "
 					"hotplug driver\n", sun);
 			else
-				pr_warn("acpiphp_register_hotplug_slot failed "
+				warn("acpiphp_register_hotplug_slot failed "
 					"(err code = 0x%x)\n", retval);
 		}
 		/* Even if the slot registration fails, we can still use it. */
@@ -369,7 +369,7 @@ static acpi_status register_slot(acpi_handle handle, u32 lvl, void *data,
 		if (register_hotplug_dock_device(handle,
 			&acpiphp_dock_ops, context,
 			acpiphp_dock_init, acpiphp_dock_release))
-			pr_debug("failed to register dock device\n");
+			dbg("failed to register dock device\n");
 	}
 
 	/* install notify handler */
@@ -427,7 +427,7 @@ static void cleanup_bridge(struct acpiphp_bridge *bridge)
 							ACPI_SYSTEM_NOTIFY,
 							handle_hotplug_event);
 				if (ACPI_FAILURE(status))
-					pr_err("failed to remove notify handler\n");
+					err("failed to remove notify handler\n");
 			}
 		}
 		if (slot->slot)
@@ -826,9 +826,8 @@ static void hotplug_event(acpi_handle handle, u32 type, void *data)
 	switch (type) {
 	case ACPI_NOTIFY_BUS_CHECK:
 		/* bus re-enumerate */
-		pr_debug("%s: Bus check notify on %s\n", __func__, objname);
-		pr_debug("%s: re-enumerating slots under %s\n",
-			 __func__, objname);
+		dbg("%s: Bus check notify on %s\n", __func__, objname);
+		dbg("%s: re-enumerating slots under %s\n", __func__, objname);
 		if (bridge) {
 			acpiphp_check_bridge(bridge);
 		} else {
@@ -842,7 +841,7 @@ static void hotplug_event(acpi_handle handle, u32 type, void *data)
 
 	case ACPI_NOTIFY_DEVICE_CHECK:
 		/* device check */
-		pr_debug("%s: Device check notify on %s\n", __func__, objname);
+		dbg("%s: Device check notify on %s\n", __func__, objname);
 		if (bridge) {
 			acpiphp_check_bridge(bridge);
 		} else {
@@ -863,7 +862,7 @@ static void hotplug_event(acpi_handle handle, u32 type, void *data)
 
 	case ACPI_NOTIFY_EJECT_REQUEST:
 		/* request device eject */
-		pr_debug("%s: Device eject notify on %s\n", __func__, objname);
+		dbg("%s: Device eject notify on %s\n", __func__, objname);
 		acpiphp_disable_and_eject_slot(func->slot);
 		break;
 	}
@@ -872,17 +871,21 @@ static void hotplug_event(acpi_handle handle, u32 type, void *data)
 		put_bridge(bridge);
 }
 
-static void hotplug_event_work(void *data, u32 type)
+static void hotplug_event_work(struct work_struct *work)
 {
-	struct acpiphp_context *context = data;
-	acpi_handle handle = context->handle;
+	struct acpiphp_context *context;
+	struct acpi_hp_work *hp_work;
 
+	hp_work = container_of(work, struct acpi_hp_work, work);
+	context = hp_work->context;
 	acpi_scan_lock_acquire();
 
-	hotplug_event(handle, type, context);
+	hotplug_event(hp_work->handle, hp_work->type, context);
 
 	acpi_scan_lock_release();
-	acpi_evaluate_hotplug_ost(handle, type, ACPI_OST_SC_SUCCESS, NULL);
+	acpi_evaluate_hotplug_ost(hp_work->handle, hp_work->type,
+				  ACPI_OST_SC_SUCCESS, NULL);
+	kfree(hp_work); /* allocated in handle_hotplug_event() */
 	put_bridge(context->func.parent);
 }
 
@@ -933,10 +936,10 @@ static void handle_hotplug_event(acpi_handle handle, u32 type, void *data)
 
 	mutex_lock(&acpiphp_context_lock);
 	context = acpiphp_get_context(handle);
-	if (context && !WARN_ON(context->handle != handle)) {
+	if (context) {
 		get_bridge(context->func.parent);
 		acpiphp_put_context(context);
-		acpi_hotplug_execute(hotplug_event_work, context, type);
+		alloc_acpi_hp_work(handle, type, context, hotplug_event_work);
 		mutex_unlock(&acpiphp_context_lock);
 		return;
 	}

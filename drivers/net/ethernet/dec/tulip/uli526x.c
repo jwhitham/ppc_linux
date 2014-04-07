@@ -429,6 +429,7 @@ err_out_release:
 err_out_disable:
 	pci_disable_device(pdev);
 err_out_free:
+	pci_set_drvdata(pdev, NULL);
 	free_netdev(dev);
 
 	return err;
@@ -449,6 +450,7 @@ static void uli526x_remove_one(struct pci_dev *pdev)
 				db->buf_pool_ptr, db->buf_pool_dma_ptr);
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
+	pci_set_drvdata(pdev, NULL);
 	free_netdev(dev);
 }
 

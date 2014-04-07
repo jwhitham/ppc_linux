@@ -46,17 +46,6 @@ static int gsc_m2m_ctx_stop_req(struct gsc_ctx *ctx)
 	return ret == 0 ? -ETIMEDOUT : ret;
 }
 
-static void __gsc_m2m_job_abort(struct gsc_ctx *ctx)
-{
-	int ret;
-
-	ret = gsc_m2m_ctx_stop_req(ctx);
-	if ((ret == -ETIMEDOUT) || (ctx->state & GSC_CTX_ABORT)) {
-		gsc_ctx_state_lock_clear(GSC_CTX_STOP_REQ | GSC_CTX_ABORT, ctx);
-		gsc_m2m_job_finish(ctx, VB2_BUF_STATE_ERROR);
-	}
-}
-
 static int gsc_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct gsc_ctx *ctx = q->drv_priv;
@@ -69,8 +58,11 @@ static int gsc_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 static int gsc_m2m_stop_streaming(struct vb2_queue *q)
 {
 	struct gsc_ctx *ctx = q->drv_priv;
+	int ret;
 
-	__gsc_m2m_job_abort(ctx);
+	ret = gsc_m2m_ctx_stop_req(ctx);
+	if (ret == -ETIMEDOUT)
+		gsc_m2m_job_finish(ctx, VB2_BUF_STATE_ERROR);
 
 	pm_runtime_put(&ctx->gsc_dev->pdev->dev);
 
@@ -99,9 +91,15 @@ void gsc_m2m_job_finish(struct gsc_ctx *ctx, int vb_state)
 	}
 }
 
+
 static void gsc_m2m_job_abort(void *priv)
 {
-	__gsc_m2m_job_abort((struct gsc_ctx *)priv);
+	struct gsc_ctx *ctx = priv;
+	int ret;
+
+	ret = gsc_m2m_ctx_stop_req(ctx);
+	if (ret == -ETIMEDOUT)
+		gsc_m2m_job_finish(ctx, VB2_BUF_STATE_ERROR);
 }
 
 static int gsc_get_bufs(struct gsc_ctx *ctx)
@@ -152,10 +150,9 @@ static void gsc_m2m_device_run(void *priv)
 		gsc->m2m.ctx = ctx;
 	}
 
-	is_set = ctx->state & GSC_CTX_STOP_REQ;
+	is_set = (ctx->state & GSC_CTX_STOP_REQ) ? 1 : 0;
+	ctx->state &= ~GSC_CTX_STOP_REQ;
 	if (is_set) {
-		ctx->state &= ~GSC_CTX_STOP_REQ;
-		ctx->state |= GSC_CTX_ABORT;
 		wake_up(&gsc->irq_queue);
 		goto put_device;
 	}

@@ -163,7 +163,7 @@ static struct jc42_chips jc42_chips[] = {
 
 /* Each client has this additional data */
 struct jc42_data {
-	struct i2c_client *client;
+	struct device	*hwmon_dev;
 	struct mutex	update_lock;	/* protect register access */
 	bool		extended;	/* true if extended range supported */
 	bool		valid;
@@ -193,21 +193,21 @@ MODULE_DEVICE_TABLE(i2c, jc42_id);
 
 static int jc42_suspend(struct device *dev)
 {
-	struct jc42_data *data = dev_get_drvdata(dev);
+	struct i2c_client *client = to_i2c_client(dev);
+	struct jc42_data *data = i2c_get_clientdata(client);
 
 	data->config |= JC42_CFG_SHUTDOWN;
-	i2c_smbus_write_word_swapped(data->client, JC42_REG_CONFIG,
-				     data->config);
+	i2c_smbus_write_word_swapped(client, JC42_REG_CONFIG, data->config);
 	return 0;
 }
 
 static int jc42_resume(struct device *dev)
 {
-	struct jc42_data *data = dev_get_drvdata(dev);
+	struct i2c_client *client = to_i2c_client(dev);
+	struct jc42_data *data = i2c_get_clientdata(client);
 
 	data->config &= ~JC42_CFG_SHUTDOWN;
-	i2c_smbus_write_word_swapped(data->client, JC42_REG_CONFIG,
-				     data->config);
+	i2c_smbus_write_word_swapped(client, JC42_REG_CONFIG, data->config);
 	return 0;
 }
 
@@ -317,14 +317,15 @@ static ssize_t set_##value(struct device *dev,				\
 			   struct device_attribute *attr,		\
 			   const char *buf, size_t count)		\
 {									\
-	struct jc42_data *data = dev_get_drvdata(dev);			\
+	struct i2c_client *client = to_i2c_client(dev);			\
+	struct jc42_data *data = i2c_get_clientdata(client);		\
 	int err, ret = count;						\
 	long val;							\
-	if (kstrtol(buf, 10, &val) < 0)					\
+	if (kstrtol(buf, 10, &val) < 0)				\
 		return -EINVAL;						\
 	mutex_lock(&data->update_lock);					\
 	data->value = jc42_temp_to_reg(val, data->extended);		\
-	err = i2c_smbus_write_word_swapped(data->client, reg, data->value); \
+	err = i2c_smbus_write_word_swapped(client, reg, data->value);	\
 	if (err < 0)							\
 		ret = err;						\
 	mutex_unlock(&data->update_lock);				\
@@ -343,7 +344,8 @@ static ssize_t set_temp_crit_hyst(struct device *dev,
 				  struct device_attribute *attr,
 				  const char *buf, size_t count)
 {
-	struct jc42_data *data = dev_get_drvdata(dev);
+	struct i2c_client *client = to_i2c_client(dev);
+	struct jc42_data *data = i2c_get_clientdata(client);
 	unsigned long val;
 	int diff, hyst;
 	int err;
@@ -366,7 +368,7 @@ static ssize_t set_temp_crit_hyst(struct device *dev,
 	mutex_lock(&data->update_lock);
 	data->config = (data->config & ~JC42_CFG_HYST_MASK)
 	  | (hyst << JC42_CFG_HYST_SHIFT);
-	err = i2c_smbus_write_word_swapped(data->client, JC42_REG_CONFIG,
+	err = i2c_smbus_write_word_swapped(client, JC42_REG_CONFIG,
 					   data->config);
 	if (err < 0)
 		ret = err;
@@ -428,7 +430,8 @@ static umode_t jc42_attribute_mode(struct kobject *kobj,
 				  struct attribute *attr, int index)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
-	struct jc42_data *data = dev_get_drvdata(dev);
+	struct i2c_client *client = to_i2c_client(dev);
+	struct jc42_data *data = i2c_get_clientdata(client);
 	unsigned int config = data->config;
 	bool readonly;
 
@@ -449,7 +452,6 @@ static const struct attribute_group jc42_group = {
 	.attrs = jc42_attributes,
 	.is_visible = jc42_attribute_mode,
 };
-__ATTRIBUTE_GROUPS(jc42);
 
 /* Return 0 if detection is successful, -ENODEV otherwise */
 static int jc42_detect(struct i2c_client *client, struct i2c_board_info *info)
@@ -485,16 +487,14 @@ static int jc42_detect(struct i2c_client *client, struct i2c_board_info *info)
 
 static int jc42_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
-	struct device *dev = &client->dev;
-	struct device *hwmon_dev;
 	struct jc42_data *data;
-	int config, cap;
+	int config, cap, err;
+	struct device *dev = &client->dev;
 
 	data = devm_kzalloc(dev, sizeof(struct jc42_data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
-	data->client = client;
 	i2c_set_clientdata(client, data);
 	mutex_init(&data->update_lock);
 
@@ -515,15 +515,29 @@ static int jc42_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	}
 	data->config = config;
 
-	hwmon_dev = devm_hwmon_device_register_with_groups(dev, client->name,
-							   data,
-							   jc42_groups);
-	return PTR_ERR_OR_ZERO(hwmon_dev);
+	/* Register sysfs hooks */
+	err = sysfs_create_group(&dev->kobj, &jc42_group);
+	if (err)
+		return err;
+
+	data->hwmon_dev = hwmon_device_register(dev);
+	if (IS_ERR(data->hwmon_dev)) {
+		err = PTR_ERR(data->hwmon_dev);
+		goto exit_remove;
+	}
+
+	return 0;
+
+exit_remove:
+	sysfs_remove_group(&dev->kobj, &jc42_group);
+	return err;
 }
 
 static int jc42_remove(struct i2c_client *client)
 {
 	struct jc42_data *data = i2c_get_clientdata(client);
+	hwmon_device_unregister(data->hwmon_dev);
+	sysfs_remove_group(&client->dev.kobj, &jc42_group);
 
 	/* Restore original configuration except hysteresis */
 	if ((data->config & ~JC42_CFG_HYST_MASK) !=
@@ -539,8 +553,8 @@ static int jc42_remove(struct i2c_client *client)
 
 static struct jc42_data *jc42_update_device(struct device *dev)
 {
-	struct jc42_data *data = dev_get_drvdata(dev);
-	struct i2c_client *client = data->client;
+	struct i2c_client *client = to_i2c_client(dev);
+	struct jc42_data *data = i2c_get_clientdata(client);
 	struct jc42_data *ret = data;
 	int val;
 

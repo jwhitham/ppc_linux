@@ -2106,7 +2106,8 @@ static int neofb_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (err < 0)
 		goto err_reg_fb;
 
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       info->node, info->fix.id);
 
 	/*
 	 * Our driver data
@@ -2147,6 +2148,12 @@ static void neofb_remove(struct pci_dev *dev)
 		fb_destroy_modedb(info->monspecs.modedb);
 		neo_unmap_mmio(info);
 		neo_free_fb_info(info);
+
+		/*
+		 * Ensure that the driver data is no longer
+		 * valid.
+		 */
+		pci_set_drvdata(dev, NULL);
 	}
 }
 

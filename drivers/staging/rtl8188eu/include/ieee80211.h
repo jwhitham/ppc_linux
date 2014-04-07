@@ -306,8 +306,8 @@ struct ieee_ibss_seq {
 };
 
 struct rtw_ieee80211_hdr {
-	__le16 frame_ctl;
-	__le16 duration_id;
+	u16 frame_ctl;
+	u16 duration_id;
 	u8 addr1[ETH_ALEN];
 	u8 addr2[ETH_ALEN];
 	u8 addr3[ETH_ALEN];
@@ -316,8 +316,8 @@ struct rtw_ieee80211_hdr {
 } __packed;
 
 struct rtw_ieee80211_hdr_3addr {
-	__le16 frame_ctl;
-	__le16 duration_id;
+	u16 frame_ctl;
+	u16 duration_id;
 	u8 addr1[ETH_ALEN];
 	u8 addr2[ETH_ALEN];
 	u8 addr3[ETH_ALEN];
@@ -325,8 +325,8 @@ struct rtw_ieee80211_hdr_3addr {
 } __packed;
 
 struct rtw_ieee80211_hdr_qos {
-	__le16 frame_ctl;
-	__le16 duration_id;
+	u16 frame_ctl;
+	u16 duration_id;
 	u8 addr1[ETH_ALEN];
 	u8 addr2[ETH_ALEN];
 	u8 addr3[ETH_ALEN];
@@ -336,8 +336,8 @@ struct rtw_ieee80211_hdr_qos {
 }  __packed;
 
 struct rtw_ieee80211_hdr_3addr_qos {
-	__le16 frame_ctl;
-	__le16 duration_id;
+	u16 frame_ctl;
+	u16 duration_id;
 	u8 addr1[ETH_ALEN];
 	u8 addr2[ETH_ALEN];
 	u8 addr3[ETH_ALEN];

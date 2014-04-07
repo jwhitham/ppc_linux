@@ -77,8 +77,4 @@ static inline unsigned int get_d(u32 inst)
 	return inst & 0xffff;
 }
 
-static inline unsigned int get_oc(u32 inst)
-{
-	return (inst >> 11) & 0x7fff;
-}
 #endif /* __ASM_PPC_DISASSEMBLE_H__ */

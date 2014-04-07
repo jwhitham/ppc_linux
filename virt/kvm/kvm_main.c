@@ -70,8 +70,7 @@ MODULE_LICENSE("GPL");
  * 		kvm->lock --> kvm->slots_lock --> kvm->irq_lock
  */
 
-DEFINE_SPINLOCK(kvm_lock);
-static DEFINE_RAW_SPINLOCK(kvm_count_lock);
+DEFINE_RAW_SPINLOCK(kvm_lock);
 LIST_HEAD(vm_list);
 
 static cpumask_var_t cpus_hardware_enabled;
@@ -187,7 +186,6 @@ void kvm_flush_remote_tlbs(struct kvm *kvm)
 		++kvm->stat.remote_tlb_flush;
 	cmpxchg(&kvm->tlbs_dirty, dirty_count, 0);
 }
-EXPORT_SYMBOL_GPL(kvm_flush_remote_tlbs);
 
 void kvm_reload_remote_mmus(struct kvm *kvm)
 {
@@ -492,9 +490,9 @@ static struct kvm *kvm_create_vm(unsigned long type)
 	if (r)
 		goto out_err;
 
-	spin_lock(&kvm_lock);
+	raw_spin_lock(&kvm_lock);
 	list_add(&kvm->vm_list, &vm_list);
-	spin_unlock(&kvm_lock);
+	raw_spin_unlock(&kvm_lock);
 
 	return kvm;
 
@@ -542,13 +540,13 @@ static void kvm_destroy_dirty_bitmap(struct kvm_memory_slot *memslot)
 /*
  * Free any memory in @free but not in @dont.
  */
-static void kvm_free_physmem_slot(struct kvm *kvm, struct kvm_memory_slot *free,
+static void kvm_free_physmem_slot(struct kvm_memory_slot *free,
 				  struct kvm_memory_slot *dont)
 {
 	if (!dont || free->dirty_bitmap != dont->dirty_bitmap)
 		kvm_destroy_dirty_bitmap(free);
 
-	kvm_arch_free_memslot(kvm, free, dont);
+	kvm_arch_free_memslot(free, dont);
 
 	free->npages = 0;
 }
@@ -559,7 +557,7 @@ void kvm_free_physmem(struct kvm *kvm)
 	struct kvm_memory_slot *memslot;
 
 	kvm_for_each_memslot(memslot, slots)
-		kvm_free_physmem_slot(kvm, memslot, NULL);
+		kvm_free_physmem_slot(memslot, NULL);
 
 	kfree(kvm->memslots);
 }
@@ -583,9 +581,9 @@ static void kvm_destroy_vm(struct kvm *kvm)
 	struct mm_struct *mm = kvm->mm;
 
 	kvm_arch_sync_events(kvm);
-	spin_lock(&kvm_lock);
+	raw_spin_lock(&kvm_lock);
 	list_del(&kvm->vm_list);
-	spin_unlock(&kvm_lock);
+	raw_spin_unlock(&kvm_lock);
 	kvm_free_irq_routing(kvm);
 	for (i = 0; i < KVM_NR_BUSES; i++)
 		kvm_io_bus_destroy(kvm->buses[i]);
@@ -823,7 +821,7 @@ int __kvm_set_memory_region(struct kvm *kvm,
 	if (change == KVM_MR_CREATE) {
 		new.userspace_addr = mem->userspace_addr;
 
-		if (kvm_arch_create_memslot(kvm, &new, npages))
+		if (kvm_arch_create_memslot(&new, npages))
 			goto out_free;
 	}
 
@@ -874,19 +872,6 @@ int __kvm_set_memory_region(struct kvm *kvm,
 			goto out_free;
 	}
 
-	/* actual memory is freed via old in kvm_free_physmem_slot below */
-	if (change == KVM_MR_DELETE) {
-		new.dirty_bitmap = NULL;
-		memset(&new.arch, 0, sizeof(new.arch));
-	}
-
-	old_memslots = install_new_memslots(kvm, slots, &new);
-
-	kvm_arch_commit_memory_region(kvm, mem, &old, change);
-
-	kvm_free_physmem_slot(kvm, &old, &new);
-	kfree(old_memslots);
-
 	/*
 	 * IOMMU mapping:  New slots need to be mapped.  Old slots need to be
 	 * un-mapped and re-mapped if their base changes.  Since base change
@@ -898,15 +883,29 @@ int __kvm_set_memory_region(struct kvm *kvm,
 	 */
 	if ((change == KVM_MR_CREATE) || (change == KVM_MR_MOVE)) {
 		r = kvm_iommu_map_pages(kvm, &new);
-		return r;
+		if (r)
+			goto out_slots;
 	}
+
+	/* actual memory is freed via old in kvm_free_physmem_slot below */
+	if (change == KVM_MR_DELETE) {
+		new.dirty_bitmap = NULL;
+		memset(&new.arch, 0, sizeof(new.arch));
+	}
+
+	old_memslots = install_new_memslots(kvm, slots, &new);
+
+	kvm_arch_commit_memory_region(kvm, mem, &old, change);
+
+	kvm_free_physmem_slot(&old, &new);
+	kfree(old_memslots);
 
 	return 0;
 
 out_slots:
 	kfree(slots);
 out_free:
-	kvm_free_physmem_slot(kvm, &new, &old);
+	kvm_free_physmem_slot(&new, &old);
 out:
 	return r;
 }
@@ -965,7 +964,6 @@ int kvm_get_dirty_log(struct kvm *kvm,
 out:
 	return r;
 }
-EXPORT_SYMBOL_GPL(kvm_get_dirty_log);
 
 bool kvm_largepages_enabled(void)
 {
@@ -1615,9 +1613,8 @@ EXPORT_SYMBOL_GPL(kvm_read_guest_cached);
 
 int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
 {
-	const void *zero_page = (const void *) __va(page_to_phys(ZERO_PAGE(0)));
-
-	return kvm_write_guest_page(kvm, gfn, zero_page, offset, len);
+	return kvm_write_guest_page(kvm, gfn, (const void *) empty_zero_page,
+				    offset, len);
 }
 EXPORT_SYMBOL_GPL(kvm_clear_guest_page);
 
@@ -1657,7 +1654,6 @@ void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
 	memslot = gfn_to_memslot(kvm, gfn);
 	mark_page_dirty_in_slot(kvm, memslot, gfn);
 }
-EXPORT_SYMBOL_GPL(mark_page_dirty);
 
 /*
  * The vCPU has executed a HLT instruction with in-kernel mode enabled.
@@ -1683,7 +1679,6 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
 
 	finish_wait(&vcpu->wq, &wait);
 }
-EXPORT_SYMBOL_GPL(kvm_vcpu_block);
 
 #ifndef CONFIG_S390
 /*
@@ -2276,11 +2271,6 @@ static int kvm_ioctl_create_device(struct kvm *kvm,
 		ops = &kvm_xics_ops;
 		break;
 #endif
-#ifdef CONFIG_KVM_VFIO
-	case KVM_DEV_TYPE_VFIO:
-		ops = &kvm_vfio_ops;
-		break;
-#endif
 	default:
 		return -ENODEV;
 	}
@@ -2529,12 +2519,44 @@ out:
 }
 #endif
 
+static int kvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+{
+	struct page *page[1];
+	unsigned long addr;
+	int npages;
+	gfn_t gfn = vmf->pgoff;
+	struct kvm *kvm = vma->vm_file->private_data;
+
+	addr = gfn_to_hva(kvm, gfn);
+	if (kvm_is_error_hva(addr))
+		return VM_FAULT_SIGBUS;
+
+	npages = get_user_pages(current, current->mm, addr, 1, 1, 0, page,
+				NULL);
+	if (unlikely(npages != 1))
+		return VM_FAULT_SIGBUS;
+
+	vmf->page = page[0];
+	return 0;
+}
+
+static const struct vm_operations_struct kvm_vm_vm_ops = {
+	.fault = kvm_vm_fault,
+};
+
+static int kvm_vm_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	vma->vm_ops = &kvm_vm_vm_ops;
+	return 0;
+}
+
 static struct file_operations kvm_vm_fops = {
 	.release        = kvm_vm_release,
 	.unlocked_ioctl = kvm_vm_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl   = kvm_vm_compat_ioctl,
 #endif
+	.mmap           = kvm_vm_mmap,
 	.llseek		= noop_llseek,
 };
 
@@ -2661,12 +2683,11 @@ static void hardware_enable_nolock(void *junk)
 	}
 }
 
-static void hardware_enable(void)
+static void hardware_enable(void *junk)
 {
-	raw_spin_lock(&kvm_count_lock);
-	if (kvm_usage_count)
-		hardware_enable_nolock(NULL);
-	raw_spin_unlock(&kvm_count_lock);
+	raw_spin_lock(&kvm_lock);
+	hardware_enable_nolock(junk);
+	raw_spin_unlock(&kvm_lock);
 }
 
 static void hardware_disable_nolock(void *junk)
@@ -2679,12 +2700,11 @@ static void hardware_disable_nolock(void *junk)
 	kvm_arch_hardware_disable(NULL);
 }
 
-static void hardware_disable(void)
+static void hardware_disable(void *junk)
 {
-	raw_spin_lock(&kvm_count_lock);
-	if (kvm_usage_count)
-		hardware_disable_nolock(NULL);
-	raw_spin_unlock(&kvm_count_lock);
+	raw_spin_lock(&kvm_lock);
+	hardware_disable_nolock(junk);
+	raw_spin_unlock(&kvm_lock);
 }
 
 static void hardware_disable_all_nolock(void)
@@ -2698,16 +2718,16 @@ static void hardware_disable_all_nolock(void)
 
 static void hardware_disable_all(void)
 {
-	raw_spin_lock(&kvm_count_lock);
+	raw_spin_lock(&kvm_lock);
 	hardware_disable_all_nolock();
-	raw_spin_unlock(&kvm_count_lock);
+	raw_spin_unlock(&kvm_lock);
 }
 
 static int hardware_enable_all(void)
 {
 	int r = 0;
 
-	raw_spin_lock(&kvm_count_lock);
+	raw_spin_lock(&kvm_lock);
 
 	kvm_usage_count++;
 	if (kvm_usage_count == 1) {
@@ -2720,7 +2740,7 @@ static int hardware_enable_all(void)
 		}
 	}
 
-	raw_spin_unlock(&kvm_count_lock);
+	raw_spin_unlock(&kvm_lock);
 
 	return r;
 }
@@ -2730,17 +2750,20 @@ static int kvm_cpu_hotplug(struct notifier_block *notifier, unsigned long val,
 {
 	int cpu = (long)v;
 
+	if (!kvm_usage_count)
+		return NOTIFY_OK;
+
 	val &= ~CPU_TASKS_FROZEN;
 	switch (val) {
 	case CPU_DYING:
 		printk(KERN_INFO "kvm: disabling virtualization on CPU%d\n",
 		       cpu);
-		hardware_disable();
+		hardware_disable(NULL);
 		break;
 	case CPU_STARTING:
 		printk(KERN_INFO "kvm: enabling virtualization on CPU%d\n",
 		       cpu);
-		hardware_enable();
+		hardware_enable(NULL);
 		break;
 	}
 	return NOTIFY_OK;
@@ -3033,10 +3056,10 @@ static int vm_stat_get(void *_offset, u64 *val)
 	struct kvm *kvm;
 
 	*val = 0;
-	spin_lock(&kvm_lock);
+	raw_spin_lock(&kvm_lock);
 	list_for_each_entry(kvm, &vm_list, vm_list)
 		*val += *(u32 *)((void *)kvm + offset);
-	spin_unlock(&kvm_lock);
+	raw_spin_unlock(&kvm_lock);
 	return 0;
 }
 
@@ -3050,12 +3073,12 @@ static int vcpu_stat_get(void *_offset, u64 *val)
 	int i;
 
 	*val = 0;
-	spin_lock(&kvm_lock);
+	raw_spin_lock(&kvm_lock);
 	list_for_each_entry(kvm, &vm_list, vm_list)
 		kvm_for_each_vcpu(i, vcpu, kvm)
 			*val += *(u32 *)((void *)vcpu + offset);
 
-	spin_unlock(&kvm_lock);
+	raw_spin_unlock(&kvm_lock);
 	return 0;
 }
 
@@ -3110,7 +3133,7 @@ static int kvm_suspend(void)
 static void kvm_resume(void)
 {
 	if (kvm_usage_count) {
-		WARN_ON(raw_spin_is_locked(&kvm_count_lock));
+		WARN_ON(raw_spin_is_locked(&kvm_lock));
 		hardware_enable_nolock(NULL);
 	}
 }

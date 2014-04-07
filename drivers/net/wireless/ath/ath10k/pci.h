@@ -43,22 +43,21 @@ struct bmi_xfer {
 	u32 resp_len;
 };
 
-enum ath10k_pci_compl_state {
-	ATH10K_PCI_COMPL_FREE = 0,
-	ATH10K_PCI_COMPL_SEND,
-	ATH10K_PCI_COMPL_RECV,
-};
-
 struct ath10k_pci_compl {
 	struct list_head list;
-	enum ath10k_pci_compl_state state;
-	struct ath10k_ce_pipe *ce_state;
-	struct ath10k_pci_pipe *pipe_info;
-	struct sk_buff *skb;
+	int send_or_recv;
+	struct ce_state *ce_state;
+	struct hif_ce_pipe_info *pipe_info;
+	void *transfer_context;
 	unsigned int nbytes;
 	unsigned int transfer_id;
 	unsigned int flags;
 };
+
+/* compl_state.send_or_recv */
+#define HIF_CE_COMPLETE_FREE 0
+#define HIF_CE_COMPLETE_SEND 1
+#define HIF_CE_COMPLETE_RECV 2
 
 /*
  * PCI-specific Target state
@@ -153,16 +152,17 @@ struct service_to_pipe {
 
 enum ath10k_pci_features {
 	ATH10K_PCI_FEATURE_MSI_X		= 0,
-	ATH10K_PCI_FEATURE_SOC_POWER_SAVE	= 1,
+	ATH10K_PCI_FEATURE_HW_1_0_WORKAROUND	= 1,
+	ATH10K_PCI_FEATURE_SOC_POWER_SAVE	= 2,
 
 	/* keep last */
 	ATH10K_PCI_FEATURE_COUNT
 };
 
 /* Per-pipe state. */
-struct ath10k_pci_pipe {
+struct hif_ce_pipe_info {
 	/* Handle of underlying Copy Engine */
-	struct ath10k_ce_pipe *ce_hdl;
+	struct ce_state *ce_hdl;
 
 	/* Our pipe number; facilitiates use of pipe_info ptrs. */
 	u8 pipe_num;
@@ -178,6 +178,9 @@ struct ath10k_pci_pipe {
 	/* List of free CE completion slots */
 	struct list_head compl_free;
 
+	/* Limit the number of outstanding send requests. */
+	int num_sends_allowed;
+
 	struct ath10k_pci *ar_pci;
 	struct tasklet_struct intr;
 };
@@ -187,6 +190,7 @@ struct ath10k_pci {
 	struct device *dev;
 	struct ath10k *ar;
 	void __iomem *mem;
+	int cacheline_sz;
 
 	DECLARE_BITMAP(features, ATH10K_PCI_FEATURE_COUNT);
 
@@ -215,7 +219,7 @@ struct ath10k_pci {
 
 	bool compl_processing;
 
-	struct ath10k_pci_pipe pipe_info[CE_COUNT_MAX];
+	struct hif_ce_pipe_info pipe_info[CE_COUNT_MAX];
 
 	struct ath10k_hif_cb msg_callbacks_current;
 
@@ -223,13 +227,16 @@ struct ath10k_pci {
 	u32 fw_indicator_address;
 
 	/* Copy Engine used for Diagnostic Accesses */
-	struct ath10k_ce_pipe *ce_diag;
+	struct ce_state *ce_diag;
 
 	/* FIXME: document what this really protects */
 	spinlock_t ce_lock;
 
 	/* Map CE id to ce_state */
-	struct ath10k_ce_pipe ce_states[CE_COUNT_MAX];
+	struct ce_state *ce_id_to_state[CE_COUNT_MAX];
+
+	/* makes sure that dummy reads are atomic */
+	spinlock_t hw_v1_workaround_lock;
 };
 
 static inline struct ath10k_pci *ath10k_pci_priv(struct ath10k *ar)
@@ -237,18 +244,14 @@ static inline struct ath10k_pci *ath10k_pci_priv(struct ath10k *ar)
 	return ar->hif.priv;
 }
 
-static inline u32 ath10k_pci_reg_read32(struct ath10k *ar, u32 addr)
+static inline u32 ath10k_pci_reg_read32(void __iomem *mem, u32 addr)
 {
-	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
-
-	return ioread32(ar_pci->mem + PCIE_LOCAL_BASE_ADDRESS + addr);
+	return ioread32(mem + PCIE_LOCAL_BASE_ADDRESS + addr);
 }
 
-static inline void ath10k_pci_reg_write32(struct ath10k *ar, u32 addr, u32 val)
+static inline void ath10k_pci_reg_write32(void __iomem *mem, u32 addr, u32 val)
 {
-	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
-
-	iowrite32(val, ar_pci->mem + PCIE_LOCAL_BASE_ADDRESS + addr);
+	iowrite32(val, mem + PCIE_LOCAL_BASE_ADDRESS + addr);
 }
 
 #define ATH_PCI_RESET_WAIT_MAX 10 /* ms */
@@ -307,8 +310,23 @@ static inline void ath10k_pci_write32(struct ath10k *ar, u32 offset,
 				      u32 value)
 {
 	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
+	void __iomem *addr = ar_pci->mem;
 
-	iowrite32(value, ar_pci->mem + offset);
+	if (test_bit(ATH10K_PCI_FEATURE_HW_1_0_WORKAROUND, ar_pci->features)) {
+		unsigned long irq_flags;
+
+		spin_lock_irqsave(&ar_pci->hw_v1_workaround_lock, irq_flags);
+
+		ioread32(addr+offset+4); /* 3rd read prior to write */
+		ioread32(addr+offset+4); /* 2nd read prior to write */
+		ioread32(addr+offset+4); /* 1st read prior to write */
+		iowrite32(value, addr+offset);
+
+		spin_unlock_irqrestore(&ar_pci->hw_v1_workaround_lock,
+				       irq_flags);
+	} else {
+		iowrite32(value, addr+offset);
+	}
 }
 
 static inline u32 ath10k_pci_read32(struct ath10k *ar, u32 offset)
@@ -318,17 +336,15 @@ static inline u32 ath10k_pci_read32(struct ath10k *ar, u32 offset)
 	return ioread32(ar_pci->mem + offset);
 }
 
-int ath10k_do_pci_wake(struct ath10k *ar);
+void ath10k_do_pci_wake(struct ath10k *ar);
 void ath10k_do_pci_sleep(struct ath10k *ar);
 
-static inline int ath10k_pci_wake(struct ath10k *ar)
+static inline void ath10k_pci_wake(struct ath10k *ar)
 {
 	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
 
 	if (test_bit(ATH10K_PCI_FEATURE_SOC_POWER_SAVE, ar_pci->features))
-		return ath10k_do_pci_wake(ar);
-
-	return 0;
+		ath10k_do_pci_wake(ar);
 }
 
 static inline void ath10k_pci_sleep(struct ath10k *ar)

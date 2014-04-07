@@ -115,7 +115,7 @@ static const Dwfl_Callbacks offline_callbacks = {
 };
 
 /* Get a Dwarf from offline image */
-static int debuginfo__init_offline_dwarf(struct debuginfo *dbg,
+static int debuginfo__init_offline_dwarf(struct debuginfo *self,
 					 const char *path)
 {
 	int fd;
@@ -124,25 +124,25 @@ static int debuginfo__init_offline_dwarf(struct debuginfo *dbg,
 	if (fd < 0)
 		return fd;
 
-	dbg->dwfl = dwfl_begin(&offline_callbacks);
-	if (!dbg->dwfl)
+	self->dwfl = dwfl_begin(&offline_callbacks);
+	if (!self->dwfl)
 		goto error;
 
-	dbg->mod = dwfl_report_offline(dbg->dwfl, "", "", fd);
-	if (!dbg->mod)
+	self->mod = dwfl_report_offline(self->dwfl, "", "", fd);
+	if (!self->mod)
 		goto error;
 
-	dbg->dbg = dwfl_module_getdwarf(dbg->mod, &dbg->bias);
-	if (!dbg->dbg)
+	self->dbg = dwfl_module_getdwarf(self->mod, &self->bias);
+	if (!self->dbg)
 		goto error;
 
 	return 0;
 error:
-	if (dbg->dwfl)
-		dwfl_end(dbg->dwfl);
+	if (self->dwfl)
+		dwfl_end(self->dwfl);
 	else
 		close(fd);
-	memset(dbg, 0, sizeof(*dbg));
+	memset(self, 0, sizeof(*self));
 
 	return -ENOENT;
 }
@@ -180,24 +180,24 @@ static const Dwfl_Callbacks kernel_callbacks = {
 };
 
 /* Get a Dwarf from live kernel image */
-static int debuginfo__init_online_kernel_dwarf(struct debuginfo *dbg,
+static int debuginfo__init_online_kernel_dwarf(struct debuginfo *self,
 					       Dwarf_Addr addr)
 {
-	dbg->dwfl = dwfl_begin(&kernel_callbacks);
-	if (!dbg->dwfl)
+	self->dwfl = dwfl_begin(&kernel_callbacks);
+	if (!self->dwfl)
 		return -EINVAL;
 
 	/* Load the kernel dwarves: Don't care the result here */
-	dwfl_linux_kernel_report_kernel(dbg->dwfl);
-	dwfl_linux_kernel_report_modules(dbg->dwfl);
+	dwfl_linux_kernel_report_kernel(self->dwfl);
+	dwfl_linux_kernel_report_modules(self->dwfl);
 
-	dbg->dbg = dwfl_addrdwarf(dbg->dwfl, addr, &dbg->bias);
+	self->dbg = dwfl_addrdwarf(self->dwfl, addr, &self->bias);
 	/* Here, check whether we could get a real dwarf */
-	if (!dbg->dbg) {
+	if (!self->dbg) {
 		pr_debug("Failed to find kernel dwarf at %lx\n",
 			 (unsigned long)addr);
-		dwfl_end(dbg->dwfl);
-		memset(dbg, 0, sizeof(*dbg));
+		dwfl_end(self->dwfl);
+		memset(self, 0, sizeof(*self));
 		return -ENOENT;
 	}
 
@@ -205,7 +205,7 @@ static int debuginfo__init_online_kernel_dwarf(struct debuginfo *dbg,
 }
 #else
 /* With older elfutils, this just support kernel module... */
-static int debuginfo__init_online_kernel_dwarf(struct debuginfo *dbg,
+static int debuginfo__init_online_kernel_dwarf(struct debuginfo *self,
 					       Dwarf_Addr addr __maybe_unused)
 {
 	const char *path = kernel_get_module_path("kernel");
@@ -216,45 +216,44 @@ static int debuginfo__init_online_kernel_dwarf(struct debuginfo *dbg,
 	}
 
 	pr_debug2("Use file %s for debuginfo\n", path);
-	return debuginfo__init_offline_dwarf(dbg, path);
+	return debuginfo__init_offline_dwarf(self, path);
 }
 #endif
 
 struct debuginfo *debuginfo__new(const char *path)
 {
-	struct debuginfo *dbg = zalloc(sizeof(*dbg));
-	if (!dbg)
+	struct debuginfo *self = zalloc(sizeof(struct debuginfo));
+	if (!self)
 		return NULL;
 
-	if (debuginfo__init_offline_dwarf(dbg, path) < 0) {
-		free(dbg);
-		dbg = NULL;
+	if (debuginfo__init_offline_dwarf(self, path) < 0) {
+		free(self);
+		self = NULL;
 	}
 
-	return dbg;
+	return self;
 }
 
 struct debuginfo *debuginfo__new_online_kernel(unsigned long addr)
 {
-	struct debuginfo *dbg = zalloc(sizeof(*dbg));
-
-	if (!dbg)
+	struct debuginfo *self = zalloc(sizeof(struct debuginfo));
+	if (!self)
 		return NULL;
 
-	if (debuginfo__init_online_kernel_dwarf(dbg, (Dwarf_Addr)addr) < 0) {
-		free(dbg);
-		dbg = NULL;
+	if (debuginfo__init_online_kernel_dwarf(self, (Dwarf_Addr)addr) < 0) {
+		free(self);
+		self = NULL;
 	}
 
-	return dbg;
+	return self;
 }
 
-void debuginfo__delete(struct debuginfo *dbg)
+void debuginfo__delete(struct debuginfo *self)
 {
-	if (dbg) {
-		if (dbg->dwfl)
-			dwfl_end(dbg->dwfl);
-		free(dbg);
+	if (self) {
+		if (self->dwfl)
+			dwfl_end(self->dwfl);
+		free(self);
 	}
 }
 
@@ -274,15 +273,12 @@ static struct probe_trace_arg_ref *alloc_trace_arg_ref(long offs)
 /*
  * Convert a location into trace_arg.
  * If tvar == NULL, this just checks variable can be converted.
- * If fentry == true and vr_die is a parameter, do huristic search
- * for the location fuzzed by function entry mcount.
  */
 static int convert_variable_location(Dwarf_Die *vr_die, Dwarf_Addr addr,
-				     Dwarf_Op *fb_ops, Dwarf_Die *sp_die,
+				     Dwarf_Op *fb_ops,
 				     struct probe_trace_arg *tvar)
 {
 	Dwarf_Attribute attr;
-	Dwarf_Addr tmp = 0;
 	Dwarf_Op *op;
 	size_t nops;
 	unsigned int regn;
@@ -295,29 +291,12 @@ static int convert_variable_location(Dwarf_Die *vr_die, Dwarf_Addr addr,
 		goto static_var;
 
 	/* TODO: handle more than 1 exprs */
-	if (dwarf_attr(vr_die, DW_AT_location, &attr) == NULL)
-		return -EINVAL;	/* Broken DIE ? */
-	if (dwarf_getlocation_addr(&attr, addr, &op, &nops, 1) <= 0) {
-		ret = dwarf_entrypc(sp_die, &tmp);
-		if (ret || addr != tmp ||
-		    dwarf_tag(vr_die) != DW_TAG_formal_parameter ||
-		    dwarf_highpc(sp_die, &tmp))
-			return -ENOENT;
-		/*
-		 * This is fuzzed by fentry mcount. We try to find the
-		 * parameter location at the earliest address.
-		 */
-		for (addr += 1; addr <= tmp; addr++) {
-			if (dwarf_getlocation_addr(&attr, addr, &op,
-						   &nops, 1) > 0)
-				goto found;
-		}
-		return -ENOENT;
-	}
-found:
-	if (nops == 0)
+	if (dwarf_attr(vr_die, DW_AT_location, &attr) == NULL ||
+	    dwarf_getlocation_addr(&attr, addr, &op, &nops, 1) <= 0 ||
+	    nops == 0) {
 		/* TODO: Support const_value */
 		return -ENOENT;
+	}
 
 	if (op->atom == DW_OP_addr) {
 static_var:
@@ -584,7 +563,7 @@ static int convert_variable_fields(Dwarf_Die *vr_die, const char *varname,
 	}
 
 	if (die_find_member(&type, field->name, die_mem) == NULL) {
-		pr_warning("%s(type:%s) has no member %s.\n", varname,
+		pr_warning("%s(tyep:%s) has no member %s.\n", varname,
 			   dwarf_diename(&type), field->name);
 		return -EINVAL;
 	}
@@ -621,7 +600,7 @@ static int convert_variable(Dwarf_Die *vr_die, struct probe_finder *pf)
 		 dwarf_diename(vr_die));
 
 	ret = convert_variable_location(vr_die, pf->addr, pf->fb_ops,
-					&pf->sp_die, pf->tvar);
+					pf->tvar);
 	if (ret == -ENOENT)
 		pr_err("Failed to find the location of %s at this address.\n"
 		       " Perhaps, it has been optimized out.\n", pf->pvar->var);
@@ -1084,7 +1063,7 @@ static int pubname_search_cb(Dwarf *dbg, Dwarf_Global *gl, void *data)
 }
 
 /* Find probe points from debuginfo */
-static int debuginfo__find_probes(struct debuginfo *dbg,
+static int debuginfo__find_probes(struct debuginfo *self,
 				  struct probe_finder *pf)
 {
 	struct perf_probe_point *pp = &pf->pev->point;
@@ -1095,7 +1074,7 @@ static int debuginfo__find_probes(struct debuginfo *dbg,
 
 #if _ELFUTILS_PREREQ(0, 142)
 	/* Get the call frame information from this dwarf */
-	pf->cfi = dwarf_getcfi(dbg->dbg);
+	pf->cfi = dwarf_getcfi(self->dbg);
 #endif
 
 	off = 0;
@@ -1114,7 +1093,7 @@ static int debuginfo__find_probes(struct debuginfo *dbg,
 			.data = pf,
 		};
 
-		dwarf_getpubnames(dbg->dbg, pubname_search_cb,
+		dwarf_getpubnames(self->dbg, pubname_search_cb,
 				  &pubname_param, 0);
 		if (pubname_param.found) {
 			ret = probe_point_search_cb(&pf->sp_die, &probe_param);
@@ -1124,9 +1103,9 @@ static int debuginfo__find_probes(struct debuginfo *dbg,
 	}
 
 	/* Loop on CUs (Compilation Unit) */
-	while (!dwarf_nextcu(dbg->dbg, off, &noff, &cuhl, NULL, NULL, NULL)) {
+	while (!dwarf_nextcu(self->dbg, off, &noff, &cuhl, NULL, NULL, NULL)) {
 		/* Get the DIE(Debugging Information Entry) of this CU */
-		diep = dwarf_offdie(dbg->dbg, off + cuhl, &pf->cu_die);
+		diep = dwarf_offdie(self->dbg, off + cuhl, &pf->cu_die);
 		if (!diep)
 			continue;
 
@@ -1157,80 +1136,12 @@ found:
 	return ret;
 }
 
-struct local_vars_finder {
-	struct probe_finder *pf;
-	struct perf_probe_arg *args;
-	int max_args;
-	int nargs;
-	int ret;
-};
-
-/* Collect available variables in this scope */
-static int copy_variables_cb(Dwarf_Die *die_mem, void *data)
-{
-	struct local_vars_finder *vf = data;
-	struct probe_finder *pf = vf->pf;
-	int tag;
-
-	tag = dwarf_tag(die_mem);
-	if (tag == DW_TAG_formal_parameter ||
-	    tag == DW_TAG_variable) {
-		if (convert_variable_location(die_mem, vf->pf->addr,
-					      vf->pf->fb_ops, &pf->sp_die,
-					      NULL) == 0) {
-			vf->args[vf->nargs].var = (char *)dwarf_diename(die_mem);
-			if (vf->args[vf->nargs].var == NULL) {
-				vf->ret = -ENOMEM;
-				return DIE_FIND_CB_END;
-			}
-			pr_debug(" %s", vf->args[vf->nargs].var);
-			vf->nargs++;
-		}
-	}
-
-	if (dwarf_haspc(die_mem, vf->pf->addr))
-		return DIE_FIND_CB_CONTINUE;
-	else
-		return DIE_FIND_CB_SIBLING;
-}
-
-static int expand_probe_args(Dwarf_Die *sc_die, struct probe_finder *pf,
-			     struct perf_probe_arg *args)
-{
-	Dwarf_Die die_mem;
-	int i;
-	int n = 0;
-	struct local_vars_finder vf = {.pf = pf, .args = args,
-				.max_args = MAX_PROBE_ARGS, .ret = 0};
-
-	for (i = 0; i < pf->pev->nargs; i++) {
-		/* var never be NULL */
-		if (strcmp(pf->pev->args[i].var, "$vars") == 0) {
-			pr_debug("Expanding $vars into:");
-			vf.nargs = n;
-			/* Special local variables */
-			die_find_child(sc_die, copy_variables_cb, (void *)&vf,
-				       &die_mem);
-			pr_debug(" (%d)\n", vf.nargs - n);
-			if (vf.ret < 0)
-				return vf.ret;
-			n = vf.nargs;
-		} else {
-			/* Copy normal argument */
-			args[n] = pf->pev->args[i];
-			n++;
-		}
-	}
-	return n;
-}
-
 /* Add a found probe point into trace event list */
 static int add_probe_trace_event(Dwarf_Die *sc_die, struct probe_finder *pf)
 {
 	struct trace_event_finder *tf =
 			container_of(pf, struct trace_event_finder, pf);
 	struct probe_trace_event *tev;
-	struct perf_probe_arg *args;
 	int ret, i;
 
 	/* Check number of tevs */
@@ -1250,45 +1161,31 @@ static int add_probe_trace_event(Dwarf_Die *sc_die, struct probe_finder *pf)
 	pr_debug("Probe point found: %s+%lu\n", tev->point.symbol,
 		 tev->point.offset);
 
-	/* Expand special probe argument if exist */
-	args = zalloc(sizeof(struct perf_probe_arg) * MAX_PROBE_ARGS);
-	if (args == NULL)
-		return -ENOMEM;
-
-	ret = expand_probe_args(sc_die, pf, args);
-	if (ret < 0)
-		goto end;
-
-	tev->nargs = ret;
-	tev->args = zalloc(sizeof(struct probe_trace_arg) * tev->nargs);
-	if (tev->args == NULL) {
-		ret = -ENOMEM;
-		goto end;
-	}
-
 	/* Find each argument */
-	for (i = 0; i < tev->nargs; i++) {
-		pf->pvar = &args[i];
+	tev->nargs = pf->pev->nargs;
+	tev->args = zalloc(sizeof(struct probe_trace_arg) * tev->nargs);
+	if (tev->args == NULL)
+		return -ENOMEM;
+	for (i = 0; i < pf->pev->nargs; i++) {
+		pf->pvar = &pf->pev->args[i];
 		pf->tvar = &tev->args[i];
 		/* Variable should be found from scope DIE */
 		ret = find_variable(sc_die, pf);
 		if (ret != 0)
-			break;
+			return ret;
 	}
 
-end:
-	free(args);
-	return ret;
+	return 0;
 }
 
 /* Find probe_trace_events specified by perf_probe_event from debuginfo */
-int debuginfo__find_trace_events(struct debuginfo *dbg,
+int debuginfo__find_trace_events(struct debuginfo *self,
 				 struct perf_probe_event *pev,
 				 struct probe_trace_event **tevs, int max_tevs)
 {
 	struct trace_event_finder tf = {
 			.pf = {.pev = pev, .callback = add_probe_trace_event},
-			.mod = dbg->mod, .max_tevs = max_tevs};
+			.mod = self->mod, .max_tevs = max_tevs};
 	int ret;
 
 	/* Allocate result tevs array */
@@ -1299,7 +1196,7 @@ int debuginfo__find_trace_events(struct debuginfo *dbg,
 	tf.tevs = *tevs;
 	tf.ntevs = 0;
 
-	ret = debuginfo__find_probes(dbg, &tf.pf);
+	ret = debuginfo__find_probes(self, &tf.pf);
 	if (ret < 0) {
 		free(*tevs);
 		*tevs = NULL;
@@ -1325,8 +1222,7 @@ static int collect_variables_cb(Dwarf_Die *die_mem, void *data)
 	if (tag == DW_TAG_formal_parameter ||
 	    tag == DW_TAG_variable) {
 		ret = convert_variable_location(die_mem, af->pf.addr,
-						af->pf.fb_ops, &af->pf.sp_die,
-						NULL);
+						af->pf.fb_ops, NULL);
 		if (ret == 0) {
 			ret = die_get_varname(die_mem, buf, MAX_VAR_LEN);
 			pr_debug2("Add new var: %s\n", buf);
@@ -1390,14 +1286,14 @@ out:
 }
 
 /* Find available variables at given probe point */
-int debuginfo__find_available_vars_at(struct debuginfo *dbg,
+int debuginfo__find_available_vars_at(struct debuginfo *self,
 				      struct perf_probe_event *pev,
 				      struct variable_list **vls,
 				      int max_vls, bool externs)
 {
 	struct available_var_finder af = {
 			.pf = {.pev = pev, .callback = add_available_vars},
-			.mod = dbg->mod,
+			.mod = self->mod,
 			.max_vls = max_vls, .externs = externs};
 	int ret;
 
@@ -1409,7 +1305,7 @@ int debuginfo__find_available_vars_at(struct debuginfo *dbg,
 	af.vls = *vls;
 	af.nvls = 0;
 
-	ret = debuginfo__find_probes(dbg, &af.pf);
+	ret = debuginfo__find_probes(self, &af.pf);
 	if (ret < 0) {
 		/* Free vlist for error */
 		while (af.nvls--) {
@@ -1427,7 +1323,7 @@ int debuginfo__find_available_vars_at(struct debuginfo *dbg,
 }
 
 /* Reverse search */
-int debuginfo__find_probe_point(struct debuginfo *dbg, unsigned long addr,
+int debuginfo__find_probe_point(struct debuginfo *self, unsigned long addr,
 				struct perf_probe_point *ppt)
 {
 	Dwarf_Die cudie, spdie, indie;
@@ -1436,10 +1332,10 @@ int debuginfo__find_probe_point(struct debuginfo *dbg, unsigned long addr,
 	int baseline = 0, lineno = 0, ret = 0;
 
 	/* Adjust address with bias */
-	addr += dbg->bias;
+	addr += self->bias;
 
 	/* Find cu die */
-	if (!dwarf_addrdie(dbg->dbg, (Dwarf_Addr)addr - dbg->bias, &cudie)) {
+	if (!dwarf_addrdie(self->dbg, (Dwarf_Addr)addr - self->bias, &cudie)) {
 		pr_warning("Failed to find debug information for address %lx\n",
 			   addr);
 		ret = -EINVAL;
@@ -1640,7 +1536,7 @@ static int find_line_range_by_func(struct line_finder *lf)
 	return param.retval;
 }
 
-int debuginfo__find_line_range(struct debuginfo *dbg, struct line_range *lr)
+int debuginfo__find_line_range(struct debuginfo *self, struct line_range *lr)
 {
 	struct line_finder lf = {.lr = lr, .found = 0};
 	int ret = 0;
@@ -1657,7 +1553,7 @@ int debuginfo__find_line_range(struct debuginfo *dbg, struct line_range *lr)
 		struct dwarf_callback_param line_range_param = {
 			.data = (void *)&lf, .retval = 0};
 
-		dwarf_getpubnames(dbg->dbg, pubname_search_cb,
+		dwarf_getpubnames(self->dbg, pubname_search_cb,
 				  &pubname_param, 0);
 		if (pubname_param.found) {
 			line_range_search_cb(&lf.sp_die, &line_range_param);
@@ -1668,12 +1564,12 @@ int debuginfo__find_line_range(struct debuginfo *dbg, struct line_range *lr)
 
 	/* Loop on CUs (Compilation Unit) */
 	while (!lf.found && ret >= 0) {
-		if (dwarf_nextcu(dbg->dbg, off, &noff, &cuhl,
+		if (dwarf_nextcu(self->dbg, off, &noff, &cuhl,
 				 NULL, NULL, NULL) != 0)
 			break;
 
 		/* Get the DIE(Debugging Information Entry) of this CU */
-		diep = dwarf_offdie(dbg->dbg, off + cuhl, &lf.cu_die);
+		diep = dwarf_offdie(self->dbg, off + cuhl, &lf.cu_die);
 		if (!diep)
 			continue;
 

@@ -137,39 +137,43 @@ static int lpc32xx_adc_probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		dev_err(&pdev->dev, "failed to get platform I/O memory\n");
-		return -EBUSY;
+		retval = -EBUSY;
+		goto errout1;
 	}
 
-	iodev = devm_iio_device_alloc(&pdev->dev, sizeof(*info));
-	if (!iodev)
-		return -ENOMEM;
+	iodev = iio_device_alloc(sizeof(struct lpc32xx_adc_info));
+	if (!iodev) {
+		dev_err(&pdev->dev, "failed allocating iio device\n");
+		retval = -ENOMEM;
+		goto errout1;
+	}
 
 	info = iio_priv(iodev);
 
-	info->adc_base = devm_ioremap(&pdev->dev, res->start,
-						resource_size(res));
+	info->adc_base = ioremap(res->start, resource_size(res));
 	if (!info->adc_base) {
 		dev_err(&pdev->dev, "failed mapping memory\n");
-		return -EBUSY;
+		retval = -EBUSY;
+		goto errout2;
 	}
 
-	info->clk = devm_clk_get(&pdev->dev, NULL);
+	info->clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(info->clk)) {
 		dev_err(&pdev->dev, "failed getting clock\n");
-		return PTR_ERR(info->clk);
+		goto errout3;
 	}
 
 	irq = platform_get_irq(pdev, 0);
-	if (irq <= 0) {
+	if ((irq < 0) || (irq >= NR_IRQS)) {
 		dev_err(&pdev->dev, "failed getting interrupt resource\n");
-		return -EINVAL;
+		retval = -EINVAL;
+		goto errout4;
 	}
 
-	retval = devm_request_irq(&pdev->dev, irq, lpc32xx_adc_isr, 0,
-								MOD_NAME, info);
+	retval = request_irq(irq, lpc32xx_adc_isr, 0, MOD_NAME, info);
 	if (retval < 0) {
 		dev_err(&pdev->dev, "failed requesting interrupt\n");
-		return retval;
+		goto errout4;
 	}
 
 	platform_set_drvdata(pdev, iodev);
@@ -185,18 +189,35 @@ static int lpc32xx_adc_probe(struct platform_device *pdev)
 
 	retval = iio_device_register(iodev);
 	if (retval)
-		return retval;
+		goto errout5;
 
 	dev_info(&pdev->dev, "LPC32XX ADC driver loaded, IRQ %d\n", irq);
 
 	return 0;
+
+errout5:
+	free_irq(irq, info);
+errout4:
+	clk_put(info->clk);
+errout3:
+	iounmap(info->adc_base);
+errout2:
+	iio_device_free(iodev);
+errout1:
+	return retval;
 }
 
 static int lpc32xx_adc_remove(struct platform_device *pdev)
 {
 	struct iio_dev *iodev = platform_get_drvdata(pdev);
+	struct lpc32xx_adc_info *info = iio_priv(iodev);
+	int irq = platform_get_irq(pdev, 0);
 
 	iio_device_unregister(iodev);
+	free_irq(irq, info);
+	clk_put(info->clk);
+	iounmap(info->adc_base);
+	iio_device_free(iodev);
 
 	return 0;
 }

@@ -24,10 +24,30 @@
 static enum htc_phymode ath9k_htc_get_curmode(struct ath9k_htc_priv *priv,
 					      struct ath9k_channel *ichan)
 {
-	if (IS_CHAN_5GHZ(ichan))
-		return HTC_MODE_11NA;
+	enum htc_phymode mode;
 
-	return HTC_MODE_11NG;
+	mode = -EINVAL;
+
+	switch (ichan->chanmode) {
+	case CHANNEL_G:
+	case CHANNEL_G_HT20:
+	case CHANNEL_G_HT40PLUS:
+	case CHANNEL_G_HT40MINUS:
+		mode = HTC_MODE_11NG;
+		break;
+	case CHANNEL_A:
+	case CHANNEL_A_HT20:
+	case CHANNEL_A_HT40PLUS:
+	case CHANNEL_A_HT40MINUS:
+		mode = HTC_MODE_11NA;
+		break;
+	default:
+		break;
+	}
+
+	WARN_ON(mode < 0);
+
+	return mode;
 }
 
 bool ath9k_htc_setpower(struct ath9k_htc_priv *priv,
@@ -906,7 +926,7 @@ static int ath9k_htc_start(struct ieee80211_hw *hw)
 	WMI_CMD(WMI_FLUSH_RECV_CMDID);
 
 	/* setup initial channel */
-	init_channel = ath9k_cmn_get_channel(hw, ah, &hw->conf.chandef);
+	init_channel = ath9k_cmn_get_curchannel(hw, ah);
 
 	ret = ath9k_hw_reset(ah, init_channel, ah->caldata, false);
 	if (ret) {
@@ -1188,7 +1208,9 @@ static int ath9k_htc_config(struct ieee80211_hw *hw, u32 changed)
 		ath_dbg(common, CONFIG, "Set channel: %d MHz\n",
 			curchan->center_freq);
 
-		ath9k_cmn_get_channel(hw, priv->ah, &hw->conf.chandef);
+		ath9k_cmn_update_ichannel(&priv->ah->channels[pos],
+					  &hw->conf.chandef);
+
 		if (ath9k_htc_set_channel(priv, hw, &priv->ah->channels[pos]) < 0) {
 			ath_err(common, "Unable to set channel\n");
 			ret = -EINVAL;

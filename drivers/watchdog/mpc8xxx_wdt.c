@@ -24,7 +24,6 @@
 #include <linux/kernel.h>
 #include <linux/timer.h>
 #include <linux/miscdevice.h>
-#include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/module.h>
 #include <linux/watchdog.h>
@@ -330,3 +329,4 @@ MODULE_AUTHOR("Dave Updegraff, Kumar Gala");
 MODULE_DESCRIPTION("Driver for watchdog timer in MPC8xx/MPC83xx/MPC86xx "
 		   "uProcessors");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS_MISCDEV(WATCHDOG_MINOR);

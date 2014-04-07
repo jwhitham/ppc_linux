@@ -628,6 +628,7 @@ static irqreturn_t omap_wakeup_interrupt(int irq, void *dev)
 
 static struct irqaction omap_wakeup_irq = {
 	.name		= "peripheral wakeup",
+	.flags		= IRQF_DISABLED,
 	.handler	= omap_wakeup_interrupt
 };
 

@@ -241,11 +241,6 @@ struct page *pgtable_alloc_one(struct mm_struct *mm, unsigned long address,
 	if (p == NULL)
 		return NULL;
 
-	if (!pgtable_page_ctor(p)) {
-		__free_pages(p, L2_USER_PGTABLE_ORDER);
-		return NULL;
-	}
-
 	/*
 	 * Make every page have a page_count() of one, not just the first.
 	 * We don't use __GFP_COMP since it doesn't look like it works
@@ -256,6 +251,7 @@ struct page *pgtable_alloc_one(struct mm_struct *mm, unsigned long address,
 		inc_zone_page_state(p+i, NR_PAGETABLE);
 	}
 
+	pgtable_page_ctor(p);
 	return p;
 }
 

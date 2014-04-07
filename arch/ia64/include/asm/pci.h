@@ -95,7 +95,7 @@ struct iospace_resource {
 };
 
 struct pci_controller {
-	struct acpi_device *companion;
+	void *acpi_handle;
 	void *iommu;
 	int segment;
 	int node;		/* nearest node with memory or -1 for global allocation */

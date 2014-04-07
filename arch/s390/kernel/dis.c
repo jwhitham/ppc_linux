@@ -23,7 +23,6 @@
 #include <linux/kdebug.h>
 
 #include <asm/uaccess.h>
-#include <asm/dis.h>
 #include <asm/io.h>
 #include <linux/atomic.h>
 #include <asm/mathemu.h>
@@ -37,6 +36,17 @@
 #else /* CONFIG_64BIT */
 #define ONELONG "%016lx: "
 #endif /* CONFIG_64BIT */
+
+#define OPERAND_GPR	0x1	/* Operand printed as %rx */
+#define OPERAND_FPR	0x2	/* Operand printed as %fx */
+#define OPERAND_AR	0x4	/* Operand printed as %ax */
+#define OPERAND_CR	0x8	/* Operand printed as %cx */
+#define OPERAND_DISP	0x10	/* Operand printed as displacement */
+#define OPERAND_BASE	0x20	/* Operand printed as base register */
+#define OPERAND_INDEX	0x40	/* Operand printed as index register */
+#define OPERAND_PCREL	0x80	/* Operand printed as pc-relative symbol */
+#define OPERAND_SIGNED	0x100	/* Operand printed as signed value */
+#define OPERAND_LENGTH	0x200	/* Operand printed as length (+1) */
 
 enum {
 	UNUSED,	/* Indicates the end of the operand list */
@@ -145,7 +155,19 @@ enum {
 	INSTR_S_00, INSTR_S_RD,
 };
 
-static const struct s390_operand operands[] =
+struct operand {
+	int bits;		/* The number of bits in the operand. */
+	int shift;		/* The number of bits to shift. */
+	int flags;		/* One bit syntax flags. */
+};
+
+struct insn {
+	const char name[5];
+	unsigned char opfrag;
+	unsigned char format;
+};
+
+static const struct operand operands[] =
 {
 	[UNUSED]  = { 0, 0, 0 },
 	[R_8]	 = {  4,  8, OPERAND_GPR },
@@ -457,7 +479,7 @@ static char *long_insn_name[] = {
 	[LONG_INSN_PCISTB] = "pcistb",
 };
 
-static struct s390_insn opcode[] = {
+static struct insn opcode[] = {
 #ifdef CONFIG_64BIT
 	{ "bprp", 0xc5, INSTR_MII_UPI },
 	{ "bpp", 0xc7, INSTR_SMI_U0RDP },
@@ -646,7 +668,7 @@ static struct s390_insn opcode[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_01[] = {
+static struct insn opcode_01[] = {
 #ifdef CONFIG_64BIT
 	{ "ptff", 0x04, INSTR_E },
 	{ "pfpo", 0x0a, INSTR_E },
@@ -662,7 +684,7 @@ static struct s390_insn opcode_01[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_a5[] = {
+static struct insn opcode_a5[] = {
 #ifdef CONFIG_64BIT
 	{ "iihh", 0x00, INSTR_RI_RU },
 	{ "iihl", 0x01, INSTR_RI_RU },
@@ -684,7 +706,7 @@ static struct s390_insn opcode_a5[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_a7[] = {
+static struct insn opcode_a7[] = {
 #ifdef CONFIG_64BIT
 	{ "tmhh", 0x02, INSTR_RI_RU },
 	{ "tmhl", 0x03, INSTR_RI_RU },
@@ -706,7 +728,7 @@ static struct s390_insn opcode_a7[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_aa[] = {
+static struct insn opcode_aa[] = {
 #ifdef CONFIG_64BIT
 	{ { 0, LONG_INSN_RINEXT }, 0x00, INSTR_RI_RI },
 	{ "rion", 0x01, INSTR_RI_RI },
@@ -717,7 +739,7 @@ static struct s390_insn opcode_aa[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_b2[] = {
+static struct insn opcode_b2[] = {
 #ifdef CONFIG_64BIT
 	{ "stckf", 0x7c, INSTR_S_RD },
 	{ "lpp", 0x80, INSTR_S_RD },
@@ -829,7 +851,7 @@ static struct s390_insn opcode_b2[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_b3[] = {
+static struct insn opcode_b3[] = {
 #ifdef CONFIG_64BIT
 	{ "maylr", 0x38, INSTR_RRF_F0FF },
 	{ "mylr", 0x39, INSTR_RRF_F0FF },
@@ -1012,7 +1034,7 @@ static struct s390_insn opcode_b3[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_b9[] = {
+static struct insn opcode_b9[] = {
 #ifdef CONFIG_64BIT
 	{ "lpgr", 0x00, INSTR_RRE_RR },
 	{ "lngr", 0x01, INSTR_RRE_RR },
@@ -1145,7 +1167,7 @@ static struct s390_insn opcode_b9[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_c0[] = {
+static struct insn opcode_c0[] = {
 #ifdef CONFIG_64BIT
 	{ "lgfi", 0x01, INSTR_RIL_RI },
 	{ "xihf", 0x06, INSTR_RIL_RU },
@@ -1165,7 +1187,7 @@ static struct s390_insn opcode_c0[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_c2[] = {
+static struct insn opcode_c2[] = {
 #ifdef CONFIG_64BIT
 	{ "msgfi", 0x00, INSTR_RIL_RI },
 	{ "msfi", 0x01, INSTR_RIL_RI },
@@ -1183,7 +1205,7 @@ static struct s390_insn opcode_c2[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_c4[] = {
+static struct insn opcode_c4[] = {
 #ifdef CONFIG_64BIT
 	{ "llhrl", 0x02, INSTR_RIL_RP },
 	{ "lghrl", 0x04, INSTR_RIL_RP },
@@ -1200,7 +1222,7 @@ static struct s390_insn opcode_c4[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_c6[] = {
+static struct insn opcode_c6[] = {
 #ifdef CONFIG_64BIT
 	{ "exrl", 0x00, INSTR_RIL_RP },
 	{ "pfdrl", 0x02, INSTR_RIL_UP },
@@ -1218,7 +1240,7 @@ static struct s390_insn opcode_c6[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_c8[] = {
+static struct insn opcode_c8[] = {
 #ifdef CONFIG_64BIT
 	{ "mvcos", 0x00, INSTR_SSF_RRDRD },
 	{ "ectg", 0x01, INSTR_SSF_RRDRD },
@@ -1229,7 +1251,7 @@ static struct s390_insn opcode_c8[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_cc[] = {
+static struct insn opcode_cc[] = {
 #ifdef CONFIG_64BIT
 	{ "brcth", 0x06, INSTR_RIL_RP },
 	{ "aih", 0x08, INSTR_RIL_RI },
@@ -1241,7 +1263,7 @@ static struct s390_insn opcode_cc[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_e3[] = {
+static struct insn opcode_e3[] = {
 #ifdef CONFIG_64BIT
 	{ "ltg", 0x02, INSTR_RXY_RRRD },
 	{ "lrag", 0x03, INSTR_RXY_RRRD },
@@ -1347,7 +1369,7 @@ static struct s390_insn opcode_e3[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_e5[] = {
+static struct insn opcode_e5[] = {
 #ifdef CONFIG_64BIT
 	{ "strag", 0x02, INSTR_SSE_RDRD },
 	{ "mvhhi", 0x44, INSTR_SIL_RDI },
@@ -1369,7 +1391,7 @@ static struct s390_insn opcode_e5[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_eb[] = {
+static struct insn opcode_eb[] = {
 #ifdef CONFIG_64BIT
 	{ "lmg", 0x04, INSTR_RSY_RRRD },
 	{ "srag", 0x0a, INSTR_RSY_RRRD },
@@ -1443,7 +1465,7 @@ static struct s390_insn opcode_eb[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_ec[] = {
+static struct insn opcode_ec[] = {
 #ifdef CONFIG_64BIT
 	{ "brxhg", 0x44, INSTR_RIE_RRP },
 	{ "brxlg", 0x45, INSTR_RIE_RRP },
@@ -1482,7 +1504,7 @@ static struct s390_insn opcode_ec[] = {
 	{ "", 0, INSTR_INVALID }
 };
 
-static struct s390_insn opcode_ed[] = {
+static struct insn opcode_ed[] = {
 #ifdef CONFIG_64BIT
 	{ "mayl", 0x38, INSTR_RXF_FRRDF },
 	{ "myl", 0x39, INSTR_RXF_FRRDF },
@@ -1550,7 +1572,7 @@ static struct s390_insn opcode_ed[] = {
 
 /* Extracts an operand value from an instruction.  */
 static unsigned int extract_operand(unsigned char *code,
-				    const struct s390_operand *operand)
+				    const struct operand *operand)
 {
 	unsigned int val;
 	int bits;
@@ -1586,11 +1608,16 @@ static unsigned int extract_operand(unsigned char *code,
 	return val;
 }
 
-struct s390_insn *find_insn(unsigned char *code)
+static inline int insn_length(unsigned char code)
+{
+	return ((((int) code + 64) >> 7) + 1) << 1;
+}
+
+static struct insn *find_insn(unsigned char *code)
 {
 	unsigned char opfrag = code[1];
 	unsigned char opmask;
-	struct s390_insn *table;
+	struct insn *table;
 
 	switch (code[0]) {
 	case 0x01:
@@ -1679,7 +1706,7 @@ struct s390_insn *find_insn(unsigned char *code)
  */
 int insn_to_mnemonic(unsigned char *instruction, char *buf, unsigned int len)
 {
-	struct s390_insn *insn;
+	struct insn *insn;
 
 	insn = find_insn(instruction);
 	if (!insn)
@@ -1695,9 +1722,9 @@ EXPORT_SYMBOL_GPL(insn_to_mnemonic);
 
 static int print_insn(char *buffer, unsigned char *code, unsigned long addr)
 {
-	struct s390_insn *insn;
+	struct insn *insn;
 	const unsigned char *ops;
-	const struct s390_operand *operand;
+	const struct operand *operand;
 	unsigned int value;
 	char separator;
 	char *ptr;

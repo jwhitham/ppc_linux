@@ -5,7 +5,7 @@
 #include "../../util/types.h"
 #include <asm/perf_regs.h>
 
-#ifndef HAVE_ARCH_X86_64_SUPPORT
+#ifndef ARCH_X86_64
 #define PERF_REGS_MASK ((1ULL << PERF_REG_X86_32_MAX) - 1)
 #else
 #define REG_NOSUPPORT ((1ULL << PERF_REG_X86_DS) | \
@@ -52,7 +52,7 @@ static inline const char *perf_reg_name(int id)
 		return "FS";
 	case PERF_REG_X86_GS:
 		return "GS";
-#ifdef HAVE_ARCH_X86_64_SUPPORT
+#ifdef ARCH_X86_64
 	case PERF_REG_X86_R8:
 		return "R8";
 	case PERF_REG_X86_R9:
@@ -69,7 +69,7 @@ static inline const char *perf_reg_name(int id)
 		return "R14";
 	case PERF_REG_X86_R15:
 		return "R15";
-#endif /* HAVE_ARCH_X86_64_SUPPORT */
+#endif /* ARCH_X86_64 */
 	default:
 		return NULL;
 	}

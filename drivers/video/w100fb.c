@@ -680,7 +680,7 @@ int w100fb_probe(struct platform_device *pdev)
 	par = info->par;
 	platform_set_drvdata(pdev, info);
 
-	inf = dev_get_platdata(&pdev->dev);
+	inf = pdev->dev.platform_data;
 	par->chip_id = chip_id;
 	par->mach = inf;
 	par->fastpll_mode = 0;
@@ -761,9 +761,10 @@ int w100fb_probe(struct platform_device *pdev)
 	err |= device_create_file(&pdev->dev, &dev_attr_flip);
 
 	if (err != 0)
-		fb_warn(info, "failed to register attributes (%d)\n", err);
+		printk(KERN_WARNING "fb%d: failed to register attributes (%d)\n",
+				info->node, err);
 
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n", info->node, info->fix.id);
 	return 0;
 out:
 	if (info) {

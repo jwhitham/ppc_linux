@@ -22,7 +22,6 @@
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
 #include <net/netns/conntrack.h>
 #endif
-#include <net/netns/nftables.h>
 #include <net/netns/xfrm.h>
 
 struct user_namespace;
@@ -102,9 +101,6 @@ struct net {
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
 	struct netns_ct		ct;
 #endif
-#if defined(CONFIG_NF_TABLES) || defined(CONFIG_NF_TABLES_MODULE)
-	struct netns_nftables	nft;
-#endif
 #if IS_ENABLED(CONFIG_NF_DEFRAG_IPV6)
 	struct netns_nf_frag	nf_frag;
 #endif
@@ -141,8 +137,8 @@ struct net {
 extern struct net init_net;
 
 #ifdef CONFIG_NET_NS
-struct net *copy_net_ns(unsigned long flags, struct user_namespace *user_ns,
-			struct net *old_net);
+extern struct net *copy_net_ns(unsigned long flags,
+	struct user_namespace *user_ns, struct net *old_net);
 
 #else /* CONFIG_NET_NS */
 #include <linux/sched.h>
@@ -159,11 +155,11 @@ static inline struct net *copy_net_ns(unsigned long flags,
 
 extern struct list_head net_namespace_list;
 
-struct net *get_net_ns_by_pid(pid_t pid);
-struct net *get_net_ns_by_fd(int pid);
+extern struct net *get_net_ns_by_pid(pid_t pid);
+extern struct net *get_net_ns_by_fd(int pid);
 
 #ifdef CONFIG_NET_NS
-void __put_net(struct net *net);
+extern void __put_net(struct net *net);
 
 static inline struct net *get_net(struct net *net)
 {
@@ -195,7 +191,7 @@ int net_eq(const struct net *net1, const struct net *net2)
 	return net1 == net2;
 }
 
-void net_drop_ns(void *);
+extern void net_drop_ns(void *);
 
 #else
 
@@ -312,19 +308,19 @@ struct pernet_operations {
  * device which caused kernel oops, and panics during network
  * namespace cleanup.   So please don't get this wrong.
  */
-int register_pernet_subsys(struct pernet_operations *);
-void unregister_pernet_subsys(struct pernet_operations *);
-int register_pernet_device(struct pernet_operations *);
-void unregister_pernet_device(struct pernet_operations *);
+extern int register_pernet_subsys(struct pernet_operations *);
+extern void unregister_pernet_subsys(struct pernet_operations *);
+extern int register_pernet_device(struct pernet_operations *);
+extern void unregister_pernet_device(struct pernet_operations *);
 
 struct ctl_table;
 struct ctl_table_header;
 
 #ifdef CONFIG_SYSCTL
-int net_sysctl_init(void);
-struct ctl_table_header *register_net_sysctl(struct net *net, const char *path,
-					     struct ctl_table *table);
-void unregister_net_sysctl_table(struct ctl_table_header *header);
+extern int net_sysctl_init(void);
+extern struct ctl_table_header *register_net_sysctl(struct net *net,
+	const char *path, struct ctl_table *table);
+extern void unregister_net_sysctl_table(struct ctl_table_header *header);
 #else
 static inline int net_sysctl_init(void) { return 0; }
 static inline struct ctl_table_header *register_net_sysctl(struct net *net,

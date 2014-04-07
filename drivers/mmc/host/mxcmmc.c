@@ -1250,20 +1250,28 @@ static int mxcmci_suspend(struct device *dev)
 {
 	struct mmc_host *mmc = dev_get_drvdata(dev);
 	struct mxcmci_host *host = mmc_priv(mmc);
+	int ret = 0;
 
+	if (mmc)
+		ret = mmc_suspend_host(mmc);
 	clk_disable_unprepare(host->clk_per);
 	clk_disable_unprepare(host->clk_ipg);
-	return 0;
+
+	return ret;
 }
 
 static int mxcmci_resume(struct device *dev)
 {
 	struct mmc_host *mmc = dev_get_drvdata(dev);
 	struct mxcmci_host *host = mmc_priv(mmc);
+	int ret = 0;
 
 	clk_prepare_enable(host->clk_per);
 	clk_prepare_enable(host->clk_ipg);
-	return 0;
+	if (mmc)
+		ret = mmc_resume_host(mmc);
+
+	return ret;
 }
 
 static const struct dev_pm_ops mxcmci_pm_ops = {

@@ -164,14 +164,97 @@ static irqreturn_t ad7291_event_handler(int irq, void *private)
 	return IRQ_HANDLED;
 }
 
-static unsigned int ad7291_threshold_reg(const struct iio_chan_spec *chan,
-	enum iio_event_direction dir, enum iio_event_info info)
+static inline ssize_t ad7291_show_hyst(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
+	struct ad7291_chip_info *chip = iio_priv(indio_dev);
+	struct iio_dev_attr *this_attr = to_iio_dev_attr(attr);
+	u16 data;
+	int ret;
+
+	ret = ad7291_i2c_read(chip, this_attr->address, &data);
+	if (ret < 0)
+		return ret;
+
+	return sprintf(buf, "%d\n", data & AD7291_VALUE_MASK);
+}
+
+static inline ssize_t ad7291_set_hyst(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf,
+				      size_t len)
+{
+	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
+	struct ad7291_chip_info *chip = iio_priv(indio_dev);
+	struct iio_dev_attr *this_attr = to_iio_dev_attr(attr);
+	u16 data;
+	int ret;
+
+	ret = kstrtou16(buf, 10, &data);
+
+	if (ret < 0)
+		return ret;
+	if (data > AD7291_VALUE_MASK)
+		return -EINVAL;
+
+	ret = ad7291_i2c_write(chip, this_attr->address, data);
+	if (ret < 0)
+		return ret;
+
+	return len;
+}
+
+static IIO_DEVICE_ATTR(in_temp0_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst,
+		       AD7291_HYST(8));
+static IIO_DEVICE_ATTR(in_voltage0_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(0));
+static IIO_DEVICE_ATTR(in_voltage1_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(1));
+static IIO_DEVICE_ATTR(in_voltage2_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(2));
+static IIO_DEVICE_ATTR(in_voltage3_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(3));
+static IIO_DEVICE_ATTR(in_voltage4_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(4));
+static IIO_DEVICE_ATTR(in_voltage5_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(5));
+static IIO_DEVICE_ATTR(in_voltage6_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(6));
+static IIO_DEVICE_ATTR(in_voltage7_thresh_both_hyst_raw,
+		       S_IRUGO | S_IWUSR,
+		       ad7291_show_hyst, ad7291_set_hyst, AD7291_HYST(7));
+
+static struct attribute *ad7291_event_attributes[] = {
+	&iio_dev_attr_in_temp0_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage0_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage1_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage2_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage3_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage4_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage5_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage6_thresh_both_hyst_raw.dev_attr.attr,
+	&iio_dev_attr_in_voltage7_thresh_both_hyst_raw.dev_attr.attr,
+	NULL,
+};
+
+static unsigned int ad7291_threshold_reg(u64 event_code)
 {
 	unsigned int offset;
 
-	switch (chan->type) {
+	switch (IIO_EVENT_CODE_EXTRACT_CHAN_TYPE(event_code)) {
 	case IIO_VOLTAGE:
-		offset = chan->channel;
+		offset = IIO_EVENT_CODE_EXTRACT_CHAN(event_code);
 		break;
 	case IIO_TEMP:
 		offset = 8;
@@ -180,78 +263,69 @@ static unsigned int ad7291_threshold_reg(const struct iio_chan_spec *chan,
 	    return 0;
 	}
 
-	switch (info) {
-	case IIO_EV_INFO_VALUE:
-			if (dir == IIO_EV_DIR_FALLING)
-					return AD7291_DATA_HIGH(offset);
-			else
-					return AD7291_DATA_LOW(offset);
-	case IIO_EV_INFO_HYSTERESIS:
-			return AD7291_HYST(offset);
-	default:
-			break;
-	}
-	return 0;
+	if (IIO_EVENT_CODE_EXTRACT_DIR(event_code) == IIO_EV_DIR_FALLING)
+		return AD7291_DATA_LOW(offset);
+	else
+		return AD7291_DATA_HIGH(offset);
 }
 
 static int ad7291_read_event_value(struct iio_dev *indio_dev,
-				   const struct iio_chan_spec *chan,
-				   enum iio_event_type type,
-				   enum iio_event_direction dir,
-				   enum iio_event_info info,
-				   int *val, int *val2)
+				   u64 event_code,
+				   int *val)
 {
 	struct ad7291_chip_info *chip = iio_priv(indio_dev);
 	int ret;
 	u16 uval;
 
-	ret = ad7291_i2c_read(chip, ad7291_threshold_reg(chan, dir, info),
-		&uval);
+	ret = ad7291_i2c_read(chip, ad7291_threshold_reg(event_code), &uval);
 	if (ret < 0)
 		return ret;
 
-	if (info == IIO_EV_INFO_HYSTERESIS || chan->type == IIO_VOLTAGE)
+	switch (IIO_EVENT_CODE_EXTRACT_CHAN_TYPE(event_code)) {
+	case IIO_VOLTAGE:
 		*val = uval & AD7291_VALUE_MASK;
-
-	else
+		return 0;
+	case IIO_TEMP:
 		*val = sign_extend32(uval, 11);
-
-	return IIO_VAL_INT;
+		return 0;
+	default:
+		return -EINVAL;
+	};
 }
 
 static int ad7291_write_event_value(struct iio_dev *indio_dev,
-				    const struct iio_chan_spec *chan,
-				    enum iio_event_type type,
-				    enum iio_event_direction dir,
-				    enum iio_event_info info,
-				    int val, int val2)
+				    u64 event_code,
+				    int val)
 {
 	struct ad7291_chip_info *chip = iio_priv(indio_dev);
 
-	if (info == IIO_EV_INFO_HYSTERESIS || chan->type == IIO_VOLTAGE) {
+	switch (IIO_EVENT_CODE_EXTRACT_CHAN_TYPE(event_code)) {
+	case IIO_VOLTAGE:
 		if (val > AD7291_VALUE_MASK || val < 0)
 			return -EINVAL;
-	} else {
+		break;
+	case IIO_TEMP:
 		if (val > 2047 || val < -2048)
 			return -EINVAL;
+		break;
+	default:
+		return -EINVAL;
 	}
 
-	return ad7291_i2c_write(chip, ad7291_threshold_reg(chan, dir, info),
-		val);
+	return ad7291_i2c_write(chip, ad7291_threshold_reg(event_code), val);
 }
 
 static int ad7291_read_event_config(struct iio_dev *indio_dev,
-				    const struct iio_chan_spec *chan,
-				    enum iio_event_type type,
-				    enum iio_event_direction dir)
+				    u64 event_code)
 {
 	struct ad7291_chip_info *chip = iio_priv(indio_dev);
 	/* To be enabled the channel must simply be on. If any are enabled
 	   we are in continuous sampling mode */
 
-	switch (chan->type) {
+	switch (IIO_EVENT_CODE_EXTRACT_CHAN_TYPE(event_code)) {
 	case IIO_VOLTAGE:
-		if (chip->c_mask & (1 << (15 - chan->channel)))
+		if (chip->c_mask &
+		    (1 << (15 - IIO_EVENT_CODE_EXTRACT_CHAN(event_code))))
 			return 1;
 		else
 			return 0;
@@ -265,14 +339,11 @@ static int ad7291_read_event_config(struct iio_dev *indio_dev,
 }
 
 static int ad7291_write_event_config(struct iio_dev *indio_dev,
-				     const struct iio_chan_spec *chan,
-				     enum iio_event_type type,
-				     enum iio_event_direction dir,
+				     u64 event_code,
 				     int state)
 {
 	int ret = 0;
 	struct ad7291_chip_info *chip = iio_priv(indio_dev);
-	unsigned int mask;
 	u16 regval;
 
 	mutex_lock(&chip->state_lock);
@@ -283,14 +354,16 @@ static int ad7291_write_event_config(struct iio_dev *indio_dev,
 	 * Possible to disable temp as well but that makes single read tricky.
 	 */
 
-	mask = BIT(15 - chan->channel);
-
-	switch (chan->type) {
+	switch (IIO_EVENT_CODE_EXTRACT_TYPE(event_code)) {
 	case IIO_VOLTAGE:
-		if ((!state) && (chip->c_mask & mask))
-			chip->c_mask &= ~mask;
-		else if (state && (!(chip->c_mask & mask)))
-			chip->c_mask |= mask;
+		if ((!state) && (chip->c_mask & (1 << (15 -
+				IIO_EVENT_CODE_EXTRACT_CHAN(event_code)))))
+			chip->c_mask &= ~(1 << (15 - IIO_EVENT_CODE_EXTRACT_CHAN
+							(event_code)));
+		else if (state && (!(chip->c_mask & (1 << (15 -
+				IIO_EVENT_CODE_EXTRACT_CHAN(event_code))))))
+			chip->c_mask |= (1 << (15 - IIO_EVENT_CODE_EXTRACT_CHAN
+							(event_code)));
 		else
 			break;
 
@@ -400,24 +473,6 @@ static int ad7291_read_raw(struct iio_dev *indio_dev,
 	}
 }
 
-static const struct iio_event_spec ad7291_events[] = {
-	{
-		.type = IIO_EV_TYPE_THRESH,
-		.dir = IIO_EV_DIR_RISING,
-		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
-			BIT(IIO_EV_INFO_ENABLE),
-	}, {
-		.type = IIO_EV_TYPE_THRESH,
-		.dir = IIO_EV_DIR_FALLING,
-		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
-			BIT(IIO_EV_INFO_ENABLE),
-	}, {
-		.type = IIO_EV_TYPE_THRESH,
-		.dir = IIO_EV_DIR_EITHER,
-		.mask_separate = BIT(IIO_EV_INFO_HYSTERESIS),
-	},
-};
-
 #define AD7291_VOLTAGE_CHAN(_chan)					\
 {									\
 	.type = IIO_VOLTAGE,						\
@@ -425,8 +480,8 @@ static const struct iio_event_spec ad7291_events[] = {
 	.info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE),		\
 	.indexed = 1,							\
 	.channel = _chan,						\
-	.event_spec = ad7291_events,					\
-	.num_event_specs = ARRAY_SIZE(ad7291_events),			\
+	.event_mask = IIO_EV_BIT(IIO_EV_TYPE_THRESH, IIO_EV_DIR_RISING)|\
+	IIO_EV_BIT(IIO_EV_TYPE_THRESH, IIO_EV_DIR_FALLING)		\
 }
 
 static const struct iio_chan_spec ad7291_channels[] = {
@@ -445,17 +500,23 @@ static const struct iio_chan_spec ad7291_channels[] = {
 				BIT(IIO_CHAN_INFO_SCALE),
 		.indexed = 1,
 		.channel = 0,
-		.event_spec = ad7291_events,
-		.num_event_specs = ARRAY_SIZE(ad7291_events),
+		.event_mask =
+		IIO_EV_BIT(IIO_EV_TYPE_THRESH, IIO_EV_DIR_RISING)|
+		IIO_EV_BIT(IIO_EV_TYPE_THRESH, IIO_EV_DIR_FALLING)
 	}
+};
+
+static struct attribute_group ad7291_event_attribute_group = {
+	.attrs = ad7291_event_attributes,
 };
 
 static const struct iio_info ad7291_info = {
 	.read_raw = &ad7291_read_raw,
-	.read_event_config_new = &ad7291_read_event_config,
-	.write_event_config_new = &ad7291_write_event_config,
-	.read_event_value_new = &ad7291_read_event_value,
-	.write_event_value_new = &ad7291_write_event_value,
+	.read_event_config = &ad7291_read_event_config,
+	.write_event_config = &ad7291_write_event_config,
+	.read_event_value = &ad7291_read_event_value,
+	.write_event_value = &ad7291_write_event_value,
+	.event_attrs = &ad7291_event_attribute_group,
 	.driver_module = THIS_MODULE,
 };
 
@@ -467,19 +528,21 @@ static int ad7291_probe(struct i2c_client *client,
 	struct iio_dev *indio_dev;
 	int ret = 0;
 
-	indio_dev = devm_iio_device_alloc(&client->dev, sizeof(*chip));
-	if (!indio_dev)
-		return -ENOMEM;
+	indio_dev = iio_device_alloc(sizeof(*chip));
+	if (indio_dev == NULL) {
+		ret = -ENOMEM;
+		goto error_ret;
+	}
 	chip = iio_priv(indio_dev);
 
 	if (pdata && pdata->use_external_ref) {
-		chip->reg = devm_regulator_get(&client->dev, "vref");
+		chip->reg = regulator_get(&client->dev, "vref");
 		if (IS_ERR(chip->reg))
-			return ret;
+			goto error_free;
 
 		ret = regulator_enable(chip->reg);
 		if (ret)
-			return ret;
+			goto error_put_reg;
 	}
 
 	mutex_init(&chip->state_lock);
@@ -538,7 +601,12 @@ error_unreg_irq:
 error_disable_reg:
 	if (chip->reg)
 		regulator_disable(chip->reg);
-
+error_put_reg:
+	if (chip->reg)
+		regulator_put(chip->reg);
+error_free:
+	iio_device_free(indio_dev);
+error_ret:
 	return ret;
 }
 
@@ -552,8 +620,12 @@ static int ad7291_remove(struct i2c_client *client)
 	if (client->irq)
 		free_irq(client->irq, indio_dev);
 
-	if (chip->reg)
+	if (chip->reg) {
 		regulator_disable(chip->reg);
+		regulator_put(chip->reg);
+	}
+
+	iio_device_free(indio_dev);
 
 	return 0;
 }

@@ -59,7 +59,7 @@ void __init board_setup(void)
 		ret = -ENODEV;
 	}
 	if (ret)
-		panic("cannot initialize board support");
+		panic("cannot initialize board support\n");
 }
 
 int __init db1235_arch_init(void)

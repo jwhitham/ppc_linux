@@ -20,7 +20,6 @@
 #include <linux/spi/spi.h>
 #include <linux/fsl_devices.h>
 #include <linux/dma-mapping.h>
-#include <linux/of_address.h>
 #include <asm/cpm.h>
 #include <asm/qe.h>
 
@@ -300,7 +299,7 @@ int fsl_spi_cpm_init(struct mpc8xxx_spi *mspi)
 
 		switch (mspi->subblock) {
 		default:
-			dev_warn(dev, "cell-index unspecified, assuming SPI1\n");
+			dev_warn(dev, "cell-index unspecified, assuming SPI1");
 			/* fall through */
 		case 0:
 			mspi->subblock = QE_CR_SUBBLOCK_SPI1;

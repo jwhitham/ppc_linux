@@ -16,19 +16,6 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/tc3589x.h>
 
-/**
- * enum tc3589x_version - indicates the TC3589x version
- */
-enum tc3589x_version {
-	TC3589X_TC35890,
-	TC3589X_TC35892,
-	TC3589X_TC35893,
-	TC3589X_TC35894,
-	TC3589X_TC35895,
-	TC3589X_TC35896,
-	TC3589X_UNKNOWN,
-};
-
 #define TC3589x_CLKMODE_MODCTL_SLEEP		0x0
 #define TC3589x_CLKMODE_MODCTL_OPERATION	(1 << 0)
 
@@ -374,21 +361,7 @@ static int tc3589x_probe(struct i2c_client *i2c,
 	tc3589x->i2c = i2c;
 	tc3589x->pdata = pdata;
 	tc3589x->irq_base = pdata->irq_base;
-
-	switch (id->driver_data) {
-	case TC3589X_TC35893:
-	case TC3589X_TC35895:
-	case TC3589X_TC35896:
-		tc3589x->num_gpio = 20;
-		break;
-	case TC3589X_TC35890:
-	case TC3589X_TC35892:
-	case TC3589X_TC35894:
-	case TC3589X_UNKNOWN:
-	default:
-		tc3589x->num_gpio = 24;
-		break;
-	}
+	tc3589x->num_gpio = id->driver_data;
 
 	i2c_set_clientdata(i2c, tc3589x);
 
@@ -459,13 +432,7 @@ static int tc3589x_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(tc3589x_dev_pm_ops, tc3589x_suspend, tc3589x_resume);
 
 static const struct i2c_device_id tc3589x_id[] = {
-	{ "tc35890", TC3589X_TC35890 },
-	{ "tc35892", TC3589X_TC35892 },
-	{ "tc35893", TC3589X_TC35893 },
-	{ "tc35894", TC3589X_TC35894 },
-	{ "tc35895", TC3589X_TC35895 },
-	{ "tc35896", TC3589X_TC35896 },
-	{ "tc3589x", TC3589X_UNKNOWN },
+	{ "tc3589x", 24 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, tc3589x_id);

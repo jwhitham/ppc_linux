@@ -125,15 +125,13 @@ static void *i915_gem_dmabuf_vmap(struct dma_buf *dma_buf)
 
 	ret = i915_gem_object_get_pages(obj);
 	if (ret)
-		goto err;
-
-	i915_gem_object_pin_pages(obj);
+		goto error;
 
 	ret = -ENOMEM;
 
 	pages = drm_malloc_ab(obj->base.size >> PAGE_SHIFT, sizeof(*pages));
 	if (pages == NULL)
-		goto err_unpin;
+		goto error;
 
 	i = 0;
 	for_each_sg_page(obj->pages->sgl, &sg_iter, obj->pages->nents, 0)
@@ -143,16 +141,15 @@ static void *i915_gem_dmabuf_vmap(struct dma_buf *dma_buf)
 	drm_free_large(pages);
 
 	if (!obj->dma_buf_vmapping)
-		goto err_unpin;
+		goto error;
 
 	obj->vmapping_count = 1;
+	i915_gem_object_pin_pages(obj);
 out_unlock:
 	mutex_unlock(&dev->struct_mutex);
 	return obj->dma_buf_vmapping;
 
-err_unpin:
-	i915_gem_object_unpin_pages(obj);
-err:
+error:
 	mutex_unlock(&dev->struct_mutex);
 	return ERR_PTR(ret);
 }

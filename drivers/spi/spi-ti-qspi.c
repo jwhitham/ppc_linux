@@ -41,6 +41,9 @@ struct ti_qspi_regs {
 struct ti_qspi {
 	struct completion       transfer_complete;
 
+	/* IRQ synchronization */
+	spinlock_t              lock;
+
 	/* list synchronization */
 	struct mutex            list_lock;
 
@@ -54,6 +57,7 @@ struct ti_qspi {
 	u32 spi_max_frequency;
 	u32 cmd;
 	u32 dc;
+	u32 stat;
 };
 
 #define QSPI_PID			(0x0)
@@ -161,7 +165,7 @@ static int ti_qspi_setup(struct spi_device *spi)
 			qspi->spi_max_frequency, clk_div);
 
 	ret = pm_runtime_get_sync(qspi->dev);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(qspi->dev, "pm_runtime_get_sync() failed\n");
 		return ret;
 	}
@@ -393,12 +397,13 @@ static irqreturn_t ti_qspi_isr(int irq, void *dev_id)
 {
 	struct ti_qspi *qspi = dev_id;
 	u16 int_stat;
-	u32 stat;
 
 	irqreturn_t ret = IRQ_HANDLED;
 
+	spin_lock(&qspi->lock);
+
 	int_stat = ti_qspi_read(qspi, QSPI_INTR_STATUS_ENABLED_CLEAR);
-	stat = ti_qspi_read(qspi, QSPI_SPI_STATUS_REG);
+	qspi->stat = ti_qspi_read(qspi, QSPI_SPI_STATUS_REG);
 
 	if (!int_stat) {
 		dev_dbg(qspi->dev, "No IRQ triggered\n");
@@ -406,12 +411,33 @@ static irqreturn_t ti_qspi_isr(int irq, void *dev_id)
 		goto out;
 	}
 
+	ret = IRQ_WAKE_THREAD;
+
+	ti_qspi_write(qspi, QSPI_WC_INT_DISABLE, QSPI_INTR_ENABLE_CLEAR_REG);
 	ti_qspi_write(qspi, QSPI_WC_INT_DISABLE,
 				QSPI_INTR_STATUS_ENABLED_CLEAR);
-	if (stat & WC)
-		complete(&qspi->transfer_complete);
+
 out:
+	spin_unlock(&qspi->lock);
+
 	return ret;
+}
+
+static irqreturn_t ti_qspi_threaded_isr(int this_irq, void *dev_id)
+{
+	struct ti_qspi *qspi = dev_id;
+	unsigned long flags;
+
+	spin_lock_irqsave(&qspi->lock, flags);
+
+	if (qspi->stat & WC)
+		complete(&qspi->transfer_complete);
+
+	spin_unlock_irqrestore(&qspi->lock, flags);
+
+	ti_qspi_write(qspi, QSPI_WC_INT_EN, QSPI_INTR_ENABLE_SET_REG);
+
+	return IRQ_HANDLED;
 }
 
 static int ti_qspi_runtime_resume(struct device *dev)
@@ -446,7 +472,7 @@ static int ti_qspi_probe(struct platform_device *pdev)
 	if (!master)
 		return -ENOMEM;
 
-	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_RX_DUAL | SPI_RX_QUAD;
+	master->mode_bits = SPI_CPOL | SPI_CPHA;
 
 	master->bus_num = -1;
 	master->flags = SPI_MASTER_HALF_DUPLEX;
@@ -459,10 +485,11 @@ static int ti_qspi_probe(struct platform_device *pdev)
 	if (!of_property_read_u32(np, "num-cs", &num_cs))
 		master->num_chipselect = num_cs;
 
+	platform_set_drvdata(pdev, master);
+
 	qspi = spi_master_get_devdata(master);
 	qspi->master = master;
 	qspi->dev = &pdev->dev;
-	platform_set_drvdata(pdev, qspi);
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
@@ -472,6 +499,7 @@ static int ti_qspi_probe(struct platform_device *pdev)
 		return irq;
 	}
 
+	spin_lock_init(&qspi->lock);
 	mutex_init(&qspi->list_lock);
 
 	qspi->base = devm_ioremap_resource(&pdev->dev, r);
@@ -480,7 +508,8 @@ static int ti_qspi_probe(struct platform_device *pdev)
 		goto free_master;
 	}
 
-	ret = devm_request_irq(&pdev->dev, irq, ti_qspi_isr, 0,
+	ret = devm_request_threaded_irq(&pdev->dev, irq, ti_qspi_isr,
+			ti_qspi_threaded_isr, 0,
 			dev_name(&pdev->dev), qspi);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to register ISR for IRQ %d\n",
@@ -503,7 +532,7 @@ static int ti_qspi_probe(struct platform_device *pdev)
 	if (!of_property_read_u32(np, "spi-max-frequency", &max_freq))
 		qspi->spi_max_frequency = max_freq;
 
-	ret = devm_spi_register_master(&pdev->dev, master);
+	ret = spi_register_master(master);
 	if (ret)
 		goto free_master;
 
@@ -516,25 +545,9 @@ free_master:
 
 static int ti_qspi_remove(struct platform_device *pdev)
 {
-	struct spi_master *master;
-	struct ti_qspi *qspi;
-	int ret;
+	struct	ti_qspi *qspi = platform_get_drvdata(pdev);
 
-	master = platform_get_drvdata(pdev);
-	qspi = spi_master_get_devdata(master);
-
-	ret = pm_runtime_get_sync(qspi->dev);
-	if (ret < 0) {
-		dev_err(qspi->dev, "pm_runtime_get_sync() failed\n");
-		return ret;
-	}
-
-	ti_qspi_write(qspi, QSPI_WC_INT_DISABLE, QSPI_INTR_ENABLE_CLEAR_REG);
-
-	pm_runtime_put(qspi->dev);
-	pm_runtime_disable(&pdev->dev);
-
-	spi_unregister_master(master);
+	spi_unregister_master(qspi->master);
 
 	return 0;
 }
@@ -545,7 +558,7 @@ static const struct dev_pm_ops ti_qspi_pm_ops = {
 
 static struct platform_driver ti_qspi_driver = {
 	.probe	= ti_qspi_probe,
-	.remove = ti_qspi_remove,
+	.remove	= ti_qspi_remove,
 	.driver = {
 		.name	= "ti,dra7xxx-qspi",
 		.owner	= THIS_MODULE,

@@ -192,7 +192,7 @@ static int ts72xx_wdt_open(struct inode *inode, struct file *file)
 		dev_err(&wdt->pdev->dev,
 			"failed to convert timeout (%d) to register value\n",
 			timeout);
-		return regval;
+		return -EINVAL;
 	}
 
 	if (mutex_lock_interruptible(&wdt->lock))
@@ -305,8 +305,7 @@ static long ts72xx_wdt_ioctl(struct file *file, unsigned int cmd,
 
 	switch (cmd) {
 	case WDIOC_GETSUPPORT:
-		if (copy_to_user(argp, &winfo, sizeof(winfo)))
-			error = -EFAULT;
+		error = copy_to_user(argp, &winfo, sizeof(winfo));
 		break;
 
 	case WDIOC_GETSTATUS:
@@ -321,9 +320,10 @@ static long ts72xx_wdt_ioctl(struct file *file, unsigned int cmd,
 	case WDIOC_SETOPTIONS: {
 		int options;
 
-		error = get_user(options, p);
-		if (error)
+		if (get_user(options, p)) {
+			error = -EFAULT;
 			break;
+		}
 
 		error = -EINVAL;
 
@@ -341,26 +341,30 @@ static long ts72xx_wdt_ioctl(struct file *file, unsigned int cmd,
 
 	case WDIOC_SETTIMEOUT: {
 		int new_timeout;
-		int regval;
 
-		error = get_user(new_timeout, p);
+		if (get_user(new_timeout, p)) {
+			error = -EFAULT;
+		} else {
+			int regval;
+
+			regval = timeout_to_regval(new_timeout);
+			if (regval < 0) {
+				error = -EINVAL;
+			} else {
+				ts72xx_wdt_stop(wdt);
+				wdt->regval = regval;
+				ts72xx_wdt_start(wdt);
+			}
+		}
 		if (error)
 			break;
-
-		regval = timeout_to_regval(new_timeout);
-		if (regval < 0) {
-			error = regval;
-			break;
-		}
-		ts72xx_wdt_stop(wdt);
-		wdt->regval = regval;
-		ts72xx_wdt_start(wdt);
 
 		/*FALLTHROUGH*/
 	}
 
 	case WDIOC_GETTIMEOUT:
-		error = put_user(regval_to_timeout(wdt->regval), p);
+		if (put_user(regval_to_timeout(wdt->regval), p))
+			error = -EFAULT;
 		break;
 
 	default:

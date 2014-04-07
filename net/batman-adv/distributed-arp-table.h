@@ -29,7 +29,6 @@
 
 #define BATADV_DAT_ADDR_MAX ((batadv_dat_addr_t)~(batadv_dat_addr_t)0)
 
-void batadv_dat_status_update(struct net_device *net_dev);
 bool batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,
 					   struct sk_buff *skb);
 bool batadv_dat_snoop_incoming_arp_request(struct batadv_priv *bat_priv,
@@ -98,10 +97,6 @@ static inline void batadv_dat_inc_counter(struct batadv_priv *bat_priv,
 }
 
 #else
-
-static inline void batadv_dat_status_update(struct net_device *net_dev)
-{
-}
 
 static inline bool
 batadv_dat_snoop_outgoing_arp_request(struct batadv_priv *bat_priv,

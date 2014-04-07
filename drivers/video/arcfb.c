@@ -556,8 +556,9 @@ static int arcfb_probe(struct platform_device *dev)
 			goto err1;
 		}
 	}
-	fb_info(info, "Arc frame buffer device, using %dK of video memory\n",
-		videomemorysize >> 10);
+	printk(KERN_INFO
+	       "fb%d: Arc frame buffer device, using %dK of video memory\n",
+	       info->node, videomemorysize >> 10);
 
 	/* this inits the lcd but doesn't clear dirty pixels */
 	for (i = 0; i < num_cols * num_rows; i++) {
@@ -571,7 +572,8 @@ static int arcfb_probe(struct platform_device *dev)
 	/* if we were told to splash the screen, we just clear it */
 	if (!nosplash) {
 		for (i = 0; i < num_cols * num_rows; i++) {
-			fb_info(info, "splashing lcd %d\n", i);
+			printk(KERN_INFO "fb%d: splashing lcd %d\n",
+				info->node, i);
 			ks108_set_start_line(par, i, 0);
 			ks108_clear_lcd(par, i);
 		}

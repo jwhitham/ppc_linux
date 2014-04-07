@@ -24,7 +24,6 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/ethtool.h>
-#include <linux/of_address.h>
 #include <asm/io.h>
 
 #include "emac.h"

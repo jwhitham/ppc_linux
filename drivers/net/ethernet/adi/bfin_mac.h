@@ -104,6 +104,6 @@ struct bfin_mac_local {
 #endif
 };
 
-int bfin_get_ether_addr(char *addr);
+extern int bfin_get_ether_addr(char *addr);
 
 #endif

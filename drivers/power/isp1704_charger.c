@@ -2,7 +2,6 @@
  * ISP1704 USB Charger Detection driver
  *
  * Copyright (C) 2010 Nokia Corporation
- * Copyright (C) 2012 - 2013 Pali Rohár <pali.rohar@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,6 +65,10 @@ struct isp1704_charger {
 	unsigned		present:1;
 	unsigned		online:1;
 	unsigned		current_max;
+
+	/* temp storage variables */
+	unsigned long		event;
+	unsigned		max_power;
 };
 
 static inline int isp1704_read(struct isp1704_charger *isp, u32 reg)
@@ -228,59 +231,56 @@ static inline int isp1704_charger_detect(struct isp1704_charger *isp)
 	return ret;
 }
 
-static inline int isp1704_charger_detect_dcp(struct isp1704_charger *isp)
-{
-	if (isp1704_charger_detect(isp) &&
-			isp1704_charger_type(isp) == POWER_SUPPLY_TYPE_USB_DCP)
-		return true;
-	else
-		return false;
-}
-
 static void isp1704_charger_work(struct work_struct *data)
 {
+	int			detect;
+	unsigned long		event;
+	unsigned		power;
 	struct isp1704_charger	*isp =
 		container_of(data, struct isp1704_charger, work);
 	static DEFINE_MUTEX(lock);
 
+	event = isp->event;
+	power = isp->max_power;
+
 	mutex_lock(&lock);
 
-	switch (isp->phy->last_event) {
+	if (event != USB_EVENT_NONE)
+		isp1704_charger_set_power(isp, 1);
+
+	switch (event) {
 	case USB_EVENT_VBUS:
-		/* do not call wall charger detection more times */
-		if (!isp->present) {
-			isp->online = true;
-			isp->present = 1;
-			isp1704_charger_set_power(isp, 1);
+		isp->online = true;
 
-			/* detect wall charger */
-			if (isp1704_charger_detect_dcp(isp)) {
-				isp->psy.type = POWER_SUPPLY_TYPE_USB_DCP;
-				isp->current_max = 1800;
-			} else {
-				isp->psy.type = POWER_SUPPLY_TYPE_USB;
-				isp->current_max = 500;
-			}
+		/* detect charger */
+		detect = isp1704_charger_detect(isp);
 
-			/* enable data pullups */
-			if (isp->phy->otg->gadget)
-				usb_gadget_connect(isp->phy->otg->gadget);
+		if (detect) {
+			isp->present = detect;
+			isp->psy.type = isp1704_charger_type(isp);
 		}
 
-		if (isp->psy.type != POWER_SUPPLY_TYPE_USB_DCP) {
+		switch (isp->psy.type) {
+		case POWER_SUPPLY_TYPE_USB_DCP:
+			isp->current_max = 1800;
+			break;
+		case POWER_SUPPLY_TYPE_USB_CDP:
 			/*
 			 * Only 500mA here or high speed chirp
 			 * handshaking may break
 			 */
-			if (isp->current_max > 500)
-				isp->current_max = 500;
-
-			if (isp->current_max > 100)
-				isp->psy.type = POWER_SUPPLY_TYPE_USB_CDP;
+			isp->current_max = 500;
+			/* FALLTHROUGH */
+		case POWER_SUPPLY_TYPE_USB:
+		default:
+			/* enable data pullups */
+			if (isp->phy->otg->gadget)
+				usb_gadget_connect(isp->phy->otg->gadget);
 		}
 		break;
 	case USB_EVENT_NONE:
 		isp->online = false;
+		isp->current_max = 0;
 		isp->present = 0;
 		isp->current_max = 0;
 		isp->psy.type = POWER_SUPPLY_TYPE_USB;
@@ -298,6 +298,12 @@ static void isp1704_charger_work(struct work_struct *data)
 
 		isp1704_charger_set_power(isp, 0);
 		break;
+	case USB_EVENT_ENUMERATED:
+		if (isp->present)
+			isp->current_max = 1800;
+		else
+			isp->current_max = power;
+		break;
 	default:
 		goto out;
 	}
@@ -308,10 +314,15 @@ out:
 }
 
 static int isp1704_notifier_call(struct notifier_block *nb,
-		unsigned long val, void *v)
+		unsigned long event, void *power)
 {
 	struct isp1704_charger *isp =
 		container_of(nb, struct isp1704_charger, nb);
+
+	isp->event = event;
+
+	if (power)
+		isp->max_power = *((unsigned *)power);
 
 	schedule_work(&isp->work);
 
@@ -451,13 +462,13 @@ static int isp1704_charger_probe(struct platform_device *pdev)
 	if (isp->phy->otg->gadget)
 		usb_gadget_disconnect(isp->phy->otg->gadget);
 
-	if (isp->phy->last_event == USB_EVENT_NONE)
-		isp1704_charger_set_power(isp, 0);
-
 	/* Detect charger if VBUS is valid (the cable was already plugged). */
-	if (isp->phy->last_event == USB_EVENT_VBUS &&
-			!isp->phy->otg->default_a)
+	ret = isp1704_read(isp, ULPI_USB_INT_STS);
+	isp1704_charger_set_power(isp, 0);
+	if ((ret & ULPI_INT_VBUS_VALID) && !isp->phy->otg->default_a) {
+		isp->event = USB_EVENT_VBUS;
 		schedule_work(&isp->work);
+	}
 
 	return 0;
 fail2:

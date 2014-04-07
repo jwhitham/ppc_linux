@@ -585,7 +585,8 @@ static int alloc_carmine_fb(void __iomem *regs, void __iomem *smem_base,
 	if (ret < 0)
 		goto err_dealloc_cmap;
 
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n", info->node,
+			info->fix.id);
 
 	*rinfo = info;
 	return 0;
@@ -745,6 +746,7 @@ static void carminefb_remove(struct pci_dev *dev)
 	iounmap(hw->v_regs);
 	release_mem_region(fix.mmio_start, fix.mmio_len);
 
+	pci_set_drvdata(dev, NULL);
 	pci_disable_device(dev);
 	kfree(hw);
 }

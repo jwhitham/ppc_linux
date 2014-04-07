@@ -515,7 +515,8 @@ static void __init offb_init_fb(const char *name, const char *full_name,
 	if (register_framebuffer(info) < 0)
 		goto out_err;
 
-	fb_info(info, "Open Firmware frame buffer device on %s\n", full_name);
+	printk(KERN_INFO "fb%d: Open Firmware frame buffer device on %s\n",
+	       info->node, full_name);
 	return;
 
 out_err:

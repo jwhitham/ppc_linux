@@ -293,7 +293,8 @@ static int vt8500lcd_probe(struct platform_device *pdev)
 			+ sizeof(u32) * 16, GFP_KERNEL);
 	if (!fbi) {
 		dev_err(&pdev->dev, "Failed to initialize framebuffer device\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto failed;
 	}
 
 	strcpy(fbi->fb.fix.id, "VT8500 LCD");
@@ -326,13 +327,15 @@ static int vt8500lcd_probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res == NULL) {
 		dev_err(&pdev->dev, "no I/O memory resource defined\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto failed_fbi;
 	}
 
 	res = request_mem_region(res->start, resource_size(res), "vt8500lcd");
 	if (res == NULL) {
 		dev_err(&pdev->dev, "failed to request I/O memory\n");
-		return -EBUSY;
+		ret = -EBUSY;
+		goto failed_fbi;
 	}
 
 	fbi->regbase = ioremap(res->start, resource_size(res));
@@ -343,19 +346,17 @@ static int vt8500lcd_probe(struct platform_device *pdev)
 	}
 
 	disp_timing = of_get_display_timings(pdev->dev.of_node);
-	if (!disp_timing) {
-		ret = -EINVAL;
-		goto failed_free_io;
-	}
+	if (!disp_timing)
+		return -EINVAL;
 
 	ret = of_get_fb_videomode(pdev->dev.of_node, &of_mode,
 							OF_USE_NATIVE_MODE);
 	if (ret)
-		goto failed_free_io;
+		return ret;
 
 	ret = of_property_read_u32(pdev->dev.of_node, "bits-per-pixel", &bpp);
 	if (ret)
-		goto failed_free_io;
+		return ret;
 
 	/* try allocating the framebuffer */
 	fb_mem_len = of_mode.xres * of_mode.yres * 2 * (bpp / 8);
@@ -363,9 +364,8 @@ static int vt8500lcd_probe(struct platform_device *pdev)
 				GFP_KERNEL);
 	if (!fb_mem_virt) {
 		pr_err("%s: Failed to allocate framebuffer\n", __func__);
-		ret = -ENOMEM;
-		goto failed_free_io;
-	}
+		return -ENOMEM;
+	};
 
 	fbi->fb.fix.smem_start	= fb_mem_phys;
 	fbi->fb.fix.smem_len	= fb_mem_len;
@@ -447,6 +447,9 @@ failed_free_io:
 	iounmap(fbi->regbase);
 failed_free_res:
 	release_mem_region(res->start, resource_size(res));
+failed_fbi:
+	kfree(fbi);
+failed:
 	return ret;
 }
 

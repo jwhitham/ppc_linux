@@ -304,11 +304,3 @@ int set_signals(int enable)
 
 	return ret;
 }
-
-int os_is_signal_stack(void)
-{
-	stack_t ss;
-	sigaltstack(NULL, &ss);
-
-	return ss.ss_flags & SS_ONSTACK;
-}

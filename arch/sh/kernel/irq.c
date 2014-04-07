@@ -149,32 +149,47 @@ void irq_ctx_exit(int cpu)
 	hardirq_ctx[cpu] = NULL;
 }
 
-void do_softirq_own_stack(void)
+asmlinkage void do_softirq(void)
 {
+	unsigned long flags;
 	struct thread_info *curctx;
 	union irq_ctx *irqctx;
 	u32 *isp;
 
-	curctx = current_thread_info();
-	irqctx = softirq_ctx[smp_processor_id()];
-	irqctx->tinfo.task = curctx->task;
-	irqctx->tinfo.previous_sp = current_stack_pointer;
+	if (in_interrupt())
+		return;
 
-	/* build the stack frame on the softirq stack */
-	isp = (u32 *)((char *)irqctx + sizeof(*irqctx));
+	local_irq_save(flags);
 
-	__asm__ __volatile__ (
-		"mov	r15, r9		\n"
-		"jsr	@%0		\n"
-		/* switch to the softirq stack */
-		" mov	%1, r15		\n"
-		/* restore the thread stack */
-		"mov	r9, r15		\n"
-		: /* no outputs */
-		: "r" (__do_softirq), "r" (isp)
-		: "memory", "r0", "r1", "r2", "r3", "r4",
-		  "r5", "r6", "r7", "r8", "r9", "r15", "t", "pr"
-	);
+	if (local_softirq_pending()) {
+		curctx = current_thread_info();
+		irqctx = softirq_ctx[smp_processor_id()];
+		irqctx->tinfo.task = curctx->task;
+		irqctx->tinfo.previous_sp = current_stack_pointer;
+
+		/* build the stack frame on the softirq stack */
+		isp = (u32 *)((char *)irqctx + sizeof(*irqctx));
+
+		__asm__ __volatile__ (
+			"mov	r15, r9		\n"
+			"jsr	@%0		\n"
+			/* switch to the softirq stack */
+			" mov	%1, r15		\n"
+			/* restore the thread stack */
+			"mov	r9, r15		\n"
+			: /* no outputs */
+			: "r" (__do_softirq), "r" (isp)
+			: "memory", "r0", "r1", "r2", "r3", "r4",
+			  "r5", "r6", "r7", "r8", "r9", "r15", "t", "pr"
+		);
+
+		/*
+		 * Shouldn't happen, we returned above if in_interrupt():
+		 */
+		WARN_ON_ONCE(softirq_count());
+	}
+
+	local_irq_restore(flags);
 }
 #else
 static inline void handle_one_irq(unsigned int irq)

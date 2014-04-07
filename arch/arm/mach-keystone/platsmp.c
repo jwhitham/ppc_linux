@@ -17,6 +17,7 @@
 #include <linux/io.h>
 
 #include <asm/smp_plat.h>
+#include <asm/prom.h>
 
 #include "keystone.h"
 

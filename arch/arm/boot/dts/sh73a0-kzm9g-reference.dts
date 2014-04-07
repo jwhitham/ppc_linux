@@ -108,7 +108,6 @@
 };
 
 &i2c0 {
-	status = "okay";
 	as3711@40 {
 		compatible = "ams,as3711";
 		reg = <0x40>;
@@ -184,7 +183,6 @@
 &i2c3 {
 	pinctrl-0 = <&i2c3_pins>;
 	pinctrl-names = "default";
-	status = "okay";
 };
 
 &mmcif {

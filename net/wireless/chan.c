@@ -328,7 +328,6 @@ int cfg80211_chandef_dfs_required(struct wiphy *wiphy,
 	return cfg80211_get_chans_dfs_required(wiphy, chandef->center_freq2,
 					       width);
 }
-EXPORT_SYMBOL(cfg80211_chandef_dfs_required);
 
 static bool cfg80211_secondary_chans_ok(struct wiphy *wiphy,
 					u32 center_freq, u32 bandwidth,
@@ -504,8 +503,7 @@ cfg80211_get_chan_state(struct wireless_dev *wdev,
 	case NL80211_IFTYPE_ADHOC:
 		if (wdev->current_bss) {
 			*chan = wdev->current_bss->pub.channel;
-			*chanmode = (wdev->ibss_fixed &&
-				     !wdev->ibss_dfs_possible)
+			*chanmode = wdev->ibss_fixed
 				  ? CHAN_MODE_SHARED
 				  : CHAN_MODE_EXCLUSIVE;
 			return;

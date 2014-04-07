@@ -1378,7 +1378,7 @@ static int s3c_fb_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	pd = dev_get_platdata(&pdev->dev);
+	pd = pdev->dev.platform_data;
 	if (!pd) {
 		dev_err(dev, "no platform data specified\n");
 		return -EINVAL;

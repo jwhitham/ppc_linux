@@ -57,7 +57,7 @@ struct vers_iter {
 static struct list_head _name_buckets[NUM_BUCKETS];
 static struct list_head _uuid_buckets[NUM_BUCKETS];
 
-static void dm_hash_remove_all(bool keep_open_devices, bool mark_deferred, bool only_deferred);
+static void dm_hash_remove_all(int keep_open_devices);
 
 /*
  * Guards access to both hash tables.
@@ -86,7 +86,7 @@ static int dm_hash_init(void)
 
 static void dm_hash_exit(void)
 {
-	dm_hash_remove_all(false, false, false);
+	dm_hash_remove_all(0);
 }
 
 /*-----------------------------------------------------------------
@@ -276,7 +276,7 @@ static struct dm_table *__hash_remove(struct hash_cell *hc)
 	return table;
 }
 
-static void dm_hash_remove_all(bool keep_open_devices, bool mark_deferred, bool only_deferred)
+static void dm_hash_remove_all(int keep_open_devices)
 {
 	int i, dev_skipped;
 	struct hash_cell *hc;
@@ -293,8 +293,7 @@ retry:
 			md = hc->md;
 			dm_get(md);
 
-			if (keep_open_devices &&
-			    dm_lock_for_deletion(md, mark_deferred, only_deferred)) {
+			if (keep_open_devices && dm_lock_for_deletion(md)) {
 				dm_put(md);
 				dev_skipped++;
 				continue;
@@ -451,11 +450,6 @@ static struct mapped_device *dm_hash_rename(struct dm_ioctl *param,
 	return md;
 }
 
-void dm_deferred_remove(void)
-{
-	dm_hash_remove_all(true, false, true);
-}
-
 /*-----------------------------------------------------------------
  * Implementation of the ioctl commands
  *---------------------------------------------------------------*/
@@ -467,7 +461,7 @@ typedef int (*ioctl_fn)(struct dm_ioctl *param, size_t param_size);
 
 static int remove_all(struct dm_ioctl *param, size_t param_size)
 {
-	dm_hash_remove_all(true, !!(param->flags & DM_DEFERRED_REMOVE), false);
+	dm_hash_remove_all(1);
 	param->data_size = 0;
 	return 0;
 }
@@ -689,9 +683,6 @@ static void __dev_status(struct mapped_device *md, struct dm_ioctl *param)
 	if (dm_suspended_md(md))
 		param->flags |= DM_SUSPEND_FLAG;
 
-	if (dm_test_deferred_remove_flag(md))
-		param->flags |= DM_DEFERRED_REMOVE;
-
 	param->dev = huge_encode_dev(disk_devt(disk));
 
 	/*
@@ -841,13 +832,8 @@ static int dev_remove(struct dm_ioctl *param, size_t param_size)
 	/*
 	 * Ensure the device is not open and nothing further can open it.
 	 */
-	r = dm_lock_for_deletion(md, !!(param->flags & DM_DEFERRED_REMOVE), false);
+	r = dm_lock_for_deletion(md);
 	if (r) {
-		if (r == -EBUSY && param->flags & DM_DEFERRED_REMOVE) {
-			up_write(&_hash_lock);
-			dm_put(md);
-			return 0;
-		}
 		DMDEBUG_LIMIT("unable to remove open device %s", hc->name);
 		up_write(&_hash_lock);
 		dm_put(md);
@@ -861,8 +847,6 @@ static int dev_remove(struct dm_ioctl *param, size_t param_size)
 		dm_sync_table(md);
 		dm_table_destroy(t);
 	}
-
-	param->flags &= ~DM_DEFERRED_REMOVE;
 
 	if (!dm_kobject_uevent(md, KOBJ_REMOVE, param->event_nr))
 		param->flags |= DM_UEVENT_GENERATED_FLAG;
@@ -1484,14 +1468,6 @@ static int message_for_md(struct mapped_device *md, unsigned argc, char **argv,
 
 	if (**argv != '@')
 		return 2; /* no '@' prefix, deliver to target */
-
-	if (!strcasecmp(argv[0], "@cancel_deferred_remove")) {
-		if (argc != 1) {
-			DMERR("Invalid arguments for @cancel_deferred_remove");
-			return -EINVAL;
-		}
-		return dm_cancel_deferred_remove(md);
-	}
 
 	r = dm_stats_message(md, argc, argv, result, maxlen);
 	if (r < 2)

@@ -1015,6 +1015,16 @@ static struct clk_std clk_usb1 = {
 	},
 };
 
+static struct of_device_id clkc_ids[] = {
+	{ .compatible = "sirf,prima2-clkc" },
+	{},
+};
+
+static struct of_device_id rsc_ids[] = {
+	{ .compatible = "sirf,prima2-rsc" },
+	{},
+};
+
 enum prima2_clk_index {
 	/* 0    1     2      3      4      5      6       7         8      9 */
 	rtc,    osc,   pll1,  pll2,  pll3,  mem,   sys,   security, dsp,   gps,
@@ -1072,16 +1082,24 @@ static struct clk_hw *prima2_clk_hw_array[maxclk] __initdata = {
 static struct clk *prima2_clks[maxclk];
 static struct clk_onecell_data clk_data;
 
-static void __init sirfsoc_clk_init(struct device_node *np)
+void __init sirfsoc_of_clk_init(void)
 {
-	struct device_node *rscnp;
+	struct device_node *np;
 	int i;
 
-	rscnp = of_find_compatible_node(NULL, NULL, "sirf,prima2-rsc");
-	sirfsoc_rsc_vbase = of_iomap(rscnp, 0);
+	np = of_find_matching_node(NULL, rsc_ids);
+	if (!np)
+		panic("unable to find compatible rsc node in dtb\n");
+
+	sirfsoc_rsc_vbase = of_iomap(np, 0);
 	if (!sirfsoc_rsc_vbase)
 		panic("unable to map rsc registers\n");
-	of_node_put(rscnp);
+
+	of_node_put(np);
+
+	np = of_find_matching_node(NULL, clkc_ids);
+	if (!np)
+		return;
 
 	sirfsoc_clk_vbase = of_iomap(np, 0);
 	if (!sirfsoc_clk_vbase)
@@ -1106,4 +1124,3 @@ static void __init sirfsoc_clk_init(struct device_node *np)
 
 	of_clk_add_provider(np, of_clk_src_onecell_get, &clk_data);
 }
-CLK_OF_DECLARE(sirfsoc_clk, "sirf,prima2-clkc", sirfsoc_clk_init);

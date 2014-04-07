@@ -96,7 +96,7 @@ irqreturn_t esas2r_interrupt(int irq, void *dev_id)
 	if (!esas2r_adapter_interrupt_pending(a))
 		return IRQ_NONE;
 
-	set_bit(AF2_INT_PENDING, &a->flags2);
+	esas2r_lock_set_flags(&a->flags2, AF2_INT_PENDING);
 	esas2r_schedule_tasklet(a);
 
 	return IRQ_HANDLED;
@@ -317,10 +317,9 @@ void esas2r_do_deferred_processes(struct esas2r_adapter *a)
 	 *  = 2 - can start any request
 	 */
 
-	if (test_bit(AF_CHPRST_PENDING, &a->flags) ||
-	    test_bit(AF_FLASHING, &a->flags))
+	if (a->flags & (AF_CHPRST_PENDING | AF_FLASHING))
 		startreqs = 0;
-	else if (test_bit(AF_DISC_PENDING, &a->flags))
+	else if (a->flags & AF_DISC_PENDING)
 		startreqs = 1;
 
 	atomic_inc(&a->disable_cnt);
@@ -368,7 +367,7 @@ void esas2r_do_deferred_processes(struct esas2r_adapter *a)
 				 * Flashing could have been set by last local
 				 * start
 				 */
-				if (test_bit(AF_FLASHING, &a->flags))
+				if (a->flags & AF_FLASHING)
 					break;
 			}
 		}
@@ -405,7 +404,7 @@ void esas2r_process_adapter_reset(struct esas2r_adapter *a)
 
 		dc->disc_evt = 0;
 
-		clear_bit(AF_DISC_IN_PROG, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_DISC_IN_PROG);
 	}
 
 	/*
@@ -426,7 +425,7 @@ void esas2r_process_adapter_reset(struct esas2r_adapter *a)
 		a->last_write =
 			a->last_read = a->list_size - 1;
 
-	set_bit(AF_COMM_LIST_TOGGLE, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_COMM_LIST_TOGGLE);
 
 	/* Kill all the requests on the active list */
 	list_for_each(element, &a->defer_list) {
@@ -471,7 +470,7 @@ static void esas2r_process_bus_reset(struct esas2r_adapter *a)
 	if (atomic_read(&a->disable_cnt) == 0)
 		esas2r_do_deferred_processes(a);
 
-	clear_bit(AF_OS_RESET, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_OS_RESET);
 
 	esas2r_trace_exit();
 }
@@ -479,10 +478,10 @@ static void esas2r_process_bus_reset(struct esas2r_adapter *a)
 static void esas2r_chip_rst_needed_during_tasklet(struct esas2r_adapter *a)
 {
 
-	clear_bit(AF_CHPRST_NEEDED, &a->flags);
-	clear_bit(AF_BUSRST_NEEDED, &a->flags);
-	clear_bit(AF_BUSRST_DETECTED, &a->flags);
-	clear_bit(AF_BUSRST_PENDING, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_CHPRST_NEEDED);
+	esas2r_lock_clear_flags(&a->flags, AF_BUSRST_NEEDED);
+	esas2r_lock_clear_flags(&a->flags, AF_BUSRST_DETECTED);
+	esas2r_lock_clear_flags(&a->flags, AF_BUSRST_PENDING);
 	/*
 	 * Make sure we don't get attempt more than 3 resets
 	 * when the uptime between resets does not exceed one
@@ -508,10 +507,10 @@ static void esas2r_chip_rst_needed_during_tasklet(struct esas2r_adapter *a)
 		 * prevent the heartbeat from trying to recover.
 		 */
 
-		set_bit(AF_DEGRADED_MODE, &a->flags);
-		set_bit(AF_DISABLED, &a->flags);
-		clear_bit(AF_CHPRST_PENDING, &a->flags);
-		clear_bit(AF_DISC_PENDING, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_DEGRADED_MODE);
+		esas2r_lock_set_flags(&a->flags, AF_DISABLED);
+		esas2r_lock_clear_flags(&a->flags, AF_CHPRST_PENDING);
+		esas2r_lock_clear_flags(&a->flags, AF_DISC_PENDING);
 
 		esas2r_disable_chip_interrupts(a);
 		a->int_mask = 0;
@@ -520,17 +519,18 @@ static void esas2r_chip_rst_needed_during_tasklet(struct esas2r_adapter *a)
 		esas2r_log(ESAS2R_LOG_CRIT,
 			   "Adapter disabled because of hardware failure");
 	} else {
-		bool alrdyrst = test_and_set_bit(AF_CHPRST_STARTED, &a->flags);
+		u32 flags =
+			esas2r_lock_set_flags(&a->flags, AF_CHPRST_STARTED);
 
-		if (!alrdyrst)
+		if (!(flags & AF_CHPRST_STARTED))
 			/*
 			 * Only disable interrupts if this is
 			 * the first reset attempt.
 			 */
 			esas2r_disable_chip_interrupts(a);
 
-		if ((test_bit(AF_POWER_MGT, &a->flags)) &&
-		    !test_bit(AF_FIRST_INIT, &a->flags) && !alrdyrst) {
+		if ((a->flags & AF_POWER_MGT) && !(a->flags & AF_FIRST_INIT) &&
+		    !(flags & AF_CHPRST_STARTED)) {
 			/*
 			 * Don't reset the chip on the first
 			 * deferred power up attempt.
@@ -543,10 +543,10 @@ static void esas2r_chip_rst_needed_during_tasklet(struct esas2r_adapter *a)
 		/* Kick off the reinitialization */
 		a->chip_uptime += ESAS2R_CHP_UPTIME_CNT;
 		a->chip_init_time = jiffies_to_msecs(jiffies);
-		if (!test_bit(AF_POWER_MGT, &a->flags)) {
+		if (!(a->flags & AF_POWER_MGT)) {
 			esas2r_process_adapter_reset(a);
 
-			if (!alrdyrst) {
+			if (!(flags & AF_CHPRST_STARTED)) {
 				/* Remove devices now that I/O is cleaned up. */
 				a->prev_dev_cnt =
 					esas2r_targ_db_get_tgt_cnt(a);
@@ -560,37 +560,38 @@ static void esas2r_chip_rst_needed_during_tasklet(struct esas2r_adapter *a)
 
 static void esas2r_handle_chip_rst_during_tasklet(struct esas2r_adapter *a)
 {
-	while (test_bit(AF_CHPRST_DETECTED, &a->flags)) {
+	while (a->flags & AF_CHPRST_DETECTED) {
 		/*
 		 * Balance the enable in esas2r_initadapter_hw.
 		 * Esas2r_power_down already took care of it for power
 		 * management.
 		 */
-		if (!test_bit(AF_DEGRADED_MODE, &a->flags) &&
-		    !test_bit(AF_POWER_MGT, &a->flags))
+		if (!(a->flags & AF_DEGRADED_MODE) && !(a->flags &
+							AF_POWER_MGT))
 			esas2r_disable_chip_interrupts(a);
 
 		/* Reinitialize the chip. */
 		esas2r_check_adapter(a);
 		esas2r_init_adapter_hw(a, 0);
 
-		if (test_bit(AF_CHPRST_NEEDED, &a->flags))
+		if (a->flags & AF_CHPRST_NEEDED)
 			break;
 
-		if (test_bit(AF_POWER_MGT, &a->flags)) {
+		if (a->flags & AF_POWER_MGT) {
 			/* Recovery from power management. */
-			if (test_bit(AF_FIRST_INIT, &a->flags)) {
+			if (a->flags & AF_FIRST_INIT) {
 				/* Chip reset during normal power up */
 				esas2r_log(ESAS2R_LOG_CRIT,
 					   "The firmware was reset during a normal power-up sequence");
 			} else {
 				/* Deferred power up complete. */
-				clear_bit(AF_POWER_MGT, &a->flags);
+				esas2r_lock_clear_flags(&a->flags,
+							AF_POWER_MGT);
 				esas2r_send_reset_ae(a, true);
 			}
 		} else {
 			/* Recovery from online chip reset. */
-			if (test_bit(AF_FIRST_INIT, &a->flags)) {
+			if (a->flags & AF_FIRST_INIT) {
 				/* Chip reset during driver load */
 			} else {
 				/* Chip reset after driver load */
@@ -601,14 +602,14 @@ static void esas2r_handle_chip_rst_during_tasklet(struct esas2r_adapter *a)
 				   "Recovering from a chip reset while the chip was online");
 		}
 
-		clear_bit(AF_CHPRST_STARTED, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_CHPRST_STARTED);
 		esas2r_enable_chip_interrupts(a);
 
 		/*
 		 * Clear this flag last!  this indicates that the chip has been
 		 * reset already during initialization.
 		 */
-		clear_bit(AF_CHPRST_DETECTED, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_CHPRST_DETECTED);
 	}
 }
 
@@ -616,28 +617,26 @@ static void esas2r_handle_chip_rst_during_tasklet(struct esas2r_adapter *a)
 /* Perform deferred tasks when chip interrupts are disabled */
 void esas2r_do_tasklet_tasks(struct esas2r_adapter *a)
 {
-
-	if (test_bit(AF_CHPRST_NEEDED, &a->flags) ||
-	    test_bit(AF_CHPRST_DETECTED, &a->flags)) {
-		if (test_bit(AF_CHPRST_NEEDED, &a->flags))
+	if (a->flags & (AF_CHPRST_NEEDED | AF_CHPRST_DETECTED)) {
+		if (a->flags & AF_CHPRST_NEEDED)
 			esas2r_chip_rst_needed_during_tasklet(a);
 
 		esas2r_handle_chip_rst_during_tasklet(a);
 	}
 
-	if (test_bit(AF_BUSRST_NEEDED, &a->flags)) {
+	if (a->flags & AF_BUSRST_NEEDED) {
 		esas2r_hdebug("hard resetting bus");
 
-		clear_bit(AF_BUSRST_NEEDED, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_BUSRST_NEEDED);
 
-		if (test_bit(AF_FLASHING, &a->flags))
-			set_bit(AF_BUSRST_DETECTED, &a->flags);
+		if (a->flags & AF_FLASHING)
+			esas2r_lock_set_flags(&a->flags, AF_BUSRST_DETECTED);
 		else
 			esas2r_write_register_dword(a, MU_DOORBELL_IN,
 						    DRBL_RESET_BUS);
 	}
 
-	if (test_bit(AF_BUSRST_DETECTED, &a->flags)) {
+	if (a->flags & AF_BUSRST_DETECTED) {
 		esas2r_process_bus_reset(a);
 
 		esas2r_log_dev(ESAS2R_LOG_WARN,
@@ -646,14 +645,14 @@ void esas2r_do_tasklet_tasks(struct esas2r_adapter *a)
 
 		scsi_report_bus_reset(a->host, 0);
 
-		clear_bit(AF_BUSRST_DETECTED, &a->flags);
-		clear_bit(AF_BUSRST_PENDING, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_BUSRST_DETECTED);
+		esas2r_lock_clear_flags(&a->flags, AF_BUSRST_PENDING);
 
 		esas2r_log(ESAS2R_LOG_WARN, "Bus reset complete");
 	}
 
-	if (test_bit(AF_PORT_CHANGE, &a->flags)) {
-		clear_bit(AF_PORT_CHANGE, &a->flags);
+	if (a->flags & AF_PORT_CHANGE) {
+		esas2r_lock_clear_flags(&a->flags, AF_PORT_CHANGE);
 
 		esas2r_targ_db_report_changes(a);
 	}
@@ -673,10 +672,10 @@ static void esas2r_doorbell_interrupt(struct esas2r_adapter *a, u32 doorbell)
 	esas2r_write_register_dword(a, MU_DOORBELL_OUT, doorbell);
 
 	if (doorbell & DRBL_RESET_BUS)
-		set_bit(AF_BUSRST_DETECTED, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_BUSRST_DETECTED);
 
 	if (doorbell & DRBL_FORCE_INT)
-		clear_bit(AF_HEARTBEAT, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_HEARTBEAT);
 
 	if (doorbell & DRBL_PANIC_REASON_MASK) {
 		esas2r_hdebug("*** Firmware Panic ***");
@@ -684,7 +683,7 @@ static void esas2r_doorbell_interrupt(struct esas2r_adapter *a, u32 doorbell)
 	}
 
 	if (doorbell & DRBL_FW_RESET) {
-		set_bit(AF2_COREDUMP_AVAIL, &a->flags2);
+		esas2r_lock_set_flags(&a->flags2, AF2_COREDUMP_AVAIL);
 		esas2r_local_reset_adapter(a);
 	}
 
@@ -919,7 +918,7 @@ void esas2r_complete_request(struct esas2r_adapter *a,
 {
 	if (rq->vrq->scsi.function == VDA_FUNC_FLASH
 	    && rq->vrq->flash.sub_func == VDA_FLASH_COMMIT)
-		clear_bit(AF_FLASHING, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_FLASHING);
 
 	/* See if we setup a callback to do special processing */
 

@@ -17,25 +17,18 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
-#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/hw_random.h>
 #include <asm/vio.h>
 
+#define MODULE_NAME "pseries-rng"
 
 static int pseries_rng_data_read(struct hwrng *rng, u32 *data)
 {
-	int rc;
-
-	rc = plpar_hcall(H_RANDOM, (unsigned long *)data);
-	if (rc != H_SUCCESS) {
-		pr_err_ratelimited("H_RANDOM call failed %d\n", rc);
-		return -EIO;
+	if (plpar_hcall(H_RANDOM, (unsigned long *)data) != H_SUCCESS) {
+		printk(KERN_ERR "pseries rng hcall error\n");
+		return 0;
 	}
-
-	/* The hypervisor interface returns 64 bits */
 	return 8;
 }
 
@@ -54,7 +47,7 @@ static unsigned long pseries_rng_get_desired_dma(struct vio_dev *vdev)
 };
 
 static struct hwrng pseries_rng = {
-	.name		= KBUILD_MODNAME,
+	.name		= MODULE_NAME,
 	.data_read	= pseries_rng_data_read,
 };
 
@@ -77,7 +70,7 @@ static struct vio_device_id pseries_rng_driver_ids[] = {
 MODULE_DEVICE_TABLE(vio, pseries_rng_driver_ids);
 
 static struct vio_driver pseries_rng_driver = {
-	.name = KBUILD_MODNAME,
+	.name = MODULE_NAME,
 	.probe = pseries_rng_probe,
 	.remove = pseries_rng_remove,
 	.get_desired_dma = pseries_rng_get_desired_dma,

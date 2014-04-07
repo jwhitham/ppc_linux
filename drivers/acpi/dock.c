@@ -441,7 +441,7 @@ static void handle_dock(struct dock_station *ds, int dock)
 	acpi_status status;
 	struct acpi_object_list arg_list;
 	union acpi_object arg;
-	unsigned long long value;
+	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
 
 	acpi_handle_info(ds->handle, "%s\n", dock ? "docking" : "undocking");
 
@@ -450,10 +450,12 @@ static void handle_dock(struct dock_station *ds, int dock)
 	arg_list.pointer = &arg;
 	arg.type = ACPI_TYPE_INTEGER;
 	arg.integer.value = dock;
-	status = acpi_evaluate_integer(ds->handle, "_DCK", &arg_list, &value);
+	status = acpi_evaluate_object(ds->handle, "_DCK", &arg_list, &buffer);
 	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND)
 		acpi_handle_err(ds->handle, "Failed to execute _DCK (0x%x)\n",
 				status);
+
+	kfree(buffer.pointer);
 }
 
 static inline void dock(struct dock_station *ds)
@@ -669,20 +671,39 @@ static void dock_notify(struct dock_station *ds, u32 event)
 	}
 }
 
-static void acpi_dock_deferred_cb(void *data, u32 event)
+struct dock_data {
+	struct dock_station *ds;
+	u32 event;
+};
+
+static void acpi_dock_deferred_cb(void *context)
 {
+	struct dock_data *data = context;
+
 	acpi_scan_lock_acquire();
-	dock_notify(data, event);
+	dock_notify(data->ds, data->event);
 	acpi_scan_lock_release();
+	kfree(data);
 }
 
 static void dock_notify_handler(acpi_handle handle, u32 event, void *data)
 {
+	struct dock_data *dd;
+
 	if (event != ACPI_NOTIFY_BUS_CHECK && event != ACPI_NOTIFY_DEVICE_CHECK
 	   && event != ACPI_NOTIFY_EJECT_REQUEST)
 		return;
 
-	acpi_hotplug_execute(acpi_dock_deferred_cb, data, event);
+	dd = kmalloc(sizeof(*dd), GFP_KERNEL);
+	if (dd) {
+		acpi_status status;
+
+		dd->ds = data;
+		dd->event = event;
+		status = acpi_os_hotplug_execute(acpi_dock_deferred_cb, dd);
+		if (ACPI_FAILURE(status))
+			kfree(dd);
+	}
 }
 
 /**

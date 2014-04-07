@@ -436,7 +436,7 @@ static enum dma_status sa11x0_dma_tx_status(struct dma_chan *chan,
 	enum dma_status ret;
 
 	ret = dma_cookie_status(&c->vc.chan, cookie, state);
-	if (ret == DMA_COMPLETE)
+	if (ret == DMA_SUCCESS)
 		return ret;
 
 	if (!state)

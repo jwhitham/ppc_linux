@@ -32,12 +32,16 @@
 
 
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/delay.h>	/* For udelay */
 #include <linux/slab.h>
 #include <asm/uaccess.h>	/* For copy_from_user/copy_to_user */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 #include <linux/sched.h>
+#endif
 
 #include "dgap_driver.h"
 #include "dgap_pci.h"
@@ -416,7 +420,8 @@ void dgap_cleanup_module(void)
 		unregister_chrdev(DIGI_DGAP_MAJOR, "dgap");
 	}
 
-	kfree(dgap_config_buf);
+	if (dgap_config_buf)
+		kfree(dgap_config_buf);
 
 	for (i = 0; i < dgap_NumBoards; ++i) {
 		dgap_remove_ports_sysfiles(dgap_Board[i]);
@@ -483,8 +488,10 @@ static void dgap_cleanup_board(struct board_t *brd)
 		}
 	}
 
-	kfree(brd->flipbuf);
-	kfree(brd->flipflagbuf);
+	if (brd->flipbuf)
+		kfree(brd->flipbuf);
+	if (brd->flipflagbuf)
+		kfree(brd->flipflagbuf);
 
 	dgap_Board[brd->boardnum] = NULL;
 

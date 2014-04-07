@@ -90,7 +90,7 @@ const struct st_bits_data spk_punc_info[] = {
 	{"repeats", "()", CH_RPT},
 	{"extended numeric", "", B_EXNUM},
 	{"symbols", "", B_SYM},
-	{NULL, NULL}
+	{0, 0}
 };
 
 static char mark_cut_flag;

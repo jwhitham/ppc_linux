@@ -33,7 +33,6 @@ extern int boot_cpuid;
 extern int spinning_secondaries;
 
 extern void cpu_die(void);
-extern int cpu_to_chip_id(int cpu);
 
 #ifdef CONFIG_SMP
 
@@ -113,6 +112,7 @@ static inline struct cpumask *cpu_core_mask(int cpu)
 }
 
 extern int cpu_to_core_id(int cpu);
+extern int cpu_to_chip_id(int cpu);
 
 /* Since OpenPIC has only 4 IPIs, we use slightly different message numbers.
  *

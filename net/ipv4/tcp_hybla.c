@@ -85,8 +85,7 @@ static inline u32 hybla_fraction(u32 odds)
  *     o Give cwnd a new value based on the model proposed
  *     o remember increments <1
  */
-static void hybla_cong_avoid(struct sock *sk, u32 ack, u32 acked,
-			     u32 in_flight)
+static void hybla_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct hybla *ca = inet_csk_ca(sk);
@@ -103,7 +102,7 @@ static void hybla_cong_avoid(struct sock *sk, u32 ack, u32 acked,
 		return;
 
 	if (!ca->hybla_en) {
-		tcp_reno_cong_avoid(sk, ack, acked, in_flight);
+		tcp_reno_cong_avoid(sk, ack, in_flight);
 		return;
 	}
 

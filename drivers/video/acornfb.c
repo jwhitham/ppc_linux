@@ -949,7 +949,9 @@ free_unused_pages(unsigned int virtual_start, unsigned int virtual_end)
 		 * the page.
 		 */
 		page = virt_to_page(virtual_start);
-		__free_reserved_page(page);
+		ClearPageReserved(page);
+		init_page_count(page);
+		free_page(virtual_start);
 
 		virtual_start += PAGE_SIZE;
 		mb_freed += PAGE_SIZE / 1024;

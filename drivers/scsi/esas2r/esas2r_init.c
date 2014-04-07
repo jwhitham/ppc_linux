@@ -216,7 +216,7 @@ use_legacy_interrupts:
 			goto use_legacy_interrupts;
 		}
 		a->intr_mode = INTR_MODE_MSI;
-		set_bit(AF2_MSI_ENABLED, &a->flags2);
+		esas2r_lock_set_flags(&a->flags2, AF2_MSI_ENABLED);
 		break;
 
 
@@ -252,7 +252,7 @@ static void esas2r_claim_interrupts(struct esas2r_adapter *a)
 		return;
 	}
 
-	set_bit(AF2_IRQ_CLAIMED, &a->flags2);
+	esas2r_lock_set_flags(&a->flags2, AF2_IRQ_CLAIMED);
 	esas2r_log(ESAS2R_LOG_INFO,
 		   "claimed IRQ %d flags: 0x%lx",
 		   a->pcid->irq, flags);
@@ -380,10 +380,10 @@ int esas2r_init_adapter(struct Scsi_Host *host, struct pci_dev *pcid,
 	/* interrupts will be disabled until we are done with init */
 	atomic_inc(&a->dis_ints_cnt);
 	atomic_inc(&a->disable_cnt);
-	set_bit(AF_CHPRST_PENDING, &a->flags);
-	set_bit(AF_DISC_PENDING, &a->flags);
-	set_bit(AF_FIRST_INIT, &a->flags);
-	set_bit(AF_LEGACY_SGE_MODE, &a->flags);
+	a->flags |= AF_CHPRST_PENDING
+		    | AF_DISC_PENDING
+		    | AF_FIRST_INIT
+		    | AF_LEGACY_SGE_MODE;
 
 	a->init_msg = ESAS2R_INIT_MSG_START;
 	a->max_vdareq_size = 128;
@@ -440,11 +440,11 @@ int esas2r_init_adapter(struct Scsi_Host *host, struct pci_dev *pcid,
 
 	esas2r_claim_interrupts(a);
 
-	if (test_bit(AF2_IRQ_CLAIMED, &a->flags2))
+	if (a->flags2 & AF2_IRQ_CLAIMED)
 		esas2r_enable_chip_interrupts(a);
 
-	set_bit(AF2_INIT_DONE, &a->flags2);
-	if (!test_bit(AF_DEGRADED_MODE, &a->flags))
+	esas2r_lock_set_flags(&a->flags2, AF2_INIT_DONE);
+	if (!(a->flags & AF_DEGRADED_MODE))
 		esas2r_kickoff_timer(a);
 	esas2r_debug("esas2r_init_adapter done for %p (%d)",
 		     a, a->disable_cnt);
@@ -457,8 +457,8 @@ static void esas2r_adapter_power_down(struct esas2r_adapter *a,
 {
 	struct esas2r_mem_desc *memdesc, *next;
 
-	if ((test_bit(AF2_INIT_DONE, &a->flags2))
-	    &&  (!test_bit(AF_DEGRADED_MODE, &a->flags))) {
+	if ((a->flags2 & AF2_INIT_DONE)
+	    &&  (!(a->flags & AF_DEGRADED_MODE))) {
 		if (!power_management) {
 			del_timer_sync(&a->timer);
 			tasklet_kill(&a->tasklet);
@@ -508,19 +508,19 @@ static void esas2r_adapter_power_down(struct esas2r_adapter *a,
 	}
 
 	/* Clean up interrupts */
-	if (test_bit(AF2_IRQ_CLAIMED, &a->flags2)) {
+	if (a->flags2 & AF2_IRQ_CLAIMED) {
 		esas2r_log_dev(ESAS2R_LOG_INFO,
 			       &(a->pcid->dev),
 			       "free_irq(%d) called", a->pcid->irq);
 
 		free_irq(a->pcid->irq, a);
 		esas2r_debug("IRQ released");
-		clear_bit(AF2_IRQ_CLAIMED, &a->flags2);
+		esas2r_lock_clear_flags(&a->flags2, AF2_IRQ_CLAIMED);
 	}
 
-	if (test_bit(AF2_MSI_ENABLED, &a->flags2)) {
+	if (a->flags2 & AF2_MSI_ENABLED) {
 		pci_disable_msi(a->pcid);
-		clear_bit(AF2_MSI_ENABLED, &a->flags2);
+		esas2r_lock_clear_flags(&a->flags2, AF2_MSI_ENABLED);
 		esas2r_debug("MSI disabled");
 	}
 
@@ -641,10 +641,12 @@ void esas2r_kill_adapter(int i)
 		pci_set_drvdata(a->pcid, NULL);
 		esas2r_adapters[i] = NULL;
 
-		if (test_bit(AF2_INIT_DONE, &a->flags2)) {
-			clear_bit(AF2_INIT_DONE, &a->flags2);
+		if (a->flags2 & AF2_INIT_DONE) {
+			esas2r_lock_clear_flags(&a->flags2,
+						AF2_INIT_DONE);
 
-			set_bit(AF_DEGRADED_MODE, &a->flags);
+			esas2r_lock_set_flags(&a->flags,
+					      AF_DEGRADED_MODE);
 
 			esas2r_log_dev(ESAS2R_LOG_INFO,
 				       &(a->host->shost_gendev),
@@ -757,7 +759,7 @@ int esas2r_resume(struct pci_dev *pdev)
 
 	esas2r_claim_interrupts(a);
 
-	if (test_bit(AF2_IRQ_CLAIMED, &a->flags2)) {
+	if (a->flags2 & AF2_IRQ_CLAIMED) {
 		/*
 		 * Now that system interrupt(s) are claimed, we can enable
 		 * chip interrupts.
@@ -779,7 +781,7 @@ error_exit:
 
 bool esas2r_set_degraded_mode(struct esas2r_adapter *a, char *error_str)
 {
-	set_bit(AF_DEGRADED_MODE, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_DEGRADED_MODE);
 	esas2r_log(ESAS2R_LOG_CRIT,
 		   "setting adapter to degraded mode: %s\n", error_str);
 	return false;
@@ -807,7 +809,7 @@ static void esas2r_init_pci_cfg_space(struct esas2r_adapter *a)
 	int pcie_cap_reg;
 
 	pcie_cap_reg = pci_find_capability(a->pcid, PCI_CAP_ID_EXP);
-	if (pcie_cap_reg) {
+	if (0xffff & pcie_cap_reg) {
 		u16 devcontrol;
 
 		pci_read_config_word(a->pcid, pcie_cap_reg + PCI_EXP_DEVCTL,
@@ -894,7 +896,7 @@ bool esas2r_init_adapter_struct(struct esas2r_adapter *a,
 	    && (a->pcid->subsystem_device & ATTO_SSDID_TBT))
 		a->flags2 |= AF2_THUNDERBOLT;
 
-	if (test_bit(AF2_THUNDERBOLT, &a->flags2))
+	if (a->flags2 & AF2_THUNDERBOLT)
 		a->flags2 |= AF2_SERIAL_FLASH;
 
 	if (a->pcid->subsystem_device == ATTO_TLSH_1068)
@@ -954,14 +956,14 @@ bool esas2r_init_adapter_struct(struct esas2r_adapter *a,
 	a->outbound_copy = (u32 volatile *)high;
 	high += sizeof(u32);
 
-	if (!test_bit(AF_NVR_VALID, &a->flags))
+	if (!(a->flags & AF_NVR_VALID))
 		esas2r_nvram_set_defaults(a);
 
 	/* update the caller's uncached memory area pointer */
 	*uncached_area = (void *)high;
 
 	/* initialize the allocated memory */
-	if (test_bit(AF_FIRST_INIT, &a->flags)) {
+	if (a->flags & AF_FIRST_INIT) {
 		memset(a->req_table, 0,
 		       (num_requests + num_ae_requests +
 			1) * sizeof(struct esas2r_request *));
@@ -1017,7 +1019,7 @@ bool esas2r_check_adapter(struct esas2r_adapter *a)
 	 * if the chip reset detected flag is set, we can bypass a bunch of
 	 * stuff.
 	 */
-	if (test_bit(AF_CHPRST_DETECTED, &a->flags))
+	if (a->flags & AF_CHPRST_DETECTED)
 		goto skip_chip_reset;
 
 	/*
@@ -1055,12 +1057,14 @@ bool esas2r_check_adapter(struct esas2r_adapter *a)
 						    doorbell);
 
 			if (ver == DRBL_FW_VER_0) {
-				set_bit(AF_LEGACY_SGE_MODE, &a->flags);
+				esas2r_lock_set_flags(&a->flags,
+						      AF_LEGACY_SGE_MODE);
 
 				a->max_vdareq_size = 128;
 				a->build_sgl = esas2r_build_sg_list_sge;
 			} else if (ver == DRBL_FW_VER_1) {
-				clear_bit(AF_LEGACY_SGE_MODE, &a->flags);
+				esas2r_lock_clear_flags(&a->flags,
+							AF_LEGACY_SGE_MODE);
 
 				a->max_vdareq_size = 1024;
 				a->build_sgl = esas2r_build_sg_list_prd;
@@ -1135,7 +1139,7 @@ skip_chip_reset:
 	*a->outbound_copy =
 		a->last_write =
 			a->last_read = a->list_size - 1;
-	set_bit(AF_COMM_LIST_TOGGLE, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_COMM_LIST_TOGGLE);
 	esas2r_write_register_dword(a, MU_IN_LIST_WRITE, MU_ILW_TOGGLE |
 				    a->last_write);
 	esas2r_write_register_dword(a, MU_OUT_LIST_COPY, MU_OLC_TOGGLE |
@@ -1200,9 +1204,9 @@ skip_chip_reset:
 	 */
 	doorbell = esas2r_read_register_dword(a, MU_DOORBELL_IN_ENB);
 	if (doorbell & DRBL_POWER_DOWN)
-		set_bit(AF2_VDA_POWER_DOWN, &a->flags2);
+		esas2r_lock_set_flags(&a->flags2, AF2_VDA_POWER_DOWN);
 	else
-		clear_bit(AF2_VDA_POWER_DOWN, &a->flags2);
+		esas2r_lock_clear_flags(&a->flags2, AF2_VDA_POWER_DOWN);
 
 	/*
 	 * enable assertion of outbound queue and doorbell interrupts in the
@@ -1235,8 +1239,8 @@ static bool esas2r_format_init_msg(struct esas2r_adapter *a,
 				     0,
 				     NULL);
 		ci = (struct atto_vda_cfg_init *)&rq->vrq->cfg.data.init;
-		ci->sgl_page_size = cpu_to_le32(sgl_page_size);
-		ci->epoch_time = cpu_to_le32(now.tv_sec);
+		ci->sgl_page_size = sgl_page_size;
+		ci->epoch_time = now.tv_sec;
 		rq->flags |= RF_FAILURE_OK;
 		a->init_msg = ESAS2R_INIT_MSG_INIT;
 		break;
@@ -1246,15 +1250,12 @@ static bool esas2r_format_init_msg(struct esas2r_adapter *a,
 		if (rq->req_stat == RS_SUCCESS) {
 			u32 major;
 			u32 minor;
-			u16 fw_release;
 
 			a->fw_version = le16_to_cpu(
 				rq->func_rsp.cfg_rsp.vda_version);
 			a->fw_build = rq->func_rsp.cfg_rsp.fw_build;
-			fw_release = le16_to_cpu(
-				rq->func_rsp.cfg_rsp.fw_release);
-			major = LOBYTE(fw_release);
-			minor = HIBYTE(fw_release);
+			major = LOBYTE(rq->func_rsp.cfg_rsp.fw_release);
+			minor = HIBYTE(rq->func_rsp.cfg_rsp.fw_release);
 			a->fw_version += (major << 16) + (minor << 24);
 		} else {
 			esas2r_hdebug("FAILED");
@@ -1265,8 +1266,9 @@ static bool esas2r_format_init_msg(struct esas2r_adapter *a,
 		 * unsupported config requests correctly.
 		 */
 
-		if ((test_bit(AF2_THUNDERBOLT, &a->flags2))
-		    || (be32_to_cpu(a->fw_version) > 0x00524702)) {
+		if ((a->flags2 & AF2_THUNDERBOLT)
+		    || (be32_to_cpu(a->fw_version) >
+			be32_to_cpu(0x47020052))) {
 			esas2r_hdebug("CFG get init");
 			esas2r_build_cfg_req(a,
 					     rq,
@@ -1359,10 +1361,10 @@ bool esas2r_init_adapter_hw(struct esas2r_adapter *a, bool init_poll)
 	struct esas2r_request *rq;
 	u32 i;
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		goto exit;
 
-	if (!test_bit(AF_NVR_VALID, &a->flags)) {
+	if (!(a->flags & AF_NVR_VALID)) {
 		if (!esas2r_nvram_read_direct(a))
 			esas2r_log(ESAS2R_LOG_WARN,
 				   "invalid/missing NVRAM parameters");
@@ -1374,8 +1376,8 @@ bool esas2r_init_adapter_hw(struct esas2r_adapter *a, bool init_poll)
 	}
 
 	/* The firmware is ready. */
-	clear_bit(AF_DEGRADED_MODE, &a->flags);
-	clear_bit(AF_CHPRST_PENDING, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_DEGRADED_MODE);
+	esas2r_lock_clear_flags(&a->flags, AF_CHPRST_PENDING);
 
 	/* Post all the async event requests */
 	for (i = 0, rq = a->first_ae_req; i < num_ae_requests; i++, rq++)
@@ -1396,8 +1398,8 @@ bool esas2r_init_adapter_hw(struct esas2r_adapter *a, bool init_poll)
 
 	esas2r_hdebug("firmware revision: %s", a->fw_rev);
 
-	if (test_bit(AF_CHPRST_DETECTED, &a->flags)
-	    && (test_bit(AF_FIRST_INIT, &a->flags))) {
+	if ((a->flags & AF_CHPRST_DETECTED)
+	    && (a->flags & AF_FIRST_INIT)) {
 		esas2r_enable_chip_interrupts(a);
 		return true;
 	}
@@ -1421,18 +1423,18 @@ bool esas2r_init_adapter_hw(struct esas2r_adapter *a, bool init_poll)
 		 * Block Tasklets from getting scheduled and indicate this is
 		 * polled discovery.
 		 */
-		set_bit(AF_TASKLET_SCHEDULED, &a->flags);
-		set_bit(AF_DISC_POLLED, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_TASKLET_SCHEDULED);
+		esas2r_lock_set_flags(&a->flags, AF_DISC_POLLED);
 
 		/*
 		 * Temporarily bring the disable count to zero to enable
 		 * deferred processing.  Note that the count is already zero
 		 * after the first initialization.
 		 */
-		if (test_bit(AF_FIRST_INIT, &a->flags))
+		if (a->flags & AF_FIRST_INIT)
 			atomic_dec(&a->disable_cnt);
 
-		while (test_bit(AF_DISC_PENDING, &a->flags)) {
+		while (a->flags & AF_DISC_PENDING) {
 			schedule_timeout_interruptible(msecs_to_jiffies(100));
 
 			/*
@@ -1451,7 +1453,7 @@ bool esas2r_init_adapter_hw(struct esas2r_adapter *a, bool init_poll)
 			 * we have to make sure the timer tick processes the
 			 * doorbell indicating the firmware is ready.
 			 */
-			if (!test_bit(AF_CHPRST_PENDING, &a->flags))
+			if (!(a->flags & AF_CHPRST_PENDING))
 				esas2r_disc_check_for_work(a);
 
 			/* Simulate a timer tick. */
@@ -1471,11 +1473,11 @@ bool esas2r_init_adapter_hw(struct esas2r_adapter *a, bool init_poll)
 
 		}
 
-		if (test_bit(AF_FIRST_INIT, &a->flags))
+		if (a->flags & AF_FIRST_INIT)
 			atomic_inc(&a->disable_cnt);
 
-		clear_bit(AF_DISC_POLLED, &a->flags);
-		clear_bit(AF_TASKLET_SCHEDULED, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_DISC_POLLED);
+		esas2r_lock_clear_flags(&a->flags, AF_TASKLET_SCHEDULED);
 	}
 
 
@@ -1502,26 +1504,26 @@ exit:
 	 * need to get done before we exit.
 	 */
 
-	if (test_bit(AF_CHPRST_DETECTED, &a->flags) &&
-	    test_bit(AF_FIRST_INIT, &a->flags)) {
+	if ((a->flags & AF_CHPRST_DETECTED)
+	    && (a->flags & AF_FIRST_INIT)) {
 		/*
 		 * Reinitialization was performed during the first
 		 * initialization.  Only clear the chip reset flag so the
 		 * original device polling is not cancelled.
 		 */
 		if (!rslt)
-			clear_bit(AF_CHPRST_PENDING, &a->flags);
+			esas2r_lock_clear_flags(&a->flags, AF_CHPRST_PENDING);
 	} else {
 		/* First initialization or a subsequent re-init is complete. */
 		if (!rslt) {
-			clear_bit(AF_CHPRST_PENDING, &a->flags);
-			clear_bit(AF_DISC_PENDING, &a->flags);
+			esas2r_lock_clear_flags(&a->flags, AF_CHPRST_PENDING);
+			esas2r_lock_clear_flags(&a->flags, AF_DISC_PENDING);
 		}
 
 
 		/* Enable deferred processing after the first initialization. */
-		if (test_bit(AF_FIRST_INIT, &a->flags)) {
-			clear_bit(AF_FIRST_INIT, &a->flags);
+		if (a->flags & AF_FIRST_INIT) {
+			esas2r_lock_clear_flags(&a->flags, AF_FIRST_INIT);
 
 			if (atomic_dec_return(&a->disable_cnt) == 0)
 				esas2r_do_deferred_processes(a);
@@ -1533,7 +1535,7 @@ exit:
 
 void esas2r_reset_adapter(struct esas2r_adapter *a)
 {
-	set_bit(AF_OS_RESET, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_OS_RESET);
 	esas2r_local_reset_adapter(a);
 	esas2r_schedule_tasklet(a);
 }
@@ -1548,17 +1550,17 @@ void esas2r_reset_chip(struct esas2r_adapter *a)
 	 * dump is located in the upper 512KB of the onchip SRAM.  Make sure
 	 * to not overwrite a previous crash that was saved.
 	 */
-	if (test_bit(AF2_COREDUMP_AVAIL, &a->flags2) &&
-	    !test_bit(AF2_COREDUMP_SAVED, &a->flags2)) {
+	if ((a->flags2 & AF2_COREDUMP_AVAIL)
+	    && !(a->flags2 & AF2_COREDUMP_SAVED)) {
 		esas2r_read_mem_block(a,
 				      a->fw_coredump_buff,
 				      MW_DATA_ADDR_SRAM + 0x80000,
 				      ESAS2R_FWCOREDUMP_SZ);
 
-		set_bit(AF2_COREDUMP_SAVED, &a->flags2);
+		esas2r_lock_set_flags(&a->flags2, AF2_COREDUMP_SAVED);
 	}
 
-	clear_bit(AF2_COREDUMP_AVAIL, &a->flags2);
+	esas2r_lock_clear_flags(&a->flags2, AF2_COREDUMP_AVAIL);
 
 	/* Reset the chip */
 	if (a->pcid->revision == MVR_FREY_B2)
@@ -1604,10 +1606,10 @@ static void esas2r_power_down_notify_firmware(struct esas2r_adapter *a)
  */
 void esas2r_power_down(struct esas2r_adapter *a)
 {
-	set_bit(AF_POWER_MGT, &a->flags);
-	set_bit(AF_POWER_DOWN, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_POWER_MGT);
+	esas2r_lock_set_flags(&a->flags, AF_POWER_DOWN);
 
-	if (!test_bit(AF_DEGRADED_MODE, &a->flags)) {
+	if (!(a->flags & AF_DEGRADED_MODE)) {
 		u32 starttime;
 		u32 doorbell;
 
@@ -1647,14 +1649,14 @@ void esas2r_power_down(struct esas2r_adapter *a)
 		 * For versions of firmware that support it tell them the driver
 		 * is powering down.
 		 */
-		if (test_bit(AF2_VDA_POWER_DOWN, &a->flags2))
+		if (a->flags2 & AF2_VDA_POWER_DOWN)
 			esas2r_power_down_notify_firmware(a);
 	}
 
 	/* Suspend I/O processing. */
-	set_bit(AF_OS_RESET, &a->flags);
-	set_bit(AF_DISC_PENDING, &a->flags);
-	set_bit(AF_CHPRST_PENDING, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_OS_RESET);
+	esas2r_lock_set_flags(&a->flags, AF_DISC_PENDING);
+	esas2r_lock_set_flags(&a->flags, AF_CHPRST_PENDING);
 
 	esas2r_process_adapter_reset(a);
 
@@ -1671,9 +1673,9 @@ bool esas2r_power_up(struct esas2r_adapter *a, bool init_poll)
 {
 	bool ret;
 
-	clear_bit(AF_POWER_DOWN, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_POWER_DOWN);
 	esas2r_init_pci_cfg_space(a);
-	set_bit(AF_FIRST_INIT, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_FIRST_INIT);
 	atomic_inc(&a->disable_cnt);
 
 	/* reinitialize the adapter */
@@ -1685,17 +1687,17 @@ bool esas2r_power_up(struct esas2r_adapter *a, bool init_poll)
 	esas2r_send_reset_ae(a, true);
 
 	/* clear this flag after initialization. */
-	clear_bit(AF_POWER_MGT, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_POWER_MGT);
 	return ret;
 }
 
 bool esas2r_is_adapter_present(struct esas2r_adapter *a)
 {
-	if (test_bit(AF_NOT_PRESENT, &a->flags))
+	if (a->flags & AF_NOT_PRESENT)
 		return false;
 
 	if (esas2r_read_register_dword(a, MU_DOORBELL_OUT) == 0xFFFFFFFF) {
-		set_bit(AF_NOT_PRESENT, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_NOT_PRESENT);
 
 		return false;
 	}

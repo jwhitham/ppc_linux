@@ -24,7 +24,6 @@
 #include <linux/i2c-mux-pinctrl.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
-#include <linux/of.h>
 
 struct i2c_mux_pinctrl {
 	struct device *dev;

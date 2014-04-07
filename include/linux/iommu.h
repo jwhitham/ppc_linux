@@ -22,7 +22,6 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/types.h>
-#include <trace/events/iommu.h>
 
 #define IOMMU_READ	(1)
 #define IOMMU_WRITE	(2)
@@ -228,7 +227,6 @@ static inline int report_iommu_fault(struct iommu_domain *domain,
 		ret = domain->handler(domain, dev, iova, flags,
 						domain->handler_token);
 
-	trace_io_page_fault(dev, iova, flags);
 	return ret;
 }
 

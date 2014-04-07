@@ -561,16 +561,23 @@ static int bfin_resume(struct device *dev)
 
 	return 0;
 }
-#endif
 
-static SIMPLE_DEV_PM_OPS(bfin_pm_ops, bfin_suspend, bfin_resume);
+static struct dev_pm_ops bfin_pm_ops = {
+	.suspend	= bfin_suspend,
+	.resume		= bfin_resume,
+};
+
+#define DEV_PM_OPS	&bfin_pm_ops
+#else
+#define DEV_PM_OPS	NULL
+#endif
 
 static struct platform_driver bfin_driver = {
 	.probe		= bfin_probe,
 	.remove		= __exit_p(bfin_remove),
 	.driver		= {
 		.name	= "musb-blackfin",
-		.pm	= &bfin_pm_ops,
+		.pm	= DEV_PM_OPS,
 	},
 };
 

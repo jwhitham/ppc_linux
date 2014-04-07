@@ -102,6 +102,7 @@ static ssize_t adis16220_capture_buffer_read(struct iio_dev *indio_dev,
 					int addr)
 {
 	struct adis16220_state *st = iio_priv(indio_dev);
+	struct spi_message msg;
 	struct spi_transfer xfers[] = {
 		{
 			.tx_buf = st->tx,
@@ -146,7 +147,10 @@ static ssize_t adis16220_capture_buffer_read(struct iio_dev *indio_dev,
 	}
 	xfers[1].len = count;
 
-	ret = spi_sync_transfer(st->adis.spi, xfers, ARRAY_SIZE(xfers));
+	spi_message_init(&msg);
+	spi_message_add_tail(&xfers[0], &msg);
+	spi_message_add_tail(&xfers[1], &msg);
+	ret = spi_sync(st->adis.spi, &msg);
 	if (ret) {
 
 		mutex_unlock(&st->buf_lock);

@@ -82,9 +82,9 @@ static struct trace_array *graph_array;
  * to fill in space into DURATION column.
  */
 enum {
-	FLAGS_FILL_FULL  = 1 << TRACE_GRAPH_PRINT_FILL_SHIFT,
-	FLAGS_FILL_START = 2 << TRACE_GRAPH_PRINT_FILL_SHIFT,
-	FLAGS_FILL_END   = 3 << TRACE_GRAPH_PRINT_FILL_SHIFT,
+	DURATION_FILL_FULL  = -1,
+	DURATION_FILL_START = -2,
+	DURATION_FILL_END   = -3,
 };
 
 static enum print_line_t
@@ -114,37 +114,16 @@ ftrace_push_return_trace(unsigned long ret, unsigned long func, int *depth,
 		return -EBUSY;
 	}
 
-	/*
-	 * The curr_ret_stack is an index to ftrace return stack of
-	 * current task.  Its value should be in [0, FTRACE_RETFUNC_
-	 * DEPTH) when the function graph tracer is used.  To support
-	 * filtering out specific functions, it makes the index
-	 * negative by subtracting huge value (FTRACE_NOTRACE_DEPTH)
-	 * so when it sees a negative index the ftrace will ignore
-	 * the record.  And the index gets recovered when returning
-	 * from the filtered function by adding the FTRACE_NOTRACE_
-	 * DEPTH and then it'll continue to record functions normally.
-	 *
-	 * The curr_ret_stack is initialized to -1 and get increased
-	 * in this function.  So it can be less than -1 only if it was
-	 * filtered out via ftrace_graph_notrace_addr() which can be
-	 * set from set_graph_notrace file in debugfs by user.
-	 */
-	if (current->curr_ret_stack < -1)
-		return -EBUSY;
-
 	calltime = trace_clock_local();
 
 	index = ++current->curr_ret_stack;
-	if (ftrace_graph_notrace_addr(func))
-		current->curr_ret_stack -= FTRACE_NOTRACE_DEPTH;
 	barrier();
 	current->ret_stack[index].ret = ret;
 	current->ret_stack[index].func = func;
 	current->ret_stack[index].calltime = calltime;
 	current->ret_stack[index].subtime = 0;
 	current->ret_stack[index].fp = frame_pointer;
-	*depth = current->curr_ret_stack;
+	*depth = index;
 
 	return 0;
 }
@@ -158,17 +137,7 @@ ftrace_pop_return_trace(struct ftrace_graph_ret *trace, unsigned long *ret,
 
 	index = current->curr_ret_stack;
 
-	/*
-	 * A negative index here means that it's just returned from a
-	 * notrace'd function.  Recover index to get an original
-	 * return address.  See ftrace_push_return_trace().
-	 *
-	 * TODO: Need to check whether the stack gets corrupted.
-	 */
-	if (index < 0)
-		index += FTRACE_NOTRACE_DEPTH;
-
-	if (unlikely(index < 0 || index >= FTRACE_RETFUNC_DEPTH)) {
+	if (unlikely(index < 0)) {
 		ftrace_graph_stop();
 		WARN_ON(1);
 		/* Might as well panic, otherwise we have no where to go */
@@ -224,15 +193,6 @@ unsigned long ftrace_return_to_handler(unsigned long frame_pointer)
 	trace.rettime = trace_clock_local();
 	barrier();
 	current->curr_ret_stack--;
-	/*
-	 * The curr_ret_stack can be less than -1 only if it was
-	 * filtered out and it's about to return from the function.
-	 * Recover the index and continue to trace normal functions.
-	 */
-	if (current->curr_ret_stack < -1) {
-		current->curr_ret_stack += FTRACE_NOTRACE_DEPTH;
-		return ret;
-	}
 
 	/*
 	 * The trace should run after decrementing the ret counter
@@ -270,7 +230,7 @@ int __trace_graph_entry(struct trace_array *tr,
 		return 0;
 	entry	= ring_buffer_event_data(event);
 	entry->graph_ent			= *trace;
-	if (!call_filter_check_discard(call, entry, buffer, event))
+	if (!filter_current_check_discard(buffer, call, entry, event))
 		__buffer_unlock_commit(buffer, event);
 
 	return 1;
@@ -299,19 +259,9 @@ int trace_graph_entry(struct ftrace_graph_ent *trace)
 
 	/* trace it when it is-nested-in or is a function enabled. */
 	if ((!(trace->depth || ftrace_graph_addr(trace->func)) ||
-	     ftrace_graph_ignore_irqs()) || (trace->depth < 0) ||
+	     ftrace_graph_ignore_irqs()) ||
 	    (max_depth && trace->depth >= max_depth))
 		return 0;
-
-	/*
-	 * Do not trace a function if it's filtered by set_graph_notrace.
-	 * Make the index of ret stack negative to indicate that it should
-	 * ignore further functions.  But it needs its own ret stack entry
-	 * to recover the original index in order to continue tracing after
-	 * returning from the function.
-	 */
-	if (ftrace_graph_notrace_addr(trace->func))
-		return 1;
 
 	local_irq_save(flags);
 	cpu = raw_smp_processor_id();
@@ -385,7 +335,7 @@ void __trace_graph_return(struct trace_array *tr,
 		return;
 	entry	= ring_buffer_event_data(event);
 	entry->ret				= *trace;
-	if (!call_filter_check_discard(call, entry, buffer, event))
+	if (!filter_current_check_discard(buffer, call, entry, event))
 		__buffer_unlock_commit(buffer, event);
 }
 
@@ -702,7 +652,7 @@ print_graph_irq(struct trace_iterator *iter, unsigned long addr,
 	}
 
 	/* No overhead */
-	ret = print_graph_duration(0, s, flags | FLAGS_FILL_START);
+	ret = print_graph_duration(DURATION_FILL_START, s, flags);
 	if (ret != TRACE_TYPE_HANDLED)
 		return ret;
 
@@ -714,7 +664,7 @@ print_graph_irq(struct trace_iterator *iter, unsigned long addr,
 	if (!ret)
 		return TRACE_TYPE_PARTIAL_LINE;
 
-	ret = print_graph_duration(0, s, flags | FLAGS_FILL_END);
+	ret = print_graph_duration(DURATION_FILL_END, s, flags);
 	if (ret != TRACE_TYPE_HANDLED)
 		return ret;
 
@@ -779,14 +729,14 @@ print_graph_duration(unsigned long long duration, struct trace_seq *s,
 			return TRACE_TYPE_HANDLED;
 
 	/* No real adata, just filling the column with spaces */
-	switch (flags & TRACE_GRAPH_PRINT_FILL_MASK) {
-	case FLAGS_FILL_FULL:
+	switch (duration) {
+	case DURATION_FILL_FULL:
 		ret = trace_seq_puts(s, "              |  ");
 		return ret ? TRACE_TYPE_HANDLED : TRACE_TYPE_PARTIAL_LINE;
-	case FLAGS_FILL_START:
+	case DURATION_FILL_START:
 		ret = trace_seq_puts(s, "  ");
 		return ret ? TRACE_TYPE_HANDLED : TRACE_TYPE_PARTIAL_LINE;
-	case FLAGS_FILL_END:
+	case DURATION_FILL_END:
 		ret = trace_seq_puts(s, " |");
 		return ret ? TRACE_TYPE_HANDLED : TRACE_TYPE_PARTIAL_LINE;
 	}
@@ -902,7 +852,7 @@ print_graph_entry_nested(struct trace_iterator *iter,
 	}
 
 	/* No time */
-	ret = print_graph_duration(0, s, flags | FLAGS_FILL_FULL);
+	ret = print_graph_duration(DURATION_FILL_FULL, s, flags);
 	if (ret != TRACE_TYPE_HANDLED)
 		return ret;
 
@@ -1222,7 +1172,7 @@ print_graph_comment(struct trace_seq *s, struct trace_entry *ent,
 		return TRACE_TYPE_PARTIAL_LINE;
 
 	/* No time */
-	ret = print_graph_duration(0, s, flags | FLAGS_FILL_FULL);
+	ret = print_graph_duration(DURATION_FILL_FULL, s, flags);
 	if (ret != TRACE_TYPE_HANDLED)
 		return ret;
 

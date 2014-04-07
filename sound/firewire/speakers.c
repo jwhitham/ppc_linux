@@ -52,6 +52,7 @@ struct fwspk {
 	struct mutex mutex;
 	struct cmp_connection connection;
 	struct amdtp_out_stream stream;
+	bool stream_running;
 	bool mute;
 	s16 volume[6];
 	s16 volume_min;
@@ -187,9 +188,10 @@ static int fwspk_close(struct snd_pcm_substream *substream)
 
 static void fwspk_stop_stream(struct fwspk *fwspk)
 {
-	if (amdtp_out_stream_running(&fwspk->stream)) {
+	if (fwspk->stream_running) {
 		amdtp_out_stream_stop(&fwspk->stream);
 		cmp_connection_break(&fwspk->connection);
+		fwspk->stream_running = false;
 	}
 }
 
@@ -244,10 +246,8 @@ static int fwspk_hw_params(struct snd_pcm_substream *substream,
 	if (err < 0)
 		goto error;
 
-	amdtp_out_stream_set_parameters(&fwspk->stream,
-					params_rate(hw_params),
-					params_channels(hw_params),
-					0);
+	amdtp_out_stream_set_rate(&fwspk->stream, params_rate(hw_params));
+	amdtp_out_stream_set_pcm(&fwspk->stream, params_channels(hw_params));
 
 	amdtp_out_stream_set_pcm_format(&fwspk->stream,
 					params_format(hw_params));
@@ -285,7 +285,7 @@ static int fwspk_prepare(struct snd_pcm_substream *substream)
 	if (amdtp_out_streaming_error(&fwspk->stream))
 		fwspk_stop_stream(fwspk);
 
-	if (!amdtp_out_stream_running(&fwspk->stream)) {
+	if (!fwspk->stream_running) {
 		err = cmp_connection_establish(&fwspk->connection,
 			amdtp_out_stream_get_max_payload(&fwspk->stream));
 		if (err < 0)
@@ -296,6 +296,8 @@ static int fwspk_prepare(struct snd_pcm_substream *substream)
 					fwspk->connection.speed);
 		if (err < 0)
 			goto err_connection;
+
+		fwspk->stream_running = true;
 	}
 
 	mutex_unlock(&fwspk->mutex);
@@ -645,7 +647,7 @@ static u32 fwspk_read_firmware_version(struct fw_unit *unit)
 	int err;
 
 	err = snd_fw_transaction(unit, TCODE_READ_QUADLET_REQUEST,
-				 OXFORD_FIRMWARE_ID_ADDRESS, &data, 4, 0);
+				 OXFORD_FIRMWARE_ID_ADDRESS, &data, 4);
 	return err >= 0 ? be32_to_cpu(data) : 0;
 }
 

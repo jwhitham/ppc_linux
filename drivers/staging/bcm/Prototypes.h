@@ -111,7 +111,7 @@ void update_per_cid_rx (struct bcm_mini_adapter *Adapter);
 
 void update_per_sf_desc_cnts( struct bcm_mini_adapter *Adapter);
 
-void ClearTargetDSXBuffer(struct bcm_mini_adapter *Adapter,B_UINT16 TID,bool bFreeAll);
+void ClearTargetDSXBuffer(struct bcm_mini_adapter *Adapter,B_UINT16 TID,BOOLEAN bFreeAll);
 
 
 void flush_queue(struct bcm_mini_adapter *Adapter, UINT iQIndex);
@@ -138,7 +138,7 @@ INT BeceemEEPROMBulkWrite(
 	PUCHAR pBuffer,
 	UINT uiOffset,
 	UINT uiNumBytes,
-	bool bVerify);
+	BOOLEAN bVerify);
 
 
 INT ReadBeceemEEPROM(struct bcm_mini_adapter *Adapter,UINT dwAddress, UINT *pdwData);
@@ -155,13 +155,13 @@ INT BeceemNVMWrite(
 	PUINT pBuffer,
 	UINT uiOffset,
 	UINT uiNumBytes,
-	bool bVerify);
+	BOOLEAN bVerify);
 
 
 INT BcmInitNVM(struct bcm_mini_adapter *Adapter);
 
 INT BcmUpdateSectorSize(struct bcm_mini_adapter *Adapter,UINT uiSectorSize);
-bool IsSectionExistInFlash(struct bcm_mini_adapter *Adapter, enum bcm_flash2x_section_val section);
+BOOLEAN IsSectionExistInFlash(struct bcm_mini_adapter *Adapter, enum bcm_flash2x_section_val section);
 
 INT BcmGetFlash2xSectionalBitMap(struct bcm_mini_adapter *Adapter, struct bcm_flash2x_bitmap *psFlash2xBitMap);
 
@@ -198,7 +198,7 @@ INT	BcmCopySection(struct bcm_mini_adapter *Adapter,
 						UINT numOfBytes);
 
 
-bool IsNonCDLessDevice(struct bcm_mini_adapter *Adapter);
+BOOLEAN IsNonCDLessDevice(struct bcm_mini_adapter *Adapter);
 
 
 VOID OverrideServiceFlowParams(struct bcm_mini_adapter *Adapter,PUINT puiBuffer);
@@ -212,7 +212,7 @@ INT buffDnldVerify(struct bcm_mini_adapter *Adapter, unsigned char *mappedbuffer
 
 
 VOID putUsbSuspend(struct work_struct *work);
-bool IsReqGpioIsLedInNVM(struct bcm_mini_adapter *Adapter, UINT gpios);
+BOOLEAN IsReqGpioIsLedInNVM(struct bcm_mini_adapter *Adapter, UINT gpios);
 
 
 #endif

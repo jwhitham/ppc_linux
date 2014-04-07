@@ -42,6 +42,7 @@
 #include <asm/mmu.h>
 #include <asm/mmzone.h>
 #include <asm/processor.h>
+#include <asm/prom.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/traps.h>
@@ -114,7 +115,7 @@ extern u32 __dtb_start[];
 extern struct console dash_console;
 #endif
 
-const struct machine_desc *machine_desc __initdata;
+struct machine_desc *machine_desc __initdata;
 
 /*
  * Map a Linux CPU number to a hardware thread ID
@@ -301,9 +302,13 @@ void __init setup_arch(char **cmdline_p)
 	 * rather than the version from the bootloader. This makes call
 	 * stacks easier to understand and may allow us to unmap the
 	 * bootloader at some point.
+	 *
+	 * We need to keep the LWK handler that TBI installed in order to
+	 * be able to do inter-thread comms.
 	 */
 	for (i = 0; i <= TBID_SIGNUM_MAX; i++)
-		_pTBI->fnSigs[i] = __TBIUnExpXXX;
+		if (i != TBID_SIGNUM_LWK)
+			_pTBI->fnSigs[i] = __TBIUnExpXXX;
 
 	/* A Meta requirement is that the kernel is loaded (virtually)
 	 * at the PAGE_OFFSET.
@@ -403,7 +408,9 @@ void __init setup_arch(char **cmdline_p)
 	cpu_2_hwthread_id[smp_processor_id()] = hard_processor_id();
 	hwthread_id_2_cpu[hard_processor_id()] = smp_processor_id();
 
-	unflatten_and_copy_device_tree();
+	/* Copy device tree blob into non-init memory before unflattening */
+	copy_fdt();
+	unflatten_device_tree();
 
 #ifdef CONFIG_SMP
 	smp_init_cpus();

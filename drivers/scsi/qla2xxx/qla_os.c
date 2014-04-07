@@ -494,14 +494,18 @@ qla24xx_pci_info_str(struct scsi_qla_host *vha, char *str)
 	static char *pci_bus_modes[] = { "33", "66", "100", "133", };
 	struct qla_hw_data *ha = vha->hw;
 	uint32_t pci_bus;
+	int pcie_reg;
 
-	if (pci_is_pcie(ha->pdev)) {
+	pcie_reg = pci_pcie_cap(ha->pdev);
+	if (pcie_reg) {
 		char lwstr[6];
-		uint32_t lstat, lspeed, lwidth;
+		uint16_t pcie_lstat, lspeed, lwidth;
 
-		pcie_capability_read_dword(ha->pdev, PCI_EXP_LNKCAP, &lstat);
-		lspeed = lstat & PCI_EXP_LNKCAP_SLS;
-		lwidth = (lstat & PCI_EXP_LNKCAP_MLW) >> 4;
+		pcie_reg += PCI_EXP_LNKCAP;
+		pci_read_config_word(ha->pdev, pcie_reg, &pcie_lstat);
+		lspeed = pcie_lstat & (BIT_0 | BIT_1 | BIT_2 | BIT_3);
+		lwidth = (pcie_lstat &
+		    (BIT_4 | BIT_5 | BIT_6 | BIT_7 | BIT_8 | BIT_9)) >> 4;
 
 		strcpy(str, "PCIe (");
 		switch (lspeed) {
@@ -3179,6 +3183,7 @@ qla2x00_remove_one(struct pci_dev *pdev)
 	pci_disable_pcie_error_reporting(pdev);
 
 	pci_disable_device(pdev);
+	pci_set_drvdata(pdev, NULL);
 }
 
 static void

@@ -493,7 +493,7 @@ static inline int do_one_ahash_op(struct ahash_request *req, int ret)
 		ret = wait_for_completion_interruptible(&tr->completion);
 		if (!ret)
 			ret = tr->err;
-		reinit_completion(&tr->completion);
+		INIT_COMPLETION(tr->completion);
 	}
 	return ret;
 }
@@ -721,7 +721,7 @@ static inline int do_one_acipher_op(struct ablkcipher_request *req, int ret)
 		ret = wait_for_completion_interruptible(&tr->completion);
 		if (!ret)
 			ret = tr->err;
-		reinit_completion(&tr->completion);
+		INIT_COMPLETION(tr->completion);
 	}
 
 	return ret;
@@ -1240,10 +1240,6 @@ static int do_test(int m)
 
 	case 154:
 		ret += tcrypt_test("cmac(des3_ede)");
-		break;
-
-	case 155:
-		ret += tcrypt_test("authenc(hmac(sha1),cbc(aes))");
 		break;
 
 	case 200:

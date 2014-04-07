@@ -1151,14 +1151,14 @@ static void check_no_speaker_on_headset(struct snd_kcontrol *kctl,
 	const char *names_to_check[] = {
 		"Headset", "headset", "Headphone", "headphone", NULL};
 	const char **s;
-	bool found = false;
+	bool found = 0;
 
 	if (strcmp("Speaker", kctl->id.name))
 		return;
 
 	for (s = names_to_check; *s; s++)
 		if (strstr(card->shortname, *s)) {
-			found = true;
+			found = 1;
 			break;
 		}
 

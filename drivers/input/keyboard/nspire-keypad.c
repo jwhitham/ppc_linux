@@ -143,10 +143,8 @@ static int nspire_keypad_open(struct input_dev *input)
 		return error;
 
 	error = nspire_keypad_chip_init(keypad);
-	if (error) {
-		clk_disable_unprepare(keypad->clk);
+	if (error)
 		return error;
-	}
 
 	return 0;
 }
@@ -269,7 +267,7 @@ static struct platform_driver nspire_keypad_driver = {
 	.driver = {
 		.name = "nspire-keypad",
 		.owner = THIS_MODULE,
-		.of_match_table = nspire_keypad_dt_match,
+		.of_match_table = of_match_ptr(nspire_keypad_dt_match),
 	},
 	.probe = nspire_keypad_probe,
 };

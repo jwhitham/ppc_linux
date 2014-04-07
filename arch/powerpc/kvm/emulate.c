@@ -130,8 +130,8 @@ static int kvmppc_emulate_mtspr(struct kvm_vcpu *vcpu, int sprn, int rs)
 	case SPRN_PIR: break;
 
 	default:
-		emulated = vcpu->kvm->arch.kvm_ops->emulate_mtspr(vcpu, sprn,
-								  spr_val);
+		emulated = kvmppc_core_emulate_mtspr(vcpu, sprn,
+						     spr_val);
 		if (emulated == EMULATE_FAIL)
 			printk(KERN_INFO "mtspr: unknown spr "
 				"0x%x\n", sprn);
@@ -191,8 +191,8 @@ static int kvmppc_emulate_mfspr(struct kvm_vcpu *vcpu, int sprn, int rt)
 		spr_val = kvmppc_get_dec(vcpu, get_tb());
 		break;
 	default:
-		emulated = vcpu->kvm->arch.kvm_ops->emulate_mfspr(vcpu, sprn,
-								  &spr_val);
+		emulated = kvmppc_core_emulate_mfspr(vcpu, sprn,
+						     &spr_val);
 		if (unlikely(emulated == EMULATE_FAIL)) {
 			printk(KERN_INFO "mfspr: unknown spr "
 				"0x%x\n", sprn);
@@ -464,8 +464,7 @@ int kvmppc_emulate_instruction(struct kvm_run *run, struct kvm_vcpu *vcpu)
 	}
 
 	if (emulated == EMULATE_FAIL) {
-		emulated = vcpu->kvm->arch.kvm_ops->emulate_op(run, vcpu, inst,
-							       &advance);
+		emulated = kvmppc_core_emulate_op(run, vcpu, inst, &advance);
 		if (emulated == EMULATE_AGAIN) {
 			advance = 0;
 		} else if (emulated == EMULATE_FAIL) {
@@ -484,4 +483,3 @@ int kvmppc_emulate_instruction(struct kvm_run *run, struct kvm_vcpu *vcpu)
 
 	return emulated;
 }
-EXPORT_SYMBOL_GPL(kvmppc_emulate_instruction);

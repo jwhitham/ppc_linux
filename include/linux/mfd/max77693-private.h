@@ -323,6 +323,7 @@ struct max77693_dev {
 
 	int irq;
 	int irq_gpio;
+	bool wakeup;
 	struct mutex irqlock;
 	int irq_masks_cur[MAX77693_IRQ_GROUP_NR];
 	int irq_masks_cache[MAX77693_IRQ_GROUP_NR];

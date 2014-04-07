@@ -54,7 +54,6 @@
  */
 #ifdef CONFIG_ARCH_PXA
 #include <mach/pxa25x-udc.h>
-#include <mach/hardware.h>
 #endif
 
 #ifdef CONFIG_ARCH_LUBBOCK

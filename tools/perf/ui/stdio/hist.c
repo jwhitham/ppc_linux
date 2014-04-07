@@ -213,19 +213,20 @@ static size_t callchain__fprintf_graph(FILE *fp, struct rb_root *root,
 	return ret;
 }
 
-static size_t __callchain__fprintf_flat(FILE *fp, struct callchain_node *node,
+static size_t __callchain__fprintf_flat(FILE *fp,
+					struct callchain_node *self,
 					u64 total_samples)
 {
 	struct callchain_list *chain;
 	size_t ret = 0;
 
-	if (!node)
+	if (!self)
 		return 0;
 
-	ret += __callchain__fprintf_flat(fp, node->parent, total_samples);
+	ret += __callchain__fprintf_flat(fp, self->parent, total_samples);
 
 
-	list_for_each_entry(chain, &node->val, list) {
+	list_for_each_entry(chain, &self->val, list) {
 		if (chain->ip >= PERF_CONTEXT_MAX)
 			continue;
 		if (chain->ms.sym)
@@ -238,14 +239,15 @@ static size_t __callchain__fprintf_flat(FILE *fp, struct callchain_node *node,
 	return ret;
 }
 
-static size_t callchain__fprintf_flat(FILE *fp, struct rb_root *tree,
+static size_t callchain__fprintf_flat(FILE *fp, struct rb_root *self,
 				      u64 total_samples)
 {
 	size_t ret = 0;
 	u32 entries_printed = 0;
+	struct rb_node *rb_node;
 	struct callchain_node *chain;
-	struct rb_node *rb_node = rb_first(tree);
 
+	rb_node = rb_first(self);
 	while (rb_node) {
 		double percent;
 

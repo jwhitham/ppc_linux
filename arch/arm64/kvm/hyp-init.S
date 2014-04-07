@@ -74,10 +74,7 @@ __do_hyp_init:
 	msr	mair_el2, x4
 	isb
 
-	mrs	x4, sctlr_el2
-	and	x4, x4, #SCTLR_EL2_EE	// preserve endianness of EL2
-	ldr	x5, =SCTLR_EL2_FLAGS
-	orr	x4, x4, x5
+	mov	x4, #SCTLR_EL2_FLAGS
 	msr	sctlr_el2, x4
 	isb
 

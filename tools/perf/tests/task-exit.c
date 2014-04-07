@@ -28,7 +28,7 @@ int test__task_exit(void)
 	union perf_event *event;
 	struct perf_evsel *evsel;
 	struct perf_evlist *evlist;
-	struct target target = {
+	struct perf_target target = {
 		.uid		= UINT_MAX,
 		.uses_mmap	= true,
 	};
@@ -37,10 +37,19 @@ int test__task_exit(void)
 	signal(SIGCHLD, sig_handler);
 	signal(SIGUSR1, sig_handler);
 
-	evlist = perf_evlist__new_default();
+	evlist = perf_evlist__new();
 	if (evlist == NULL) {
-		pr_debug("perf_evlist__new_default\n");
+		pr_debug("perf_evlist__new\n");
 		return -1;
+	}
+	/*
+	 * We need at least one evsel in the evlist, use the default
+	 * one: "cycles".
+	 */
+	err = perf_evlist__add_default(evlist);
+	if (err < 0) {
+		pr_debug("Not enough memory to create evsel\n");
+		goto out_free_evlist;
 	}
 
 	/*
@@ -108,6 +117,7 @@ out_close_evlist:
 	perf_evlist__close(evlist);
 out_delete_maps:
 	perf_evlist__delete_maps(evlist);
+out_free_evlist:
 	perf_evlist__delete(evlist);
 	return err;
 }

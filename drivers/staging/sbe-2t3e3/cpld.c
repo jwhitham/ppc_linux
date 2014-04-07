@@ -240,7 +240,7 @@ void cpld_select_panel(struct channel *sc, u32 panel)
 }
 
 
-void cpld_set_clock(struct channel *sc, u32 mode)
+extern void cpld_set_clock(struct channel *sc, u32 mode)
 {
 	if (sc->p.clock_source == mode)
 		return;

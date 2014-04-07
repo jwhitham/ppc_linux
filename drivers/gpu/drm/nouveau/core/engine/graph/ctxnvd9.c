@@ -466,7 +466,6 @@ nvd9_grctx_init_hub[] = {
 	nvc0_grctx_init_unk78xx,
 	nvc0_grctx_init_unk80xx,
 	nvd9_grctx_init_rop,
-	NULL
 };
 
 struct nvc0_graph_init *

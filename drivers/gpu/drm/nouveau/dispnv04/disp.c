@@ -140,8 +140,6 @@ nv04_display_create(struct drm_device *dev)
 		func->save(encoder);
 	}
 
-	nouveau_overlay_init(dev);
-
 	return 0;
 }
 

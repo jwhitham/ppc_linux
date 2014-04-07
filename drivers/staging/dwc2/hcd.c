@@ -537,15 +537,10 @@ static void dwc2_hcd_reinit(struct dwc2_hsotg *hsotg)
 	int i;
 
 	hsotg->flags.d32 = 0;
-	hsotg->non_periodic_qh_ptr = &hsotg->non_periodic_sched_active;
 
-	if (hsotg->core_params->uframe_sched > 0) {
-		hsotg->available_host_channels =
-			hsotg->core_params->host_channels;
-	} else {
-		hsotg->non_periodic_channels = 0;
-		hsotg->periodic_channels = 0;
-	}
+	hsotg->non_periodic_qh_ptr = &hsotg->non_periodic_sched_active;
+	hsotg->non_periodic_channels = 0;
+	hsotg->periodic_channels = 0;
 
 	/*
 	 * Put all channels in the free channel list and clean up channel
@@ -721,7 +716,8 @@ static int dwc2_hc_setup_align_buf(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh,
  * @qh:    Transactions from the first QTD for this QH are selected and assigned
  *         to a free host channel
  */
-static int dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
+static void dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg,
+				    struct dwc2_qh *qh)
 {
 	struct dwc2_host_chan *chan;
 	struct dwc2_hcd_urb *urb;
@@ -733,18 +729,18 @@ static int dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 
 	if (list_empty(&qh->qtd_list)) {
 		dev_dbg(hsotg->dev, "No QTDs in QH list\n");
-		return -ENOMEM;
+		return;
 	}
 
 	if (list_empty(&hsotg->free_hc_list)) {
 		dev_dbg(hsotg->dev, "No free channel to assign\n");
-		return -ENOMEM;
+		return;
 	}
 
 	chan = list_first_entry(&hsotg->free_hc_list, struct dwc2_host_chan,
 				hc_list_entry);
 
-	/* Remove host channel from free list */
+	/* Remove the host channel from the free list */
 	list_del_init(&chan->hc_list_entry);
 
 	qtd = list_first_entry(&qh->qtd_list, struct dwc2_qtd, qtd_list_entry);
@@ -784,10 +780,6 @@ static int dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 	chan->data_pid_start = qh->data_toggle;
 	chan->multi_count = 1;
 
-	if (urb->actual_length > urb->length &&
-		!dwc2_hcd_is_pipe_in(&urb->pipe_info))
-		urb->actual_length = urb->length;
-
 	if (hsotg->core_params->dma_enable > 0) {
 		chan->xfer_dma = urb->dma + urb->actual_length;
 
@@ -825,7 +817,7 @@ static int dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 				      &hsotg->free_hc_list);
 			qtd->in_process = 0;
 			qh->channel = NULL;
-			return -ENOMEM;
+			return;
 		}
 	} else {
 		chan->align_buf = 0;
@@ -844,8 +836,6 @@ static int dwc2_assign_and_init_hc(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 
 	dwc2_hc_init(hsotg, chan);
 	chan->qh = qh;
-
-	return 0;
 }
 
 /**
@@ -874,14 +864,8 @@ enum dwc2_transaction_type dwc2_hcd_select_transactions(
 	while (qh_ptr != &hsotg->periodic_sched_ready) {
 		if (list_empty(&hsotg->free_hc_list))
 			break;
-		if (hsotg->core_params->uframe_sched > 0) {
-			if (hsotg->available_host_channels <= 1)
-				break;
-			hsotg->available_host_channels--;
-		}
 		qh = list_entry(qh_ptr, struct dwc2_qh, qh_list_entry);
-		if (dwc2_assign_and_init_hc(hsotg, qh))
-			break;
+		dwc2_assign_and_init_hc(hsotg, qh);
 
 		/*
 		 * Move the QH from the periodic ready schedule to the
@@ -900,21 +884,13 @@ enum dwc2_transaction_type dwc2_hcd_select_transactions(
 	num_channels = hsotg->core_params->host_channels;
 	qh_ptr = hsotg->non_periodic_sched_inactive.next;
 	while (qh_ptr != &hsotg->non_periodic_sched_inactive) {
-		if (hsotg->core_params->uframe_sched <= 0 &&
-		    hsotg->non_periodic_channels >= num_channels -
+		if (hsotg->non_periodic_channels >= num_channels -
 						hsotg->periodic_channels)
 			break;
 		if (list_empty(&hsotg->free_hc_list))
 			break;
 		qh = list_entry(qh_ptr, struct dwc2_qh, qh_list_entry);
-		if (hsotg->core_params->uframe_sched > 0) {
-			if (hsotg->available_host_channels < 1)
-				break;
-			hsotg->available_host_channels--;
-		}
-
-		if (dwc2_assign_and_init_hc(hsotg, qh))
-			break;
+		dwc2_assign_and_init_hc(hsotg, qh);
 
 		/*
 		 * Move the QH from the non-periodic inactive schedule to the
@@ -929,8 +905,7 @@ enum dwc2_transaction_type dwc2_hcd_select_transactions(
 		else
 			ret_val = DWC2_TRANSACTION_ALL;
 
-		if (hsotg->core_params->uframe_sched <= 0)
-			hsotg->non_periodic_channels++;
+		hsotg->non_periodic_channels++;
 	}
 
 	return ret_val;
@@ -2872,9 +2847,6 @@ int dwc2_hcd_init(struct dwc2_hsotg *hsotg, int irq,
 		channel->hc_num = i;
 		hsotg->hc_ptr_array[i] = channel;
 	}
-
-	if (hsotg->core_params->uframe_sched > 0)
-		dwc2_hcd_init_usecs(hsotg);
 
 	/* Initialize hsotg start work */
 	INIT_DELAYED_WORK(&hsotg->start_work, dwc2_hcd_start_func);

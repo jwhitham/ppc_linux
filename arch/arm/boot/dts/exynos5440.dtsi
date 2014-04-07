@@ -276,7 +276,6 @@
 		interrupt-map-mask = <0 0 0 0>;
 		interrupt-map = <0x0 0 &gic 53>;
 		num-lanes = <4>;
-		status = "disabled";
 	};
 
 	pcie@2a0000 {
@@ -297,6 +296,5 @@
 		interrupt-map-mask = <0 0 0 0>;
 		interrupt-map = <0x0 0 &gic 56>;
 		num-lanes = <4>;
-		status = "disabled";
 	};
 };

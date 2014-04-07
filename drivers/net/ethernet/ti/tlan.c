@@ -319,6 +319,7 @@ static void tlan_remove_one(struct pci_dev *pdev)
 
 	free_netdev(dev);
 
+	pci_set_drvdata(pdev, NULL);
 	cancel_work_sync(&priv->tlan_tqueue);
 }
 

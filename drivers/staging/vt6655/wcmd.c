@@ -233,7 +233,7 @@ s_vProbeChannel(
  *
  *
  * Return Value:
- *    A ptr to Tx frame or NULL on allocation failure
+ *    A ptr to Tx frame or NULL on allocation failue
  *
  -*/
 

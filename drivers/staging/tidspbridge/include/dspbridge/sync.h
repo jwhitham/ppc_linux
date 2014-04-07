@@ -59,7 +59,7 @@ static inline void sync_init_event(struct sync_object *event)
 
 static inline void sync_reset_event(struct sync_object *event)
 {
-	reinit_completion(&event->comp);
+	INIT_COMPLETION(event->comp);
 	event->multi_comp = NULL;
 }
 

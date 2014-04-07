@@ -26,8 +26,8 @@
 
 */
 
-#define blogic_drvr_version		"2.1.17"
-#define blogic_drvr_date		"12 September 2013"
+#define blogic_drvr_version		"2.1.16"
+#define blogic_drvr_date		"18 July 2002"
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -311,14 +311,12 @@ static struct blogic_ccb *blogic_alloc_ccb(struct blogic_adapter *adapter)
   caller.
 */
 
-static void blogic_dealloc_ccb(struct blogic_ccb *ccb, int dma_unmap)
+static void blogic_dealloc_ccb(struct blogic_ccb *ccb)
 {
 	struct blogic_adapter *adapter = ccb->adapter;
 
-	if (ccb->command != NULL)
-		scsi_dma_unmap(ccb->command);
-	if (dma_unmap)
-		pci_unmap_single(adapter->pci_device, ccb->sensedata,
+	scsi_dma_unmap(ccb->command);
+	pci_unmap_single(adapter->pci_device, ccb->sensedata,
 			 ccb->sense_datalen, PCI_DMA_FROMDEVICE);
 
 	ccb->command = NULL;
@@ -2764,8 +2762,8 @@ static void blogic_process_ccbs(struct blogic_adapter *adapter)
 			/*
 			   Place CCB back on the Host Adapter's free list.
 			 */
-			blogic_dealloc_ccb(ccb, 1);
-#if 0			/* this needs to be redone different for new EH */
+			blogic_dealloc_ccb(ccb);
+#if 0				/* this needs to be redone different for new EH */
 			/*
 			   Bus Device Reset CCBs have the command field
 			   non-NULL only when a Bus Device Reset was requested
@@ -2793,7 +2791,7 @@ static void blogic_process_ccbs(struct blogic_adapter *adapter)
 				if (ccb->status == BLOGIC_CCB_RESET &&
 						ccb->tgt_id == tgt_id) {
 					command = ccb->command;
-					blogic_dealloc_ccb(ccb, 1);
+					blogic_dealloc_ccb(ccb);
 					adapter->active_cmds[tgt_id]--;
 					command->result = DID_RESET << 16;
 					command->scsi_done(command);
@@ -2864,7 +2862,7 @@ static void blogic_process_ccbs(struct blogic_adapter *adapter)
 			/*
 			   Place CCB back on the Host Adapter's free list.
 			 */
-			blogic_dealloc_ccb(ccb, 1);
+			blogic_dealloc_ccb(ccb);
 			/*
 			   Call the SCSI Command Completion Routine.
 			 */
@@ -3036,7 +3034,6 @@ static int blogic_qcmd_lck(struct scsi_cmnd *command,
 	int buflen = scsi_bufflen(command);
 	int count;
 	struct blogic_ccb *ccb;
-	dma_addr_t sense_buf;
 
 	/*
 	   SCSI REQUEST_SENSE commands will be executed automatically by the
@@ -3182,17 +3179,10 @@ static int blogic_qcmd_lck(struct scsi_cmnd *command,
 	}
 	memcpy(ccb->cdb, cdb, cdblen);
 	ccb->sense_datalen = SCSI_SENSE_BUFFERSIZE;
-	ccb->command = command;
-	sense_buf = pci_map_single(adapter->pci_device,
+	ccb->sensedata = pci_map_single(adapter->pci_device,
 				command->sense_buffer, ccb->sense_datalen,
 				PCI_DMA_FROMDEVICE);
-	if (dma_mapping_error(&adapter->pci_device->dev, sense_buf)) {
-		blogic_err("DMA mapping for sense data buffer failed\n",
-				adapter);
-		blogic_dealloc_ccb(ccb, 0);
-		return SCSI_MLQUEUE_HOST_BUSY;
-	}
-	ccb->sensedata = sense_buf;
+	ccb->command = command;
 	command->scsi_done = comp_cb;
 	if (blogic_multimaster_type(adapter)) {
 		/*
@@ -3213,7 +3203,7 @@ static int blogic_qcmd_lck(struct scsi_cmnd *command,
 			if (!blogic_write_outbox(adapter, BLOGIC_MBOX_START,
 						ccb)) {
 				blogic_warn("Still unable to write Outgoing Mailbox - " "Host Adapter Dead?\n", adapter);
-				blogic_dealloc_ccb(ccb, 1);
+				blogic_dealloc_ccb(ccb);
 				command->result = DID_ERROR << 16;
 				command->scsi_done(command);
 			}
@@ -3347,7 +3337,7 @@ static int blogic_resetadapter(struct blogic_adapter *adapter, bool hard_reset)
 
 	for (ccb = adapter->all_ccbs; ccb != NULL; ccb = ccb->next_all)
 		if (ccb->status == BLOGIC_CCB_ACTIVE)
-			blogic_dealloc_ccb(ccb, 1);
+			blogic_dealloc_ccb(ccb);
 	/*
 	 * Wait a few seconds between the Host Adapter Hard Reset which
 	 * initiates a SCSI Bus Reset and issuing any SCSI Commands.  Some

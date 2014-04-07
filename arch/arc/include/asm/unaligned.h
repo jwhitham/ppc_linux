@@ -22,8 +22,7 @@ static inline int
 misaligned_fixup(unsigned long address, struct pt_regs *regs,
 		 struct callee_regs *cregs)
 {
-	/* Not fixed */
-	return 1;
+	return 0;
 }
 #endif
 

@@ -637,18 +637,10 @@ static void append_filter_err(struct filter_parse_state *ps,
 	free_page((unsigned long) buf);
 }
 
-static inline struct event_filter *event_filter(struct ftrace_event_file *file)
-{
-	if (file->event_call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		return file->event_call->filter;
-	else
-		return file->filter;
-}
-
 /* caller must hold event_mutex */
-void print_event_filter(struct ftrace_event_file *file, struct trace_seq *s)
+void print_event_filter(struct ftrace_event_call *call, struct trace_seq *s)
 {
-	struct event_filter *filter = event_filter(file);
+	struct event_filter *filter = call->filter;
 
 	if (filter && filter->filter_string)
 		trace_seq_printf(s, "%s\n", filter->filter_string);
@@ -774,19 +766,9 @@ static void __free_preds(struct event_filter *filter)
 	filter->n_preds = 0;
 }
 
-static void call_filter_disable(struct ftrace_event_call *call)
+static void filter_disable(struct ftrace_event_call *call)
 {
 	call->flags &= ~TRACE_EVENT_FL_FILTERED;
-}
-
-static void filter_disable(struct ftrace_event_file *file)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		call_filter_disable(call);
-	else
-		file->flags &= ~FTRACE_EVENT_FL_FILTERED;
 }
 
 static void __free_filter(struct event_filter *filter)
@@ -799,30 +781,16 @@ static void __free_filter(struct event_filter *filter)
 	kfree(filter);
 }
 
-void destroy_call_preds(struct ftrace_event_call *call)
+/*
+ * Called when destroying the ftrace_event_call.
+ * The call is being freed, so we do not need to worry about
+ * the call being currently used. This is for module code removing
+ * the tracepoints from within it.
+ */
+void destroy_preds(struct ftrace_event_call *call)
 {
 	__free_filter(call->filter);
 	call->filter = NULL;
-}
-
-static void destroy_file_preds(struct ftrace_event_file *file)
-{
-	__free_filter(file->filter);
-	file->filter = NULL;
-}
-
-/*
- * Called when destroying the ftrace_event_file.
- * The file is being freed, so we do not need to worry about
- * the file being currently used. This is for module code removing
- * the tracepoints from within it.
- */
-void destroy_preds(struct ftrace_event_file *file)
-{
-	if (file->event_call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		destroy_call_preds(file->event_call);
-	else
-		destroy_file_preds(file);
 }
 
 static struct event_filter *__alloc_filter(void)
@@ -857,56 +825,28 @@ static int __alloc_preds(struct event_filter *filter, int n_preds)
 	return 0;
 }
 
-static inline void __remove_filter(struct ftrace_event_file *file)
+static void filter_free_subsystem_preds(struct event_subsystem *system)
 {
-	struct ftrace_event_call *call = file->event_call;
-
-	filter_disable(file);
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		remove_filter_string(call->filter);
-	else
-		remove_filter_string(file->filter);
-}
-
-static void filter_free_subsystem_preds(struct event_subsystem *system,
-					struct trace_array *tr)
-{
-	struct ftrace_event_file *file;
 	struct ftrace_event_call *call;
 
-	list_for_each_entry(file, &tr->events, list) {
-		call = file->event_call;
+	list_for_each_entry(call, &ftrace_events, list) {
 		if (strcmp(call->class->system, system->name) != 0)
 			continue;
 
-		__remove_filter(file);
+		filter_disable(call);
+		remove_filter_string(call->filter);
 	}
 }
 
-static inline void __free_subsystem_filter(struct ftrace_event_file *file)
+static void filter_free_subsystem_filters(struct event_subsystem *system)
 {
-	struct ftrace_event_call *call = file->event_call;
+	struct ftrace_event_call *call;
 
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER) {
+	list_for_each_entry(call, &ftrace_events, list) {
+		if (strcmp(call->class->system, system->name) != 0)
+			continue;
 		__free_filter(call->filter);
 		call->filter = NULL;
-	} else {
-		__free_filter(file->filter);
-		file->filter = NULL;
-	}
-}
-
-static void filter_free_subsystem_filters(struct event_subsystem *system,
-					  struct trace_array *tr)
-{
-	struct ftrace_event_file *file;
-	struct ftrace_event_call *call;
-
-	list_for_each_entry(file, &tr->events, list) {
-		call = file->event_call;
-		if (strcmp(call->class->system, system->name) != 0)
-			continue;
-		__free_subsystem_filter(file);
 	}
 }
 
@@ -1677,85 +1617,15 @@ fail:
 	return err;
 }
 
-static inline void event_set_filtered_flag(struct ftrace_event_file *file)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		call->flags |= TRACE_EVENT_FL_FILTERED;
-	else
-		file->flags |= FTRACE_EVENT_FL_FILTERED;
-}
-
-static inline void event_set_filter(struct ftrace_event_file *file,
-				    struct event_filter *filter)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		rcu_assign_pointer(call->filter, filter);
-	else
-		rcu_assign_pointer(file->filter, filter);
-}
-
-static inline void event_clear_filter(struct ftrace_event_file *file)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		RCU_INIT_POINTER(call->filter, NULL);
-	else
-		RCU_INIT_POINTER(file->filter, NULL);
-}
-
-static inline void
-event_set_no_set_filter_flag(struct ftrace_event_file *file)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		call->flags |= TRACE_EVENT_FL_NO_SET_FILTER;
-	else
-		file->flags |= FTRACE_EVENT_FL_NO_SET_FILTER;
-}
-
-static inline void
-event_clear_no_set_filter_flag(struct ftrace_event_file *file)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (call->flags & TRACE_EVENT_FL_USE_CALL_FILTER)
-		call->flags &= ~TRACE_EVENT_FL_NO_SET_FILTER;
-	else
-		file->flags &= ~FTRACE_EVENT_FL_NO_SET_FILTER;
-}
-
-static inline bool
-event_no_set_filter_flag(struct ftrace_event_file *file)
-{
-	struct ftrace_event_call *call = file->event_call;
-
-	if (file->flags & FTRACE_EVENT_FL_NO_SET_FILTER)
-		return true;
-
-	if ((call->flags & TRACE_EVENT_FL_USE_CALL_FILTER) &&
-	    (call->flags & TRACE_EVENT_FL_NO_SET_FILTER))
-		return true;
-
-	return false;
-}
-
 struct filter_list {
 	struct list_head	list;
 	struct event_filter	*filter;
 };
 
 static int replace_system_preds(struct event_subsystem *system,
-				struct trace_array *tr,
 				struct filter_parse_state *ps,
 				char *filter_string)
 {
-	struct ftrace_event_file *file;
 	struct ftrace_event_call *call;
 	struct filter_list *filter_item;
 	struct filter_list *tmp;
@@ -1763,8 +1633,8 @@ static int replace_system_preds(struct event_subsystem *system,
 	bool fail = true;
 	int err;
 
-	list_for_each_entry(file, &tr->events, list) {
-		call = file->event_call;
+	list_for_each_entry(call, &ftrace_events, list) {
+
 		if (strcmp(call->class->system, system->name) != 0)
 			continue;
 
@@ -1774,20 +1644,18 @@ static int replace_system_preds(struct event_subsystem *system,
 		 */
 		err = replace_preds(call, NULL, ps, filter_string, true);
 		if (err)
-			event_set_no_set_filter_flag(file);
+			call->flags |= TRACE_EVENT_FL_NO_SET_FILTER;
 		else
-			event_clear_no_set_filter_flag(file);
+			call->flags &= ~TRACE_EVENT_FL_NO_SET_FILTER;
 	}
 
-	list_for_each_entry(file, &tr->events, list) {
+	list_for_each_entry(call, &ftrace_events, list) {
 		struct event_filter *filter;
-
-		call = file->event_call;
 
 		if (strcmp(call->class->system, system->name) != 0)
 			continue;
 
-		if (event_no_set_filter_flag(file))
+		if (call->flags & TRACE_EVENT_FL_NO_SET_FILTER)
 			continue;
 
 		filter_item = kzalloc(sizeof(*filter_item), GFP_KERNEL);
@@ -1808,17 +1676,17 @@ static int replace_system_preds(struct event_subsystem *system,
 
 		err = replace_preds(call, filter, ps, filter_string, false);
 		if (err) {
-			filter_disable(file);
+			filter_disable(call);
 			parse_error(ps, FILT_ERR_BAD_SUBSYS_FILTER, 0);
 			append_filter_err(ps, filter);
 		} else
-			event_set_filtered_flag(file);
+			call->flags |= TRACE_EVENT_FL_FILTERED;
 		/*
 		 * Regardless of if this returned an error, we still
 		 * replace the filter for the call.
 		 */
-		filter = event_filter(file);
-		event_set_filter(file, filter_item->filter);
+		filter = call->filter;
+		rcu_assign_pointer(call->filter, filter_item->filter);
 		filter_item->filter = filter;
 
 		fail = false;
@@ -1948,7 +1816,6 @@ static int create_filter(struct ftrace_event_call *call,
  * and always remembers @filter_str.
  */
 static int create_system_filter(struct event_subsystem *system,
-				struct trace_array *tr,
 				char *filter_str, struct event_filter **filterp)
 {
 	struct event_filter *filter = NULL;
@@ -1957,7 +1824,7 @@ static int create_system_filter(struct event_subsystem *system,
 
 	err = create_filter_start(filter_str, true, &ps, &filter);
 	if (!err) {
-		err = replace_system_preds(system, tr, ps, filter_str);
+		err = replace_system_preds(system, ps, filter_str);
 		if (!err) {
 			/* System filters just show a default message */
 			kfree(filter->filter_string);
@@ -1973,25 +1840,20 @@ static int create_system_filter(struct event_subsystem *system,
 }
 
 /* caller must hold event_mutex */
-int apply_event_filter(struct ftrace_event_file *file, char *filter_string)
+int apply_event_filter(struct ftrace_event_call *call, char *filter_string)
 {
-	struct ftrace_event_call *call = file->event_call;
 	struct event_filter *filter;
 	int err;
 
 	if (!strcmp(strstrip(filter_string), "0")) {
-		filter_disable(file);
-		filter = event_filter(file);
-
+		filter_disable(call);
+		filter = call->filter;
 		if (!filter)
 			return 0;
-
-		event_clear_filter(file);
-
+		RCU_INIT_POINTER(call->filter, NULL);
 		/* Make sure the filter is not being used */
 		synchronize_sched();
 		__free_filter(filter);
-
 		return 0;
 	}
 
@@ -2004,15 +1866,14 @@ int apply_event_filter(struct ftrace_event_file *file, char *filter_string)
 	 * string
 	 */
 	if (filter) {
-		struct event_filter *tmp;
+		struct event_filter *tmp = call->filter;
 
-		tmp = event_filter(file);
 		if (!err)
-			event_set_filtered_flag(file);
+			call->flags |= TRACE_EVENT_FL_FILTERED;
 		else
-			filter_disable(file);
+			filter_disable(call);
 
-		event_set_filter(file, filter);
+		rcu_assign_pointer(call->filter, filter);
 
 		if (tmp) {
 			/* Make sure the call is done with the filter */
@@ -2028,7 +1889,6 @@ int apply_subsystem_event_filter(struct ftrace_subsystem_dir *dir,
 				 char *filter_string)
 {
 	struct event_subsystem *system = dir->subsystem;
-	struct trace_array *tr = dir->tr;
 	struct event_filter *filter;
 	int err = 0;
 
@@ -2041,18 +1901,18 @@ int apply_subsystem_event_filter(struct ftrace_subsystem_dir *dir,
 	}
 
 	if (!strcmp(strstrip(filter_string), "0")) {
-		filter_free_subsystem_preds(system, tr);
+		filter_free_subsystem_preds(system);
 		remove_filter_string(system->filter);
 		filter = system->filter;
 		system->filter = NULL;
 		/* Ensure all filters are no longer used */
 		synchronize_sched();
-		filter_free_subsystem_filters(system, tr);
+		filter_free_subsystem_filters(system);
 		__free_filter(filter);
 		goto out_unlock;
 	}
 
-	err = create_system_filter(system, tr, filter_string, &filter);
+	err = create_system_filter(system, filter_string, &filter);
 	if (filter) {
 		/*
 		 * No event actually uses the system filter

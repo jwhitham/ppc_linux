@@ -1147,7 +1147,7 @@ static void ufx_free_framebuffer_work(struct work_struct *work)
 
 	fb_destroy_modelist(&info->modelist);
 
-	dev->info = NULL;
+	dev->info = 0;
 
 	/* Assume info structure is freed after this point */
 	framebuffer_release(info);

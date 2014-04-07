@@ -1108,16 +1108,14 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case FBIOPUT_VSCREENINFO:
 		if (copy_from_user(&var, argp, sizeof(var)))
 			return -EFAULT;
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		info->flags |= FBINFO_MISC_USEREVENT;
 		ret = fb_set_var(info, &var);
 		info->flags &= ~FBINFO_MISC_USEREVENT;
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		if (!ret && copy_to_user(argp, &var, sizeof(var)))
 			ret = -EFAULT;
 		break;
@@ -1146,14 +1144,12 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case FBIOPAN_DISPLAY:
 		if (copy_from_user(&var, argp, sizeof(var)))
 			return -EFAULT;
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		ret = fb_pan_display(info, &var);
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		if (ret == 0 && copy_to_user(argp, &var, sizeof(var)))
 			return -EFAULT;
 		break;
@@ -1188,27 +1184,23 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			break;
 		}
 		event.data = &con2fb;
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		event.info = info;
 		ret = fb_notifier_call_chain(FB_EVENT_SET_CONSOLE_MAP, &event);
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		break;
 	case FBIOBLANK:
-		console_lock();
-		if (!lock_fb_info(info)) {
-			console_unlock();
+		if (!lock_fb_info(info))
 			return -ENODEV;
-		}
+		console_lock();
 		info->flags |= FBINFO_MISC_USEREVENT;
 		ret = fb_blank(info, arg);
 		info->flags &= ~FBINFO_MISC_USEREVENT;
-		unlock_fb_info(info);
 		console_unlock();
+		unlock_fb_info(info);
 		break;
 	default:
 		if (!lock_fb_info(info))
@@ -1668,15 +1660,12 @@ static int do_register_framebuffer(struct fb_info *fb_info)
 	registered_fb[i] = fb_info;
 
 	event.info = fb_info;
-	console_lock();
-	if (!lock_fb_info(fb_info)) {
-		console_unlock();
+	if (!lock_fb_info(fb_info))
 		return -ENODEV;
-	}
-
+	console_lock();
 	fb_notifier_call_chain(FB_EVENT_FB_REGISTERED, &event);
-	unlock_fb_info(fb_info);
 	console_unlock();
+	unlock_fb_info(fb_info);
 	return 0;
 }
 
@@ -1689,16 +1678,13 @@ static int do_unregister_framebuffer(struct fb_info *fb_info)
 	if (i < 0 || i >= FB_MAX || registered_fb[i] != fb_info)
 		return -EINVAL;
 
-	console_lock();
-	if (!lock_fb_info(fb_info)) {
-		console_unlock();
+	if (!lock_fb_info(fb_info))
 		return -ENODEV;
-	}
-
+	console_lock();
 	event.info = fb_info;
 	ret = fb_notifier_call_chain(FB_EVENT_FB_UNBIND, &event);
-	unlock_fb_info(fb_info);
 	console_unlock();
+	unlock_fb_info(fb_info);
 
 	if (ret)
 		return -EINVAL;

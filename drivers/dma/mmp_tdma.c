@@ -62,11 +62,6 @@
 #define TDCR_BURSTSZ_16B	(0x3 << 6)
 #define TDCR_BURSTSZ_32B	(0x6 << 6)
 #define TDCR_BURSTSZ_64B	(0x7 << 6)
-#define TDCR_BURSTSZ_SQU_1B		(0x5 << 6)
-#define TDCR_BURSTSZ_SQU_2B		(0x6 << 6)
-#define TDCR_BURSTSZ_SQU_4B		(0x0 << 6)
-#define TDCR_BURSTSZ_SQU_8B		(0x1 << 6)
-#define TDCR_BURSTSZ_SQU_16B	(0x3 << 6)
 #define TDCR_BURSTSZ_SQU_32B	(0x7 << 6)
 #define TDCR_BURSTSZ_128B	(0x5 << 6)
 #define TDCR_DSTDIR_MSK		(0x3 << 4)	/* Dst Direction */
@@ -163,7 +158,7 @@ static void mmp_tdma_disable_chan(struct mmp_tdma_chan *tdmac)
 	/* disable irq */
 	writel(0, tdmac->reg_base + TDIMR);
 
-	tdmac->status = DMA_COMPLETE;
+	tdmac->status = DMA_SUCCESS;
 }
 
 static void mmp_tdma_resume_chan(struct mmp_tdma_chan *tdmac)
@@ -233,31 +228,8 @@ static int mmp_tdma_config_chan(struct mmp_tdma_chan *tdmac)
 			return -EINVAL;
 		}
 	} else if (tdmac->type == PXA910_SQU) {
+		tdcr |= TDCR_BURSTSZ_SQU_32B;
 		tdcr |= TDCR_SSPMOD;
-
-		switch (tdmac->burst_sz) {
-		case 1:
-			tdcr |= TDCR_BURSTSZ_SQU_1B;
-			break;
-		case 2:
-			tdcr |= TDCR_BURSTSZ_SQU_2B;
-			break;
-		case 4:
-			tdcr |= TDCR_BURSTSZ_SQU_4B;
-			break;
-		case 8:
-			tdcr |= TDCR_BURSTSZ_SQU_8B;
-			break;
-		case 16:
-			tdcr |= TDCR_BURSTSZ_SQU_16B;
-			break;
-		case 32:
-			tdcr |= TDCR_BURSTSZ_SQU_32B;
-			break;
-		default:
-			dev_err(tdmac->dev, "mmp_tdma: unknown burst size.\n");
-			return -EINVAL;
-		}
 	}
 
 	writel(tdcr, tdmac->reg_base + TDCR);
@@ -352,7 +324,7 @@ static int mmp_tdma_alloc_chan_resources(struct dma_chan *chan)
 
 	if (tdmac->irq) {
 		ret = devm_request_irq(tdmac->dev, tdmac->irq,
-			mmp_tdma_chan_handler, 0, "tdma", tdmac);
+			mmp_tdma_chan_handler, IRQF_DISABLED, "tdma", tdmac);
 		if (ret)
 			return ret;
 	}
@@ -378,7 +350,12 @@ struct mmp_tdma_desc *mmp_tdma_alloc_descriptor(struct mmp_tdma_chan *tdmac)
 	if (!gpool)
 		return NULL;
 
-	tdmac->desc_arr = gen_pool_dma_alloc(gpool, size, &tdmac->desc_arr_phys);
+	tdmac->desc_arr = (void *)gen_pool_alloc(gpool, size);
+	if (!tdmac->desc_arr)
+		return NULL;
+
+	tdmac->desc_arr_phys = gen_pool_virt_to_phys(gpool,
+			(unsigned long)tdmac->desc_arr);
 
 	return tdmac->desc_arr;
 }
@@ -393,7 +370,7 @@ static struct dma_async_tx_descriptor *mmp_tdma_prep_dma_cyclic(
 	int num_periods = buf_len / period_len;
 	int i = 0, buf = 0;
 
-	if (tdmac->status != DMA_COMPLETE)
+	if (tdmac->status != DMA_SUCCESS)
 		return NULL;
 
 	if (period_len > TDMA_MAX_XFER_BYTES) {
@@ -527,7 +504,7 @@ static int mmp_tdma_chan_init(struct mmp_tdma_device *tdev,
 	tdmac->idx	   = idx;
 	tdmac->type	   = type;
 	tdmac->reg_base	   = (unsigned long)tdev->base + idx * 4;
-	tdmac->status = DMA_COMPLETE;
+	tdmac->status = DMA_SUCCESS;
 	tdev->tdmac[tdmac->idx] = tdmac;
 	tasklet_init(&tdmac->tasklet, dma_do_tasklet, (unsigned long)tdmac);
 
@@ -582,7 +559,7 @@ static int mmp_tdma_probe(struct platform_device *pdev)
 	if (irq_num != chan_num) {
 		irq = platform_get_irq(pdev, 0);
 		ret = devm_request_irq(&pdev->dev, irq,
-			mmp_tdma_int_handler, 0, "tdma", tdev);
+			mmp_tdma_int_handler, IRQF_DISABLED, "tdma", tdev);
 		if (ret)
 			return ret;
 	}

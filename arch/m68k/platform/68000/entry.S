@@ -27,6 +27,7 @@
 .globl ret_from_exception
 .globl ret_from_signal
 .globl sys_call_table
+.globl ret_from_interrupt
 .globl bad_interrupt
 .globl inthandler1
 .globl inthandler2
@@ -136,7 +137,7 @@ inthandler1:
 	movel	#65,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler2:
 	SAVE_ALL_INT
@@ -147,7 +148,7 @@ inthandler2:
 	movel	#66,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler3:
 	SAVE_ALL_INT
@@ -158,7 +159,7 @@ inthandler3:
 	movel	#67,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler4:
 	SAVE_ALL_INT
@@ -169,7 +170,7 @@ inthandler4:
 	movel	#68,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler5:
 	SAVE_ALL_INT
@@ -180,7 +181,7 @@ inthandler5:
 	movel	#69,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler6:
 	SAVE_ALL_INT
@@ -191,7 +192,7 @@ inthandler6:
 	movel	#70,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler7:
 	SAVE_ALL_INT
@@ -202,7 +203,7 @@ inthandler7:
 	movel	#71,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
 
 inthandler:
 	SAVE_ALL_INT
@@ -213,7 +214,23 @@ inthandler:
 	movel	%d0,%sp@- 		/*  put vector # on stack*/
 	jbsr	process_int		/*  process the IRQ*/
 3:     	addql	#8,%sp			/*  pop parameters off stack*/
-	bra	ret_from_exception
+	bra	ret_from_interrupt
+
+ret_from_interrupt:
+	jeq	1f
+2:
+	RESTORE_ALL
+1:
+	moveb	%sp@(PT_OFF_SR), %d0
+	and	#7, %d0
+	jhi	2b
+
+	/* check if we need to do software interrupts */
+	jeq	ret_from_exception
+
+	pea	ret_from_exception
+	jra	do_softirq
+
 
 /*
  * Handler for uninitialized and spurious interrupts.

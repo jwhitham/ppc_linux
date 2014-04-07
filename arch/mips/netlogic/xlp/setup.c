@@ -98,7 +98,7 @@ void __init plat_mem_setup(void)
 	pm_power_off	= nlm_linux_exit;
 
 	/* memory and bootargs from DT */
-	xlp_early_init_devtree();
+	early_init_devtree(initial_boot_params);
 
 	if (boot_mem_map.nr_map == 0) {
 		pr_info("Using DRAM BARs for memory map.\n");

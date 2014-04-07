@@ -469,10 +469,10 @@ cpufreq_cooling_register(const struct cpumask *clip_cpus)
 
 	cool_dev = thermal_cooling_device_register(dev_name, cpufreq_dev,
 						   &cpufreq_cooling_ops);
-	if (IS_ERR(cool_dev)) {
+	if (!cool_dev) {
 		release_idr(&cpufreq_idr, cpufreq_dev->id);
 		kfree(cpufreq_dev);
-		return cool_dev;
+		return ERR_PTR(-EINVAL);
 	}
 	cpufreq_dev->cool_dev = cool_dev;
 	cpufreq_dev->cpufreq_state = 0;

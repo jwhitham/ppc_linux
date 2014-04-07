@@ -3080,6 +3080,7 @@ static void pch_udc_remove(struct pci_dev *pdev)
 	if (dev->active)
 		pci_disable_device(pdev);
 	kfree(dev);
+	pci_set_drvdata(pdev, NULL);
 }
 
 #ifdef CONFIG_PM

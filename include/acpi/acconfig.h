@@ -83,9 +83,7 @@
  * Should the subsystem abort the loading of an ACPI table if the
  * table checksum is incorrect?
  */
-#ifndef ACPI_CHECKSUM_ABORT
 #define ACPI_CHECKSUM_ABORT             FALSE
-#endif
 
 /*
  * Generate a version of ACPICA that only supports "reduced hardware"
@@ -102,9 +100,7 @@
  *      ACPI PM timer
  *      FACS table (Waking vectors and Global Lock)
  */
-#ifndef ACPI_REDUCED_HARDWARE
 #define ACPI_REDUCED_HARDWARE           FALSE
-#endif
 
 /******************************************************************************
  *

@@ -267,8 +267,6 @@ static inline void tracepoint_synchronize_unregister(void)
 
 #define TRACE_EVENT_FLAGS(event, flag)
 
-#define TRACE_EVENT_PERF_PERM(event, expr...)
-
 #endif /* DECLARE_TRACE */
 
 #ifndef TRACE_EVENT
@@ -400,7 +398,5 @@ static inline void tracepoint_synchronize_unregister(void)
 				PARAMS(args), PARAMS(cond))
 
 #define TRACE_EVENT_FLAGS(event, flag)
-
-#define TRACE_EVENT_PERF_PERM(event, expr...)
 
 #endif /* ifdef TRACE_EVENT (see note above) */

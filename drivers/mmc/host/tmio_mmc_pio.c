@@ -1145,9 +1145,12 @@ int tmio_mmc_host_suspend(struct device *dev)
 {
 	struct mmc_host *mmc = dev_get_drvdata(dev);
 	struct tmio_mmc_host *host = mmc_priv(mmc);
+	int ret = mmc_suspend_host(mmc);
 
-	tmio_mmc_disable_mmc_irqs(host, TMIO_MASK_ALL);
-	return 0;
+	if (!ret)
+		tmio_mmc_disable_mmc_irqs(host, TMIO_MASK_ALL);
+
+	return ret;
 }
 EXPORT_SYMBOL(tmio_mmc_host_suspend);
 
@@ -1160,7 +1163,7 @@ int tmio_mmc_host_resume(struct device *dev)
 
 	/* The MMC core will perform the complete set up */
 	host->resuming = true;
-	return 0;
+	return mmc_resume_host(mmc);
 }
 EXPORT_SYMBOL(tmio_mmc_host_resume);
 

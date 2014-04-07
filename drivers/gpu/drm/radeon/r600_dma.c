@@ -311,7 +311,7 @@ void r600_dma_fence_ring_emit(struct radeon_device *rdev,
  * Add a DMA semaphore packet to the ring wait on or signal
  * other rings (r6xx-SI).
  */
-bool r600_dma_semaphore_ring_emit(struct radeon_device *rdev,
+void r600_dma_semaphore_ring_emit(struct radeon_device *rdev,
 				  struct radeon_ring *ring,
 				  struct radeon_semaphore *semaphore,
 				  bool emit_wait)
@@ -322,8 +322,6 @@ bool r600_dma_semaphore_ring_emit(struct radeon_device *rdev,
 	radeon_ring_write(ring, DMA_PACKET(DMA_PACKET_SEMAPHORE, 0, s, 0));
 	radeon_ring_write(ring, addr & 0xfffffffc);
 	radeon_ring_write(ring, upper_32_bits(addr) & 0xff);
-
-	return true;
 }
 
 /**
@@ -464,8 +462,13 @@ int r600_copy_dma(struct radeon_device *rdev,
 		return r;
 	}
 
-	radeon_semaphore_sync_to(sem, *fence);
-	radeon_semaphore_sync_rings(rdev, sem, ring->idx);
+	if (radeon_fence_need_sync(*fence, ring->idx)) {
+		radeon_semaphore_sync_rings(rdev, sem, (*fence)->ring,
+					    ring->idx);
+		radeon_fence_note_sync(*fence, ring->idx);
+	} else {
+		radeon_semaphore_free(rdev, &sem, NULL);
+	}
 
 	for (i = 0; i < num_loops; i++) {
 		cur_size_in_dw = size_in_dw;

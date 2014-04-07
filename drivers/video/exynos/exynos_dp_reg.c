@@ -14,6 +14,8 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 
+#include <video/exynos_dp.h>
+
 #include "exynos_dp_core.h"
 #include "exynos_dp_reg.h"
 

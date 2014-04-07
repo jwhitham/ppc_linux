@@ -283,7 +283,6 @@ REGULATOR
   devm_regulator_get()
   devm_regulator_put()
   devm_regulator_bulk_get()
-  devm_regulator_register()
 
 CLOCK
   devm_clk_get()
@@ -303,6 +302,3 @@ PHY
 
 SLAVE DMA ENGINE
   devm_acpi_dma_controller_register()
-
-SPI
-  devm_spi_register_master()

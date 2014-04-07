@@ -10,8 +10,6 @@
 #include <linux/of_fdt.h>
 #include <linux/bootmem.h>
 
-#include <asm/prom.h>
-
 #include <asm/mips-boards/generic.h>
 
 const char *get_system_type(void)

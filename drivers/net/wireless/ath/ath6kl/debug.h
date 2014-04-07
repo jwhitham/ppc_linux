@@ -50,10 +50,11 @@ enum ATH6K_DEBUG_MASK {
 };
 
 extern unsigned int debug_mask;
-__printf(2, 3) int ath6kl_printk(const char *level, const char *fmt, ...);
-__printf(1, 2) int ath6kl_info(const char *fmt, ...);
-__printf(1, 2) int ath6kl_err(const char *fmt, ...);
-__printf(1, 2) int ath6kl_warn(const char *fmt, ...);
+extern __printf(2, 3)
+int ath6kl_printk(const char *level, const char *fmt, ...);
+extern __printf(1, 2) int ath6kl_info(const char *fmt, ...);
+extern __printf(1, 2) int ath6kl_err(const char *fmt, ...);
+extern __printf(1, 2) int ath6kl_warn(const char *fmt, ...);
 
 enum ath6kl_war {
 	ATH6KL_WAR_INVALID_RATE,

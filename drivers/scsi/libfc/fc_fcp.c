@@ -902,8 +902,7 @@ static void fc_fcp_resp(struct fc_fcp_pkt *fsp, struct fc_frame *fp)
 	/*
 	 * Check for missing or extra data frames.
 	 */
-	if (unlikely(fsp->cdb_status == SAM_STAT_GOOD &&
-		     fsp->xfer_len != expected_len)) {
+	if (unlikely(fsp->xfer_len != expected_len)) {
 		if (fsp->xfer_len < expected_len) {
 			/*
 			 * Some data may be queued locally,
@@ -956,11 +955,12 @@ static void fc_fcp_complete_locked(struct fc_fcp_pkt *fsp)
 		 * Test for transport underrun, independent of response
 		 * underrun status.
 		 */
-		if (fsp->cdb_status == SAM_STAT_GOOD &&
-		    fsp->xfer_len < fsp->data_len && !fsp->io_status &&
+		if (fsp->xfer_len < fsp->data_len && !fsp->io_status &&
 		    (!(fsp->scsi_comp_flags & FCP_RESID_UNDER) ||
-		     fsp->xfer_len < fsp->data_len - fsp->scsi_resid))
+		     fsp->xfer_len < fsp->data_len - fsp->scsi_resid)) {
 			fsp->status_code = FC_DATA_UNDRUN;
+			fsp->io_status = 0;
+		}
 	}
 
 	seq = fsp->seq_ptr;

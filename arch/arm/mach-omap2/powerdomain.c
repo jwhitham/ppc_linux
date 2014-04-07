@@ -128,8 +128,7 @@ skip_voltdm:
 	for (i = 0; i < pwrdm->banks; i++)
 		pwrdm->ret_mem_off_counter[i] = 0;
 
-	if (arch_pwrdm && arch_pwrdm->pwrdm_wait_transition)
-		arch_pwrdm->pwrdm_wait_transition(pwrdm);
+	arch_pwrdm->pwrdm_wait_transition(pwrdm);
 	pwrdm->state = pwrdm_read_pwrst(pwrdm);
 	pwrdm->state_counter[pwrdm->state] = 1;
 

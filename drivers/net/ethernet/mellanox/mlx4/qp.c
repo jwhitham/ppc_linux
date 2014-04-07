@@ -480,7 +480,8 @@ int mlx4_init_qp_table(struct mlx4_dev *dev)
 	*/
 
 	err = mlx4_bitmap_init(&qp_table->bitmap, dev->caps.num_qps,
-			       (1 << 23) - 1, mlx4_num_reserved_sqps(dev),
+			       (1 << 23) - 1, dev->phys_caps.base_sqpn + 8 +
+			       16 * MLX4_MFUNC_MAX * !!mlx4_is_master(dev),
 			       reserved_from_top);
 	if (err)
 		return err;

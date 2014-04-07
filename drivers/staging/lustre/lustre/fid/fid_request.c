@@ -548,7 +548,9 @@ static int __init fid_mod_init(void)
 	seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
 					     proc_lustre_root,
 					     NULL, NULL);
-	return PTR_ERR_OR_ZERO(seq_type_proc_dir);
+	if (IS_ERR(seq_type_proc_dir))
+		return PTR_ERR(seq_type_proc_dir);
+	return 0;
 }
 
 static void __exit fid_mod_exit(void)

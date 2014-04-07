@@ -17,5 +17,5 @@ util/xyarray.c
 util/cgroup.c
 util/rblist.c
 util/strlist.c
-util/fs.c
+util/sysfs.c
 ../../lib/rbtree.c

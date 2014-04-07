@@ -197,9 +197,6 @@ struct audit_context {
 			int			fd;
 			int			flags;
 		} mmap;
-		struct {
-			int			argc;
-		} execve;
 	};
 	int fds[2];
 

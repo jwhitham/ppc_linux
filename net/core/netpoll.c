@@ -636,9 +636,8 @@ static void netpoll_neigh_reply(struct sk_buff *skb, struct netpoll_info *npinfo
 
 			netpoll_send_skb(np, send_skb);
 
-			/* If there are several rx_skb_hooks for the same
-			 * address we're fine by sending a single reply
-			 */
+			/* If there are several rx_hooks for the same address,
+			   we're fine by sending a single reply */
 			break;
 		}
 		spin_unlock_irqrestore(&npinfo->rx_lock, flags);
@@ -720,9 +719,8 @@ static void netpoll_neigh_reply(struct sk_buff *skb, struct netpoll_info *npinfo
 
 			netpoll_send_skb(np, send_skb);
 
-			/* If there are several rx_skb_hooks for the same
-			 * address, we're fine by sending a single reply
-			 */
+			/* If there are several rx_hooks for the same address,
+			   we're fine by sending a single reply */
 			break;
 		}
 		spin_unlock_irqrestore(&npinfo->rx_lock, flags);
@@ -758,12 +756,11 @@ static bool pkt_is_ns(struct sk_buff *skb)
 
 int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 {
-	int proto, len, ulen, data_len;
-	int hits = 0, offset;
+	int proto, len, ulen;
+	int hits = 0;
 	const struct iphdr *iph;
 	struct udphdr *uh;
 	struct netpoll *np, *tmp;
-	uint16_t source;
 
 	if (list_empty(&npinfo->rx_np))
 		goto out;
@@ -823,10 +820,7 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 
 		len -= iph->ihl*4;
 		uh = (struct udphdr *)(((char *)iph) + iph->ihl*4);
-		offset = (unsigned char *)(uh + 1) - skb->data;
 		ulen = ntohs(uh->len);
-		data_len = skb->len - offset;
-		source = ntohs(uh->source);
 
 		if (ulen != len)
 			goto out;
@@ -840,7 +834,9 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 			if (np->local_port && np->local_port != ntohs(uh->dest))
 				continue;
 
-			np->rx_skb_hook(np, source, skb, offset, data_len);
+			np->rx_hook(np, ntohs(uh->source),
+				       (char *)(uh+1),
+				       ulen - sizeof(struct udphdr));
 			hits++;
 		}
 	} else {
@@ -863,10 +859,7 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 		if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 			goto out;
 		uh = udp_hdr(skb);
-		offset = (unsigned char *)(uh + 1) - skb->data;
 		ulen = ntohs(uh->len);
-		data_len = skb->len - offset;
-		source = ntohs(uh->source);
 		if (ulen != skb->len)
 			goto out;
 		if (udp6_csum_init(skb, uh, IPPROTO_UDP))
@@ -879,7 +872,9 @@ int __netpoll_rx(struct sk_buff *skb, struct netpoll_info *npinfo)
 			if (np->local_port && np->local_port != ntohs(uh->dest))
 				continue;
 
-			np->rx_skb_hook(np, source, skb, offset, data_len);
+			np->rx_hook(np, ntohs(uh->source),
+				       (char *)(uh+1),
+				       ulen - sizeof(struct udphdr));
 			hits++;
 		}
 #endif
@@ -1067,7 +1062,7 @@ int __netpoll_setup(struct netpoll *np, struct net_device *ndev, gfp_t gfp)
 
 	npinfo->netpoll = np;
 
-	if (np->rx_skb_hook) {
+	if (np->rx_hook) {
 		spin_lock_irqsave(&npinfo->rx_lock, flags);
 		npinfo->rx_flags |= NETPOLL_RX_ENABLED;
 		list_add_tail(&np->rx, &npinfo->rx_np);

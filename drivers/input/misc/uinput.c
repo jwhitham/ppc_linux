@@ -430,30 +430,20 @@ static int uinput_setup_device(struct uinput_device *udev,
 	return retval;
 }
 
-static ssize_t uinput_inject_events(struct uinput_device *udev,
-				    const char __user *buffer, size_t count)
+static ssize_t uinput_inject_event(struct uinput_device *udev,
+				   const char __user *buffer, size_t count)
 {
 	struct input_event ev;
-	size_t bytes = 0;
 
-	if (count != 0 && count < input_event_size())
+	if (count < input_event_size())
 		return -EINVAL;
 
-	while (bytes + input_event_size() <= count) {
-		/*
-		 * Note that even if some events were fetched successfully
-		 * we are still going to return EFAULT instead of partial
-		 * count to let userspace know that it got it's buffers
-		 * all wrong.
-		 */
-		if (input_event_from_user(buffer + bytes, &ev))
-			return -EFAULT;
+	if (input_event_from_user(buffer, &ev))
+		return -EFAULT;
 
-		input_event(udev->dev, ev.type, ev.code, ev.value);
-		bytes += input_event_size();
-	}
+	input_event(udev->dev, ev.type, ev.code, ev.value);
 
-	return bytes;
+	return input_event_size();
 }
 
 static ssize_t uinput_write(struct file *file, const char __user *buffer,
@@ -470,7 +460,7 @@ static ssize_t uinput_write(struct file *file, const char __user *buffer,
 		return retval;
 
 	retval = udev->state == UIST_CREATED ?
-			uinput_inject_events(udev, buffer, count) :
+			uinput_inject_event(udev, buffer, count) :
 			uinput_setup_device(udev, buffer, count);
 
 	mutex_unlock(&udev->mutex);

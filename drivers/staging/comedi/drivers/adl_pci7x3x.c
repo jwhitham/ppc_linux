@@ -112,10 +112,21 @@ static int adl_pci7x3x_do_insn_bits(struct comedi_device *dev,
 				    unsigned int *data)
 {
 	unsigned long reg = (unsigned long)s->private;
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
 
-	if (comedi_dio_update_state(s, data))
+	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
+
 		outl(s->state, dev->iobase + reg);
+	}
 
+	/*
+	 * NOTE: The output register is not readable.
+	 * This returned state will not be correct until all the
+	 * outputs have been updated.
+	 */
 	data[1] = s->state;
 
 	return insn->n;

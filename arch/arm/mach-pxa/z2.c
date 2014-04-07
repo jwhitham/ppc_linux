@@ -206,7 +206,6 @@ static struct platform_pwm_backlight_data z2_backlight_data[] = {
 		.max_brightness	= 1023,
 		.dft_brightness	= 0,
 		.pwm_period_ns	= 1260320,
-		.enable_gpio	= -1,
 	},
 	[1] = {
 		/* LCD Backlight */
@@ -214,7 +213,6 @@ static struct platform_pwm_backlight_data z2_backlight_data[] = {
 		.max_brightness	= 1023,
 		.dft_brightness	= 512,
 		.pwm_period_ns	= 1260320,
-		.enable_gpio	= -1,
 	},
 };
 

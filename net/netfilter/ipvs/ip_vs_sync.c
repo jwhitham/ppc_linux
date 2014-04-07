@@ -1637,9 +1637,12 @@ static int sync_thread_master(void *data)
 			continue;
 		}
 		while (ip_vs_send_sync_msg(tinfo->sock, sb->mesg) < 0) {
-			int ret = __wait_event_interruptible(*sk_sleep(sk),
+			int ret = 0;
+
+			__wait_event_interruptible(*sk_sleep(sk),
 						   sock_writeable(sk) ||
-						   kthread_should_stop());
+						   kthread_should_stop(),
+						   ret);
 			if (unlikely(kthread_should_stop()))
 				goto done;
 		}

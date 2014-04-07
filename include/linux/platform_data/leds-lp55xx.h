@@ -22,7 +22,6 @@
 
 struct lp55xx_led_config {
 	const char *name;
-	const char *default_trigger;
 	u8 chan_nr;
 	u8 led_current; /* mA x10, 0 if led is not connected */
 	u8 max_current;
@@ -67,8 +66,10 @@ struct lp55xx_platform_data {
 	/* Clock configuration */
 	u8 clock_mode;
 
-	/* optional enable GPIO */
-	int enable_gpio;
+	/* Platform specific functions */
+	int (*setup_resources)(void);
+	void (*release_resources)(void);
+	void (*enable)(bool state);
 
 	/* Predefined pattern data */
 	struct lp55xx_predef_pattern *patterns;

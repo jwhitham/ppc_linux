@@ -28,7 +28,6 @@
 #include <linux/types.h>
 #include <linux/crypto.h>
 #include <linux/err.h>
-#include <crypto/ablk_helper.h>
 #include <crypto/algapi.h>
 #include <crypto/twofish.h>
 #include <crypto/cryptd.h>
@@ -40,6 +39,7 @@
 #include <asm/xcr.h>
 #include <asm/xsave.h>
 #include <asm/crypto/twofish.h>
+#include <asm/crypto/ablk_helper.h>
 #include <asm/crypto/glue_helper.h>
 #include <crypto/scatterwalk.h>
 #include <linux/workqueue.h>

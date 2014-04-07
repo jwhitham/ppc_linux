@@ -16,8 +16,6 @@
 #include <linux/fsl_devices.h>
 #include <linux/mm.h>
 #include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/interrupt.h>
 #include <linux/err.h>
@@ -232,7 +230,7 @@ static int fsl_espi_bufs(struct spi_device *spi, struct spi_transfer *t)
 	mpc8xxx_spi->tx = t->tx_buf;
 	mpc8xxx_spi->rx = t->rx_buf;
 
-	reinit_completion(&mpc8xxx_spi->done);
+	INIT_COMPLETION(mpc8xxx_spi->done);
 
 	/* Set SPCOM[CS] and SPCOM[TRANLEN] field */
 	if ((t->len - 1) > SPCOM_TRANLEN_MAX) {
@@ -291,8 +289,8 @@ static void fsl_espi_do_trans(struct spi_message *m,
 		if ((first->bits_per_word != t->bits_per_word) ||
 			(first->speed_hz != t->speed_hz)) {
 			espi_trans->status = -EINVAL;
-			dev_err(mspi->dev,
-				"bits_per_word/speed_hz should be same for the same SPI transfer\n");
+			dev_err(mspi->dev, "bits_per_word/speed_hz should be"
+					" same for the same SPI transfer\n");
 			return;
 		}
 
@@ -689,7 +687,7 @@ static int of_fsl_espi_probe(struct platform_device *ofdev)
 	struct device_node *np = ofdev->dev.of_node;
 	struct spi_master *master;
 	struct resource mem;
-	unsigned int irq;
+	struct resource irq;
 	int ret = -ENOMEM;
 
 	ret = of_mpc8xxx_spi_probe(ofdev);
@@ -704,13 +702,13 @@ static int of_fsl_espi_probe(struct platform_device *ofdev)
 	if (ret)
 		goto err;
 
-	irq = irq_of_parse_and_map(np, 0);
+	ret = of_irq_to_resource(np, 0, &irq);
 	if (!ret) {
 		ret = -EINVAL;
 		goto err;
 	}
 
-	master = fsl_espi_probe(dev, &mem, irq);
+	master = fsl_espi_probe(dev, &mem, irq.start);
 	if (IS_ERR(master)) {
 		ret = PTR_ERR(master);
 		goto err;

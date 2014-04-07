@@ -307,8 +307,6 @@ int regcache_sync(struct regmap *map)
 	if (!map->cache_dirty)
 		goto out;
 
-	map->async = true;
-
 	/* Apply any patch first */
 	map->cache_bypass = 1;
 	for (i = 0; i < map->patch_regs; i++) {
@@ -334,14 +332,10 @@ int regcache_sync(struct regmap *map)
 		map->cache_dirty = false;
 
 out:
+	trace_regcache_sync(map->dev, name, "stop");
 	/* Restore the bypass state */
-	map->async = false;
 	map->cache_bypass = bypass;
 	map->unlock(map->lock_arg);
-
-	regmap_async_complete(map);
-
-	trace_regcache_sync(map->dev, name, "stop");
 
 	return ret;
 }
@@ -381,22 +375,16 @@ int regcache_sync_region(struct regmap *map, unsigned int min,
 	if (!map->cache_dirty)
 		goto out;
 
-	map->async = true;
-
 	if (map->cache_ops->sync)
 		ret = map->cache_ops->sync(map, min, max);
 	else
 		ret = regcache_default_sync(map, min, max);
 
 out:
+	trace_regcache_sync(map->dev, name, "stop region");
 	/* Restore the bypass state */
 	map->cache_bypass = bypass;
-	map->async = false;
 	map->unlock(map->lock_arg);
-
-	regmap_async_complete(map);
-
-	trace_regcache_sync(map->dev, name, "stop region");
 
 	return ret;
 }
@@ -643,7 +631,8 @@ static int regcache_sync_block_raw_flush(struct regmap *map, const void **data,
 
 	map->cache_bypass = 1;
 
-	ret = _regmap_raw_write(map, base, *data, count * val_bytes);
+	ret = _regmap_raw_write(map, base, *data, count * val_bytes,
+				false);
 
 	map->cache_bypass = 0;
 

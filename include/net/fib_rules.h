@@ -115,13 +115,14 @@ static inline u32 frh_get_table(struct fib_rule_hdr *frh, struct nlattr **nla)
 	return frh->table;
 }
 
-struct fib_rules_ops *fib_rules_register(const struct fib_rules_ops *,
-					 struct net *);
-void fib_rules_unregister(struct fib_rules_ops *);
+extern struct fib_rules_ops *fib_rules_register(const struct fib_rules_ops *, struct net *);
+extern void fib_rules_unregister(struct fib_rules_ops *);
 
-int fib_rules_lookup(struct fib_rules_ops *, struct flowi *, int flags,
-		     struct fib_lookup_arg *);
-int fib_default_rule_add(struct fib_rules_ops *, u32 pref, u32 table,
-			 u32 flags);
-u32 fib_default_rule_pref(struct fib_rules_ops *ops);
+extern int			fib_rules_lookup(struct fib_rules_ops *,
+						 struct flowi *, int flags,
+						 struct fib_lookup_arg *);
+extern int			fib_default_rule_add(struct fib_rules_ops *,
+						     u32 pref, u32 table,
+						     u32 flags);
+extern u32			fib_default_rule_pref(struct fib_rules_ops *ops);
 #endif

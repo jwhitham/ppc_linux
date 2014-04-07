@@ -233,7 +233,7 @@ static const struct tnt tnts[] = {
  */
 const char *print_tainted(void)
 {
-	static char buf[ARRAY_SIZE(tnts) + sizeof("Tainted: ")];
+	static char buf[ARRAY_SIZE(tnts) + sizeof("Tainted: ") + 1];
 
 	if (tainted_mask) {
 		char *s;

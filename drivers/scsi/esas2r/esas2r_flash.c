@@ -231,7 +231,7 @@ static bool load_image(struct esas2r_adapter *a, struct esas2r_request *rq)
 	 * RS_PENDING, FM API tasks will continue.
 	 */
 	rq->req_stat = RS_PENDING;
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		/* not suppported for now */;
 	else
 		build_flash_msg(a, rq);
@@ -315,7 +315,7 @@ static bool complete_fmapi_req(struct esas2r_adapter *a,
 		memset(fc->scratch, 0, FM_BUF_SZ);
 
 	esas2r_enable_heartbeat(a);
-	clear_bit(AF_FLASH_LOCK, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_FLASH_LOCK);
 	return false;
 }
 
@@ -526,7 +526,7 @@ no_cfg:
 			 * The download is complete.  If in degraded mode,
 			 * attempt a chip reset.
 			 */
-			if (test_bit(AF_DEGRADED_MODE, &a->flags))
+			if (a->flags & AF_DEGRADED_MODE)
 				esas2r_local_reset_adapter(a);
 
 			a->flash_ver = fi->cmp_hdr[CH_IT_BIOS].version;
@@ -890,7 +890,7 @@ bool esas2r_process_fs_ioctl(struct esas2r_adapter *a,
 		}
 	}
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags)) {
+	if (a->flags & AF_DEGRADED_MODE) {
 		fs->status = ATTO_STS_DEGRADED;
 		return false;
 	}
@@ -945,12 +945,8 @@ static bool esas2r_flash_access(struct esas2r_adapter *a, u32 function)
 
 	/* Now wait for the firmware to process it */
 	starttime = jiffies_to_msecs(jiffies);
-
-	if (test_bit(AF_CHPRST_PENDING, &a->flags) ||
-	    test_bit(AF_DISC_PENDING, &a->flags))
-		timeout = 40000;
-	else
-		timeout = 5000;
+	timeout = a->flags &
+		  (AF_CHPRST_PENDING | AF_DISC_PENDING) ? 40000 : 5000;
 
 	while (true) {
 		intstat = esas2r_read_register_dword(a, MU_INT_STATUS_OUT);
@@ -1012,7 +1008,7 @@ bool esas2r_read_flash_block(struct esas2r_adapter *a,
 		u32 offset;
 		u32 iatvr;
 
-		if (test_bit(AF2_SERIAL_FLASH, &a->flags2))
+		if (a->flags2 & AF2_SERIAL_FLASH)
 			iatvr = MW_DATA_ADDR_SER_FLASH + (from & -WINDOW_SIZE);
 		else
 			iatvr = MW_DATA_ADDR_PAR_FLASH + (from & -WINDOW_SIZE);
@@ -1240,9 +1236,9 @@ static void esas2r_nvram_callback(struct esas2r_adapter *a,
 	if (rq->req_stat != RS_PENDING) {
 		/* update the NVRAM state */
 		if (rq->req_stat == RS_SUCCESS)
-			set_bit(AF_NVR_VALID, &a->flags);
+			esas2r_lock_set_flags(&a->flags, AF_NVR_VALID);
 		else
-			clear_bit(AF_NVR_VALID, &a->flags);
+			esas2r_lock_clear_flags(&a->flags, AF_NVR_VALID);
 
 		esas2r_enable_heartbeat(a);
 
@@ -1262,7 +1258,7 @@ bool esas2r_nvram_write(struct esas2r_adapter *a, struct esas2r_request *rq,
 	u32 *sas_address_dwords = (u32 *)&sas_address_bytes[0];
 	struct atto_vda_flash_req *vrq = &rq->vrq->flash;
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		return false;
 
 	if (down_interruptible(&a->nvram_semaphore))
@@ -1306,7 +1302,7 @@ bool esas2r_nvram_write(struct esas2r_adapter *a, struct esas2r_request *rq,
 			       FLS_OFFSET_NVR,
 			       sizeof(struct esas2r_sas_nvram));
 
-	if (test_bit(AF_LEGACY_SGE_MODE, &a->flags)) {
+	if (a->flags & AF_LEGACY_SGE_MODE) {
 
 		vrq->data.sge[0].length =
 			cpu_to_le32(SGE_LAST |
@@ -1341,7 +1337,7 @@ bool esas2r_nvram_validate(struct esas2r_adapter *a)
 	} else if (n->version > SASNVR_VERSION) {
 		esas2r_hdebug("invalid NVRAM version");
 	} else {
-		set_bit(AF_NVR_VALID, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_NVR_VALID);
 		rslt = true;
 	}
 
@@ -1363,7 +1359,7 @@ void esas2r_nvram_set_defaults(struct esas2r_adapter *a)
 	struct esas2r_sas_nvram *n = a->nvram;
 	u32 time = jiffies_to_msecs(jiffies);
 
-	clear_bit(AF_NVR_VALID, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_NVR_VALID);
 	*n = default_sas_nvram;
 	n->sas_addr[3] |= 0x0F;
 	n->sas_addr[4] = HIBYTE(LOWORD(time));
@@ -1393,7 +1389,7 @@ bool esas2r_fm_api(struct esas2r_adapter *a, struct esas2r_flash_img *fi,
 	u8 j;
 	struct esas2r_component_header *ch;
 
-	if (test_and_set_bit(AF_FLASH_LOCK, &a->flags)) {
+	if (esas2r_lock_set_flags(&a->flags, AF_FLASH_LOCK) & AF_FLASH_LOCK) {
 		/* flag was already set */
 		fi->status = FI_STAT_BUSY;
 		return false;
@@ -1417,7 +1413,7 @@ bool esas2r_fm_api(struct esas2r_adapter *a, struct esas2r_flash_img *fi,
 		return complete_fmapi_req(a, rq, FI_STAT_IMG_VER);
 	}
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		return complete_fmapi_req(a, rq, FI_STAT_DEGRADED);
 
 	switch (fi->action) {

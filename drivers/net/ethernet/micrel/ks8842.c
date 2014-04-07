@@ -459,7 +459,8 @@ static int ks8842_tx_frame_dma(struct sk_buff *skb, struct net_device *netdev)
 		sg_dma_len(&ctl->sg) += 4 - sg_dma_len(&ctl->sg) % 4;
 
 	ctl->adesc = dmaengine_prep_slave_sg(ctl->chan,
-		&ctl->sg, 1, DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT);
+		&ctl->sg, 1, DMA_MEM_TO_DEV,
+		DMA_PREP_INTERRUPT | DMA_COMPL_SKIP_SRC_UNMAP);
 	if (!ctl->adesc)
 		return NETDEV_TX_BUSY;
 
@@ -570,7 +571,8 @@ static int __ks8842_start_new_rx_dma(struct net_device *netdev)
 		sg_dma_len(sg) = DMA_BUFFER_SIZE;
 
 		ctl->adesc = dmaengine_prep_slave_sg(ctl->chan,
-			sg, 1, DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT);
+			sg, 1, DMA_DEV_TO_MEM,
+			DMA_PREP_INTERRUPT | DMA_COMPL_SKIP_SRC_UNMAP);
 
 		if (!ctl->adesc)
 			goto out;

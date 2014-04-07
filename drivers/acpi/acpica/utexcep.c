@@ -41,9 +41,8 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
-#define EXPORT_ACPI_INTERFACES
-
 #define ACPI_DEFINE_EXCEPTION_TABLE
+#include <linux/export.h>
 #include <acpi/acpi.h>
 #include "accommon.h"
 

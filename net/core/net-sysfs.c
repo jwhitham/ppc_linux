@@ -1263,7 +1263,7 @@ static void netdev_release(struct device *d)
 	BUG_ON(dev->reg_state != NETREG_RELEASED);
 
 	kfree(dev->ifalias);
-	netdev_freemem(dev);
+	kfree((char *)dev - dev->padded);
 }
 
 static const void *net_namespace(struct device *d)
@@ -1344,19 +1344,17 @@ int netdev_register_kobject(struct net_device *net)
 	return error;
 }
 
-int netdev_class_create_file_ns(struct class_attribute *class_attr,
-				const void *ns)
+int netdev_class_create_file(struct class_attribute *class_attr)
 {
-	return class_create_file_ns(&net_class, class_attr, ns);
+	return class_create_file(&net_class, class_attr);
 }
-EXPORT_SYMBOL(netdev_class_create_file_ns);
+EXPORT_SYMBOL(netdev_class_create_file);
 
-void netdev_class_remove_file_ns(struct class_attribute *class_attr,
-				 const void *ns)
+void netdev_class_remove_file(struct class_attribute *class_attr)
 {
-	class_remove_file_ns(&net_class, class_attr, ns);
+	class_remove_file(&net_class, class_attr);
 }
-EXPORT_SYMBOL(netdev_class_remove_file_ns);
+EXPORT_SYMBOL(netdev_class_remove_file);
 
 int netdev_kobject_init(void)
 {

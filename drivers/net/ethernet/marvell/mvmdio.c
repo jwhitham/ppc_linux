@@ -4,9 +4,11 @@
  * Since the MDIO interface of Marvell network interfaces is shared
  * between all network interfaces, having a single driver allows to
  * handle concurrent accesses properly (you may have four Ethernet
- * ports, but they in fact share the same SMI interface to access
- * the MDIO bus). This driver is currently used by the mvneta and
- * mv643xx_eth drivers.
+ * ports, but they in fact share the same SMI interface to access the
+ * MDIO bus). Moreover, this MDIO interface code is similar between
+ * the mv643xx_eth driver and the mvneta driver. For now, it is only
+ * used by the mvneta driver, but it could later be used by the
+ * mv643xx_eth driver as well.
  *
  * Copyright (C) 2012 Marvell
  *
@@ -42,15 +44,6 @@
 #define  MVMDIO_ERR_INT_SMI_DONE	   0x00000010
 #define MVMDIO_ERR_INT_MASK		   0x0080
 
-/*
- * SMI Timeout measurements:
- * - Kirkwood 88F6281 (Globalscale Dreamplug): 45us to 95us (Interrupt)
- * - Armada 370       (Globalscale Mirabox):   41us to 43us (Polled)
- */
-#define MVMDIO_SMI_TIMEOUT		   1000 /* 1000us = 1ms */
-#define MVMDIO_SMI_POLL_INTERVAL_MIN	   45
-#define MVMDIO_SMI_POLL_INTERVAL_MAX	   55
-
 struct orion_mdio_dev {
 	struct mutex lock;
 	void __iomem *regs;
@@ -75,68 +68,77 @@ static int orion_mdio_smi_is_done(struct orion_mdio_dev *dev)
 static int orion_mdio_wait_ready(struct mii_bus *bus)
 {
 	struct orion_mdio_dev *dev = bus->priv;
-	unsigned long timeout = usecs_to_jiffies(MVMDIO_SMI_TIMEOUT);
-	unsigned long end = jiffies + timeout;
-	int timedout = 0;
+	int count;
 
-	while (1) {
-	        if (orion_mdio_smi_is_done(dev))
-			return 0;
-	        else if (timedout)
-			break;
+	if (dev->err_interrupt <= 0) {
+		count = 0;
+		while (1) {
+			if (orion_mdio_smi_is_done(dev))
+				break;
 
-	        if (dev->err_interrupt <= 0) {
-			usleep_range(MVMDIO_SMI_POLL_INTERVAL_MIN,
-				     MVMDIO_SMI_POLL_INTERVAL_MAX);
+			if (count > 100) {
+				dev_err(bus->parent,
+					"Timeout: SMI busy for too long\n");
+				return -ETIMEDOUT;
+			}
 
-			if (time_is_before_jiffies(end))
-				++timedout;
-	        } else {
+			udelay(10);
+			count++;
+		}
+	} else {
+		if (!orion_mdio_smi_is_done(dev)) {
 			wait_event_timeout(dev->smi_busy_wait,
-				           orion_mdio_smi_is_done(dev),
-				           timeout);
-
-			++timedout;
-	        }
+				orion_mdio_smi_is_done(dev),
+				msecs_to_jiffies(100));
+			if (!orion_mdio_smi_is_done(dev))
+				return -ETIMEDOUT;
+		}
 	}
 
-	dev_err(bus->parent, "Timeout: SMI busy for too long\n");
-	return  -ETIMEDOUT;
+	return 0;
 }
 
 static int orion_mdio_read(struct mii_bus *bus, int mii_id,
 			   int regnum)
 {
 	struct orion_mdio_dev *dev = bus->priv;
+	int count;
 	u32 val;
 	int ret;
 
 	mutex_lock(&dev->lock);
 
 	ret = orion_mdio_wait_ready(bus);
-	if (ret < 0)
-		goto out;
+	if (ret < 0) {
+		mutex_unlock(&dev->lock);
+		return ret;
+	}
 
 	writel(((mii_id << MVMDIO_SMI_PHY_ADDR_SHIFT) |
 		(regnum << MVMDIO_SMI_PHY_REG_SHIFT)  |
 		MVMDIO_SMI_READ_OPERATION),
 	       dev->regs);
 
-	ret = orion_mdio_wait_ready(bus);
-	if (ret < 0)
-		goto out;
+	/* Wait for the value to become available */
+	count = 0;
+	while (1) {
+		val = readl(dev->regs);
+		if (val & MVMDIO_SMI_READ_VALID)
+			break;
 
-	val = readl(dev->regs);
-	if (!(val & MVMDIO_SMI_READ_VALID)) {
-		dev_err(bus->parent, "SMI bus read not valid\n");
-		ret = -ENODEV;
-		goto out;
+		if (count > 100) {
+			dev_err(bus->parent, "Timeout when reading PHY\n");
+			mutex_unlock(&dev->lock);
+			return -ETIMEDOUT;
+		}
+
+		udelay(10);
+		count++;
 	}
 
-	ret = val & 0xFFFF;
-out:
 	mutex_unlock(&dev->lock);
-	return ret;
+
+	return val & 0xFFFF;
 }
 
 static int orion_mdio_write(struct mii_bus *bus, int mii_id,
@@ -148,8 +150,10 @@ static int orion_mdio_write(struct mii_bus *bus, int mii_id,
 	mutex_lock(&dev->lock);
 
 	ret = orion_mdio_wait_ready(bus);
-	if (ret < 0)
-		goto out;
+	if (ret < 0) {
+		mutex_unlock(&dev->lock);
+		return ret;
+	}
 
 	writel(((mii_id << MVMDIO_SMI_PHY_ADDR_SHIFT) |
 		(regnum << MVMDIO_SMI_PHY_REG_SHIFT)  |
@@ -157,9 +161,9 @@ static int orion_mdio_write(struct mii_bus *bus, int mii_id,
 		(value << MVMDIO_SMI_DATA_SHIFT)),
 	       dev->regs);
 
-out:
 	mutex_unlock(&dev->lock);
-	return ret;
+
+	return 0;
 }
 
 static int orion_mdio_reset(struct mii_bus *bus)

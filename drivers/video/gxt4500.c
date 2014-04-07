@@ -698,7 +698,8 @@ static int gxt4500_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		dev_err(&pdev->dev, "gxt4500: cannot register framebuffer\n");
 		goto err_free_cmap;
 	}
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       info->node, info->fix.id);
 
 	return 0;
 

@@ -483,7 +483,6 @@ struct mlx5_priv {
 	struct rb_root		page_root;
 	int			fw_pages;
 	int			reg_pages;
-	struct list_head	free_list;
 
 	struct mlx5_core_health health;
 
@@ -558,11 +557,9 @@ typedef void (*mlx5_cmd_cbk_t)(int status, void *context);
 struct mlx5_cmd_work_ent {
 	struct mlx5_cmd_msg    *in;
 	struct mlx5_cmd_msg    *out;
-	void		       *uout;
-	int			uout_size;
 	mlx5_cmd_cbk_t		callback;
 	void		       *context;
-	int			idx;
+	int idx;
 	struct completion	done;
 	struct mlx5_cmd        *cmd;
 	struct work_struct	work;
@@ -573,7 +570,6 @@ struct mlx5_cmd_work_ent {
 	u8			token;
 	struct timespec		ts1;
 	struct timespec		ts2;
-	u16			op;
 };
 
 struct mlx5_pas {
@@ -657,9 +653,6 @@ void mlx5_cmd_use_polling(struct mlx5_core_dev *dev);
 int mlx5_cmd_status_to_err(struct mlx5_outbox_hdr *hdr);
 int mlx5_cmd_exec(struct mlx5_core_dev *dev, void *in, int in_size, void *out,
 		  int out_size);
-int mlx5_cmd_exec_cb(struct mlx5_core_dev *dev, void *in, int in_size,
-		     void *out, int out_size, mlx5_cmd_cbk_t callback,
-		     void *context);
 int mlx5_cmd_alloc_uar(struct mlx5_core_dev *dev, u32 *uarn);
 int mlx5_cmd_free_uar(struct mlx5_core_dev *dev, u32 uarn);
 int mlx5_alloc_uuars(struct mlx5_core_dev *dev, struct mlx5_uuar_info *uuari);
@@ -683,9 +676,7 @@ int mlx5_core_query_srq(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 int mlx5_core_arm_srq(struct mlx5_core_dev *dev, struct mlx5_core_srq *srq,
 		      u16 lwm, int is_srq);
 int mlx5_core_create_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mr *mr,
-			  struct mlx5_create_mkey_mbox_in *in, int inlen,
-			  mlx5_cmd_cbk_t callback, void *context,
-			  struct mlx5_create_mkey_mbox_out *out);
+			  struct mlx5_create_mkey_mbox_in *in, int inlen);
 int mlx5_core_destroy_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mr *mr);
 int mlx5_core_query_mkey(struct mlx5_core_dev *dev, struct mlx5_core_mr *mr,
 			 struct mlx5_query_mkey_mbox_out *out, int outlen);
@@ -752,11 +743,6 @@ static inline u32 mlx5_mkey_to_idx(u32 mkey)
 static inline u32 mlx5_idx_to_mkey(u32 mkey_idx)
 {
 	return mkey_idx << 8;
-}
-
-static inline u8 mlx5_mkey_variant(u32 mkey)
-{
-	return mkey & 0xff;
 }
 
 enum {

@@ -352,11 +352,12 @@ struct pci9118_private {
 						 * on external start
 						 */
 	unsigned int ai_data_len;
-	unsigned short ao_data[2];		/* data output buffer */
+	short *ai_data;
+	short ao_data[2];			/* data output buffer */
 	unsigned int ai_scans;			/* number of scans to do */
 	char dma_doublebuf;			/* we can use double buffering */
 	unsigned int dma_actbuf;		/* which buffer is used now */
-	unsigned short *dmabuf_virt[2];		/*
+	short *dmabuf_virt[2];			/*
 						 * pointers to begin of
 						 * DMA buffer
 						 */
@@ -670,12 +671,13 @@ static int pci9118_insn_bits_di(struct comedi_device *dev,
 
 static int pci9118_insn_bits_do(struct comedi_device *dev,
 				struct comedi_subdevice *s,
-				struct comedi_insn *insn,
-				unsigned int *data)
+				struct comedi_insn *insn, unsigned int *data)
 {
-	if (comedi_dio_update_state(s, data))
+	if (data[0]) {
+		s->state &= ~data[0];
+		s->state |= (data[0] & data[1]);
 		outl(s->state & 0x0f, dev->iobase + PCI9118_DO);
-
+	}
 	data[1] = s->state;
 
 	return insn->n;
@@ -699,7 +701,7 @@ static void interrupt_pci9118_ai_mode4_switch(struct comedi_device *dev)
 
 static unsigned int defragment_dma_buffer(struct comedi_device *dev,
 					  struct comedi_subdevice *s,
-					  unsigned short *dma_buffer,
+					  short *dma_buffer,
 					  unsigned int num_samples)
 {
 	struct pci9118_private *devpriv = dev->private;
@@ -723,7 +725,7 @@ static unsigned int defragment_dma_buffer(struct comedi_device *dev,
 
 static int move_block_from_dma(struct comedi_device *dev,
 					struct comedi_subdevice *s,
-					unsigned short *dma_buffer,
+					short *dma_buffer,
 					unsigned int num_samples)
 {
 	struct pci9118_private *devpriv = dev->private;
@@ -791,8 +793,7 @@ static void pci9118_calc_divisors(char mode, struct comedi_device *dev,
 	case 4:
 		if (*tim2 < this_board->ai_ns_min)
 			*tim2 = this_board->ai_ns_min;
-		i8253_cascade_ns_to_timer(devpriv->i8254_osc_base,
-					  div1, div2,
+		i8253_cascade_ns_to_timer(devpriv->i8254_osc_base, div1, div2,
 					  tim2, flags & TRIG_ROUND_NEAREST);
 		break;
 	case 2:
@@ -924,7 +925,7 @@ static void pci9118_ai_munge(struct comedi_device *dev,
 {
 	struct pci9118_private *devpriv = dev->private;
 	unsigned int i, num_samples = num_bytes / sizeof(short);
-	unsigned short *array = data;
+	short *array = data;
 
 	for (i = 0; i < num_samples; i++) {
 		if (devpriv->usedma)
@@ -944,7 +945,7 @@ static void interrupt_pci9118_ai_onesample(struct comedi_device *dev,
 					   unsigned short int_daq)
 {
 	struct pci9118_private *devpriv = dev->private;
-	unsigned short sampl;
+	register short sampl;
 
 	s->async->events = 0;
 
@@ -1277,9 +1278,9 @@ static int pci9118_ai_cmdtest(struct comedi_device *dev,
 
 	if (cmd->scan_begin_src == TRIG_TIMER) {
 		tmp = cmd->scan_begin_arg;
-		i8253_cascade_ns_to_timer(devpriv->i8254_osc_base,
-					  &divisor1, &divisor2,
-					  &cmd->scan_begin_arg, cmd->flags);
+		i8253_cascade_ns_to_timer(devpriv->i8254_osc_base, &divisor1,
+					  &divisor2, &cmd->scan_begin_arg,
+					  cmd->flags & TRIG_ROUND_MASK);
 		if (cmd->scan_begin_arg < this_board->ai_ns_min)
 			cmd->scan_begin_arg = this_board->ai_ns_min;
 		if (tmp != cmd->scan_begin_arg)
@@ -1288,9 +1289,9 @@ static int pci9118_ai_cmdtest(struct comedi_device *dev,
 
 	if (cmd->convert_src & (TRIG_TIMER | TRIG_NOW)) {
 		tmp = cmd->convert_arg;
-		i8253_cascade_ns_to_timer(devpriv->i8254_osc_base,
-					  &divisor1, &divisor2,
-					  &cmd->convert_arg, cmd->flags);
+		i8253_cascade_ns_to_timer(devpriv->i8254_osc_base, &divisor1,
+					  &divisor2, &cmd->convert_arg,
+					  cmd->flags & TRIG_ROUND_MASK);
 		if (cmd->convert_arg < this_board->ai_ns_min)
 			cmd->convert_arg = this_board->ai_ns_min;
 		if (tmp != cmd->convert_arg)
@@ -1612,6 +1613,7 @@ static int pci9118_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 	devpriv->ai_n_chan = cmd->chanlist_len;
 	devpriv->ai_n_scanlen = cmd->scan_end_arg;
 	devpriv->ai_chanlist = cmd->chanlist;
+	devpriv->ai_data = s->async->prealloc_buf;
 	devpriv->ai_data_len = s->async->prealloc_bufsz;
 	devpriv->ai_timer1 = 0;
 	devpriv->ai_timer2 = 0;
@@ -1985,8 +1987,8 @@ static int pci9118_common_attach(struct comedi_device *dev, int disable_irq,
 		for (i = 0; i < 2; i++) {
 			for (pages = 4; pages >= 0; pages--) {
 				devpriv->dmabuf_virt[i] =
-				    (unsigned short *)
-				    __get_free_pages(GFP_KERNEL, pages);
+				    (short *)__get_free_pages(GFP_KERNEL,
+							      pages);
 				if (devpriv->dmabuf_virt[i])
 					break;
 			}
@@ -2073,6 +2075,7 @@ static int pci9118_common_attach(struct comedi_device *dev, int disable_irq,
 	s->maxdata = 1;
 	s->len_chanlist = 4;
 	s->range_table = &range_digital;
+	s->io_bits = 0;		/* all bits input */
 	s->insn_bits = pci9118_insn_bits_di;
 
 	s = &dev->subdevices[3];
@@ -2082,10 +2085,11 @@ static int pci9118_common_attach(struct comedi_device *dev, int disable_irq,
 	s->maxdata = 1;
 	s->len_chanlist = 4;
 	s->range_table = &range_digital;
+	s->io_bits = 0xf;	/* all bits output */
 	s->insn_bits = pci9118_insn_bits_do;
 
 	devpriv->valid = 1;
-	devpriv->i8254_osc_base = I8254_OSC_BASE_4MHZ;
+	devpriv->i8254_osc_base = 250;	/* 250ns=4MHz */
 	devpriv->ai_maskharderr = 0x10a;
 					/* default measure crash condition */
 	if (hw_err_mask)		/* disable some requested */

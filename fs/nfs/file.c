@@ -65,7 +65,9 @@ nfs_file_open(struct inode *inode, struct file *filp)
 {
 	int res;
 
-	dprintk("NFS: open file(%pD2)\n", filp);
+	dprintk("NFS: open file(%s/%s)\n",
+			filp->f_path.dentry->d_parent->d_name.name,
+			filp->f_path.dentry->d_name.name);
 
 	nfs_inc_stats(inode, NFSIOS_VFSOPEN);
 	res = nfs_check_flags(filp->f_flags);
@@ -79,7 +81,9 @@ nfs_file_open(struct inode *inode, struct file *filp)
 int
 nfs_file_release(struct inode *inode, struct file *filp)
 {
-	dprintk("NFS: release(%pD2)\n", filp);
+	dprintk("NFS: release(%s/%s)\n",
+			filp->f_path.dentry->d_parent->d_name.name,
+			filp->f_path.dentry->d_name.name);
 
 	nfs_inc_stats(inode, NFSIOS_VFSRELEASE);
 	return nfs_release(inode, filp);
@@ -119,8 +123,10 @@ force_reval:
 
 loff_t nfs_file_llseek(struct file *filp, loff_t offset, int whence)
 {
-	dprintk("NFS: llseek file(%pD2, %lld, %d)\n",
-			filp, offset, whence);
+	dprintk("NFS: llseek file(%s/%s, %lld, %d)\n",
+			filp->f_path.dentry->d_parent->d_name.name,
+			filp->f_path.dentry->d_name.name,
+			offset, whence);
 
 	/*
 	 * whence == SEEK_END || SEEK_DATA || SEEK_HOLE => we must revalidate
@@ -144,9 +150,12 @@ EXPORT_SYMBOL_GPL(nfs_file_llseek);
 int
 nfs_file_flush(struct file *file, fl_owner_t id)
 {
-	struct inode	*inode = file_inode(file);
+	struct dentry	*dentry = file->f_path.dentry;
+	struct inode	*inode = dentry->d_inode;
 
-	dprintk("NFS: flush(%pD2)\n", file);
+	dprintk("NFS: flush(%s/%s)\n",
+			dentry->d_parent->d_name.name,
+			dentry->d_name.name);
 
 	nfs_inc_stats(inode, NFSIOS_VFSFLUSH);
 	if ((file->f_mode & FMODE_WRITE) == 0)
@@ -168,14 +177,15 @@ ssize_t
 nfs_file_read(struct kiocb *iocb, const struct iovec *iov,
 		unsigned long nr_segs, loff_t pos)
 {
-	struct inode *inode = file_inode(iocb->ki_filp);
+	struct dentry * dentry = iocb->ki_filp->f_path.dentry;
+	struct inode * inode = dentry->d_inode;
 	ssize_t result;
 
 	if (iocb->ki_filp->f_flags & O_DIRECT)
 		return nfs_file_direct_read(iocb, iov, nr_segs, pos, true);
 
-	dprintk("NFS: read(%pD2, %lu@%lu)\n",
-		iocb->ki_filp,
+	dprintk("NFS: read(%s/%s, %lu@%lu)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name,
 		(unsigned long) iov_length(iov, nr_segs), (unsigned long) pos);
 
 	result = nfs_revalidate_mapping(inode, iocb->ki_filp->f_mapping);
@@ -193,11 +203,13 @@ nfs_file_splice_read(struct file *filp, loff_t *ppos,
 		     struct pipe_inode_info *pipe, size_t count,
 		     unsigned int flags)
 {
-	struct inode *inode = file_inode(filp);
+	struct dentry *dentry = filp->f_path.dentry;
+	struct inode *inode = dentry->d_inode;
 	ssize_t res;
 
-	dprintk("NFS: splice_read(%pD2, %lu@%Lu)\n",
-		filp, (unsigned long) count, (unsigned long long) *ppos);
+	dprintk("NFS: splice_read(%s/%s, %lu@%Lu)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name,
+		(unsigned long) count, (unsigned long long) *ppos);
 
 	res = nfs_revalidate_mapping(inode, filp->f_mapping);
 	if (!res) {
@@ -212,10 +224,12 @@ EXPORT_SYMBOL_GPL(nfs_file_splice_read);
 int
 nfs_file_mmap(struct file * file, struct vm_area_struct * vma)
 {
-	struct inode *inode = file_inode(file);
+	struct dentry *dentry = file->f_path.dentry;
+	struct inode *inode = dentry->d_inode;
 	int	status;
 
-	dprintk("NFS: mmap(%pD2)\n", file);
+	dprintk("NFS: mmap(%s/%s)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name);
 
 	/* Note: generic_file_mmap() returns ENOSYS on nommu systems
 	 *       so we call that before revalidating the mapping
@@ -244,12 +258,15 @@ EXPORT_SYMBOL_GPL(nfs_file_mmap);
 int
 nfs_file_fsync_commit(struct file *file, loff_t start, loff_t end, int datasync)
 {
+	struct dentry *dentry = file->f_path.dentry;
 	struct nfs_open_context *ctx = nfs_file_open_context(file);
-	struct inode *inode = file_inode(file);
+	struct inode *inode = dentry->d_inode;
 	int have_error, do_resend, status;
 	int ret = 0;
 
-	dprintk("NFS: fsync file(%pD2) datasync %d\n", file, datasync);
+	dprintk("NFS: fsync file(%s/%s) datasync %d\n",
+			dentry->d_parent->d_name.name, dentry->d_name.name,
+			datasync);
 
 	nfs_inc_stats(inode, NFSIOS_VFSFSYNC);
 	do_resend = test_and_clear_bit(NFS_CONTEXT_RESEND_WRITES, &ctx->flags);
@@ -354,8 +371,10 @@ static int nfs_write_begin(struct file *file, struct address_space *mapping,
 	struct page *page;
 	int once_thru = 0;
 
-	dfprintk(PAGECACHE, "NFS: write_begin(%pD2(%ld), %u@%lld)\n",
-		file, mapping->host->i_ino, len, (long long) pos);
+	dfprintk(PAGECACHE, "NFS: write_begin(%s/%s(%ld), %u@%lld)\n",
+		file->f_path.dentry->d_parent->d_name.name,
+		file->f_path.dentry->d_name.name,
+		mapping->host->i_ino, len, (long long) pos);
 
 start:
 	/*
@@ -395,8 +414,10 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 	struct nfs_open_context *ctx = nfs_file_open_context(file);
 	int status;
 
-	dfprintk(PAGECACHE, "NFS: write_end(%pD2(%ld), %u@%lld)\n",
-		file, mapping->host->i_ino, len, (long long) pos);
+	dfprintk(PAGECACHE, "NFS: write_end(%s/%s(%ld), %u@%lld)\n",
+		file->f_path.dentry->d_parent->d_name.name,
+		file->f_path.dentry->d_name.name,
+		mapping->host->i_ino, len, (long long) pos);
 
 	/*
 	 * Zero any uninitialised parts of the page, and then mark the page
@@ -580,21 +601,22 @@ static int nfs_vm_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct page *page = vmf->page;
 	struct file *filp = vma->vm_file;
-	struct inode *inode = file_inode(filp);
+	struct dentry *dentry = filp->f_path.dentry;
 	unsigned pagelen;
 	int ret = VM_FAULT_NOPAGE;
 	struct address_space *mapping;
 
-	dfprintk(PAGECACHE, "NFS: vm_page_mkwrite(%pD2(%ld), offset %lld)\n",
-		filp, filp->f_mapping->host->i_ino,
+	dfprintk(PAGECACHE, "NFS: vm_page_mkwrite(%s/%s(%ld), offset %lld)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name,
+		filp->f_mapping->host->i_ino,
 		(long long)page_offset(page));
 
 	/* make sure the cache has finished storing the page */
-	nfs_fscache_wait_on_page_write(NFS_I(inode), page);
+	nfs_fscache_wait_on_page_write(NFS_I(dentry->d_inode), page);
 
 	lock_page(page);
 	mapping = page_file_mapping(page);
-	if (mapping != inode->i_mapping)
+	if (mapping != dentry->d_inode->i_mapping)
 		goto out_unlock;
 
 	wait_on_page_writeback(page);
@@ -637,21 +659,22 @@ static int nfs_need_sync_write(struct file *filp, struct inode *inode)
 ssize_t nfs_file_write(struct kiocb *iocb, const struct iovec *iov,
 		       unsigned long nr_segs, loff_t pos)
 {
-	struct file *file = iocb->ki_filp;
-	struct inode *inode = file_inode(file);
+	struct dentry * dentry = iocb->ki_filp->f_path.dentry;
+	struct inode * inode = dentry->d_inode;
 	unsigned long written = 0;
 	ssize_t result;
 	size_t count = iov_length(iov, nr_segs);
 
-	result = nfs_key_timeout_notify(file, inode);
+	result = nfs_key_timeout_notify(iocb->ki_filp, inode);
 	if (result)
 		return result;
 
-	if (file->f_flags & O_DIRECT)
+	if (iocb->ki_filp->f_flags & O_DIRECT)
 		return nfs_file_direct_write(iocb, iov, nr_segs, pos, true);
 
-	dprintk("NFS: write(%pD2, %lu@%Ld)\n",
-		file, (unsigned long) count, (long long) pos);
+	dprintk("NFS: write(%s/%s, %lu@%Ld)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name,
+		(unsigned long) count, (long long) pos);
 
 	result = -EBUSY;
 	if (IS_SWAPFILE(inode))
@@ -659,8 +682,8 @@ ssize_t nfs_file_write(struct kiocb *iocb, const struct iovec *iov,
 	/*
 	 * O_APPEND implies that we must revalidate the file length.
 	 */
-	if (file->f_flags & O_APPEND) {
-		result = nfs_revalidate_file_size(inode, file);
+	if (iocb->ki_filp->f_flags & O_APPEND) {
+		result = nfs_revalidate_file_size(inode, iocb->ki_filp);
 		if (result)
 			goto out;
 	}
@@ -674,8 +697,8 @@ ssize_t nfs_file_write(struct kiocb *iocb, const struct iovec *iov,
 		written = result;
 
 	/* Return error values for O_DSYNC and IS_SYNC() */
-	if (result >= 0 && nfs_need_sync_write(file, inode)) {
-		int err = vfs_fsync(file, 0);
+	if (result >= 0 && nfs_need_sync_write(iocb->ki_filp, inode)) {
+		int err = vfs_fsync(iocb->ki_filp, 0);
 		if (err < 0)
 			result = err;
 	}
@@ -694,12 +717,14 @@ ssize_t nfs_file_splice_write(struct pipe_inode_info *pipe,
 			      struct file *filp, loff_t *ppos,
 			      size_t count, unsigned int flags)
 {
-	struct inode *inode = file_inode(filp);
+	struct dentry *dentry = filp->f_path.dentry;
+	struct inode *inode = dentry->d_inode;
 	unsigned long written = 0;
 	ssize_t ret;
 
-	dprintk("NFS splice_write(%pD2, %lu@%llu)\n",
-		filp, (unsigned long) count, (unsigned long long) *ppos);
+	dprintk("NFS splice_write(%s/%s, %lu@%llu)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name,
+		(unsigned long) count, (unsigned long long) *ppos);
 
 	/*
 	 * The combination of splice and an O_APPEND destination is disallowed.
@@ -858,8 +883,10 @@ int nfs_lock(struct file *filp, int cmd, struct file_lock *fl)
 	int ret = -ENOLCK;
 	int is_local = 0;
 
-	dprintk("NFS: lock(%pD2, t=%x, fl=%x, r=%lld:%lld)\n",
-			filp, fl->fl_type, fl->fl_flags,
+	dprintk("NFS: lock(%s/%s, t=%x, fl=%x, r=%lld:%lld)\n",
+			filp->f_path.dentry->d_parent->d_name.name,
+			filp->f_path.dentry->d_name.name,
+			fl->fl_type, fl->fl_flags,
 			(long long)fl->fl_start, (long long)fl->fl_end);
 
 	nfs_inc_stats(inode, NFSIOS_VFSLOCK);
@@ -896,8 +923,10 @@ int nfs_flock(struct file *filp, int cmd, struct file_lock *fl)
 	struct inode *inode = filp->f_mapping->host;
 	int is_local = 0;
 
-	dprintk("NFS: flock(%pD2, t=%x, fl=%x)\n",
-			filp, fl->fl_type, fl->fl_flags);
+	dprintk("NFS: flock(%s/%s, t=%x, fl=%x)\n",
+			filp->f_path.dentry->d_parent->d_name.name,
+			filp->f_path.dentry->d_name.name,
+			fl->fl_type, fl->fl_flags);
 
 	if (!(fl->fl_flags & FL_FLOCK))
 		return -ENOLCK;
@@ -931,7 +960,9 @@ EXPORT_SYMBOL_GPL(nfs_flock);
  */
 int nfs_setlease(struct file *file, long arg, struct file_lock **fl)
 {
-	dprintk("NFS: setlease(%pD2, arg=%ld)\n", file, arg);
+	dprintk("NFS: setlease(%s/%s, arg=%ld)\n",
+			file->f_path.dentry->d_parent->d_name.name,
+			file->f_path.dentry->d_name.name, arg);
 	return -EINVAL;
 }
 EXPORT_SYMBOL_GPL(nfs_setlease);

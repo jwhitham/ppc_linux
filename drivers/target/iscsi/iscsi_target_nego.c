@@ -88,7 +88,7 @@ int extract_param(
 	if (len < 0)
 		return -1;
 
-	if (len >= max_length) {
+	if (len > max_length) {
 		pr_err("Length of input: %d exceeds max_length:"
 			" %d\n", len, max_length);
 		return -1;
@@ -140,7 +140,7 @@ static u32 iscsi_handle_authentication(
 			iscsi_nacl = container_of(se_nacl, struct iscsi_node_acl,
 						  se_node_acl);
 
-			auth = &iscsi_nacl->node_auth;
+			auth = ISCSI_NODE_AUTH(iscsi_nacl);
 		}
 	} else {
 		/*
@@ -789,7 +789,7 @@ static int iscsi_target_handle_csg_zero(
 		return -1;
 
 	if (!iscsi_check_negotiated_keys(conn->param_list)) {
-		if (conn->tpg->tpg_attrib.authentication &&
+		if (ISCSI_TPG_ATTRIB(ISCSI_TPG_C(conn))->authentication &&
 		    !strncmp(param->value, NONE, 4)) {
 			pr_err("Initiator sent AuthMethod=None but"
 				" Target is enforcing iSCSI Authentication,"
@@ -799,7 +799,7 @@ static int iscsi_target_handle_csg_zero(
 			return -1;
 		}
 
-		if (conn->tpg->tpg_attrib.authentication &&
+		if (ISCSI_TPG_ATTRIB(ISCSI_TPG_C(conn))->authentication &&
 		    !login->auth_complete)
 			return 0;
 
@@ -862,7 +862,7 @@ static int iscsi_target_handle_csg_one(struct iscsi_conn *conn, struct iscsi_log
 	}
 
 	if (!login->auth_complete &&
-	     conn->tpg->tpg_attrib.authentication) {
+	     ISCSI_TPG_ATTRIB(ISCSI_TPG_C(conn))->authentication) {
 		pr_err("Initiator is requesting CSG: 1, has not been"
 			 " successfully authenticated, and the Target is"
 			" enforcing iSCSI Authentication, login failed.\n");

@@ -30,6 +30,10 @@ config ARCH_REQUIRE_GPIOLIB
 	  Selecting this from the architecture code will cause the gpiolib
 	  code to always get built in.
 
+config GPIO_DEVRES
+	def_bool y
+	depends on HAS_IOMEM
+
 
 menuconfig GPIOLIB
 	bool "GPIO Support"
@@ -42,10 +46,6 @@ menuconfig GPIOLIB
 	  If unsure, say N.
 
 if GPIOLIB
-
-config GPIO_DEVRES
-	def_bool y
-	depends on HAS_IOMEM
 
 config OF_GPIO
 	def_bool y
@@ -129,7 +129,7 @@ config GPIO_IT8761E
 
 config GPIO_EM
 	tristate "Emma Mobile GPIO"
-	depends on ARM && OF_GPIO
+	depends on ARM
 	help
 	  Say yes here to support GPIO on Renesas Emma Mobile SoCs.
 
@@ -213,7 +213,7 @@ config GPIO_OCTEON
 
 config GPIO_PL061
 	bool "PrimeCell PL061 GPIO support"
-	depends on ARM_AMBA
+	depends on ARM && ARM_AMBA
 	select GENERIC_IRQ_CHIP
 	help
 	  Say yes here to support the PrimeCell PL061 GPIO device
@@ -320,15 +320,6 @@ config GPIO_ICH
 
 	  If unsure, say N.
 
-config GPIO_IOP
-	tristate "Intel IOP GPIO"
-	depends on ARM && (ARCH_IOP32X || ARCH_IOP33X)
-	help
-	  Say yes here to support the GPIO functionality of a number of Intel
-	  IOP32X or IOP33X.
-
-	  If unsure, say N.
-
 config GPIO_VX855
 	tristate "VIA VX855/VX875 GPIO"
 	depends on PCI
@@ -368,10 +359,6 @@ config GPIO_GRGPIO
 	help
 	  Select this to support Aeroflex Gaisler GRGPIO cores from the GRLIB
 	  VHDL IP core library.
-
-config GPIO_TB10X
-	bool
-	select OF_GPIO
 
 comment "I2C GPIO expanders:"
 
@@ -625,12 +612,12 @@ config GPIO_AMD8111
 
 	  If unsure, say N
 
-config GPIO_INTEL_MID
-	bool "Intel Mid GPIO support"
+config GPIO_LANGWELL
+	bool "Intel Langwell/Penwell GPIO support"
 	depends on PCI && X86
 	select IRQ_DOMAIN
 	help
-	  Say Y here to support Intel Mid GPIO.
+	  Say Y here to support Intel Langwell/Penwell GPIO.
 
 config GPIO_PCH
 	tristate "Intel EG20T PCH/LAPIS Semiconductor IOH(ML7223/ML7831) GPIO"
@@ -716,7 +703,7 @@ config GPIO_74X164
 comment "AC97 GPIO expanders:"
 
 config GPIO_UCB1400
-	tristate "Philips UCB1400 GPIO"
+	bool "Philips UCB1400 GPIO"
 	depends on UCB1400_CORE
 	help
 	  This enables support for the Philips UCB1400 GPIO pins.
@@ -771,12 +758,6 @@ config GPIO_MSIC
 	help
 	  Enable support for GPIO on intel MSIC controllers found in
 	  intel MID devices
-
-config GPIO_BCM_KONA
-	bool "Broadcom Kona GPIO"
-	depends on OF_GPIO
-	help
-	  Turn on GPIO support for Broadcom "Kona" chips.
 
 comment "USB GPIO expanders:"
 

@@ -172,21 +172,11 @@ static const struct ieee80211_regdomain world_regdom = {
 			NL80211_RRF_NO_IBSS |
 			NL80211_RRF_NO_OFDM),
 		/* IEEE 802.11a, channel 36..48 */
-		REG_RULE(5180-10, 5240+10, 160, 6, 20,
+		REG_RULE(5180-10, 5240+10, 80, 6, 20,
                         NL80211_RRF_PASSIVE_SCAN |
                         NL80211_RRF_NO_IBSS),
 
-		/* IEEE 802.11a, channel 52..64 - DFS required */
-		REG_RULE(5260-10, 5320+10, 160, 6, 20,
-			NL80211_RRF_PASSIVE_SCAN |
-			NL80211_RRF_NO_IBSS |
-			NL80211_RRF_DFS),
-
-		/* IEEE 802.11a, channel 100..144 - DFS required */
-		REG_RULE(5500-10, 5720+10, 160, 6, 20,
-			NL80211_RRF_PASSIVE_SCAN |
-			NL80211_RRF_NO_IBSS |
-			NL80211_RRF_DFS),
+		/* NB: 5260 MHz - 5700 MHz requires DFS */
 
 		/* IEEE 802.11a, channel 149..165 */
 		REG_RULE(5745-10, 5825+10, 80, 6, 20,
@@ -768,25 +758,24 @@ const struct ieee80211_reg_rule *freq_reg_info(struct wiphy *wiphy,
 }
 EXPORT_SYMBOL(freq_reg_info);
 
-const char *reg_initiator_name(enum nl80211_reg_initiator initiator)
+#ifdef CONFIG_CFG80211_REG_DEBUG
+static const char *reg_initiator_name(enum nl80211_reg_initiator initiator)
 {
 	switch (initiator) {
 	case NL80211_REGDOM_SET_BY_CORE:
-		return "core";
+		return "Set by core";
 	case NL80211_REGDOM_SET_BY_USER:
-		return "user";
+		return "Set by user";
 	case NL80211_REGDOM_SET_BY_DRIVER:
-		return "driver";
+		return "Set by driver";
 	case NL80211_REGDOM_SET_BY_COUNTRY_IE:
-		return "country IE";
+		return "Set by country IE";
 	default:
 		WARN_ON(1);
-		return "bug";
+		return "Set by bug";
 	}
 }
-EXPORT_SYMBOL(reg_initiator_name);
 
-#ifdef CONFIG_CFG80211_REG_DEBUG
 static void chan_reg_rule_print_dbg(struct ieee80211_channel *chan,
 				    const struct ieee80211_reg_rule *reg_rule)
 {
@@ -973,13 +962,6 @@ static bool reg_dev_ignore_cell_hint(struct wiphy *wiphy)
 }
 #endif
 
-static bool wiphy_strict_alpha2_regd(struct wiphy *wiphy)
-{
-	if (wiphy->flags & WIPHY_FLAG_STRICT_REGULATORY &&
-	    !(wiphy->flags & WIPHY_FLAG_CUSTOM_REGULATORY))
-		return true;
-	return false;
-}
 
 static bool ignore_reg_update(struct wiphy *wiphy,
 			      enum nl80211_reg_initiator initiator)
@@ -987,17 +969,14 @@ static bool ignore_reg_update(struct wiphy *wiphy,
 	struct regulatory_request *lr = get_last_request();
 
 	if (!lr) {
-		REG_DBG_PRINT("Ignoring regulatory request set by %s "
-			      "since last_request is not set\n",
+		REG_DBG_PRINT("Ignoring regulatory request %s since last_request is not set\n",
 			      reg_initiator_name(initiator));
 		return true;
 	}
 
 	if (initiator == NL80211_REGDOM_SET_BY_CORE &&
 	    wiphy->flags & WIPHY_FLAG_CUSTOM_REGULATORY) {
-		REG_DBG_PRINT("Ignoring regulatory request set by %s "
-			      "since the driver uses its own custom "
-			      "regulatory domain\n",
+		REG_DBG_PRINT("Ignoring regulatory request %s since the driver uses its own custom regulatory domain\n",
 			      reg_initiator_name(initiator));
 		return true;
 	}
@@ -1006,12 +985,10 @@ static bool ignore_reg_update(struct wiphy *wiphy,
 	 * wiphy->regd will be set once the device has its own
 	 * desired regulatory domain set
 	 */
-	if (wiphy_strict_alpha2_regd(wiphy) && !wiphy->regd &&
+	if (wiphy->flags & WIPHY_FLAG_STRICT_REGULATORY && !wiphy->regd &&
 	    initiator != NL80211_REGDOM_SET_BY_COUNTRY_IE &&
 	    !is_world_regdom(lr->alpha2)) {
-		REG_DBG_PRINT("Ignoring regulatory request set by %s "
-			      "since the driver requires its own regulatory "
-			      "domain to be set first\n",
+		REG_DBG_PRINT("Ignoring regulatory request %s since the driver requires its own regulatory domain to be set first\n",
 			      reg_initiator_name(initiator));
 		return true;
 	}
@@ -1712,8 +1689,8 @@ int regulatory_hint(struct wiphy *wiphy, const char *alpha2)
 }
 EXPORT_SYMBOL(regulatory_hint);
 
-void regulatory_hint_country_ie(struct wiphy *wiphy, enum ieee80211_band band,
-				const u8 *country_ie, u8 country_ie_len)
+void regulatory_hint_11d(struct wiphy *wiphy, enum ieee80211_band band,
+			 const u8 *country_ie, u8 country_ie_len)
 {
 	char alpha2[2];
 	enum environment_cap env = ENVIRON_ANY;

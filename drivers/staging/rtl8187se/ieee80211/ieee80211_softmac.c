@@ -887,8 +887,7 @@ static struct sk_buff* ieee80211_probe_resp(struct ieee80211_device *ieee, u8 *d
 	return skb;
 }
 
-static struct sk_buff *ieee80211_assoc_resp(struct ieee80211_device *ieee,
-					    u8 *dest)
+struct sk_buff* ieee80211_assoc_resp(struct ieee80211_device *ieee, u8 *dest)
 {
 	struct sk_buff *skb;
 	u8* tag;
@@ -941,8 +940,7 @@ static struct sk_buff *ieee80211_assoc_resp(struct ieee80211_device *ieee,
 	return skb;
 }
 
-static struct sk_buff *ieee80211_auth_resp(struct ieee80211_device *ieee,
-					   int status, u8 *dest)
+struct sk_buff* ieee80211_auth_resp(struct ieee80211_device *ieee,int status, u8 *dest)
 {
 	struct sk_buff *skb;
 	struct ieee80211_authentication *auth;
@@ -2944,9 +2942,14 @@ int ieee80211_wpa_supplicant_ioctl(struct ieee80211_device *ieee, struct iw_poin
 		goto out;
 	}
 
-	param = memdup_user(p->pointer, p->length);
-	if (IS_ERR(param)) {
-		ret = PTR_ERR(param);
+	param = kmalloc(p->length, GFP_KERNEL);
+	if (param == NULL){
+		ret = -ENOMEM;
+		goto out;
+	}
+	if (copy_from_user(param, p->pointer, p->length)) {
+		kfree(param);
+		ret = -EFAULT;
 		goto out;
 	}
 

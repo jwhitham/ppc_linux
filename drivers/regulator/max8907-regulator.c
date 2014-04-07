@@ -350,15 +350,31 @@ static int max8907_regulator_probe(struct platform_device *pdev)
 				pmic->desc[i].ops = &max8907_out5v_hwctl_ops;
 		}
 
-		pmic->rdev[i] = devm_regulator_register(&pdev->dev,
-						&pmic->desc[i], &config);
+		pmic->rdev[i] = regulator_register(&pmic->desc[i], &config);
 		if (IS_ERR(pmic->rdev[i])) {
 			dev_err(&pdev->dev,
 				"failed to register %s regulator\n",
 				pmic->desc[i].name);
-			return PTR_ERR(pmic->rdev[i]);
+			ret = PTR_ERR(pmic->rdev[i]);
+			goto err_unregister_regulator;
 		}
 	}
+
+	return 0;
+
+err_unregister_regulator:
+	while (--i >= 0)
+		regulator_unregister(pmic->rdev[i]);
+	return ret;
+}
+
+static int max8907_regulator_remove(struct platform_device *pdev)
+{
+	struct max8907_regulator *pmic = platform_get_drvdata(pdev);
+	int i;
+
+	for (i = 0; i < MAX8907_NUM_REGULATORS; i++)
+		regulator_unregister(pmic->rdev[i]);
 
 	return 0;
 }
@@ -369,6 +385,7 @@ static struct platform_driver max8907_regulator_driver = {
 		   .owner = THIS_MODULE,
 		   },
 	.probe = max8907_regulator_probe,
+	.remove = max8907_regulator_remove,
 };
 
 static int __init max8907_regulator_init(void)

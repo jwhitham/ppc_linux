@@ -248,7 +248,7 @@ static void change_VID(int vid)
 }
 
 
-static int powernow_target(struct cpufreq_policy *policy, unsigned int index)
+static void change_speed(struct cpufreq_policy *policy, unsigned int index)
 {
 	u8 fid, vid;
 	struct cpufreq_freqs freqs;
@@ -291,8 +291,6 @@ static int powernow_target(struct cpufreq_policy *policy, unsigned int index)
 		local_irq_enable();
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
-
-	return 0;
 }
 
 
@@ -535,6 +533,27 @@ static int powernow_decode_bios(int maxfid, int startvid)
 }
 
 
+static int powernow_target(struct cpufreq_policy *policy,
+			    unsigned int target_freq,
+			    unsigned int relation)
+{
+	unsigned int newstate;
+
+	if (cpufreq_frequency_table_target(policy, powernow_table, target_freq,
+				relation, &newstate))
+		return -EINVAL;
+
+	change_speed(policy, newstate);
+
+	return 0;
+}
+
+
+static int powernow_verify(struct cpufreq_policy *policy)
+{
+	return cpufreq_frequency_table_verify(policy, powernow_table);
+}
+
 /*
  * We use the fact that the bus frequency is somehow
  * a multiple of 100000/3 khz, then we compute sgtc according
@@ -659,7 +678,11 @@ static int powernow_cpu_init(struct cpufreq_policy *policy)
 	policy->cpuinfo.transition_latency =
 		cpufreq_scale(2000000UL, fsb, latency);
 
-	return cpufreq_table_validate_and_show(policy, powernow_table);
+	policy->cur = powernow_get(0);
+
+	cpufreq_frequency_table_get_attr(powernow_table, policy->cpu);
+
+	return cpufreq_frequency_table_cpuinfo(policy, powernow_table);
 }
 
 static int powernow_cpu_exit(struct cpufreq_policy *policy)
@@ -678,9 +701,14 @@ static int powernow_cpu_exit(struct cpufreq_policy *policy)
 	return 0;
 }
 
+static struct freq_attr *powernow_table_attr[] = {
+	&cpufreq_freq_attr_scaling_available_freqs,
+	NULL,
+};
+
 static struct cpufreq_driver powernow_driver = {
-	.verify		= cpufreq_generic_frequency_table_verify,
-	.target_index	= powernow_target,
+	.verify		= powernow_verify,
+	.target		= powernow_target,
 	.get		= powernow_get,
 #ifdef CONFIG_X86_POWERNOW_K7_ACPI
 	.bios_limit	= acpi_processor_get_bios_limit,
@@ -688,7 +716,7 @@ static struct cpufreq_driver powernow_driver = {
 	.init		= powernow_cpu_init,
 	.exit		= powernow_cpu_exit,
 	.name		= "powernow-k7",
-	.attr		= cpufreq_generic_attr,
+	.attr		= powernow_table_attr,
 };
 
 static int __init powernow_init(void)

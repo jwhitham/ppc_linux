@@ -150,14 +150,14 @@ struct ib_reth {
 	__be64 vaddr;
 	__be32 rkey;
 	__be32 length;
-} __packed;
+} __attribute__ ((packed));
 
 struct ib_atomic_eth {
 	__be32 vaddr[2];        /* unaligned so access as 2 32-bit words */
 	__be32 rkey;
 	__be64 swap_data;
 	__be64 compare_data;
-} __packed;
+} __attribute__ ((packed));
 
 struct qib_other_headers {
 	__be32 bth[3];
@@ -178,7 +178,7 @@ struct qib_other_headers {
 		__be32 aeth;
 		struct ib_atomic_eth atomic_eth;
 	} u;
-} __packed;
+} __attribute__ ((packed));
 
 /*
  * Note that UD packets with a GRH header are 8+40+12+8 = 68 bytes
@@ -195,12 +195,12 @@ struct qib_ib_header {
 		} l;
 		struct qib_other_headers oth;
 	} u;
-} __packed;
+} __attribute__ ((packed));
 
 struct qib_pio_header {
 	__le32 pbc[2];
 	struct qib_ib_header hdr;
-} __packed;
+} __attribute__ ((packed));
 
 /*
  * There is one struct qib_mcast for each multicast GID.

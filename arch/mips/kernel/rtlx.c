@@ -172,9 +172,8 @@ int rtlx_open(int index, int can_sleep)
 	if (rtlx == NULL) {
 		if( (p = vpe_get_shared(tclimit)) == NULL) {
 		    if (can_sleep) {
-			ret = __wait_event_interruptible(
-					channel_wqs[index].lx_queue,
-					(p = vpe_get_shared(tclimit)));
+			__wait_event_interruptible(channel_wqs[index].lx_queue,
+				(p = vpe_get_shared(tclimit)), ret);
 			if (ret)
 				goto out_fail;
 		    } else {
@@ -264,10 +263,11 @@ unsigned int rtlx_read_poll(int index, int can_sleep)
 	/* data available to read? */
 	if (chan->lx_read == chan->lx_write) {
 		if (can_sleep) {
-			int ret = __wait_event_interruptible(
-				channel_wqs[index].lx_queue,
+			int ret = 0;
+
+			__wait_event_interruptible(channel_wqs[index].lx_queue,
 				(chan->lx_read != chan->lx_write) ||
-				sp_stopping);
+				sp_stopping, ret);
 			if (ret)
 				return ret;
 
@@ -440,13 +440,14 @@ static ssize_t file_write(struct file *file, const char __user * buffer,
 
 	/* any space left... */
 	if (!rtlx_write_poll(minor)) {
-		int ret;
+		int ret = 0;
 
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
 
-		ret = __wait_event_interruptible(channel_wqs[minor].rt_queue,
-					   rtlx_write_poll(minor));
+		__wait_event_interruptible(channel_wqs[minor].rt_queue,
+					   rtlx_write_poll(minor),
+					   ret);
 		if (ret)
 			return ret;
 	}

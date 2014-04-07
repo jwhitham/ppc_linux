@@ -1377,7 +1377,8 @@ static int vga16fb_probe(struct platform_device *dev)
 		goto err_check_var;
 	}
 
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       info->node, info->fix.id);
 	platform_set_drvdata(dev, info);
 
 	return 0;

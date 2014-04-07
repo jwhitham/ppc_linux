@@ -14,7 +14,6 @@
 #include <linux/of.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
-#include <linux/of_address.h>
 
 #include <asm/cputhreads.h>
 #include <asm/reg_a2.h>
@@ -51,22 +50,18 @@ static void wsp_scom_unmap(scom_map_t map)
 	iounmap((void *)map);
 }
 
-static int wsp_scom_read(scom_map_t map, u64 reg, u64 *value)
+static u64 wsp_scom_read(scom_map_t map, u32 reg)
 {
 	u64 __iomem *addr = (u64 __iomem *)map;
 
-	*value = in_be64(addr + reg);
-
-	return 0;
+	return in_be64(addr + reg);
 }
 
-static int wsp_scom_write(scom_map_t map, u64 reg, u64 value)
+static void wsp_scom_write(scom_map_t map, u32 reg, u64 value)
 {
 	u64 __iomem *addr = (u64 __iomem *)map;
 
-	out_be64(addr + reg, value);
-
-	return 0;
+	return out_be64(addr + reg, value);
 }
 
 static const struct scom_controller wsp_scom_controller = {

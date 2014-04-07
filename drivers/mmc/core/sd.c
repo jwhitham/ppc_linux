@@ -13,7 +13,6 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
-#include <linux/pm_runtime.h>
 
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
@@ -722,7 +721,6 @@ int mmc_sd_get_cid(struct mmc_host *host, u32 ocr, u32 *cid, u32 *rocr)
 	int err;
 	u32 max_current;
 	int retries = 10;
-	u32 pocr = ocr;
 
 try_again:
 	if (!retries) {
@@ -775,8 +773,7 @@ try_again:
 	 */
 	if (!mmc_host_is_spi(host) && rocr &&
 	   ((*rocr & 0x41000000) == 0x41000000)) {
-		err = mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_180,
-					pocr);
+		err = mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_180);
 		if (err == -EAGAIN) {
 			retries--;
 			goto try_again;
@@ -938,7 +935,6 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 		if (IS_ERR(card))
 			return PTR_ERR(card);
 
-		card->ocr = ocr;
 		card->type = MMC_TYPE_SD;
 		memcpy(card->raw_cid, cid, sizeof(card->raw_cid));
 	}
@@ -1068,85 +1064,45 @@ static void mmc_sd_detect(struct mmc_host *host)
 	}
 }
 
-static int _mmc_sd_suspend(struct mmc_host *host)
-{
-	int err = 0;
-
-	BUG_ON(!host);
-	BUG_ON(!host->card);
-
-	mmc_claim_host(host);
-
-	if (mmc_card_suspended(host->card))
-		goto out;
-
-	if (!mmc_host_is_spi(host))
-		err = mmc_deselect_cards(host);
-	host->card->state &= ~MMC_STATE_HIGHSPEED;
-	if (!err) {
-		mmc_power_off(host);
-		mmc_card_set_suspended(host->card);
-	}
-
-out:
-	mmc_release_host(host);
-	return err;
-}
-
 /*
- * Callback for suspend
+ * Suspend callback from host.
  */
 static int mmc_sd_suspend(struct mmc_host *host)
 {
-	int err;
-
-	err = _mmc_sd_suspend(host);
-	if (!err) {
-		pm_runtime_disable(&host->card->dev);
-		pm_runtime_set_suspended(&host->card->dev);
-	}
-
-	return err;
-}
-
-/*
- * This function tries to determine if the same card is still present
- * and, if so, restore all state to it.
- */
-static int _mmc_sd_resume(struct mmc_host *host)
-{
 	int err = 0;
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
 	mmc_claim_host(host);
-
-	if (!mmc_card_suspended(host->card))
-		goto out;
-
-	mmc_power_up(host, host->card->ocr);
-	err = mmc_sd_init_card(host, host->card->ocr, host->card);
-	mmc_card_clr_suspended(host->card);
-
-out:
+	if (!mmc_host_is_spi(host))
+		err = mmc_deselect_cards(host);
+	host->card->state &= ~MMC_STATE_HIGHSPEED;
+	if (!err)
+		mmc_power_off(host);
 	mmc_release_host(host);
+
 	return err;
 }
 
 /*
- * Callback for resume
+ * Resume callback from host.
+ *
+ * This function tries to determine if the same card is still present
+ * and, if so, restore all state to it.
  */
 static int mmc_sd_resume(struct mmc_host *host)
 {
-	int err = 0;
+	int err;
 
-	if (!(host->caps & MMC_CAP_RUNTIME_RESUME)) {
-		err = _mmc_sd_resume(host);
-		pm_runtime_set_active(&host->card->dev);
-		pm_runtime_mark_last_busy(&host->card->dev);
-	}
-	pm_runtime_enable(&host->card->dev);
+	BUG_ON(!host);
+	BUG_ON(!host->card);
+
+	mmc_claim_host(host);
+	mmc_power_up(host);
+	mmc_select_voltage(host, host->ocr);
+	err = mmc_sd_init_card(host, host->ocr, host->card);
+	mmc_release_host(host);
 
 	return err;
 }
@@ -1161,11 +1117,18 @@ static int mmc_sd_runtime_suspend(struct mmc_host *host)
 	if (!(host->caps & MMC_CAP_AGGRESSIVE_PM))
 		return 0;
 
-	err = _mmc_sd_suspend(host);
-	if (err)
+	mmc_claim_host(host);
+
+	err = mmc_sd_suspend(host);
+	if (err) {
 		pr_err("%s: error %d doing aggessive suspend\n",
 			mmc_hostname(host), err);
+		goto out;
+	}
+	mmc_power_off(host);
 
+out:
+	mmc_release_host(host);
 	return err;
 }
 
@@ -1176,14 +1139,18 @@ static int mmc_sd_runtime_resume(struct mmc_host *host)
 {
 	int err;
 
-	if (!(host->caps & (MMC_CAP_AGGRESSIVE_PM | MMC_CAP_RUNTIME_RESUME)))
+	if (!(host->caps & MMC_CAP_AGGRESSIVE_PM))
 		return 0;
 
-	err = _mmc_sd_resume(host);
+	mmc_claim_host(host);
+
+	mmc_power_up(host);
+	err = mmc_sd_resume(host);
 	if (err)
 		pr_err("%s: error %d doing aggessive resume\n",
 			mmc_hostname(host), err);
 
+	mmc_release_host(host);
 	return 0;
 }
 
@@ -1193,7 +1160,7 @@ static int mmc_sd_power_restore(struct mmc_host *host)
 
 	host->card->state &= ~MMC_STATE_HIGHSPEED;
 	mmc_claim_host(host);
-	ret = mmc_sd_init_card(host, host->card->ocr, host->card);
+	ret = mmc_sd_init_card(host, host->ocr, host->card);
 	mmc_release_host(host);
 
 	return ret;
@@ -1238,7 +1205,7 @@ static void mmc_sd_attach_bus_ops(struct mmc_host *host)
 int mmc_attach_sd(struct mmc_host *host)
 {
 	int err;
-	u32 ocr, rocr;
+	u32 ocr;
 
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
@@ -1262,12 +1229,31 @@ int mmc_attach_sd(struct mmc_host *host)
 			goto err;
 	}
 
-	rocr = mmc_select_voltage(host, ocr);
+	/*
+	 * Sanity check the voltages that the card claims to
+	 * support.
+	 */
+	if (ocr & 0x7F) {
+		pr_warning("%s: card claims to support voltages "
+		       "below the defined range. These will be ignored.\n",
+		       mmc_hostname(host));
+		ocr &= ~0x7F;
+	}
+
+	if ((ocr & MMC_VDD_165_195) &&
+	    !(host->ocr_avail_sd & MMC_VDD_165_195)) {
+		pr_warning("%s: SD card claims to support the "
+		       "incompletely defined 'low voltage range'. This "
+		       "will be ignored.\n", mmc_hostname(host));
+		ocr &= ~MMC_VDD_165_195;
+	}
+
+	host->ocr = mmc_select_voltage(host, ocr);
 
 	/*
 	 * Can we support the voltage(s) of the card(s)?
 	 */
-	if (!rocr) {
+	if (!host->ocr) {
 		err = -EINVAL;
 		goto err;
 	}
@@ -1275,7 +1261,7 @@ int mmc_attach_sd(struct mmc_host *host)
 	/*
 	 * Detect and init the card.
 	 */
-	err = mmc_sd_init_card(host, rocr, NULL);
+	err = mmc_sd_init_card(host, host->ocr, NULL);
 	if (err)
 		goto err;
 

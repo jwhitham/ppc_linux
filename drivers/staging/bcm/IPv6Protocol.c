@@ -1,13 +1,13 @@
 #include "headers.h"
 
-static bool MatchSrcIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
+static BOOLEAN MatchSrcIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
 	struct bcm_ipv6_hdr *pstIpv6Header);
-static bool MatchDestIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
+static BOOLEAN MatchDestIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
 	struct bcm_ipv6_hdr *pstIpv6Header);
 static VOID DumpIpv6Header(struct bcm_ipv6_hdr *pstIpv6Header);
 
 static UCHAR *GetNextIPV6ChainedHeader(UCHAR **ppucPayload,
-	UCHAR *pucNextHeader, bool *bParseDone, USHORT *pusPayloadLength)
+	UCHAR *pucNextHeader, BOOLEAN *bParseDone, USHORT *pusPayloadLength)
 {
 	UCHAR *pucRetHeaderPtr = NULL;
 	UCHAR *pucPayloadPtr = NULL;
@@ -29,7 +29,7 @@ static UCHAR *GetNextIPV6ChainedHeader(UCHAR **ppucPayload,
 	}
 
 	/* Get the Nextt Header Type */
-	*bParseDone = false;
+	*bParseDone = FALSE;
 
 
 	switch (*pucNextHeader) {
@@ -124,7 +124,7 @@ static UCHAR *GetNextIPV6ChainedHeader(UCHAR **ppucPayload,
 
 	}
 
-	if (*bParseDone == false) {
+	if (*bParseDone == FALSE) {
 		if (*pusPayloadLength <= usNextHeaderOffset) {
 			*bParseDone = TRUE;
 		} else {
@@ -144,7 +144,7 @@ static UCHAR GetIpv6ProtocolPorts(UCHAR *pucPayload, USHORT *pusSrcPort,
 	USHORT *pusDestPort, USHORT usPayloadLength, UCHAR ucNextHeader)
 {
 	UCHAR *pIpv6HdrScanContext = pucPayload;
-	bool bDone = false;
+	BOOLEAN bDone = FALSE;
 	UCHAR ucHeaderType = 0;
 	UCHAR *pucNextHeader = NULL;
 	struct bcm_mini_adapter *Adapter = GET_BCM_ADAPTER(gblpnetdev);
@@ -187,12 +187,12 @@ USHORT	IpVersion6(struct bcm_mini_adapter *Adapter, PVOID pcIpHeader,
 	USHORT	ushSrcPort = 0;
 	UCHAR   ucNextProtocolAboveIP = 0;
 	struct bcm_ipv6_hdr *pstIpv6Header = NULL;
-	bool bClassificationSucceed = false;
+	BOOLEAN bClassificationSucceed = FALSE;
 
 	BCM_DEBUG_PRINT(Adapter, DBG_TYPE_TX, IPV6_DBG,
 			DBG_LVL_ALL, "IpVersion6 ==========>\n");
 
-	pstIpv6Header = pcIpHeader;
+	pstIpv6Header = (struct bcm_ipv6_hdr *)pcIpHeader;
 
 	DumpIpv6Header(pstIpv6Header);
 
@@ -277,10 +277,10 @@ USHORT	IpVersion6(struct bcm_mini_adapter *Adapter, PVOID pcIpHeader,
 		INT iMatchedSFQueueIndex = 0;
 		iMatchedSFQueueIndex = SearchSfid(Adapter, pstClassifierRule->ulSFID);
 		if (iMatchedSFQueueIndex >= NO_OF_QUEUES) {
-			bClassificationSucceed = false;
+			bClassificationSucceed = FALSE;
 		} else {
-			if (Adapter->PackInfo[iMatchedSFQueueIndex].bActive == false)
-				bClassificationSucceed = false;
+			if (Adapter->PackInfo[iMatchedSFQueueIndex].bActive == FALSE)
+				bClassificationSucceed = FALSE;
 		}
 	}
 
@@ -288,7 +288,7 @@ USHORT	IpVersion6(struct bcm_mini_adapter *Adapter, PVOID pcIpHeader,
 }
 
 
-static bool MatchSrcIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
+static BOOLEAN MatchSrcIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
 	struct bcm_ipv6_hdr *pstIpv6Header)
 {
 	UINT uiLoopIndex = 0;
@@ -341,10 +341,10 @@ static bool MatchSrcIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
 			}
 		}
 	}
-	return false;
+	return FALSE;
 }
 
-static bool MatchDestIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
+static BOOLEAN MatchDestIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
 	struct bcm_ipv6_hdr *pstIpv6Header)
 {
 	UINT uiLoopIndex = 0;
@@ -398,7 +398,7 @@ static bool MatchDestIpv6Address(struct bcm_classifier_rule *pstClassifierRule,
 			}
 		}
 	}
-	return false;
+	return FALSE;
 
 }
 

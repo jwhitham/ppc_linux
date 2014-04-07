@@ -439,7 +439,7 @@ static int max8660_probe(struct i2c_client *client,
 	for (i = 0; i < pdata->num_subdevs; i++) {
 
 		if (!pdata->subdevs[i].platform_data)
-			return ret;
+			goto err_out;
 
 		boot_on = pdata->subdevs[i].platform_data->constraints.boot_on;
 
@@ -465,7 +465,7 @@ static int max8660_probe(struct i2c_client *client,
 		case MAX8660_V7:
 			if (type == MAX8661) {
 				dev_err(dev, "Regulator not on this chip!\n");
-				return -EINVAL;
+				goto err_out;
 			}
 
 			if (boot_on)
@@ -475,7 +475,7 @@ static int max8660_probe(struct i2c_client *client,
 		default:
 			dev_err(dev, "invalid regulator %s\n",
 				 pdata->subdevs[i].name);
-			return ret;
+			goto err_out;
 		}
 	}
 
@@ -489,17 +489,32 @@ static int max8660_probe(struct i2c_client *client,
 		config.of_node = of_node[i];
 		config.driver_data = max8660;
 
-		rdev[i] = devm_regulator_register(&client->dev,
-						  &max8660_reg[id], &config);
+		rdev[i] = regulator_register(&max8660_reg[id], &config);
 		if (IS_ERR(rdev[i])) {
 			ret = PTR_ERR(rdev[i]);
-			dev_err(&client->dev, "failed to register %s\n",
+			dev_err(dev, "failed to register %s\n",
 				max8660_reg[id].name);
-			return PTR_ERR(rdev[i]);
+			goto err_unregister;
 		}
 	}
 
 	i2c_set_clientdata(client, max8660);
+	return 0;
+
+err_unregister:
+	while (--i >= 0)
+		regulator_unregister(rdev[i]);
+err_out:
+	return ret;
+}
+
+static int max8660_remove(struct i2c_client *client)
+{
+	struct max8660 *max8660 = i2c_get_clientdata(client);
+	int i;
+
+	for (i = 0; i < MAX8660_V_END; i++)
+		regulator_unregister(max8660->rdev[i]);
 	return 0;
 }
 
@@ -512,6 +527,7 @@ MODULE_DEVICE_TABLE(i2c, max8660_id);
 
 static struct i2c_driver max8660_driver = {
 	.probe = max8660_probe,
+	.remove = max8660_remove,
 	.driver		= {
 		.name	= "max8660",
 		.owner	= THIS_MODULE,

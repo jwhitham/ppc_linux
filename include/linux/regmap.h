@@ -23,7 +23,6 @@ struct device;
 struct i2c_client;
 struct irq_domain;
 struct spi_device;
-struct spmi_device;
 struct regmap;
 struct regmap_range_cfg;
 struct regmap_field;
@@ -70,8 +69,6 @@ struct regmap_range {
 	unsigned int range_min;
 	unsigned int range_max;
 };
-
-#define regmap_reg_range(low, high) { .range_min = low, .range_max = high, }
 
 /*
  * A table of ranges including some yes ranges and some no ranges.
@@ -321,8 +318,6 @@ struct regmap *regmap_init_i2c(struct i2c_client *i2c,
 			       const struct regmap_config *config);
 struct regmap *regmap_init_spi(struct spi_device *dev,
 			       const struct regmap_config *config);
-struct regmap *regmap_init_spmi(struct spmi_device *dev,
-			       const struct regmap_config *config);
 struct regmap *regmap_init_mmio_clk(struct device *dev, const char *clk_id,
 				    void __iomem *regs,
 				    const struct regmap_config *config);
@@ -335,8 +330,6 @@ struct regmap *devm_regmap_init_i2c(struct i2c_client *i2c,
 				    const struct regmap_config *config);
 struct regmap *devm_regmap_init_spi(struct spi_device *dev,
 				    const struct regmap_config *config);
-struct regmap *devm_regmap_init_spmi(struct spmi_device *dev,
-				     const struct regmap_config *config);
 struct regmap *devm_regmap_init_mmio_clk(struct device *dev, const char *clk_id,
 					 void __iomem *regs,
 					 const struct regmap_config *config);
@@ -381,13 +374,10 @@ int regmap_reinit_cache(struct regmap *map,
 			const struct regmap_config *config);
 struct regmap *dev_get_regmap(struct device *dev, const char *name);
 int regmap_write(struct regmap *map, unsigned int reg, unsigned int val);
-int regmap_write_async(struct regmap *map, unsigned int reg, unsigned int val);
 int regmap_raw_write(struct regmap *map, unsigned int reg,
 		     const void *val, size_t val_len);
 int regmap_bulk_write(struct regmap *map, unsigned int reg, const void *val,
 			size_t val_count);
-int regmap_multi_reg_write(struct regmap *map, struct reg_default *regs,
-			int num_regs);
 int regmap_raw_write_async(struct regmap *map, unsigned int reg,
 			   const void *val, size_t val_len);
 int regmap_read(struct regmap *map, unsigned int reg, unsigned int *val);
@@ -397,14 +387,9 @@ int regmap_bulk_read(struct regmap *map, unsigned int reg, void *val,
 		     size_t val_count);
 int regmap_update_bits(struct regmap *map, unsigned int reg,
 		       unsigned int mask, unsigned int val);
-int regmap_update_bits_async(struct regmap *map, unsigned int reg,
-			     unsigned int mask, unsigned int val);
 int regmap_update_bits_check(struct regmap *map, unsigned int reg,
 			     unsigned int mask, unsigned int val,
 			     bool *change);
-int regmap_update_bits_check_async(struct regmap *map, unsigned int reg,
-				   unsigned int mask, unsigned int val,
-				   bool *change);
 int regmap_get_val_bytes(struct regmap *map);
 int regmap_async_complete(struct regmap *map);
 bool regmap_can_raw_write(struct regmap *map);
@@ -440,15 +425,11 @@ bool regmap_reg_in_ranges(unsigned int reg,
  * @reg: Offset of the register within the regmap bank
  * @lsb: lsb of the register field.
  * @reg: msb of the register field.
- * @id_size: port size if it has some ports
- * @id_offset: address offset for each ports
  */
 struct reg_field {
 	unsigned int reg;
 	unsigned int lsb;
 	unsigned int msb;
-	unsigned int id_size;
-	unsigned int id_offset;
 };
 
 #define REG_FIELD(_reg, _lsb, _msb) {		\
@@ -467,15 +448,6 @@ void devm_regmap_field_free(struct device *dev,	struct regmap_field *field);
 
 int regmap_field_read(struct regmap_field *field, unsigned int *val);
 int regmap_field_write(struct regmap_field *field, unsigned int val);
-int regmap_field_update_bits(struct regmap_field *field,
-			     unsigned int mask, unsigned int val);
-
-int regmap_fields_write(struct regmap_field *field, unsigned int id,
-			unsigned int val);
-int regmap_fields_read(struct regmap_field *field, unsigned int id,
-		       unsigned int *val);
-int regmap_fields_update_bits(struct regmap_field *field,  unsigned int id,
-			      unsigned int mask, unsigned int val);
 
 /**
  * Description of an IRQ for the generic regmap irq_chip.
@@ -555,13 +527,6 @@ static inline int regmap_write(struct regmap *map, unsigned int reg,
 	return -EINVAL;
 }
 
-static inline int regmap_write_async(struct regmap *map, unsigned int reg,
-				     unsigned int val)
-{
-	WARN_ONCE(1, "regmap API is disabled");
-	return -EINVAL;
-}
-
 static inline int regmap_raw_write(struct regmap *map, unsigned int reg,
 				   const void *val, size_t val_len)
 {
@@ -611,28 +576,10 @@ static inline int regmap_update_bits(struct regmap *map, unsigned int reg,
 	return -EINVAL;
 }
 
-static inline int regmap_update_bits_async(struct regmap *map,
-					   unsigned int reg,
-					   unsigned int mask, unsigned int val)
-{
-	WARN_ONCE(1, "regmap API is disabled");
-	return -EINVAL;
-}
-
 static inline int regmap_update_bits_check(struct regmap *map,
 					   unsigned int reg,
 					   unsigned int mask, unsigned int val,
 					   bool *change)
-{
-	WARN_ONCE(1, "regmap API is disabled");
-	return -EINVAL;
-}
-
-static inline int regmap_update_bits_check_async(struct regmap *map,
-						 unsigned int reg,
-						 unsigned int mask,
-						 unsigned int val,
-						 bool *change)
 {
 	WARN_ONCE(1, "regmap API is disabled");
 	return -EINVAL;

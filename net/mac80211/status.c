@@ -194,36 +194,29 @@ static void ieee80211_frame_acked(struct sta_info *sta, struct sk_buff *skb)
 	if (ieee80211_is_action(mgmt->frame_control) &&
 	    mgmt->u.action.category == WLAN_CATEGORY_HT &&
 	    mgmt->u.action.u.ht_smps.action == WLAN_HT_ACTION_SMPS &&
+	    sdata->vif.type == NL80211_IFTYPE_STATION &&
 	    ieee80211_sdata_running(sdata)) {
-		enum ieee80211_smps_mode smps_mode;
-
+		/*
+		 * This update looks racy, but isn't -- if we come
+		 * here we've definitely got a station that we're
+		 * talking to, and on a managed interface that can
+		 * only be the AP. And the only other place updating
+		 * this variable in managed mode is before association.
+		 */
 		switch (mgmt->u.action.u.ht_smps.smps_control) {
 		case WLAN_HT_SMPS_CONTROL_DYNAMIC:
-			smps_mode = IEEE80211_SMPS_DYNAMIC;
+			sdata->smps_mode = IEEE80211_SMPS_DYNAMIC;
 			break;
 		case WLAN_HT_SMPS_CONTROL_STATIC:
-			smps_mode = IEEE80211_SMPS_STATIC;
+			sdata->smps_mode = IEEE80211_SMPS_STATIC;
 			break;
 		case WLAN_HT_SMPS_CONTROL_DISABLED:
 		default: /* shouldn't happen since we don't send that */
-			smps_mode = IEEE80211_SMPS_OFF;
+			sdata->smps_mode = IEEE80211_SMPS_OFF;
 			break;
 		}
 
-		if (sdata->vif.type == NL80211_IFTYPE_STATION) {
-			/*
-			 * This update looks racy, but isn't -- if we come
-			 * here we've definitely got a station that we're
-			 * talking to, and on a managed interface that can
-			 * only be the AP. And the only other place updating
-			 * this variable in managed mode is before association.
-			 */
-			sdata->smps_mode = smps_mode;
-			ieee80211_queue_work(&local->hw, &sdata->recalc_smps);
-		} else if (sdata->vif.type == NL80211_IFTYPE_AP ||
-			   sdata->vif.type == NL80211_IFTYPE_AP_VLAN) {
-			sta->known_smps_mode = smps_mode;
-		}
+		ieee80211_queue_work(&local->hw, &sdata->recalc_smps);
 	}
 }
 

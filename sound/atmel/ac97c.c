@@ -34,6 +34,7 @@
 #include <linux/dw_dmac.h>
 
 #include <mach/cpu.h>
+#include <mach/gpio.h>
 
 #ifdef CONFIG_ARCH_AT91
 #include <mach/hardware.h>

@@ -986,7 +986,6 @@ static int sccnxp_probe(struct platform_device *pdev)
 		return 0;
 	}
 
-	uart_unregister_driver(&s->uart);
 err_out:
 	if (!IS_ERR(s->regulator))
 		return regulator_disable(s->regulator);

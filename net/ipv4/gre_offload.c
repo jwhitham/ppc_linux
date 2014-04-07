@@ -39,8 +39,7 @@ static struct sk_buff *gre_gso_segment(struct sk_buff *skb,
 				  SKB_GSO_UDP |
 				  SKB_GSO_DODGY |
 				  SKB_GSO_TCP_ECN |
-				  SKB_GSO_GRE |
-				  SKB_GSO_IPIP)))
+				  SKB_GSO_GRE)))
 		goto out;
 
 	if (unlikely(!pskb_may_pull(skb, sizeof(*greh))))

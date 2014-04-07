@@ -19,11 +19,51 @@
 static struct cpufreq_frequency_table *freq_table;
 static struct clk *armss_clk;
 
-static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
-				unsigned int index)
+static struct freq_attr *dbx500_cpufreq_attr[] = {
+	&cpufreq_freq_attr_scaling_available_freqs,
+	NULL,
+};
+
+static int dbx500_cpufreq_verify_speed(struct cpufreq_policy *policy)
 {
+	return cpufreq_frequency_table_verify(policy, freq_table);
+}
+
+static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
+				unsigned int target_freq,
+				unsigned int relation)
+{
+	struct cpufreq_freqs freqs;
+	unsigned int idx;
+	int ret;
+
+	/* Lookup the next frequency */
+	if (cpufreq_frequency_table_target(policy, freq_table, target_freq,
+					relation, &idx))
+		return -EINVAL;
+
+	freqs.old = policy->cur;
+	freqs.new = freq_table[idx].frequency;
+
+	if (freqs.old == freqs.new)
+		return 0;
+
+	/* pre-change notification */
+	cpufreq_notify_transition(policy, &freqs, CPUFREQ_PRECHANGE);
+
 	/* update armss clk frequency */
-	return clk_set_rate(armss_clk, freq_table[index].frequency * 1000);
+	ret = clk_set_rate(armss_clk, freqs.new * 1000);
+
+	if (ret) {
+		pr_err("dbx500-cpufreq: Failed to set armss_clk to %d Hz: error %d\n",
+		       freqs.new * 1000, ret);
+		freqs.new = freqs.old;
+	}
+
+	/* post change notification */
+	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
+
+	return ret;
 }
 
 static unsigned int dbx500_cpufreq_getspeed(unsigned int cpu)
@@ -44,17 +84,43 @@ static unsigned int dbx500_cpufreq_getspeed(unsigned int cpu)
 
 static int dbx500_cpufreq_init(struct cpufreq_policy *policy)
 {
-	return cpufreq_generic_init(policy, freq_table, 20 * 1000);
+	int res;
+
+	/* get policy fields based on the table */
+	res = cpufreq_frequency_table_cpuinfo(policy, freq_table);
+	if (!res)
+		cpufreq_frequency_table_get_attr(freq_table, policy->cpu);
+	else {
+		pr_err("dbx500-cpufreq: Failed to read policy table\n");
+		return res;
+	}
+
+	policy->min = policy->cpuinfo.min_freq;
+	policy->max = policy->cpuinfo.max_freq;
+	policy->cur = dbx500_cpufreq_getspeed(policy->cpu);
+	policy->governor = CPUFREQ_DEFAULT_GOVERNOR;
+
+	/*
+	 * FIXME : Need to take time measurement across the target()
+	 *	   function with no/some/all drivers in the notification
+	 *	   list.
+	 */
+	policy->cpuinfo.transition_latency = 20 * 1000; /* in ns */
+
+	/* policy sharing between dual CPUs */
+	cpumask_setall(policy->cpus);
+
+	return 0;
 }
 
 static struct cpufreq_driver dbx500_cpufreq_driver = {
 	.flags  = CPUFREQ_STICKY | CPUFREQ_CONST_LOOPS,
-	.verify = cpufreq_generic_frequency_table_verify,
-	.target_index = dbx500_cpufreq_target,
+	.verify = dbx500_cpufreq_verify_speed,
+	.target = dbx500_cpufreq_target,
 	.get    = dbx500_cpufreq_getspeed,
 	.init   = dbx500_cpufreq_init,
 	.name   = "DBX500",
-	.attr   = cpufreq_generic_attr,
+	.attr   = dbx500_cpufreq_attr,
 };
 
 static int dbx500_cpufreq_probe(struct platform_device *pdev)

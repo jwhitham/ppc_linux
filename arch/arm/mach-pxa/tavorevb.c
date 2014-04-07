@@ -175,7 +175,6 @@ static struct platform_pwm_backlight_data tavorevb_backlight_data[] = {
 		.max_brightness	= 100,
 		.dft_brightness	= 100,
 		.pwm_period_ns	= 100000,
-		.enable_gpio	= -1,
 	},
 	[1] = {
 		/* secondary backlight */
@@ -183,7 +182,6 @@ static struct platform_pwm_backlight_data tavorevb_backlight_data[] = {
 		.max_brightness	= 100,
 		.dft_brightness	= 100,
 		.pwm_period_ns	= 100000,
-		.enable_gpio	= -1,
 	},
 };
 

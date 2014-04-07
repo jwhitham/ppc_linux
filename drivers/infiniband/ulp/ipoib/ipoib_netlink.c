@@ -142,10 +142,10 @@ static void ipoib_unregister_child_dev(struct net_device *dev, struct list_head 
 	priv = netdev_priv(dev);
 	ppriv = netdev_priv(priv->parent);
 
-	down_write(&ppriv->vlan_rwsem);
+	mutex_lock(&ppriv->vlan_mutex);
 	unregister_netdevice_queue(dev, head);
 	list_del(&priv->list);
-	up_write(&ppriv->vlan_rwsem);
+	mutex_unlock(&ppriv->vlan_mutex);
 }
 
 static size_t ipoib_get_size(const struct net_device *dev)

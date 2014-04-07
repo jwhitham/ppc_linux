@@ -379,14 +379,15 @@ static int ad5360_read_raw(struct iio_dev *indio_dev,
 		*val = ret >> chan->scan_type.shift;
 		return IIO_VAL_INT;
 	case IIO_CHAN_INFO_SCALE:
-		scale_uv = ad5360_get_channel_vref(st, chan->channel);
+		/* vout = 4 * vref * dac_code */
+		scale_uv = ad5360_get_channel_vref(st, chan->channel) * 4 * 100;
 		if (scale_uv < 0)
 			return scale_uv;
 
-		/* vout = 4 * vref * dac_code */
-		*val = scale_uv * 4 / 1000;
-		*val2 = chan->scan_type.realbits;
-		return IIO_VAL_FRACTIONAL_LOG2;
+		scale_uv >>= (chan->scan_type.realbits);
+		*val =  scale_uv / 100000;
+		*val2 = (scale_uv % 100000) * 10;
+		return IIO_VAL_INT_PLUS_MICRO;
 	case IIO_CHAN_INFO_CALIBBIAS:
 		ret = ad5360_read(indio_dev, AD5360_READBACK_OFFSET,
 			chan->address);

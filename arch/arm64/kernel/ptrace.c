@@ -636,27 +636,28 @@ static int compat_gpr_get(struct task_struct *target,
 
 	for (i = 0; i < num_regs; ++i) {
 		unsigned int idx = start + i;
-		compat_ulong_t reg;
+		void *reg;
 
 		switch (idx) {
 		case 15:
-			reg = task_pt_regs(target)->pc;
+			reg = (void *)&task_pt_regs(target)->pc;
 			break;
 		case 16:
-			reg = task_pt_regs(target)->pstate;
+			reg = (void *)&task_pt_regs(target)->pstate;
 			break;
 		case 17:
-			reg = task_pt_regs(target)->orig_x0;
+			reg = (void *)&task_pt_regs(target)->orig_x0;
 			break;
 		default:
-			reg = task_pt_regs(target)->regs[idx];
+			reg = (void *)&task_pt_regs(target)->regs[idx];
 		}
 
-		ret = copy_to_user(ubuf, &reg, sizeof(reg));
+		ret = copy_to_user(ubuf, reg, sizeof(compat_ulong_t));
+
 		if (ret)
 			break;
-
-		ubuf += sizeof(reg);
+		else
+			ubuf += sizeof(compat_ulong_t);
 	}
 
 	return ret;
@@ -684,28 +685,28 @@ static int compat_gpr_set(struct task_struct *target,
 
 	for (i = 0; i < num_regs; ++i) {
 		unsigned int idx = start + i;
-		compat_ulong_t reg;
-
-		ret = copy_from_user(&reg, ubuf, sizeof(reg));
-		if (ret)
-			return ret;
-
-		ubuf += sizeof(reg);
+		void *reg;
 
 		switch (idx) {
 		case 15:
-			newregs.pc = reg;
+			reg = (void *)&newregs.pc;
 			break;
 		case 16:
-			newregs.pstate = reg;
+			reg = (void *)&newregs.pstate;
 			break;
 		case 17:
-			newregs.orig_x0 = reg;
+			reg = (void *)&newregs.orig_x0;
 			break;
 		default:
-			newregs.regs[idx] = reg;
+			reg = (void *)&newregs.regs[idx];
 		}
 
+		ret = copy_from_user(reg, ubuf, sizeof(compat_ulong_t));
+
+		if (ret)
+			goto out;
+		else
+			ubuf += sizeof(compat_ulong_t);
 	}
 
 	if (valid_user_regs(&newregs.user_regs))
@@ -713,6 +714,7 @@ static int compat_gpr_set(struct task_struct *target,
 	else
 		ret = -EINVAL;
 
+out:
 	return ret;
 }
 

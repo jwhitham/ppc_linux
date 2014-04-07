@@ -89,15 +89,14 @@ config AT_HDMAC
 	  Support the Atmel AHB DMA controller.
 
 config FSL_DMA
-	tristate "Freescale Elo series DMA support"
+	tristate "Freescale Elo and Elo Plus DMA support"
 	depends on FSL_SOC
 	select DMA_ENGINE
 	select ASYNC_TX_ENABLE_CHANNEL_SWITCH
 	---help---
-	  Enable support for the Freescale Elo series DMA controllers.
-	  The Elo is the DMA controller on some mpc82xx and mpc83xx parts, the
-	  EloPlus is on mpc85xx and mpc86xx and Pxxx parts, and the Elo3 is on
-	  some Txxx and Bxxx parts.
+	  Enable support for the Freescale Elo and Elo Plus DMA controllers.
+	  The Elo is the DMA controller on some 82xx and 83xx parts, and the
+	  Elo Plus is the DMA controller on 85xx and 86xx parts.
 
 config MPC512X_DMA
 	tristate "Freescale MPC512x built-in DMA engine support"
@@ -155,18 +154,6 @@ config TEGRA20_APB_DMA
 	  This DMA controller transfers data from memory to peripheral fifo
 	  or vice versa. It does not support memory to memory data transfer.
 
-config S3C24XX_DMAC
-	tristate "Samsung S3C24XX DMA support"
-	depends on ARCH_S3C24XX && !S3C24XX_DMA
-	select DMA_ENGINE
-	select DMA_VIRTUAL_CHANNELS
-	help
-	  Support for the Samsung S3C24XX DMA controller driver. The
-	  DMA controller is having multiple DMA channels which can be
-	  configured for different peripherals like audio, UART, SPI.
-	  The DMA controller can transfer data from memory to peripheral,
-	  periphal to memory, periphal to periphal and memory to memory.
-
 source "drivers/dma/sh/Kconfig"
 
 config COH901318
@@ -208,7 +195,7 @@ config SIRF_DMA
 
 config TI_EDMA
 	bool "TI EDMA support"
-	depends on ARCH_DAVINCI || ARCH_OMAP || ARCH_KEYSTONE
+	depends on ARCH_DAVINCI || ARCH_OMAP
 	select DMA_ENGINE
 	select DMA_VIRTUAL_CHANNELS
 	select TI_PRIV_EDMA
@@ -314,7 +301,7 @@ config MMP_PDMA
 	depends on (ARCH_MMP || ARCH_PXA)
 	select DMA_ENGINE
 	help
-	  Support the MMP PDMA engine for PXA and MMP platform.
+	  Support the MMP PDMA engine for PXA and MMP platfrom.
 
 config DMA_JZ4740
 	tristate "JZ4740 DMA support"

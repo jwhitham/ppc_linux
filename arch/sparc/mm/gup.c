@@ -71,12 +71,13 @@ static int gup_huge_pmd(pmd_t *pmdp, pmd_t pmd, unsigned long addr,
 			int *nr)
 {
 	struct page *head, *page, *tail;
+	u32 mask;
 	int refs;
 
-	if (!pmd_large(pmd))
-		return 0;
-
-	if (write && !pmd_write(pmd))
+	mask = PMD_HUGE_PRESENT;
+	if (write)
+		mask |= PMD_HUGE_WRITE;
+	if ((pmd_val(pmd) & mask) != mask)
 		return 0;
 
 	refs = 0;

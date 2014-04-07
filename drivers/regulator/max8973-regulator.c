@@ -467,7 +467,7 @@ static int max8973_probe(struct i2c_client *client,
 	config.regmap = max->regmap;
 
 	/* Register the regulators */
-	rdev = devm_regulator_register(&client->dev, &max->desc, &config);
+	rdev = regulator_register(&max->desc, &config);
 	if (IS_ERR(rdev)) {
 		ret = PTR_ERR(rdev);
 		dev_err(max->dev, "regulator register failed, err %d\n", ret);
@@ -475,6 +475,14 @@ static int max8973_probe(struct i2c_client *client,
 	}
 
 	max->rdev = rdev;
+	return 0;
+}
+
+static int max8973_remove(struct i2c_client *client)
+{
+	struct max8973_chip *max = i2c_get_clientdata(client);
+
+	regulator_unregister(max->rdev);
 	return 0;
 }
 
@@ -491,6 +499,7 @@ static struct i2c_driver max8973_i2c_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = max8973_probe,
+	.remove = max8973_remove,
 	.id_table = max8973_id,
 };
 

@@ -1,3 +1,5 @@
+EXTRA_CFLAGS += -I$(src)/include
+
 r8188eu-y :=				\
 		core/rtw_ap.o		\
 		core/rtw_br_ext.o	\
@@ -28,6 +30,7 @@ r8188eu-y :=				\
 		hal/HalPhyRf.o		\
 		hal/HalPhyRf_8188e.o	\
 		hal/HalPwrSeqCmd.o	\
+		hal/Hal8188EFWImg_CE.o	\
 		hal/Hal8188EPwrSeq.o	\
 		hal/Hal8188ERateAdaptive.o\
 		hal/hal_intf.o		\
@@ -64,4 +67,4 @@ r8188eu-y :=				\
 
 obj-$(CONFIG_R8188EU)	:= r8188eu.o
 
-ccflags-y += -D__CHECK_ENDIAN__ -I$(src)/include
+ccflags-y += -D__CHECK_ENDIAN__

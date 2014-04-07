@@ -50,7 +50,7 @@ static struct usb_driver btusb_driver;
 #define BTUSB_ATH3012		0x80
 #define BTUSB_INTEL		0x100
 
-static const struct usb_device_id btusb_table[] = {
+static struct usb_device_id btusb_table[] = {
 	/* Generic Bluetooth USB device */
 	{ USB_DEVICE_INFO(0xe0, 0x01, 0x01) },
 
@@ -121,7 +121,7 @@ static const struct usb_device_id btusb_table[] = {
 
 MODULE_DEVICE_TABLE(usb, btusb_table);
 
-static const struct usb_device_id blacklist_table[] = {
+static struct usb_device_id blacklist_table[] = {
 	/* CSR BlueCore devices */
 	{ USB_DEVICE(0x0a12, 0x0001), .driver_info = BTUSB_CSR },
 
@@ -716,8 +716,9 @@ static int btusb_flush(struct hci_dev *hdev)
 	return 0;
 }
 
-static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+static int btusb_send_frame(struct sk_buff *skb)
 {
+	struct hci_dev *hdev = (struct hci_dev *) skb->dev;
 	struct btusb_data *data = hci_get_drvdata(hdev);
 	struct usb_ctrlrequest *dr;
 	struct urb *urb;
@@ -728,8 +729,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	if (!test_bit(HCI_RUNNING, &hdev->flags))
 		return -EBUSY;
-
-	skb->dev = (void *) hdev;
 
 	switch (bt_cb(skb)->pkt_type) {
 	case HCI_COMMAND_PKT:
@@ -775,7 +774,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		break;
 
 	case HCI_SCODATA_PKT:
-		if (!data->isoc_tx_ep || hci_conn_num(hdev, SCO_LINK) < 1)
+		if (!data->isoc_tx_ep || hdev->conn_hash.sco_num < 1)
 			return -ENODEV;
 
 		urb = usb_alloc_urb(BTUSB_MAX_ISOC_FRAMES, GFP_ATOMIC);
@@ -834,8 +833,8 @@ static void btusb_notify(struct hci_dev *hdev, unsigned int evt)
 
 	BT_DBG("%s evt %d", hdev->name, evt);
 
-	if (hci_conn_num(hdev, SCO_LINK) != data->sco_num) {
-		data->sco_num = hci_conn_num(hdev, SCO_LINK);
+	if (hdev->conn_hash.sco_num != data->sco_num) {
+		data->sco_num = hdev->conn_hash.sco_num;
 		schedule_work(&data->work);
 	}
 }
@@ -890,7 +889,7 @@ static void btusb_work(struct work_struct *work)
 	int new_alts;
 	int err;
 
-	if (data->sco_num > 0) {
+	if (hdev->conn_hash.sco_num > 0) {
 		if (!test_bit(BTUSB_DID_ISO_RESUME, &data->flags)) {
 			err = usb_autopm_get_interface(data->isoc ? data->isoc : data->intf);
 			if (err < 0) {
@@ -904,9 +903,9 @@ static void btusb_work(struct work_struct *work)
 
 		if (hdev->voice_setting & 0x0020) {
 			static const int alts[3] = { 2, 4, 5 };
-			new_alts = alts[data->sco_num - 1];
+			new_alts = alts[hdev->conn_hash.sco_num - 1];
 		} else {
-			new_alts = data->sco_num;
+			new_alts = hdev->conn_hash.sco_num;
 		}
 
 		if (data->isoc_altsetting != new_alts) {
@@ -1629,6 +1628,7 @@ static struct usb_driver btusb_driver = {
 #ifdef CONFIG_PM
 	.suspend	= btusb_suspend,
 	.resume		= btusb_resume,
+	.reset_resume	= btusb_resume,
 #endif
 	.id_table	= btusb_table,
 	.supports_autosuspend = 1,

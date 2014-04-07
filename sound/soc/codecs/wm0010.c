@@ -372,8 +372,7 @@ static int wm0010_firmware_load(const char *name, struct snd_soc_codec *codec)
 	offset = 0;
 	dsp = inforec->dsp_target;
 	wm0010->boot_failed = false;
-	if (WARN_ON(!list_empty(&xfer_list)))
-		return -EINVAL;
+	BUG_ON(!list_empty(&xfer_list));
 	init_completion(&done);
 
 	/* First record should be INFO */
@@ -794,11 +793,11 @@ static int wm0010_set_sysclk(struct snd_soc_codec *codec, int source,
 		wm0010->max_spi_freq = 0;
 	} else {
 		for (i = 0; i < ARRAY_SIZE(pll_clock_map); i++)
-			if (freq >= pll_clock_map[i].max_sysclk) {
-				wm0010->max_spi_freq = pll_clock_map[i].max_pll_spi_speed;
-				wm0010->pll_clkctrl1 = pll_clock_map[i].pll_clkctrl1;
+			if (freq >= pll_clock_map[i].max_sysclk)
 				break;
-			}
+
+		wm0010->max_spi_freq = pll_clock_map[i].max_pll_spi_speed;
+		wm0010->pll_clkctrl1 = pll_clock_map[i].pll_clkctrl1;
 	}
 
 	return 0;

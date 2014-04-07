@@ -62,7 +62,6 @@
 #define SLIC_OFFLOAD_IP_CHECKSUM		1
 #define STATS_TIMER_INTERVAL			2
 #define PING_TIMER_INTERVAL			    1
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/kernel.h>
 #include <linux/string.h>
@@ -792,8 +791,8 @@ static bool slic_mac_filter(struct adapter *adapter,
 			struct mcast_address *mcaddr = adapter->mcastaddrs;
 
 			while (mcaddr) {
-				if (ether_addr_equal(mcaddr->address,
-						     ether_frame->ether_dhost)) {
+				if (!compare_ether_addr(mcaddr->address,
+							ether_frame->ether_dhost)) {
 					adapter->rcv_multicasts++;
 					netdev->stats.multicast++;
 					return true;
@@ -1835,7 +1834,7 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 #endif
 
 	seq_printf(seq, "driver_version           : %s\n", slic_proc_version);
-	seq_puts(seq, "Microcode versions:           \n");
+	seq_printf(seq, "Microcode versions:           \n");
 	seq_printf(seq, "    Gigabit (gb)         : %s %s\n",
 		    MOJAVE_UCODE_VERS_STRING, MOJAVE_UCODE_VERS_DATE);
 	seq_printf(seq, "    Gigabit Receiver     : %s %s\n",
@@ -1866,8 +1865,8 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 			   config->macinfo[i].macaddrA[4],
 			   config->macinfo[i].macaddrA[5]);
 	}
-	seq_puts(seq, "     IF  Init State Duplex/Speed irq\n");
-	seq_puts(seq, "     -------------------------------\n");
+	seq_printf(seq, "     IF  Init State Duplex/Speed irq\n");
+	seq_printf(seq, "     -------------------------------\n");
 	for (i = 0; i < card->adapters_allocated; i++) {
 		struct adapter *adapter;
 
@@ -1910,7 +1909,7 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 	switch (config->FruFormat) {
 	case ATK_FRU_FORMAT:
 		{
-			seq_puts(seq,
+			seq_printf(seq,
 			    "Vendor                   : Alacritech, Inc.\n");
 			seq_printf(seq,
 			    "Assembly #               : %c%c%c%c%c%c\n",
@@ -1943,9 +1942,9 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 
 	default:
 		{
-			seq_puts(seq,
+			seq_printf(seq,
 			    "Vendor                   : Alacritech, Inc.\n");
-			seq_puts(seq,
+			seq_printf(seq,
 			    "Serial   #               : Empty FRU\n");
 			break;
 		}
@@ -1954,7 +1953,7 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 	switch (config->OEMFruFormat) {
 	case VENDOR1_FRU_FORMAT:
 		{
-			seq_puts(seq, "FRU Information:\n");
+			seq_printf(seq, "FRU Information:\n");
 			seq_printf(seq, "    Commodity #          : %c\n",
 				    oemfru[0]);
 			seq_printf(seq,
@@ -1977,7 +1976,7 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 
 	case VENDOR2_FRU_FORMAT:
 		{
-			seq_puts(seq, "FRU Information:\n");
+			seq_printf(seq, "FRU Information:\n");
 			seq_printf(seq,
 				    "    Part     #           : "
 				    "%c%c%c%c%c%c%c%c\n",
@@ -2000,12 +1999,12 @@ static int slic_debug_card_show(struct seq_file *seq, void *v)
 
 	case VENDOR3_FRU_FORMAT:
 		{
-			seq_puts(seq, "FRU Information:\n");
+			seq_printf(seq, "FRU Information:\n");
 		}
 
 	case VENDOR4_FRU_FORMAT:
 		{
-			seq_puts(seq, "FRU Information:\n");
+			seq_printf(seq, "FRU Information:\n");
 			seq_printf(seq,
 				    "    FRU Number           : "
 				    "%c%c%c%c%c%c%c%c\n",
@@ -2232,8 +2231,14 @@ static void slic_debug_card_destroy(struct sliccard *card)
 		if (adapter)
 			slic_debug_adapter_destroy(adapter);
 	}
-	debugfs_remove(card->debugfs_cardinfo);
-	debugfs_remove(card->debugfs_dir);
+	if (card->debugfs_cardinfo) {
+		debugfs_remove(card->debugfs_cardinfo);
+		card->debugfs_cardinfo = NULL;
+	}
+	if (card->debugfs_dir) {
+		debugfs_remove(card->debugfs_dir);
+		card->debugfs_dir = NULL;
+	}
 }
 
 static void slic_debug_init(void)
@@ -2251,7 +2256,10 @@ static void slic_debug_init(void)
 
 static void slic_debug_cleanup(void)
 {
-	debugfs_remove(slic_debugfs);
+	if (slic_debugfs) {
+		debugfs_remove(slic_debugfs);
+		slic_debugfs = NULL;
+	}
 }
 
 /*
@@ -2325,7 +2333,7 @@ static int slic_mcast_add_list(struct adapter *adapter, char *address)
 	/* Check to see if it already exists */
 	mlist = adapter->mcastaddrs;
 	while (mlist) {
-		if (ether_addr_equal(mlist->address, address))
+		if (!compare_ether_addr(mlist->address, address))
 			return 0;
 		mlist = mlist->next;
 	}
@@ -2619,67 +2627,6 @@ static void slic_xmit_complete(struct adapter *adapter)
 	adapter->max_isr_xmits = max(adapter->max_isr_xmits, frames);
 }
 
-static void slic_interrupt_card_up(u32 isr, struct adapter *adapter,
-			struct net_device *dev)
-{
-	if (isr & ~ISR_IO) {
-		if (isr & ISR_ERR) {
-			adapter->error_interrupts++;
-			if (isr & ISR_RMISS) {
-				int count;
-				int pre_count;
-				int errors;
-
-				struct slic_rcvqueue *rcvq =
-					&adapter->rcvqueue;
-
-				adapter->error_rmiss_interrupts++;
-
-				if (!rcvq->errors)
-					rcv_count = rcvq->count;
-				pre_count = rcvq->count;
-				errors = rcvq->errors;
-
-				while (rcvq->count < SLIC_RCVQ_FILLTHRESH) {
-					count = slic_rcvqueue_fill(adapter);
-					if (!count)
-						break;
-				}
-			} else if (isr & ISR_XDROP) {
-				dev_err(&dev->dev,
-						"isr & ISR_ERR [%x] "
-						"ISR_XDROP \n", isr);
-			} else {
-				dev_err(&dev->dev,
-						"isr & ISR_ERR [%x]\n",
-						isr);
-			}
-		}
-
-		if (isr & ISR_LEVENT) {
-			adapter->linkevent_interrupts++;
-			slic_link_event_handler(adapter);
-		}
-
-		if ((isr & ISR_UPC) || (isr & ISR_UPCERR) ||
-		    (isr & ISR_UPCBSY)) {
-			adapter->upr_interrupts++;
-			slic_upr_request_complete(adapter, isr);
-		}
-	}
-
-	if (isr & ISR_RCV) {
-		adapter->rcv_interrupts++;
-		slic_rcv_handler(adapter);
-	}
-
-	if (isr & ISR_CMD) {
-		adapter->xmit_interrupts++;
-		slic_xmit_complete(adapter);
-	}
-}
-
-
 static irqreturn_t slic_interrupt(int irq, void *dev_id)
 {
 	struct net_device *dev = (struct net_device *)dev_id;
@@ -2694,7 +2641,64 @@ static irqreturn_t slic_interrupt(int irq, void *dev_id)
 		adapter->num_isrs++;
 		switch (adapter->card->state) {
 		case CARD_UP:
-			slic_interrupt_card_up(isr, adapter, dev);
+			if (isr & ~ISR_IO) {
+				if (isr & ISR_ERR) {
+					adapter->error_interrupts++;
+					if (isr & ISR_RMISS) {
+						int count;
+						int pre_count;
+						int errors;
+
+						struct slic_rcvqueue *rcvq =
+						    &adapter->rcvqueue;
+
+						adapter->
+						    error_rmiss_interrupts++;
+						if (!rcvq->errors)
+							rcv_count = rcvq->count;
+						pre_count = rcvq->count;
+						errors = rcvq->errors;
+
+						while (rcvq->count <
+						       SLIC_RCVQ_FILLTHRESH) {
+							count =
+							    slic_rcvqueue_fill
+							    (adapter);
+							if (!count)
+								break;
+						}
+					} else if (isr & ISR_XDROP) {
+						dev_err(&dev->dev,
+							"isr & ISR_ERR [%x] "
+							"ISR_XDROP \n", isr);
+					} else {
+						dev_err(&dev->dev,
+							"isr & ISR_ERR [%x]\n",
+							isr);
+					}
+				}
+
+				if (isr & ISR_LEVENT) {
+					adapter->linkevent_interrupts++;
+					slic_link_event_handler(adapter);
+				}
+
+				if ((isr & ISR_UPC) ||
+				    (isr & ISR_UPCERR) || (isr & ISR_UPCBSY)) {
+					adapter->upr_interrupts++;
+					slic_upr_request_complete(adapter, isr);
+				}
+			}
+
+			if (isr & ISR_RCV) {
+				adapter->rcv_interrupts++;
+				slic_rcv_handler(adapter);
+			}
+
+			if (isr & ISR_CMD) {
+				adapter->xmit_interrupts++;
+				slic_xmit_complete(adapter);
+			}
 			break;
 
 		case CARD_DOWN:
@@ -3641,15 +3645,16 @@ static int slic_entry_probe(struct pci_dev *pcidev,
 		return err;
 
 	if (slic_debug > 0 && did_version++ == 0) {
-		dev_dbg(&pcidev->dev, "%s\n", slic_banner);
-		dev_dbg(&pcidev->dev, "%s\n", slic_proc_version);
+		printk(KERN_DEBUG "%s\n", slic_banner);
+		printk(KERN_DEBUG "%s\n", slic_proc_version);
 	}
 
 	if (!pci_set_dma_mask(pcidev, DMA_BIT_MASK(64))) {
 		pci_using_dac = 1;
 		err = pci_set_consistent_dma_mask(pcidev, DMA_BIT_MASK(64));
 		if (err) {
-			dev_err(&pcidev->dev, "unable to obtain 64-bit DMA for consistent allocations\n");
+			dev_err(&pcidev->dev, "unable to obtain 64-bit DMA for "
+					"consistent allocations\n");
 			goto err_out_disable_pci;
 		}
 	} else {
@@ -3771,7 +3776,8 @@ static int __init slic_module_init(void)
 	slic_init_driver();
 
 	if (debug >= 0 && slic_debug != debug)
-		pr_debug("debug level is %d.\n", debug);
+		printk(KERN_DEBUG KBUILD_MODNAME ": debug level is %d.\n",
+		       debug);
 	if (debug >= 0)
 		slic_debug = debug;
 

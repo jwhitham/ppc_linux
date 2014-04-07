@@ -37,7 +37,6 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
-#include <linux/of.h>
 
 #include <linux/atmel-ssc.h>
 

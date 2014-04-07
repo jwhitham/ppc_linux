@@ -21,7 +21,6 @@
 #include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
-#include <linux/acpi.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -927,7 +926,7 @@ static int rt5640_set_dmic2_event(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
-static void hp_amp_power_on(struct snd_soc_codec *codec)
+void hp_amp_power_on(struct snd_soc_codec *codec)
 {
 	struct rt5640_priv *rt5640 = snd_soc_codec_get_drvdata(codec);
 
@@ -1604,14 +1603,13 @@ static int rt5640_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_codec *codec = rtd->codec;
 	struct rt5640_priv *rt5640 = snd_soc_codec_get_drvdata(codec);
-	unsigned int val_len = 0, val_clk, mask_clk;
-	int dai_sel, pre_div, bclk_ms, frame_size;
+	unsigned int val_len = 0, val_clk, mask_clk, dai_sel;
+	int pre_div, bclk_ms, frame_size;
 
 	rt5640->lrck[dai->id] = params_rate(params);
 	pre_div = get_clk_info(rt5640->sysclk, rt5640->lrck[dai->id]);
 	if (pre_div < 0) {
-		dev_err(codec->dev, "Unsupported clock setting %d for DAI %d\n",
-			rt5640->lrck[dai->id], dai->id);
+		dev_err(codec->dev, "Unsupported clock setting\n");
 		return -EINVAL;
 	}
 	frame_size = snd_soc_params_to_frame_size(params);
@@ -1675,8 +1673,7 @@ static int rt5640_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 {
 	struct snd_soc_codec *codec = dai->codec;
 	struct rt5640_priv *rt5640 = snd_soc_codec_get_drvdata(codec);
-	unsigned int reg_val = 0;
-	int dai_sel;
+	unsigned int reg_val = 0, dai_sel;
 
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBM_CFM:
@@ -1980,20 +1977,13 @@ static int rt5640_suspend(struct snd_soc_codec *codec)
 	rt5640_reset(codec);
 	regcache_cache_only(rt5640->regmap, true);
 	regcache_mark_dirty(rt5640->regmap);
-	if (gpio_is_valid(rt5640->pdata.ldo1_en))
-		gpio_set_value_cansleep(rt5640->pdata.ldo1_en, 0);
 
 	return 0;
 }
 
 static int rt5640_resume(struct snd_soc_codec *codec)
 {
-	struct rt5640_priv *rt5640 = snd_soc_codec_get_drvdata(codec);
-
-	if (gpio_is_valid(rt5640->pdata.ldo1_en)) {
-		gpio_set_value_cansleep(rt5640->pdata.ldo1_en, 1);
-		msleep(400);
-	}
+	rt5640_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
 	return 0;
 }
@@ -2089,14 +2079,6 @@ static const struct i2c_device_id rt5640_i2c_id[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, rt5640_i2c_id);
-
-#ifdef CONFIG_ACPI
-static struct acpi_device_id rt5640_acpi_match[] = {
-	{ "INT33CA", 0 },
-	{ },
-};
-MODULE_DEVICE_TABLE(acpi, rt5640_acpi_match);
-#endif
 
 static int rt5640_parse_dt(struct rt5640_priv *rt5640, struct device_node *np)
 {
@@ -2217,7 +2199,6 @@ static struct i2c_driver rt5640_i2c_driver = {
 	.driver = {
 		.name = "rt5640",
 		.owner = THIS_MODULE,
-		.acpi_match_table = ACPI_PTR(rt5640_acpi_match),
 	},
 	.probe = rt5640_i2c_probe,
 	.remove   = rt5640_i2c_remove,

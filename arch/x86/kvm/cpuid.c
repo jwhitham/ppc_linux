@@ -23,26 +23,6 @@
 #include "mmu.h"
 #include "trace.h"
 
-static u32 xstate_required_size(u64 xstate_bv)
-{
-	int feature_bit = 0;
-	u32 ret = XSAVE_HDR_SIZE + XSAVE_HDR_OFFSET;
-
-	xstate_bv &= ~XSTATE_FPSSE;
-	while (xstate_bv) {
-		if (xstate_bv & 0x1) {
-		        u32 eax, ebx, ecx, edx;
-		        cpuid_count(0xD, feature_bit, &eax, &ebx, &ecx, &edx);
-			ret = max(ret, eax + ebx);
-		}
-
-		xstate_bv >>= 1;
-		feature_bit++;
-	}
-
-	return ret;
-}
-
 void kvm_update_cpuid(struct kvm_vcpu *vcpu)
 {
 	struct kvm_cpuid_entry2 *best;
@@ -64,18 +44,6 @@ void kvm_update_cpuid(struct kvm_vcpu *vcpu)
 			apic->lapic_timer.timer_mode_mask = 3 << 17;
 		else
 			apic->lapic_timer.timer_mode_mask = 1 << 17;
-	}
-
-	best = kvm_find_cpuid_entry(vcpu, 0xD, 0);
-	if (!best) {
-		vcpu->arch.guest_supported_xcr0 = 0;
-		vcpu->arch.guest_xstate_size = XSAVE_HDR_SIZE + XSAVE_HDR_OFFSET;
-	} else {
-		vcpu->arch.guest_supported_xcr0 =
-			(best->eax | ((u64)best->edx << 32)) &
-			host_xcr0 & KVM_SUPPORTED_XCR0;
-		vcpu->arch.guest_xstate_size =
-			xstate_required_size(vcpu->arch.guest_supported_xcr0);
 	}
 
 	kvm_pmu_cpuid_update(vcpu);
@@ -214,35 +182,13 @@ static bool supported_xcr0_bit(unsigned bit)
 {
 	u64 mask = ((u64)1 << bit);
 
-	return mask & KVM_SUPPORTED_XCR0 & host_xcr0;
+	return mask & (XSTATE_FP | XSTATE_SSE | XSTATE_YMM) & host_xcr0;
 }
 
 #define F(x) bit(X86_FEATURE_##x)
 
-static int __do_cpuid_ent_emulated(struct kvm_cpuid_entry2 *entry,
-				   u32 func, u32 index, int *nent, int maxnent)
-{
-	switch (func) {
-	case 0:
-		entry->eax = 1;		/* only one leaf currently */
-		++*nent;
-		break;
-	case 1:
-		entry->ecx = F(MOVBE);
-		++*nent;
-		break;
-	default:
-		break;
-	}
-
-	entry->function = func;
-	entry->index = index;
-
-	return 0;
-}
-
-static inline int __do_cpuid_ent(struct kvm_cpuid_entry2 *entry, u32 function,
-				 u32 index, int *nent, int maxnent)
+static int do_cpuid_ent(struct kvm_cpuid_entry2 *entry, u32 function,
+			 u32 index, int *nent, int maxnent)
 {
 	int r;
 	unsigned f_nx = is_efer_nx() ? F(NX) : 0;
@@ -437,8 +383,6 @@ static inline int __do_cpuid_ent(struct kvm_cpuid_entry2 *entry, u32 function,
 	case 0xd: {
 		int idx, i;
 
-		entry->eax &= host_xcr0 & KVM_SUPPORTED_XCR0;
-		entry->edx &= (host_xcr0 & KVM_SUPPORTED_XCR0) >> 32;
 		entry->flags |= KVM_CPUID_FLAG_SIGNIFCANT_INDEX;
 		for (idx = 1, i = 1; idx < 64; ++idx) {
 			if (*nent >= maxnent)
@@ -537,15 +481,6 @@ out:
 	return r;
 }
 
-static int do_cpuid_ent(struct kvm_cpuid_entry2 *entry, u32 func,
-			u32 idx, int *nent, int maxnent, unsigned int type)
-{
-	if (type == KVM_GET_EMULATED_CPUID)
-		return __do_cpuid_ent_emulated(entry, func, idx, nent, maxnent);
-
-	return __do_cpuid_ent(entry, func, idx, nent, maxnent);
-}
-
 #undef F
 
 struct kvm_cpuid_param {
@@ -560,36 +495,8 @@ static bool is_centaur_cpu(const struct kvm_cpuid_param *param)
 	return boot_cpu_data.x86_vendor == X86_VENDOR_CENTAUR;
 }
 
-static bool sanity_check_entries(struct kvm_cpuid_entry2 __user *entries,
-				 __u32 num_entries, unsigned int ioctl_type)
-{
-	int i;
-	__u32 pad[3];
-
-	if (ioctl_type != KVM_GET_EMULATED_CPUID)
-		return false;
-
-	/*
-	 * We want to make sure that ->padding is being passed clean from
-	 * userspace in case we want to use it for something in the future.
-	 *
-	 * Sadly, this wasn't enforced for KVM_GET_SUPPORTED_CPUID and so we
-	 * have to give ourselves satisfied only with the emulated side. /me
-	 * sheds a tear.
-	 */
-	for (i = 0; i < num_entries; i++) {
-		if (copy_from_user(pad, entries[i].padding, sizeof(pad)))
-			return true;
-
-		if (pad[0] || pad[1] || pad[2])
-			return true;
-	}
-	return false;
-}
-
-int kvm_dev_ioctl_get_cpuid(struct kvm_cpuid2 *cpuid,
-			    struct kvm_cpuid_entry2 __user *entries,
-			    unsigned int type)
+int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
+				      struct kvm_cpuid_entry2 __user *entries)
 {
 	struct kvm_cpuid_entry2 *cpuid_entries;
 	int limit, nent = 0, r = -E2BIG, i;
@@ -606,12 +513,8 @@ int kvm_dev_ioctl_get_cpuid(struct kvm_cpuid2 *cpuid,
 		goto out;
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
 		cpuid->nent = KVM_MAX_CPUID_ENTRIES;
-
-	if (sanity_check_entries(entries, cpuid->nent, type))
-		return -EINVAL;
-
 	r = -ENOMEM;
-	cpuid_entries = vzalloc(sizeof(struct kvm_cpuid_entry2) * cpuid->nent);
+	cpuid_entries = vmalloc(sizeof(struct kvm_cpuid_entry2) * cpuid->nent);
 	if (!cpuid_entries)
 		goto out;
 
@@ -623,7 +526,7 @@ int kvm_dev_ioctl_get_cpuid(struct kvm_cpuid2 *cpuid,
 			continue;
 
 		r = do_cpuid_ent(&cpuid_entries[nent], ent->func, ent->idx,
-				&nent, cpuid->nent, type);
+				&nent, cpuid->nent);
 
 		if (r)
 			goto out_free;
@@ -634,7 +537,7 @@ int kvm_dev_ioctl_get_cpuid(struct kvm_cpuid2 *cpuid,
 		limit = cpuid_entries[nent - 1].eax;
 		for (func = ent->func + 1; func <= limit && nent < cpuid->nent && r == 0; ++func)
 			r = do_cpuid_ent(&cpuid_entries[nent], func, ent->idx,
-				     &nent, cpuid->nent, type);
+				     &nent, cpuid->nent);
 
 		if (r)
 			goto out_free;
@@ -758,7 +661,6 @@ void kvm_cpuid(struct kvm_vcpu *vcpu, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx)
 		*edx = best->edx;
 	} else
 		*eax = *ebx = *ecx = *edx = 0;
-	trace_kvm_cpuid(function, *eax, *ebx, *ecx, *edx);
 }
 EXPORT_SYMBOL_GPL(kvm_cpuid);
 
@@ -774,5 +676,6 @@ void kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 	kvm_register_write(vcpu, VCPU_REGS_RCX, ecx);
 	kvm_register_write(vcpu, VCPU_REGS_RDX, edx);
 	kvm_x86_ops->skip_emulated_instruction(vcpu);
+	trace_kvm_cpuid(function, eax, ebx, ecx, edx);
 }
 EXPORT_SYMBOL_GPL(kvm_emulate_cpuid);

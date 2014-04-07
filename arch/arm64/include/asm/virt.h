@@ -18,8 +18,7 @@
 #ifndef __ASM__VIRT_H
 #define __ASM__VIRT_H
 
-#define BOOT_CPU_MODE_EL1	(0xe11)
-#define BOOT_CPU_MODE_EL2	(0xe12)
+#define BOOT_CPU_MODE_EL2	(0x0e12b007)
 
 #ifndef __ASSEMBLY__
 #include <asm/cacheflush.h>

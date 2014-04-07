@@ -592,7 +592,7 @@ bfin_sport_spi_setup(struct spi_device *spi)
 			 */
 			if (chip_info->ctl_reg || chip_info->enable_dma) {
 				ret = -EINVAL;
-				dev_err(&spi->dev, "don't set ctl_reg/enable_dma fields\n");
+				dev_err(&spi->dev, "don't set ctl_reg/enable_dma fields");
 				goto error;
 			}
 			chip->cs_chg_udelay = chip_info->cs_chg_udelay;
@@ -879,10 +879,11 @@ static int bfin_sport_spi_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
-static int bfin_sport_spi_suspend(struct device *dev)
+#ifdef CONFIG_PM
+static int
+bfin_sport_spi_suspend(struct platform_device *pdev, pm_message_t state)
 {
-	struct bfin_sport_spi_master_data *drv_data = dev_get_drvdata(dev);
+	struct bfin_sport_spi_master_data *drv_data = platform_get_drvdata(pdev);
 	int status;
 
 	status = bfin_sport_spi_stop_queue(drv_data);
@@ -895,9 +896,10 @@ static int bfin_sport_spi_suspend(struct device *dev)
 	return status;
 }
 
-static int bfin_sport_spi_resume(struct device *dev)
+static int
+bfin_sport_spi_resume(struct platform_device *pdev)
 {
-	struct bfin_sport_spi_master_data *drv_data = dev_get_drvdata(dev);
+	struct bfin_sport_spi_master_data *drv_data = platform_get_drvdata(pdev);
 	int status;
 
 	/* Enable the SPI interface */
@@ -910,22 +912,19 @@ static int bfin_sport_spi_resume(struct device *dev)
 
 	return status;
 }
-
-static SIMPLE_DEV_PM_OPS(bfin_sport_spi_pm_ops, bfin_sport_spi_suspend,
-			bfin_sport_spi_resume);
-
-#define BFIN_SPORT_SPI_PM_OPS		(&bfin_sport_spi_pm_ops)
 #else
-#define BFIN_SPORT_SPI_PM_OPS		NULL
+# define bfin_sport_spi_suspend NULL
+# define bfin_sport_spi_resume  NULL
 #endif
 
 static struct platform_driver bfin_sport_spi_driver = {
 	.driver	= {
-		.name	= DRV_NAME,
-		.owner	= THIS_MODULE,
-		.pm	= BFIN_SPORT_SPI_PM_OPS,
+		.name = DRV_NAME,
+		.owner = THIS_MODULE,
 	},
 	.probe   = bfin_sport_spi_probe,
 	.remove  = bfin_sport_spi_remove,
+	.suspend = bfin_sport_spi_suspend,
+	.resume  = bfin_sport_spi_resume,
 };
 module_platform_driver(bfin_sport_spi_driver);

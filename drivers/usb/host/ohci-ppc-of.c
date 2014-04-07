@@ -14,8 +14,6 @@
  */
 
 #include <linux/signal.h>
-#include <linux/of_address.h>
-#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 
 #include <asm/prom.h>

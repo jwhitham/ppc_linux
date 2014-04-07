@@ -147,9 +147,10 @@ static ssize_t atxp1_storevcore(struct device *dev,
 
 	/* Calculate VID */
 	vid = vid_to_reg(vcore, data->vrm);
+
 	if (vid < 0) {
 		dev_err(dev, "VID calculation failed.\n");
-		return vid;
+		return -1;
 	}
 
 	/*

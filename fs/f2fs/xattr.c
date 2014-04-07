@@ -154,9 +154,6 @@ static int f2fs_xattr_advise_set(struct dentry *dentry, const char *name,
 }
 
 #ifdef CONFIG_F2FS_FS_SECURITY
-static int __f2fs_setxattr(struct inode *inode, int name_index,
-			const char *name, const void *value, size_t value_len,
-			struct page *ipage);
 static int f2fs_initxattrs(struct inode *inode, const struct xattr *xattr_array,
 		void *page)
 {
@@ -164,7 +161,7 @@ static int f2fs_initxattrs(struct inode *inode, const struct xattr *xattr_array,
 	int err = 0;
 
 	for (xattr = xattr_array; xattr->name != NULL; xattr++) {
-		err = __f2fs_setxattr(inode, F2FS_XATTR_INDEX_SECURITY,
+		err = f2fs_setxattr(inode, F2FS_XATTR_INDEX_SECURITY,
 				xattr->name, xattr->value,
 				xattr->value_len, (struct page *)page);
 		if (err < 0)
@@ -372,7 +369,7 @@ static inline int write_all_xattrs(struct inode *inode, __u32 hsize,
 			alloc_nid_failed(sbi, new_nid);
 			return PTR_ERR(xpage);
 		}
-		f2fs_bug_on(new_nid);
+		BUG_ON(new_nid);
 	} else {
 		struct dnode_of_data dn;
 		set_new_dnode(&dn, inode, NULL, NULL, new_nid);
@@ -472,15 +469,16 @@ cleanup:
 	return error;
 }
 
-static int __f2fs_setxattr(struct inode *inode, int name_index,
-			const char *name, const void *value, size_t value_len,
-			struct page *ipage)
+int f2fs_setxattr(struct inode *inode, int name_index, const char *name,
+			const void *value, size_t value_len, struct page *ipage)
 {
+	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
 	struct f2fs_inode_info *fi = F2FS_I(inode);
 	struct f2fs_xattr_entry *here, *last;
 	void *base_addr;
 	int found, newsize;
 	size_t name_len;
+	int ilock;
 	__u32 new_hsize;
 	int error = -ENOMEM;
 
@@ -494,6 +492,10 @@ static int __f2fs_setxattr(struct inode *inode, int name_index,
 
 	if (name_len > F2FS_NAME_LEN || value_len > MAX_VALUE_LEN(inode))
 		return -ERANGE;
+
+	f2fs_balance_fs(sbi);
+
+	ilock = mutex_lock_op(sbi);
 
 	base_addr = read_all_xattrs(inode, ipage);
 	if (!base_addr)
@@ -520,7 +522,7 @@ static int __f2fs_setxattr(struct inode *inode, int name_index,
 		 */
 		free = MIN_OFFSET(inode) - ((char *)last - (char *)base_addr);
 		if (found)
-			free = free + ENTRY_SIZE(here);
+			free = free - ENTRY_SIZE(here);
 
 		if (free < newsize) {
 			error = -ENOSPC;
@@ -576,21 +578,7 @@ static int __f2fs_setxattr(struct inode *inode, int name_index,
 	else
 		update_inode_page(inode);
 exit:
+	mutex_unlock_op(sbi, ilock);
 	kzfree(base_addr);
 	return error;
-}
-
-int f2fs_setxattr(struct inode *inode, int name_index, const char *name,
-			const void *value, size_t value_len, struct page *ipage)
-{
-	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
-	int err;
-
-	f2fs_balance_fs(sbi);
-
-	f2fs_lock_op(sbi);
-	err = __f2fs_setxattr(inode, name_index, name, value, value_len, ipage);
-	f2fs_unlock_op(sbi);
-
-	return err;
 }
