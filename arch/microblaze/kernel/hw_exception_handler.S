@@ -193,8 +193,8 @@
  *      -                            W   S   REG   EXC
  *
  *
- * STACK FRAME STRUCTURE (for CONFIG_MMU=n)
- * ----------------------------------------
+ * STACK FRAME STRUCTURE (for NO_MMU)
+ * ---------------------------------
  *
  *      +-------------+         + 0
  *      |     MSR     |

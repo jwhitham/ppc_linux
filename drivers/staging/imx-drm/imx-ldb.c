@@ -359,8 +359,10 @@ static int imx_ldb_get_clk(struct imx_ldb *ldb, int chno)
 
 	sprintf(clkname, "di%d_pll", chno);
 	ldb->clk_pll[chno] = devm_clk_get(ldb->dev, clkname);
+	if (IS_ERR(ldb->clk_pll[chno]))
+		return PTR_ERR(ldb->clk_pll[chno]);
 
-	return PTR_ERR_OR_ZERO(ldb->clk_pll[chno]);
+	return 0;
 }
 
 static int imx_ldb_register(struct imx_ldb_channel *imx_ldb_ch)
@@ -419,7 +421,7 @@ static const char *imx_ldb_bit_mappings[] = {
 	[LVDS_BIT_MAP_JEIDA] = "jeida",
 };
 
-static const int of_get_data_mapping(struct device_node *np)
+const int of_get_data_mapping(struct device_node *np)
 {
 	const char *bm;
 	int ret, i;
@@ -464,7 +466,8 @@ static int imx_ldb_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	const struct of_device_id *of_id =
-			of_match_device(imx_ldb_dt_ids, &pdev->dev);
+			of_match_device(of_match_ptr(imx_ldb_dt_ids),
+					&pdev->dev);
 	struct device_node *child;
 	const u8 *edidp;
 	struct imx_ldb *imx_ldb;

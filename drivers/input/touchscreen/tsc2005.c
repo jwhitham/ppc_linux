@@ -678,6 +678,7 @@ static int tsc2005_probe(struct spi_device *spi)
 err_remove_sysfs:
 	sysfs_remove_group(&spi->dev.kobj, &tsc2005_attr_group);
 err_clear_drvdata:
+	spi_set_drvdata(spi, NULL);
 	free_irq(spi->irq, ts);
 err_free_mem:
 	input_free_device(input_dev);
@@ -695,6 +696,7 @@ static int tsc2005_remove(struct spi_device *spi)
 	input_unregister_device(ts->idev);
 	kfree(ts);
 
+	spi_set_drvdata(spi, NULL);
 	return 0;
 }
 

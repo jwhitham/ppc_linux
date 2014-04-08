@@ -90,6 +90,7 @@ static int adxrs450_spi_read_reg_16(struct iio_dev *indio_dev,
 				    u8 reg_address,
 				    u16 *val)
 {
+	struct spi_message msg;
 	struct adxrs450_state *st = iio_priv(indio_dev);
 	u32 tx;
 	int ret;
@@ -113,7 +114,10 @@ static int adxrs450_spi_read_reg_16(struct iio_dev *indio_dev,
 		tx |= ADXRS450_P;
 
 	st->tx = cpu_to_be32(tx);
-	ret = spi_sync_transfer(st->us, xfers, ARRAY_SIZE(xfers));
+	spi_message_init(&msg);
+	spi_message_add_tail(&xfers[0], &msg);
+	spi_message_add_tail(&xfers[1], &msg);
+	ret = spi_sync(st->us, &msg);
 	if (ret) {
 		dev_err(&st->us->dev, "problem while reading 16 bit register 0x%02x\n",
 				reg_address);
@@ -165,6 +169,7 @@ static int adxrs450_spi_write_reg_16(struct iio_dev *indio_dev,
  **/
 static int adxrs450_spi_sensor_data(struct iio_dev *indio_dev, s16 *val)
 {
+	struct spi_message msg;
 	struct adxrs450_state *st = iio_priv(indio_dev);
 	int ret;
 	struct spi_transfer xfers[] = {
@@ -183,7 +188,10 @@ static int adxrs450_spi_sensor_data(struct iio_dev *indio_dev, s16 *val)
 	mutex_lock(&st->buf_lock);
 	st->tx = cpu_to_be32(ADXRS450_SENSOR_DATA);
 
-	ret = spi_sync_transfer(st->us, xfers, ARRAY_SIZE(xfers));
+	spi_message_init(&msg);
+	spi_message_add_tail(&xfers[0], &msg);
+	spi_message_add_tail(&xfers[1], &msg);
+	ret = spi_sync(st->us, &msg);
 	if (ret) {
 		dev_err(&st->us->dev, "Problem while reading sensor data\n");
 		goto error_ret;
@@ -346,6 +354,7 @@ static int adxrs450_read_raw(struct iio_dev *indio_dev,
 		default:
 			return -EINVAL;
 		}
+		break;
 	case IIO_CHAN_INFO_QUADRATURE_CORRECTION_RAW:
 		ret = adxrs450_spi_read_reg_16(indio_dev, ADXRS450_QUAD1, &t);
 		if (ret)

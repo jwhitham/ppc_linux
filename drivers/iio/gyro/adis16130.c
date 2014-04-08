@@ -47,6 +47,7 @@ static int adis16130_spi_read(struct iio_dev *indio_dev, u8 reg_addr, u32 *val)
 {
 	int ret;
 	struct adis16130_state *st = iio_priv(indio_dev);
+	struct spi_message msg;
 	struct spi_transfer xfer = {
 		.tx_buf = st->buf,
 		.rx_buf = st->buf,
@@ -58,7 +59,10 @@ static int adis16130_spi_read(struct iio_dev *indio_dev, u8 reg_addr, u32 *val)
 	st->buf[0] = ADIS16130_CON_RD | reg_addr;
 	st->buf[1] = st->buf[2] = st->buf[3] = 0;
 
-	ret = spi_sync_transfer(st->us, &xfer, 1);
+	spi_message_init(&msg);
+	spi_message_add_tail(&xfer, &msg);
+	ret = spi_sync(st->us, &msg);
+
 	if (ret == 0)
 		*val = (st->buf[1] << 16) | (st->buf[2] << 8) | st->buf[3];
 	mutex_unlock(&st->buf_lock);
@@ -99,6 +103,7 @@ static int adis16130_read_raw(struct iio_dev *indio_dev,
 		default:
 			return -EINVAL;
 		}
+		break;
 	case IIO_CHAN_INFO_OFFSET:
 		switch (chan->type) {
 		case IIO_ANGL_VEL:
@@ -110,6 +115,7 @@ static int adis16130_read_raw(struct iio_dev *indio_dev,
 		default:
 			return -EINVAL;
 		}
+		break;
 	}
 
 	return -EINVAL;

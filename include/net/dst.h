@@ -106,7 +106,7 @@ struct dst_entry {
 	};
 };
 
-u32 *dst_cow_metrics_generic(struct dst_entry *dst, unsigned long old);
+extern u32 *dst_cow_metrics_generic(struct dst_entry *dst, unsigned long old);
 extern const u32 dst_default_metrics[];
 
 #define DST_METRICS_READ_ONLY	0x1UL
@@ -119,7 +119,7 @@ static inline bool dst_metrics_read_only(const struct dst_entry *dst)
 	return dst->_metrics & DST_METRICS_READ_ONLY;
 }
 
-void __dst_destroy_metrics_generic(struct dst_entry *dst, unsigned long old);
+extern void __dst_destroy_metrics_generic(struct dst_entry *dst, unsigned long old);
 
 static inline void dst_destroy_metrics_generic(struct dst_entry *dst)
 {
@@ -262,7 +262,7 @@ static inline struct dst_entry *dst_clone(struct dst_entry *dst)
 	return dst;
 }
 
-void dst_release(struct dst_entry *dst);
+extern void dst_release(struct dst_entry *dst);
 
 static inline void refdst_drop(unsigned long refdst)
 {
@@ -362,11 +362,12 @@ static inline struct dst_entry *skb_dst_pop(struct sk_buff *skb)
 	return child;
 }
 
-int dst_discard(struct sk_buff *skb);
-void *dst_alloc(struct dst_ops *ops, struct net_device *dev, int initial_ref,
-		int initial_obsolete, unsigned short flags);
-void __dst_free(struct dst_entry *dst);
-struct dst_entry *dst_destroy(struct dst_entry *dst);
+extern int dst_discard(struct sk_buff *skb);
+extern void *dst_alloc(struct dst_ops *ops, struct net_device *dev,
+		       int initial_ref, int initial_obsolete,
+		       unsigned short flags);
+extern void __dst_free(struct dst_entry *dst);
+extern struct dst_entry *dst_destroy(struct dst_entry *dst);
 
 static inline void dst_free(struct dst_entry *dst)
 {
@@ -462,7 +463,7 @@ static inline struct dst_entry *dst_check(struct dst_entry *dst, u32 cookie)
 	return dst;
 }
 
-void dst_init(void);
+extern void		dst_init(void);
 
 /* Flags for xfrm_lookup flags argument. */
 enum {
@@ -485,9 +486,9 @@ static inline struct xfrm_state *dst_xfrm(const struct dst_entry *dst)
 }
 
 #else
-struct dst_entry *xfrm_lookup(struct net *net, struct dst_entry *dst_orig,
-			      const struct flowi *fl, struct sock *sk,
-			      int flags);
+extern struct dst_entry *xfrm_lookup(struct net *net, struct dst_entry *dst_orig,
+				     const struct flowi *fl, struct sock *sk,
+				     int flags);
 
 /* skb attached with this dst needs transformation if dst->xfrm is valid */
 static inline struct xfrm_state *dst_xfrm(const struct dst_entry *dst)

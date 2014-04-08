@@ -39,11 +39,12 @@ struct imx_pcm_runtime_data {
 	unsigned int period;
 	int periods;
 	unsigned long offset;
+	unsigned long last_offset;
+	unsigned long size;
 	struct hrtimer hrt;
 	int poll_time_ns;
 	struct snd_pcm_substream *substream;
-	atomic_t playing;
-	atomic_t capturing;
+	atomic_t running;
 };
 
 static enum hrtimer_restart snd_hrtimer_callback(struct hrtimer *hrt)
@@ -51,9 +52,11 @@ static enum hrtimer_restart snd_hrtimer_callback(struct hrtimer *hrt)
 	struct imx_pcm_runtime_data *iprtd =
 		container_of(hrt, struct imx_pcm_runtime_data, hrt);
 	struct snd_pcm_substream *substream = iprtd->substream;
+	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct pt_regs regs;
+	unsigned long delta;
 
-	if (!atomic_read(&iprtd->playing) && !atomic_read(&iprtd->capturing))
+	if (!atomic_read(&iprtd->running))
 		return HRTIMER_NORESTART;
 
 	get_fiq_regs(&regs);
@@ -63,7 +66,19 @@ static enum hrtimer_restart snd_hrtimer_callback(struct hrtimer *hrt)
 	else
 		iprtd->offset = regs.ARM_r9 & 0xffff;
 
-	snd_pcm_period_elapsed(substream);
+	/* How much data have we transferred since the last period report? */
+	if (iprtd->offset >= iprtd->last_offset)
+		delta = iprtd->offset - iprtd->last_offset;
+	else
+		delta = runtime->buffer_size + iprtd->offset
+			- iprtd->last_offset;
+
+	/* If we've transferred at least a period then report it and
+	 * reset our poll time */
+	if (delta >= iprtd->period) {
+		snd_pcm_period_elapsed(substream);
+		iprtd->last_offset = iprtd->offset;
+	}
 
 	hrtimer_forward_now(hrt, ns_to_ktime(iprtd->poll_time_ns));
 
@@ -80,9 +95,11 @@ static int snd_imx_pcm_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd = runtime->private_data;
 
+	iprtd->size = params_buffer_bytes(params);
 	iprtd->periods = params_periods(params);
-	iprtd->period = params_period_bytes(params);
+	iprtd->period = params_period_bytes(params) ;
 	iprtd->offset = 0;
+	iprtd->last_offset = 0;
 	iprtd->poll_time_ns = 1000000000 / params_rate(params) *
 				params_period_size(params);
 	snd_pcm_set_runtime_buffer(substream, &substream->dma_buffer);
@@ -107,6 +124,7 @@ static int snd_imx_pcm_prepare(struct snd_pcm_substream *substream)
 	return 0;
 }
 
+static int fiq_enable;
 static int imx_pcm_fiq;
 
 static int snd_imx_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
@@ -118,27 +136,23 @@ static int snd_imx_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-			atomic_set(&iprtd->playing, 1);
-		else
-			atomic_set(&iprtd->capturing, 1);
+		atomic_set(&iprtd->running, 1);
 		hrtimer_start(&iprtd->hrt, ns_to_ktime(iprtd->poll_time_ns),
 		      HRTIMER_MODE_REL);
-		enable_fiq(imx_pcm_fiq);
+		if (++fiq_enable == 1)
+			enable_fiq(imx_pcm_fiq);
+
 		break;
 
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-			atomic_set(&iprtd->playing, 0);
-		else
-			atomic_set(&iprtd->capturing, 0);
-		if (!atomic_read(&iprtd->playing) &&
-				!atomic_read(&iprtd->capturing))
-			disable_fiq(imx_pcm_fiq);
-		break;
+		atomic_set(&iprtd->running, 0);
 
+		if (--fiq_enable == 0)
+			disable_fiq(imx_pcm_fiq);
+
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -186,8 +200,7 @@ static int snd_imx_open(struct snd_pcm_substream *substream)
 
 	iprtd->substream = substream;
 
-	atomic_set(&iprtd->playing, 0);
-	atomic_set(&iprtd->capturing, 0);
+	atomic_set(&iprtd->running, 0);
 	hrtimer_init(&iprtd->hrt, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	iprtd->hrt.function = snd_hrtimer_callback;
 
@@ -259,16 +272,18 @@ static int imx_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 	return 0;
 }
 
+static u64 imx_pcm_dmamask = DMA_BIT_MASK(32);
+
 static int imx_pcm_new(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_card *card = rtd->card->snd_card;
 	struct snd_pcm *pcm = rtd->pcm;
-	int ret;
+	int ret = 0;
 
-	ret = dma_coerce_mask_and_coherent(card->dev, DMA_BIT_MASK(32));
-	if (ret)
-		return ret;
-
+	if (!card->dev->dma_mask)
+		card->dev->dma_mask = &imx_pcm_dmamask;
+	if (!card->dev->coherent_dma_mask)
+		card->dev->coherent_dma_mask = DMA_BIT_MASK(32);
 	if (pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream) {
 		ret = imx_pcm_preallocate_dma_buffer(pcm,
 			SNDRV_PCM_STREAM_PLAYBACK);

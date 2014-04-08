@@ -111,7 +111,8 @@ static struct pcc_cpu __percpu *pcc_cpu_info;
 
 static int pcc_cpufreq_verify(struct cpufreq_policy *policy)
 {
-	cpufreq_verify_within_cpu_limits(policy);
+	cpufreq_verify_within_limits(policy, policy->cpuinfo.min_freq,
+				     policy->cpuinfo.max_freq);
 	return 0;
 }
 
@@ -395,14 +396,15 @@ static int __init pcc_cpufreq_probe(void)
 	struct pcc_memory_resource *mem_resource;
 	struct pcc_register_resource *reg_resource;
 	union acpi_object *out_obj, *member;
-	acpi_handle handle, osc_handle;
+	acpi_handle handle, osc_handle, pcch_handle;
 	int ret = 0;
 
 	status = acpi_get_handle(NULL, "\\_SB", &handle);
 	if (ACPI_FAILURE(status))
 		return -ENODEV;
 
-	if (!acpi_has_method(handle, "PCCH"))
+	status = acpi_get_handle(handle, "PCCH", &pcch_handle);
+	if (ACPI_FAILURE(status))
 		return -ENODEV;
 
 	status = acpi_get_handle(handle, "_OSC", &osc_handle);
@@ -558,6 +560,13 @@ static int pcc_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		ioread32(&pcch_hdr->nominal) * 1000;
 	policy->min = policy->cpuinfo.min_freq =
 		ioread32(&pcch_hdr->minimum_frequency) * 1000;
+	policy->cur = pcc_get_freq(cpu);
+
+	if (!policy->cur) {
+		pr_debug("init: Unable to get current CPU frequency\n");
+		result = -EINVAL;
+		goto out;
+	}
 
 	pr_debug("init: policy->max is %d, policy->min is %d\n",
 		policy->max, policy->min);

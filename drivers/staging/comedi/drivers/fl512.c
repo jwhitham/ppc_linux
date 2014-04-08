@@ -25,7 +25,8 @@ Configuration options:
 
 #define FL512_SIZE 16		/* the size of the used memory */
 struct fl512_private {
-	unsigned short ao_readback[2];
+
+	short ao_readback[2];
 };
 
 static const struct comedi_lrange range_fl512 = { 4, {

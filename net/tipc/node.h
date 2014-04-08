@@ -74,8 +74,7 @@
  *    @deferred_size: number of OOS b'cast messages in deferred queue
  *    @deferred_head: oldest OOS b'cast message received from node
  *    @deferred_tail: newest OOS b'cast message received from node
- *    @reasm_head: broadcast reassembly queue head from node
- *    @reasm_tail: last broadcast fragment received from node
+ *    @defragm: list of partially reassembled b'cast message fragments from node
  *    @recv_permitted: true if node is allowed to receive b'cast messages
  */
 struct tipc_node {
@@ -99,8 +98,7 @@ struct tipc_node {
 		u32 deferred_size;
 		struct sk_buff *deferred_head;
 		struct sk_buff *deferred_tail;
-		struct sk_buff *reasm_head;
-		struct sk_buff *reasm_tail;
+		struct sk_buff *defragm;
 		bool recv_permitted;
 	} bclink;
 };

@@ -597,12 +597,11 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	struct task_struct *new)
 {
 	struct thread_struct *new_thread, *old_thread;
+	unsigned long flags;
 	struct task_struct *last;
 #ifdef CONFIG_PPC_BOOK3S_64
 	struct ppc64_tlb_batch *batch;
 #endif
-
-	WARN_ON(!irqs_disabled());
 
 	/* Back up the TAR across context switches.
 	 * Note that the TAR is not available for use in the kernel.  (To
@@ -723,6 +722,8 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	}
 #endif /* CONFIG_PPC_BOOK3S_64 */
 
+	local_irq_save(flags);
+
 	/*
 	 * We can't take a PMU exception inside _switch() since there is a
 	 * window where the kernel stack SLB and the kernel stack are out
@@ -741,6 +742,8 @@ struct task_struct *__switch_to(struct task_struct *prev,
 		batch->active = 1;
 	}
 #endif /* CONFIG_PPC_BOOK3S_64 */
+
+	local_irq_restore(flags);
 
 	return last;
 }
@@ -858,21 +861,17 @@ void show_regs(struct pt_regs * regs)
 	printk("MSR: "REG" ", regs->msr);
 	printbits(regs->msr, msr_bits);
 	printk("  CR: %08lx  XER: %08lx\n", regs->ccr, regs->xer);
+#ifdef CONFIG_PPC64
+	printk("SOFTE: %ld\n", regs->softe);
+#endif
 	trap = TRAP(regs);
 	if ((regs->trap != 0xc00) && cpu_has_feature(CPU_FTR_CFAR))
-		printk("CFAR: "REG" ", regs->orig_gpr3);
-	if (trap == 0x200 || trap == 0x300 || trap == 0x600)
+		printk("CFAR: "REG"\n", regs->orig_gpr3);
+	if (trap == 0x300 || trap == 0x600)
 #if defined(CONFIG_4xx) || defined(CONFIG_BOOKE)
-		printk("DEAR: "REG" ESR: "REG" ", regs->dar, regs->dsisr);
+		printk("DEAR: "REG", ESR: "REG"\n", regs->dar, regs->dsisr);
 #else
-		printk("DAR: "REG" DSISR: %08lx ", regs->dar, regs->dsisr);
-#endif
-#ifdef CONFIG_PPC64
-	printk("SOFTE: %ld ", regs->softe);
-#endif
-#ifdef CONFIG_PPC_TRANSACTIONAL_MEM
-	if (MSR_TM_ACTIVE(regs->msr))
-		printk("\nPACATMSCRATCH: %016llx ", get_paca()->tm_scratch);
+		printk("DAR: "REG", DSISR: %08lx\n", regs->dar, regs->dsisr);
 #endif
 
 	for (i = 0;  i < 32;  i++) {
@@ -890,6 +889,9 @@ void show_regs(struct pt_regs * regs)
 	 */
 	printk("NIP ["REG"] %pS\n", regs->nip, (void *)regs->nip);
 	printk("LR ["REG"] %pS\n", regs->link, (void *)regs->link);
+#endif
+#ifdef CONFIG_PPC_TRANSACTIONAL_MEM
+	printk("PACATMSCRATCH [%llx]\n", get_paca()->tm_scratch);
 #endif
 	show_stack(current, (unsigned long *) regs->gpr[1]);
 	if (!user_mode(regs))
@@ -1007,11 +1009,6 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 	p->thread.ptrace_bps[0] = NULL;
 #endif
 
-	p->thread.fp_save_area = NULL;
-#ifdef CONFIG_ALTIVEC
-	p->thread.vr_save_area = NULL;
-#endif
-
 #ifdef CONFIG_PPC_STD_MMU_64
 	if (mmu_has_feature(MMU_FTR_SLB)) {
 		unsigned long sp_vsid;
@@ -1087,45 +1084,25 @@ void start_thread(struct pt_regs *regs, unsigned long start, unsigned long sp)
 	regs->msr = MSR_USER;
 #else
 	if (!is_32bit_task()) {
-		unsigned long entry;
+		unsigned long entry, toc;
 
-		if (is_elf2_task()) {
-			/* Look ma, no function descriptors! */
-			entry = start;
+		/* start is a relocated pointer to the function descriptor for
+		 * the elf _start routine.  The first entry in the function
+		 * descriptor is the entry address of _start and the second
+		 * entry is the TOC value we need to use.
+		 */
+		__get_user(entry, (unsigned long __user *)start);
+		__get_user(toc, (unsigned long __user *)start+1);
 
-			/*
-			 * Ulrich says:
-			 *   The latest iteration of the ABI requires that when
-			 *   calling a function (at its global entry point),
-			 *   the caller must ensure r12 holds the entry point
-			 *   address (so that the function can quickly
-			 *   establish addressability).
-			 */
-			regs->gpr[12] = start;
-			/* Make sure that's restored on entry to userspace. */
-			set_thread_flag(TIF_RESTOREALL);
-		} else {
-			unsigned long toc;
-
-			/* start is a relocated pointer to the function
-			 * descriptor for the elf _start routine.  The first
-			 * entry in the function descriptor is the entry
-			 * address of _start and the second entry is the TOC
-			 * value we need to use.
-			 */
-			__get_user(entry, (unsigned long __user *)start);
-			__get_user(toc, (unsigned long __user *)start+1);
-
-			/* Check whether the e_entry function descriptor entries
-			 * need to be relocated before we can use them.
-			 */
-			if (load_addr != 0) {
-				entry += load_addr;
-				toc   += load_addr;
-			}
-			regs->gpr[2] = toc;
+		/* Check whether the e_entry function descriptor entries
+		 * need to be relocated before we can use them.
+		 */
+		if (load_addr != 0) {
+			entry += load_addr;
+			toc   += load_addr;
 		}
 		regs->nip = entry;
+		regs->gpr[2] = toc;
 		regs->msr = MSR_USER64;
 	} else {
 		regs->nip = start;
@@ -1137,12 +1114,12 @@ void start_thread(struct pt_regs *regs, unsigned long start, unsigned long sp)
 #ifdef CONFIG_VSX
 	current->thread.used_vsr = 0;
 #endif
-	memset(&current->thread.fp_state, 0, sizeof(current->thread.fp_state));
-	current->thread.fp_save_area = NULL;
+	memset(current->thread.fpr, 0, sizeof(current->thread.fpr));
+	current->thread.fpscr.val = 0;
 #ifdef CONFIG_ALTIVEC
-	memset(&current->thread.vr_state, 0, sizeof(current->thread.vr_state));
-	current->thread.vr_state.vscr.u[3] = 0x00010000; /* Java mode disabled */
-	current->thread.vr_save_area = NULL;
+	memset(current->thread.vr, 0, sizeof(current->thread.vr));
+	memset(&current->thread.vscr, 0, sizeof(current->thread.vscr));
+	current->thread.vscr.u[3] = 0x00010000; /* Java mode disabled */
 	current->thread.vrsave = 0;
 	current->thread.used_vr = 0;
 #endif /* CONFIG_ALTIVEC */

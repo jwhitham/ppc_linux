@@ -21,8 +21,6 @@
 #include <asm/kvm_ppc.h>
 #include <asm/kvm_book3s.h>
 
-#define HPTE_SIZE	16		/* bytes per HPT entry */
-
 static unsigned long get_pteg_addr(struct kvm_vcpu *vcpu, long pte_index)
 {
 	struct kvmppc_vcpu_book3s *vcpu_book3s = to_book3s(vcpu);
@@ -42,41 +40,32 @@ static int kvmppc_h_pr_enter(struct kvm_vcpu *vcpu)
 	long pte_index = kvmppc_get_gpr(vcpu, 5);
 	unsigned long pteg[2 * 8];
 	unsigned long pteg_addr, i, *hpte;
-	long int ret;
 
-	i = pte_index & 7;
 	pte_index &= ~7UL;
 	pteg_addr = get_pteg_addr(vcpu, pte_index);
 
-	mutex_lock(&vcpu->kvm->arch.hpt_mutex);
 	copy_from_user(pteg, (void __user *)pteg_addr, sizeof(pteg));
 	hpte = pteg;
 
-	ret = H_PTEG_FULL;
 	if (likely((flags & H_EXACT) == 0)) {
+		pte_index &= ~7UL;
 		for (i = 0; ; ++i) {
 			if (i == 8)
-				goto done;
+				return H_PTEG_FULL;
 			if ((*hpte & HPTE_V_VALID) == 0)
 				break;
 			hpte += 2;
 		}
 	} else {
+		i = kvmppc_get_gpr(vcpu, 5) & 7UL;
 		hpte += i * 2;
-		if (*hpte & HPTE_V_VALID)
-			goto done;
 	}
 
 	hpte[0] = kvmppc_get_gpr(vcpu, 6);
 	hpte[1] = kvmppc_get_gpr(vcpu, 7);
-	pteg_addr += i * HPTE_SIZE;
-	copy_to_user((void __user *)pteg_addr, hpte, HPTE_SIZE);
+	copy_to_user((void __user *)pteg_addr, pteg, sizeof(pteg));
+	kvmppc_set_gpr(vcpu, 3, H_SUCCESS);
 	kvmppc_set_gpr(vcpu, 4, pte_index | i);
-	ret = H_SUCCESS;
-
- done:
-	mutex_unlock(&vcpu->kvm->arch.hpt_mutex);
-	kvmppc_set_gpr(vcpu, 3, ret);
 
 	return EMULATE_DONE;
 }
@@ -88,30 +77,25 @@ static int kvmppc_h_pr_remove(struct kvm_vcpu *vcpu)
 	unsigned long avpn = kvmppc_get_gpr(vcpu, 6);
 	unsigned long v = 0, pteg, rb;
 	unsigned long pte[2];
-	long int ret;
 
 	pteg = get_pteg_addr(vcpu, pte_index);
-	mutex_lock(&vcpu->kvm->arch.hpt_mutex);
 	copy_from_user(pte, (void __user *)pteg, sizeof(pte));
 
-	ret = H_NOT_FOUND;
 	if ((pte[0] & HPTE_V_VALID) == 0 ||
 	    ((flags & H_AVPN) && (pte[0] & ~0x7fUL) != avpn) ||
-	    ((flags & H_ANDCOND) && (pte[0] & avpn) != 0))
-		goto done;
+	    ((flags & H_ANDCOND) && (pte[0] & avpn) != 0)) {
+		kvmppc_set_gpr(vcpu, 3, H_NOT_FOUND);
+		return EMULATE_DONE;
+	}
 
 	copy_to_user((void __user *)pteg, &v, sizeof(v));
 
 	rb = compute_tlbie_rb(pte[0], pte[1], pte_index);
 	vcpu->arch.mmu.tlbie(vcpu, rb, rb & 1 ? true : false);
 
-	ret = H_SUCCESS;
+	kvmppc_set_gpr(vcpu, 3, H_SUCCESS);
 	kvmppc_set_gpr(vcpu, 4, pte[0]);
 	kvmppc_set_gpr(vcpu, 5, pte[1]);
-
- done:
-	mutex_unlock(&vcpu->kvm->arch.hpt_mutex);
-	kvmppc_set_gpr(vcpu, 3, ret);
 
 	return EMULATE_DONE;
 }
@@ -140,7 +124,6 @@ static int kvmppc_h_pr_bulk_remove(struct kvm_vcpu *vcpu)
 	int paramnr = 4;
 	int ret = H_SUCCESS;
 
-	mutex_lock(&vcpu->kvm->arch.hpt_mutex);
 	for (i = 0; i < H_BULK_REMOVE_MAX_BATCH; i++) {
 		unsigned long tsh = kvmppc_get_gpr(vcpu, paramnr+(2*i));
 		unsigned long tsl = kvmppc_get_gpr(vcpu, paramnr+(2*i)+1);
@@ -189,7 +172,6 @@ static int kvmppc_h_pr_bulk_remove(struct kvm_vcpu *vcpu)
 		}
 		kvmppc_set_gpr(vcpu, paramnr+(2*i), tsh);
 	}
-	mutex_unlock(&vcpu->kvm->arch.hpt_mutex);
 	kvmppc_set_gpr(vcpu, 3, ret);
 
 	return EMULATE_DONE;
@@ -202,16 +184,15 @@ static int kvmppc_h_pr_protect(struct kvm_vcpu *vcpu)
 	unsigned long avpn = kvmppc_get_gpr(vcpu, 6);
 	unsigned long rb, pteg, r, v;
 	unsigned long pte[2];
-	long int ret;
 
 	pteg = get_pteg_addr(vcpu, pte_index);
-	mutex_lock(&vcpu->kvm->arch.hpt_mutex);
 	copy_from_user(pte, (void __user *)pteg, sizeof(pte));
 
-	ret = H_NOT_FOUND;
 	if ((pte[0] & HPTE_V_VALID) == 0 ||
-	    ((flags & H_AVPN) && (pte[0] & ~0x7fUL) != avpn))
-		goto done;
+	    ((flags & H_AVPN) && (pte[0] & ~0x7fUL) != avpn)) {
+		kvmppc_set_gpr(vcpu, 3, H_NOT_FOUND);
+		return EMULATE_DONE;
+	}
 
 	v = pte[0];
 	r = pte[1];
@@ -226,11 +207,8 @@ static int kvmppc_h_pr_protect(struct kvm_vcpu *vcpu)
 	rb = compute_tlbie_rb(v, r, pte_index);
 	vcpu->arch.mmu.tlbie(vcpu, rb, rb & 1 ? true : false);
 	copy_to_user((void __user *)pteg, pte, sizeof(pte));
-	ret = H_SUCCESS;
 
- done:
-	mutex_unlock(&vcpu->kvm->arch.hpt_mutex);
-	kvmppc_set_gpr(vcpu, 3, ret);
+	kvmppc_set_gpr(vcpu, 3, H_SUCCESS);
 
 	return EMULATE_DONE;
 }

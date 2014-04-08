@@ -34,6 +34,7 @@
 #include "iwl-csr.h"
 #include "iwl-debug.h"
 #include "iwl-fh.h"
+#include "iwl-csr.h"
 
 #define IWL_POLL_INTERVAL 10	/* microseconds */
 

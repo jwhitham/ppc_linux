@@ -260,6 +260,10 @@ int kvmppc_mmu_hv_init(void)
 	return 0;
 }
 
+void kvmppc_mmu_destroy(struct kvm_vcpu *vcpu)
+{
+}
+
 static void kvmppc_mmu_book3s_64_hv_reset_msr(struct kvm_vcpu *vcpu)
 {
 	kvmppc_set_msr(vcpu, MSR_SF | MSR_ME);
@@ -447,7 +451,7 @@ static unsigned long kvmppc_mmu_get_real_addr(unsigned long v, unsigned long r,
 }
 
 static int kvmppc_mmu_book3s_64_hv_xlate(struct kvm_vcpu *vcpu, gva_t eaddr,
-			struct kvmppc_pte *gpte, bool data, bool iswrite)
+			struct kvmppc_pte *gpte, bool data)
 {
 	struct kvm *kvm = vcpu->kvm;
 	struct kvmppc_slb *slbe;
@@ -902,22 +906,21 @@ static int kvm_unmap_rmapp(struct kvm *kvm, unsigned long *rmapp,
 	return 0;
 }
 
-int kvm_unmap_hva_hv(struct kvm *kvm, unsigned long hva)
+int kvm_unmap_hva(struct kvm *kvm, unsigned long hva)
 {
 	if (kvm->arch.using_mmu_notifiers)
 		kvm_handle_hva(kvm, hva, kvm_unmap_rmapp);
 	return 0;
 }
 
-int kvm_unmap_hva_range_hv(struct kvm *kvm, unsigned long start, unsigned long end)
+int kvm_unmap_hva_range(struct kvm *kvm, unsigned long start, unsigned long end)
 {
 	if (kvm->arch.using_mmu_notifiers)
 		kvm_handle_hva_range(kvm, start, end, kvm_unmap_rmapp);
 	return 0;
 }
 
-void kvmppc_core_flush_memslot_hv(struct kvm *kvm,
-				  struct kvm_memory_slot *memslot)
+void kvmppc_core_flush_memslot(struct kvm *kvm, struct kvm_memory_slot *memslot)
 {
 	unsigned long *rmapp;
 	unsigned long gfn;
@@ -991,7 +994,7 @@ static int kvm_age_rmapp(struct kvm *kvm, unsigned long *rmapp,
 	return ret;
 }
 
-int kvm_age_hva_hv(struct kvm *kvm, unsigned long hva)
+int kvm_age_hva(struct kvm *kvm, unsigned long hva)
 {
 	if (!kvm->arch.using_mmu_notifiers)
 		return 0;
@@ -1029,14 +1032,14 @@ static int kvm_test_age_rmapp(struct kvm *kvm, unsigned long *rmapp,
 	return ret;
 }
 
-int kvm_test_age_hva_hv(struct kvm *kvm, unsigned long hva)
+int kvm_test_age_hva(struct kvm *kvm, unsigned long hva)
 {
 	if (!kvm->arch.using_mmu_notifiers)
 		return 0;
 	return kvm_handle_hva(kvm, hva, kvm_test_age_rmapp);
 }
 
-void kvm_set_spte_hva_hv(struct kvm *kvm, unsigned long hva, pte_t pte)
+void kvm_set_spte_hva(struct kvm *kvm, unsigned long hva, pte_t pte)
 {
 	if (!kvm->arch.using_mmu_notifiers)
 		return;
@@ -1509,8 +1512,9 @@ static ssize_t kvm_htab_write(struct file *file, const char __user *buf,
 
 				kvm->arch.vrma_slb_v = senc | SLB_VSID_B_1T |
 					(VRMA_VSID << SLB_VSID_SHIFT_1T);
-				lpcr = senc << (LPCR_VRMASD_SH - 4);
-				kvmppc_update_lpcr(kvm, lpcr, LPCR_VRMASD);
+				lpcr = kvm->arch.lpcr & ~LPCR_VRMASD;
+				lpcr |= senc << (LPCR_VRMASD_SH - 4);
+				kvm->arch.lpcr = lpcr;
 				rma_setup = 1;
 			}
 			++i;

@@ -24,8 +24,7 @@ struct netpoll {
 	struct net_device *dev;
 	char dev_name[IFNAMSIZ];
 	const char *name;
-	void (*rx_skb_hook)(struct netpoll *np, int source, struct sk_buff *skb,
-			    int offset, int len);
+	void (*rx_hook)(struct netpoll *, int, char *, int);
 
 	union inet_addr local_ip, remote_ip;
 	bool ipv6;
@@ -42,7 +41,7 @@ struct netpoll_info {
 	unsigned long rx_flags;
 	spinlock_t rx_lock;
 	struct semaphore dev_lock;
-	struct list_head rx_np; /* netpolls that registered an rx_skb_hook */
+	struct list_head rx_np; /* netpolls that registered an rx_hook */
 
 	struct sk_buff_head neigh_tx; /* list of neigh requests to reply to */
 	struct sk_buff_head txq;

@@ -19,7 +19,8 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+
+#include <video/exynos_dp.h>
 
 #include "exynos_dp_core.h"
 
@@ -893,17 +894,26 @@ static void exynos_dp_hotplug(struct work_struct *work)
 		dev_err(dp->dev, "unable to config video\n");
 }
 
-static struct video_info *exynos_dp_dt_parse_pdata(struct device *dev)
+#ifdef CONFIG_OF
+static struct exynos_dp_platdata *exynos_dp_dt_parse_pdata(struct device *dev)
 {
 	struct device_node *dp_node = dev->of_node;
+	struct exynos_dp_platdata *pd;
 	struct video_info *dp_video_config;
 
+	pd = devm_kzalloc(dev, sizeof(*pd), GFP_KERNEL);
+	if (!pd) {
+		dev_err(dev, "memory allocation for pdata failed\n");
+		return ERR_PTR(-ENOMEM);
+	}
 	dp_video_config = devm_kzalloc(dev,
 				sizeof(*dp_video_config), GFP_KERNEL);
+
 	if (!dp_video_config) {
 		dev_err(dev, "memory allocation for video config failed\n");
 		return ERR_PTR(-ENOMEM);
 	}
+	pd->video_info = dp_video_config;
 
 	dp_video_config->h_sync_polarity =
 		of_property_read_bool(dp_node, "hsync-active-high");
@@ -950,7 +960,7 @@ static struct video_info *exynos_dp_dt_parse_pdata(struct device *dev)
 		return ERR_PTR(-EINVAL);
 	}
 
-	return dp_video_config;
+	return pd;
 }
 
 static int exynos_dp_dt_parse_phydata(struct exynos_dp_device *dp)
@@ -961,11 +971,8 @@ static int exynos_dp_dt_parse_phydata(struct exynos_dp_device *dp)
 
 	dp_phy_node = of_find_node_by_name(dp_phy_node, "dptx-phy");
 	if (!dp_phy_node) {
-		dp->phy = devm_phy_get(dp->dev, "dp");
-		if (IS_ERR(dp->phy))
-			return PTR_ERR(dp->phy);
-		else
-			return 0;
+		dev_err(dp->dev, "could not find dptx-phy node\n");
+		return -ENODEV;
 	}
 
 	if (of_property_read_u32(dp_phy_node, "reg", &phy_base)) {
@@ -996,34 +1003,48 @@ err:
 
 static void exynos_dp_phy_init(struct exynos_dp_device *dp)
 {
-	if (dp->phy) {
-		phy_power_on(dp->phy);
-	} else if (dp->phy_addr) {
-		u32 reg;
+	u32 reg;
 
-		reg = __raw_readl(dp->phy_addr);
-		reg |= dp->enable_mask;
-		__raw_writel(reg, dp->phy_addr);
-	}
+	reg = __raw_readl(dp->phy_addr);
+	reg |= dp->enable_mask;
+	__raw_writel(reg, dp->phy_addr);
 }
 
 static void exynos_dp_phy_exit(struct exynos_dp_device *dp)
 {
-	if (dp->phy) {
-		phy_power_off(dp->phy);
-	} else if (dp->phy_addr) {
-		u32 reg;
+	u32 reg;
 
-		reg = __raw_readl(dp->phy_addr);
-		reg &= ~(dp->enable_mask);
-		__raw_writel(reg, dp->phy_addr);
-	}
+	reg = __raw_readl(dp->phy_addr);
+	reg &= ~(dp->enable_mask);
+	__raw_writel(reg, dp->phy_addr);
 }
+#else
+static struct exynos_dp_platdata *exynos_dp_dt_parse_pdata(struct device *dev)
+{
+	return NULL;
+}
+
+static int exynos_dp_dt_parse_phydata(struct exynos_dp_device *dp)
+{
+	return -EINVAL;
+}
+
+static void exynos_dp_phy_init(struct exynos_dp_device *dp)
+{
+	return;
+}
+
+static void exynos_dp_phy_exit(struct exynos_dp_device *dp)
+{
+	return;
+}
+#endif /* CONFIG_OF */
 
 static int exynos_dp_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	struct exynos_dp_device *dp;
+	struct exynos_dp_platdata *pdata;
 
 	int ret = 0;
 
@@ -1036,13 +1057,21 @@ static int exynos_dp_probe(struct platform_device *pdev)
 
 	dp->dev = &pdev->dev;
 
-	dp->video_info = exynos_dp_dt_parse_pdata(&pdev->dev);
-	if (IS_ERR(dp->video_info))
-		return PTR_ERR(dp->video_info);
+	if (pdev->dev.of_node) {
+		pdata = exynos_dp_dt_parse_pdata(&pdev->dev);
+		if (IS_ERR(pdata))
+			return PTR_ERR(pdata);
 
-	ret = exynos_dp_dt_parse_phydata(dp);
-	if (ret)
-		return ret;
+		ret = exynos_dp_dt_parse_phydata(dp);
+		if (ret)
+			return ret;
+	} else {
+		pdata = pdev->dev.platform_data;
+		if (!pdata) {
+			dev_err(&pdev->dev, "no platform data\n");
+			return -EINVAL;
+		}
+	}
 
 	dp->clock = devm_clk_get(&pdev->dev, "dp");
 	if (IS_ERR(dp->clock)) {
@@ -1066,7 +1095,15 @@ static int exynos_dp_probe(struct platform_device *pdev)
 
 	INIT_WORK(&dp->hotplug_work, exynos_dp_hotplug);
 
-	exynos_dp_phy_init(dp);
+	dp->video_info = pdata->video_info;
+
+	if (pdev->dev.of_node) {
+		if (dp->phy_addr)
+			exynos_dp_phy_init(dp);
+	} else {
+		if (pdata->phy_init)
+			pdata->phy_init();
+	}
 
 	exynos_dp_init_dp(dp);
 
@@ -1084,11 +1121,18 @@ static int exynos_dp_probe(struct platform_device *pdev)
 
 static int exynos_dp_remove(struct platform_device *pdev)
 {
+	struct exynos_dp_platdata *pdata = pdev->dev.platform_data;
 	struct exynos_dp_device *dp = platform_get_drvdata(pdev);
 
 	flush_work(&dp->hotplug_work);
 
-	exynos_dp_phy_exit(dp);
+	if (pdev->dev.of_node) {
+		if (dp->phy_addr)
+			exynos_dp_phy_exit(dp);
+	} else {
+		if (pdata->phy_exit)
+			pdata->phy_exit();
+	}
 
 	clk_disable_unprepare(dp->clock);
 
@@ -1099,13 +1143,20 @@ static int exynos_dp_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM_SLEEP
 static int exynos_dp_suspend(struct device *dev)
 {
+	struct exynos_dp_platdata *pdata = dev->platform_data;
 	struct exynos_dp_device *dp = dev_get_drvdata(dev);
 
 	disable_irq(dp->irq);
 
 	flush_work(&dp->hotplug_work);
 
-	exynos_dp_phy_exit(dp);
+	if (dev->of_node) {
+		if (dp->phy_addr)
+			exynos_dp_phy_exit(dp);
+	} else {
+		if (pdata->phy_exit)
+			pdata->phy_exit();
+	}
 
 	clk_disable_unprepare(dp->clock);
 
@@ -1114,9 +1165,16 @@ static int exynos_dp_suspend(struct device *dev)
 
 static int exynos_dp_resume(struct device *dev)
 {
+	struct exynos_dp_platdata *pdata = dev->platform_data;
 	struct exynos_dp_device *dp = dev_get_drvdata(dev);
 
-	exynos_dp_phy_init(dp);
+	if (dev->of_node) {
+		if (dp->phy_addr)
+			exynos_dp_phy_init(dp);
+	} else {
+		if (pdata->phy_init)
+			pdata->phy_init();
+	}
 
 	clk_prepare_enable(dp->clock);
 
@@ -1145,7 +1203,7 @@ static struct platform_driver exynos_dp_driver = {
 		.name	= "exynos-dp",
 		.owner	= THIS_MODULE,
 		.pm	= &exynos_dp_pm_ops,
-		.of_match_table = exynos_dp_match,
+		.of_match_table = of_match_ptr(exynos_dp_match),
 	},
 };
 

@@ -50,10 +50,16 @@ static int apci2200_do_insn_bits(struct comedi_device *dev,
 				 struct comedi_insn *insn,
 				 unsigned int *data)
 {
-	s->state = inw(dev->iobase + APCI2200_DO_REG);
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
 
-	if (comedi_dio_update_state(s, data))
+	s->state = inw(dev->iobase + APCI2200_DO_REG);
+	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
+
 		outw(s->state, dev->iobase + APCI2200_DO_REG);
+	}
 
 	data[1] = s->state;
 

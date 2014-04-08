@@ -266,7 +266,7 @@ static void vt8623_set_pixclock(struct fb_info *info, u32 pixclock)
 
 	rv = svga_compute_pll(&vt8623_pll, 1000000000 / pixclock, &m, &n, &r, info->node);
 	if (rv < 0) {
-		fb_err(info, "cannot set requested pixclock, keeping old value\n");
+		printk(KERN_ERR "fb%d: cannot set requested pixclock, keeping old value\n", info->node);
 		return;
 	}
 
@@ -335,7 +335,7 @@ static int vt8623fb_check_var(struct fb_var_screeninfo *var, struct fb_info *inf
 	rv = svga_match_format (vt8623fb_formats, var, NULL);
 	if (rv < 0)
 	{
-		fb_err(info, "unsupported mode requested\n");
+		printk(KERN_ERR "fb%d: unsupported mode requested\n", info->node);
 		return rv;
 	}
 
@@ -354,23 +354,21 @@ static int vt8623fb_check_var(struct fb_var_screeninfo *var, struct fb_info *inf
 	mem = ((var->bits_per_pixel * var->xres_virtual) >> 3) * var->yres_virtual;
 	if (mem > info->screen_size)
 	{
-		fb_err(info, "not enough framebuffer memory (%d kB requested, %d kB available)\n",
-		       mem >> 10, (unsigned int) (info->screen_size >> 10));
+		printk(KERN_ERR "fb%d: not enough framebuffer memory (%d kB requested , %d kB available)\n", info->node, mem >> 10, (unsigned int) (info->screen_size >> 10));
 		return -EINVAL;
 	}
 
 	/* Text mode is limited to 256 kB of memory */
 	if ((var->bits_per_pixel == 0) && (mem > (256*1024)))
 	{
-		fb_err(info, "text framebuffer size too large (%d kB requested, 256 kB possible)\n",
-		       mem >> 10);
+		printk(KERN_ERR "fb%d: text framebuffer size too large (%d kB requested, 256 kB possible)\n", info->node, mem >> 10);
 		return -EINVAL;
 	}
 
 	rv = svga_check_timings (&vt8623_timing_regs, var, info->node);
 	if (rv < 0)
 	{
-		fb_err(info, "invalid timings requested\n");
+		printk(KERN_ERR "fb%d: invalid timings requested\n", info->node);
 		return rv;
 	}
 
@@ -476,32 +474,32 @@ static int vt8623fb_set_par(struct fb_info *info)
 	mode = svga_match_format(vt8623fb_formats, &(info->var), &(info->fix));
 	switch (mode) {
 	case 0:
-		fb_dbg(info, "text mode\n");
+		pr_debug("fb%d: text mode\n", info->node);
 		svga_set_textmode_vga_regs(par->state.vgabase);
 		svga_wseq_mask(par->state.vgabase, 0x15, 0x00, 0xFE);
 		svga_wcrt_mask(par->state.vgabase, 0x11, 0x60, 0x70);
 		break;
 	case 1:
-		fb_dbg(info, "4 bit pseudocolor\n");
+		pr_debug("fb%d: 4 bit pseudocolor\n", info->node);
 		vga_wgfx(par->state.vgabase, VGA_GFX_MODE, 0x40);
 		svga_wseq_mask(par->state.vgabase, 0x15, 0x20, 0xFE);
 		svga_wcrt_mask(par->state.vgabase, 0x11, 0x00, 0x70);
 		break;
 	case 2:
-		fb_dbg(info, "4 bit pseudocolor, planar\n");
+		pr_debug("fb%d: 4 bit pseudocolor, planar\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x15, 0x00, 0xFE);
 		svga_wcrt_mask(par->state.vgabase, 0x11, 0x00, 0x70);
 		break;
 	case 3:
-		fb_dbg(info, "8 bit pseudocolor\n");
+		pr_debug("fb%d: 8 bit pseudocolor\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x15, 0x22, 0xFE);
 		break;
 	case 4:
-		fb_dbg(info, "5/6/5 truecolor\n");
+		pr_debug("fb%d: 5/6/5 truecolor\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x15, 0xB6, 0xFE);
 		break;
 	case 5:
-		fb_dbg(info, "8/8/8 truecolor\n");
+		pr_debug("fb%d: 8/8/8 truecolor\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x15, 0xAE, 0xFE);
 		break;
 	default:
@@ -586,27 +584,27 @@ static int vt8623fb_blank(int blank_mode, struct fb_info *info)
 
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
-		fb_dbg(info, "unblank\n");
+		pr_debug("fb%d: unblank\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x36, 0x00, 0x30);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x00, 0x20);
 		break;
 	case FB_BLANK_NORMAL:
-		fb_dbg(info, "blank\n");
+		pr_debug("fb%d: blank\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x36, 0x00, 0x30);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
 	case FB_BLANK_HSYNC_SUSPEND:
-		fb_dbg(info, "DPMS standby (hsync off)\n");
+		pr_debug("fb%d: DPMS standby (hsync off)\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x36, 0x10, 0x30);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
 	case FB_BLANK_VSYNC_SUSPEND:
-		fb_dbg(info, "DPMS suspend (vsync off)\n");
+		pr_debug("fb%d: DPMS suspend (vsync off)\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x36, 0x20, 0x30);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
 	case FB_BLANK_POWERDOWN:
-		fb_dbg(info, "DPMS off (no sync)\n");
+		pr_debug("fb%d: DPMS off (no sync)\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x36, 0x30, 0x30);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
@@ -771,12 +769,12 @@ static int vt8623_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	rc = register_framebuffer(info);
 	if (rc < 0) {
-		dev_err(info->device, "cannot register framebuffer\n");
+		dev_err(info->device, "cannot register framebugger\n");
 		goto err_reg_fb;
 	}
 
-	fb_info(info, "%s on %s, %d MB RAM\n",
-		info->fix.id, pci_name(dev), info->fix.smem_len >> 20);
+	printk(KERN_INFO "fb%d: %s on %s, %d MB RAM\n", info->node, info->fix.id,
+		 pci_name(dev), info->fix.smem_len >> 20);
 
 	/* Record a reference to the driver data */
 	pci_set_drvdata(dev, info);
@@ -831,6 +829,7 @@ static void vt8623_pci_remove(struct pci_dev *dev)
 		pci_release_regions(dev);
 /*		pci_disable_device(dev); */
 
+		pci_set_drvdata(dev, NULL);
 		framebuffer_release(info);
 	}
 }

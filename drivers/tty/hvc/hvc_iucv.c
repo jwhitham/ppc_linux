@@ -1354,7 +1354,8 @@ out_error_memory:
 	mempool_destroy(hvc_iucv_mempool);
 	kmem_cache_destroy(hvc_iucv_buffer_cache);
 out_error:
-	kfree(hvc_iucv_filter);
+	if (hvc_iucv_filter)
+		kfree(hvc_iucv_filter);
 	hvc_iucv_devices = 0; /* ensure that we do not provide any device */
 	return rc;
 }

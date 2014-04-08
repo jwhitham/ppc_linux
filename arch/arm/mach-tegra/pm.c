@@ -59,10 +59,8 @@ static void tegra_tear_down_cpu_init(void)
 		break;
 	case TEGRA30:
 	case TEGRA114:
-	case TEGRA124:
 		if (IS_ENABLED(CONFIG_ARCH_TEGRA_3x_SOC) ||
-		    IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC) ||
-		    IS_ENABLED(CONFIG_ARCH_TEGRA_124_SOC))
+		    IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC))
 			tegra_tear_down_cpu = tegra30_tear_down_cpu;
 		break;
 	}
@@ -218,10 +216,8 @@ static bool tegra_lp1_iram_hook(void)
 		break;
 	case TEGRA30:
 	case TEGRA114:
-	case TEGRA124:
 		if (IS_ENABLED(CONFIG_ARCH_TEGRA_3x_SOC) ||
-		    IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC) ||
-		    IS_ENABLED(CONFIG_ARCH_TEGRA_124_SOC))
+		    IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC))
 			tegra30_lp1_iram_hook();
 		break;
 	default:
@@ -248,10 +244,8 @@ static bool tegra_sleep_core_init(void)
 		break;
 	case TEGRA30:
 	case TEGRA114:
-	case TEGRA124:
 		if (IS_ENABLED(CONFIG_ARCH_TEGRA_3x_SOC) ||
-		    IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC) ||
-		    IS_ENABLED(CONFIG_ARCH_TEGRA_124_SOC))
+		    IS_ENABLED(CONFIG_ARCH_TEGRA_114_SOC))
 			tegra30_sleep_core_init();
 		break;
 	default:
@@ -269,10 +263,10 @@ static void tegra_suspend_enter_lp1(void)
 	tegra_pmc_suspend();
 
 	/* copy the reset vector & SDRAM shutdown code into IRAM */
-	memcpy(iram_save_addr, IO_ADDRESS(TEGRA_IRAM_LPx_RESUME_AREA),
+	memcpy(iram_save_addr, IO_ADDRESS(TEGRA_IRAM_CODE_AREA),
 		iram_save_size);
-	memcpy(IO_ADDRESS(TEGRA_IRAM_LPx_RESUME_AREA),
-		tegra_lp1_iram.start_addr, iram_save_size);
+	memcpy(IO_ADDRESS(TEGRA_IRAM_CODE_AREA), tegra_lp1_iram.start_addr,
+		iram_save_size);
 
 	*((u32 *)tegra_cpu_lp1_mask) = 1;
 }
@@ -282,7 +276,7 @@ static void tegra_suspend_exit_lp1(void)
 	tegra_pmc_resume();
 
 	/* restore IRAM */
-	memcpy(IO_ADDRESS(TEGRA_IRAM_LPx_RESUME_AREA), iram_save_addr,
+	memcpy(IO_ADDRESS(TEGRA_IRAM_CODE_AREA), iram_save_addr,
 		iram_save_size);
 
 	*(u32 *)tegra_cpu_lp1_mask = 0;

@@ -49,11 +49,10 @@ static struct platform_device_id ahci_devtype[] = {
 };
 MODULE_DEVICE_TABLE(platform, ahci_devtype);
 
-struct ata_port_operations ahci_platform_ops = {
+static struct ata_port_operations ahci_platform_ops = {
 	.inherits	= &ahci_ops,
 	.host_stop	= ahci_host_stop,
 };
-EXPORT_SYMBOL_GPL(ahci_platform_ops);
 
 static struct ata_port_operations ahci_platform_retry_srst_ops = {
 	.inherits	= &ahci_pmp_retry_srst_ops,
@@ -329,7 +328,6 @@ static SIMPLE_DEV_PM_OPS(ahci_pm_ops, ahci_suspend, ahci_resume);
 static const struct of_device_id ahci_of_match[] = {
 	{ .compatible = "snps,spear-ahci", },
 	{ .compatible = "snps,exynos5440-ahci", },
-	{ .compatible = "ibm,476gtr-ahci", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ahci_of_match);

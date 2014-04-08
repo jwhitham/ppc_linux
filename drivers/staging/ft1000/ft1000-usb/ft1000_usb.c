@@ -36,7 +36,7 @@ static struct usb_device_id id_table[] = {
 
 MODULE_DEVICE_TABLE(usb, id_table);
 
-static bool gPollingfailed = false;
+static bool gPollingfailed = FALSE;
 static int ft1000_poll_thread(void *arg)
 {
 	int ret;
@@ -47,7 +47,7 @@ static int ft1000_poll_thread(void *arg)
 			ret = ft1000_poll(arg);
 			if (ret != STATUS_SUCCESS) {
 				DEBUG("ft1000_poll_thread: polling failed\n");
-				gPollingfailed = true;
+				gPollingfailed = TRUE;
 			}
 		}
 	}
@@ -171,7 +171,7 @@ static int ft1000_probe(struct usb_interface *interface,
 		goto err_load;
 	}
 
-	gPollingfailed = false;
+	gPollingfailed = FALSE;
 	ft1000dev->pPollThread =
 	    kthread_run(ft1000_poll_thread, ft1000dev, "ft1000_poll");
 

@@ -19,21 +19,6 @@
  */
 
 /*
- * INIT_LIST_HEAD_RCU - Initialize a list_head visible to RCU readers
- * @list: list to be initialized
- *
- * You should instead use INIT_LIST_HEAD() for normal initialization and
- * cleanup tasks, when readers have no access to the list being initialized.
- * However, if the list being initialized is visible to readers, you
- * need to keep the compiler from being too mischievous.
- */
-static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
-{
-	ACCESS_ONCE(list->next) = list;
-	ACCESS_ONCE(list->prev) = list;
-}
-
-/*
  * return the ->next pointer of a list_head in an rcu safe
  * way, we must not access it directly
  */
@@ -206,13 +191,9 @@ static inline void list_splice_init_rcu(struct list_head *list,
 	if (list_empty(list))
 		return;
 
-	/*
-	 * "first" and "last" tracking list, so initialize it.  RCU readers
-	 * have access to this list, so we must use INIT_LIST_HEAD_RCU()
-	 * instead of INIT_LIST_HEAD().
-	 */
+	/* "first" and "last" tracking list, so initialize it. */
 
-	INIT_LIST_HEAD_RCU(list);
+	INIT_LIST_HEAD(list);
 
 	/*
 	 * At this point, the list body still points to the source list.

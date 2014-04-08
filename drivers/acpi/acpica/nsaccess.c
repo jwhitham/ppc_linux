@@ -240,7 +240,7 @@ acpi_status acpi_ns_root_initialize(void)
 		}
 	}
 
-unlock_and_exit:
+      unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_NAMESPACE);
 
 	/* Save a handle to "_GPE", it is always present */
@@ -424,9 +424,8 @@ acpi_ns_lookup(union acpi_generic_state *scope_info,
 					/* Current scope has no parent scope */
 
 					ACPI_ERROR((AE_INFO,
-						    "%s: Path has too many parent prefixes (^) "
-						    "- reached beyond root node",
-						    pathname));
+						    "ACPI path has too many parent prefixes (^) "
+						    "- reached beyond root node"));
 					return_ACPI_STATUS(AE_NOT_FOUND);
 				}
 			}

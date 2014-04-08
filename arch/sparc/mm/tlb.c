@@ -161,8 +161,8 @@ void set_pmd_at(struct mm_struct *mm, unsigned long addr,
 	if (mm == &init_mm)
 		return;
 
-	if ((pmd_val(pmd) ^ pmd_val(orig)) & _PAGE_PMD_HUGE) {
-		if (pmd_val(pmd) & _PAGE_PMD_HUGE)
+	if ((pmd_val(pmd) ^ pmd_val(orig)) & PMD_ISHUGE) {
+		if (pmd_val(pmd) & PMD_ISHUGE)
 			mm->context.huge_pte_count++;
 		else
 			mm->context.huge_pte_count--;
@@ -178,16 +178,13 @@ void set_pmd_at(struct mm_struct *mm, unsigned long addr,
 	}
 
 	if (!pmd_none(orig)) {
-		pte_t orig_pte = __pte(pmd_val(orig));
-		bool exec = pte_exec(orig_pte);
+		bool exec = ((pmd_val(orig) & PMD_HUGE_EXEC) != 0);
 
 		addr &= HPAGE_MASK;
-		if (pmd_trans_huge(orig)) {
+		if (pmd_val(orig) & PMD_ISHUGE)
 			tlb_batch_add_one(mm, addr, exec);
-			tlb_batch_add_one(mm, addr + REAL_HPAGE_SIZE, exec);
-		} else {
+		else
 			tlb_batch_pmd_scan(mm, addr, orig, exec);
-		}
 	}
 }
 
@@ -199,11 +196,11 @@ void pgtable_trans_huge_deposit(struct mm_struct *mm, pmd_t *pmdp,
 	assert_spin_locked(&mm->page_table_lock);
 
 	/* FIFO */
-	if (!pmd_huge_pte(mm, pmdp))
+	if (!mm->pmd_huge_pte)
 		INIT_LIST_HEAD(lh);
 	else
-		list_add(lh, (struct list_head *) pmd_huge_pte(mm, pmdp));
-	pmd_huge_pte(mm, pmdp) = pgtable;
+		list_add(lh, (struct list_head *) mm->pmd_huge_pte);
+	mm->pmd_huge_pte = pgtable;
 }
 
 pgtable_t pgtable_trans_huge_withdraw(struct mm_struct *mm, pmd_t *pmdp)
@@ -214,12 +211,12 @@ pgtable_t pgtable_trans_huge_withdraw(struct mm_struct *mm, pmd_t *pmdp)
 	assert_spin_locked(&mm->page_table_lock);
 
 	/* FIFO */
-	pgtable = pmd_huge_pte(mm, pmdp);
+	pgtable = mm->pmd_huge_pte;
 	lh = (struct list_head *) pgtable;
 	if (list_empty(lh))
-		pmd_huge_pte(mm, pmdp) = NULL;
+		mm->pmd_huge_pte = NULL;
 	else {
-		pmd_huge_pte(mm, pmdp) = (pgtable_t) lh->next;
+		mm->pmd_huge_pte = (pgtable_t) lh->next;
 		list_del(lh);
 	}
 	pte_val(pgtable[0]) = 0;

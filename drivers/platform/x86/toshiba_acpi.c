@@ -191,9 +191,16 @@ static __inline__ void _set_bit(u32 * word, u32 mask, int value)
 
 static int write_acpi_int(const char *methodName, int val)
 {
+	struct acpi_object_list params;
+	union acpi_object in_objs[1];
 	acpi_status status;
 
-	status = acpi_execute_simple_method(NULL, (char *)methodName, val);
+	params.count = ARRAY_SIZE(in_objs);
+	params.pointer = in_objs;
+	in_objs[0].type = ACPI_TYPE_INTEGER;
+	in_objs[0].integer.value = val;
+
+	status = acpi_evaluate_object(NULL, (char *)methodName, &params, NULL);
 	return (status == AE_OK) ? 0 : -EIO;
 }
 
@@ -940,17 +947,21 @@ static void toshiba_acpi_hotkey_work(struct work_struct *work)
  */
 static int toshiba_acpi_query_hotkey(struct toshiba_acpi_dev *dev)
 {
-	unsigned long long value;
+	struct acpi_buffer buf;
+	union acpi_object out_obj;
 	acpi_status status;
 
-	status = acpi_evaluate_integer(dev->acpi_dev->handle, "INFO",
-				      NULL, &value);
-	if (ACPI_FAILURE(status)) {
+	buf.pointer = &out_obj;
+	buf.length = sizeof(out_obj);
+
+	status = acpi_evaluate_object(dev->acpi_dev->handle, "INFO",
+				      NULL, &buf);
+	if (ACPI_FAILURE(status) || out_obj.type != ACPI_TYPE_INTEGER) {
 		pr_err("ACPI INFO method execution failed\n");
 		return -EIO;
 	}
 
-	return value;
+	return out_obj.integer.value;
 }
 
 static void toshiba_acpi_report_hotkey(struct toshiba_acpi_dev *dev,
@@ -970,13 +981,15 @@ static void toshiba_acpi_report_hotkey(struct toshiba_acpi_dev *dev,
 static int toshiba_acpi_setup_keyboard(struct toshiba_acpi_dev *dev)
 {
 	acpi_status status;
-	acpi_handle ec_handle;
+	acpi_handle ec_handle, handle;
 	int error;
 	u32 hci_result;
 
 	dev->hotkey_dev = input_allocate_device();
-	if (!dev->hotkey_dev)
+	if (!dev->hotkey_dev) {
+		pr_info("Unable to register input device\n");
 		return -ENOMEM;
+	}
 
 	dev->hotkey_dev->name = "Toshiba input device";
 	dev->hotkey_dev->phys = "toshiba_acpi/input0";
@@ -995,7 +1008,10 @@ static int toshiba_acpi_setup_keyboard(struct toshiba_acpi_dev *dev)
 	 */
 	status = AE_ERROR;
 	ec_handle = ec_get_handle();
-	if (ec_handle && acpi_has_method(ec_handle, "NTFY")) {
+	if (ec_handle)
+		status = acpi_get_handle(ec_handle, "NTFY", &handle);
+
+	if (ACPI_SUCCESS(status)) {
 		INIT_WORK(&dev->hotkey_work, toshiba_acpi_hotkey_work);
 
 		error = i8042_install_filter(toshiba_acpi_i8042_filter);
@@ -1011,9 +1027,10 @@ static int toshiba_acpi_setup_keyboard(struct toshiba_acpi_dev *dev)
 	 * Determine hotkey query interface. Prefer using the INFO
 	 * method when it is available.
 	 */
-	if (acpi_has_method(dev->acpi_dev->handle, "INFO"))
+	status = acpi_get_handle(dev->acpi_dev->handle, "INFO", &handle);
+	if (ACPI_SUCCESS(status)) {
 		dev->info_supported = 1;
-	else {
+	} else {
 		hci_write1(dev, HCI_SYSTEM_EVENT, 1, &hci_result);
 		if (hci_result == HCI_SUCCESS)
 			dev->system_event_supported = 1;
@@ -1138,10 +1155,15 @@ static int toshiba_acpi_remove(struct acpi_device *acpi_dev)
 
 static const char *find_hci_method(acpi_handle handle)
 {
-	if (acpi_has_method(handle, "GHCI"))
+	acpi_status status;
+	acpi_handle hci_handle;
+
+	status = acpi_get_handle(handle, "GHCI", &hci_handle);
+	if (ACPI_SUCCESS(status))
 		return "GHCI";
 
-	if (acpi_has_method(handle, "SPFC"))
+	status = acpi_get_handle(handle, "SPFC", &hci_handle);
+	if (ACPI_SUCCESS(status))
 		return "SPFC";
 
 	return NULL;

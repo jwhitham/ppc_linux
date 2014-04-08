@@ -404,38 +404,46 @@ static ssize_t dlpar_cpu_probe(const char *buf, size_t count)
 	unsigned long drc_index;
 	int rc;
 
+	cpu_hotplug_driver_lock();
 	rc = strict_strtoul(buf, 0, &drc_index);
-	if (rc)
-		return -EINVAL;
+	if (rc) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	parent = of_find_node_by_path("/cpus");
-	if (!parent)
-		return -ENODEV;
+	if (!parent) {
+		rc = -ENODEV;
+		goto out;
+	}
 
 	dn = dlpar_configure_connector(drc_index, parent);
-	if (!dn)
-		return -EINVAL;
+	if (!dn) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	of_node_put(parent);
 
 	rc = dlpar_acquire_drc(drc_index);
 	if (rc) {
 		dlpar_free_cc_nodes(dn);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto out;
 	}
 
 	rc = dlpar_attach_node(dn);
 	if (rc) {
 		dlpar_release_drc(drc_index);
 		dlpar_free_cc_nodes(dn);
-		return rc;
+		goto out;
 	}
 
 	rc = dlpar_online_cpu(dn);
-	if (rc)
-		return rc;
+out:
+	cpu_hotplug_driver_unlock();
 
-	return count;
+	return rc ? rc : count;
 }
 
 static int dlpar_offline_cpu(struct device_node *dn)
@@ -508,27 +516,30 @@ static ssize_t dlpar_cpu_release(const char *buf, size_t count)
 		return -EINVAL;
 	}
 
+	cpu_hotplug_driver_lock();
 	rc = dlpar_offline_cpu(dn);
 	if (rc) {
 		of_node_put(dn);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto out;
 	}
 
 	rc = dlpar_release_drc(*drc_index);
 	if (rc) {
 		of_node_put(dn);
-		return rc;
+		goto out;
 	}
 
 	rc = dlpar_detach_node(dn);
 	if (rc) {
 		dlpar_acquire_drc(*drc_index);
-		return rc;
+		goto out;
 	}
 
 	of_node_put(dn);
-
-	return count;
+out:
+	cpu_hotplug_driver_unlock();
+	return rc ? rc : count;
 }
 
 static int __init pseries_dlpar_init(void)

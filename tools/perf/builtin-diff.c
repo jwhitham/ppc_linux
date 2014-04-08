@@ -16,7 +16,6 @@
 #include "util/sort.h"
 #include "util/symbol.h"
 #include "util/util.h"
-#include "util/data.h"
 
 #include <stdlib.h>
 #include <math.h>
@@ -43,7 +42,7 @@ struct diff_hpp_fmt {
 
 struct data__file {
 	struct perf_session	*session;
-	struct perf_data_file	file;
+	const char		*file;
 	int			 idx;
 	struct hists		*hists;
 	struct diff_hpp_fmt	 fmt[PERF_HPP_DIFF__MAX_INDEX];
@@ -303,12 +302,11 @@ static int formula_fprintf(struct hist_entry *he, struct hist_entry *pair,
 	return -1;
 }
 
-static int hists__add_entry(struct hists *hists,
+static int hists__add_entry(struct hists *self,
 			    struct addr_location *al, u64 period,
-			    u64 weight, u64 transaction)
+			    u64 weight)
 {
-	if (__hists__add_entry(hists, al, NULL, NULL, NULL, period, weight,
-			       transaction) != NULL)
+	if (__hists__add_entry(self, al, NULL, period, weight) != NULL)
 		return 0;
 	return -ENOMEM;
 }
@@ -330,8 +328,7 @@ static int diff__process_sample_event(struct perf_tool *tool __maybe_unused,
 	if (al.filtered)
 		return 0;
 
-	if (hists__add_entry(&evsel->hists, &al, sample->period,
-			     sample->weight, sample->transaction)) {
+	if (hists__add_entry(&evsel->hists, &al, sample->period, sample->weight)) {
 		pr_warning("problem incrementing symbol period, skipping event\n");
 		return -1;
 	}
@@ -370,7 +367,7 @@ static void perf_evlist__collapse_resort(struct perf_evlist *evlist)
 	list_for_each_entry(evsel, &evlist->entries, node) {
 		struct hists *hists = &evsel->hists;
 
-		hists__collapse_resort(hists, NULL);
+		hists__collapse_resort(hists);
 	}
 }
 
@@ -602,7 +599,7 @@ static void data__fprintf(void)
 
 	data__for_each_file(i, d)
 		fprintf(stdout, "#  [%d] %s %s\n",
-			d->idx, d->file.path,
+			d->idx, d->file,
 			!d->idx ? "(Baseline)" : "");
 
 	fprintf(stdout, "#\n");
@@ -664,16 +661,17 @@ static int __cmd_diff(void)
 	int ret = -EINVAL, i;
 
 	data__for_each_file(i, d) {
-		d->session = perf_session__new(&d->file, false, &tool);
+		d->session = perf_session__new(d->file, O_RDONLY, force,
+					       false, &tool);
 		if (!d->session) {
-			pr_err("Failed to open %s\n", d->file.path);
+			pr_err("Failed to open %s\n", d->file);
 			ret = -ENOMEM;
 			goto out_delete;
 		}
 
 		ret = perf_session__process_events(d->session, &tool);
 		if (ret) {
-			pr_err("Failed to process %s\n", d->file.path);
+			pr_err("Failed to process %s\n", d->file);
 			goto out_delete;
 		}
 
@@ -1016,12 +1014,7 @@ static int data_init(int argc, const char **argv)
 		return -ENOMEM;
 
 	data__for_each_file(i, d) {
-		struct perf_data_file *file = &d->file;
-
-		file->path  = use_default ? defaults[i] : argv[i];
-		file->mode  = PERF_DATA_MODE_READ,
-		file->force = force,
-
+		d->file = use_default ? defaults[i] : argv[i];
 		d->idx  = i;
 	}
 

@@ -25,7 +25,6 @@
 #include <linux/slab.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
-#include <linux/regulator/of_regulator.h>
 #include <linux/regmap.h>
 
 #include "da9210-regulator.h"
@@ -127,8 +126,7 @@ static int da9210_i2c_probe(struct i2c_client *i2c,
 			    const struct i2c_device_id *id)
 {
 	struct da9210 *chip;
-	struct device *dev = &i2c->dev;
-	struct da9210_pdata *pdata = dev_get_platdata(dev);
+	struct da9210_pdata *pdata = i2c->dev.platform_data;
 	struct regulator_dev *rdev = NULL;
 	struct regulator_config config = { };
 	int error;
@@ -149,13 +147,12 @@ static int da9210_i2c_probe(struct i2c_client *i2c,
 	}
 
 	config.dev = &i2c->dev;
-	config.init_data = pdata ? &pdata->da9210_constraints :
-		of_get_regulator_init_data(dev, dev->of_node);
+	if (pdata)
+		config.init_data = &pdata->da9210_constraints;
 	config.driver_data = chip;
 	config.regmap = chip->regmap;
-	config.of_node = dev->of_node;
 
-	rdev = devm_regulator_register(&i2c->dev, &da9210_reg, &config);
+	rdev = regulator_register(&da9210_reg, &config);
 	if (IS_ERR(rdev)) {
 		dev_err(&i2c->dev, "Failed to register DA9210 regulator\n");
 		return PTR_ERR(rdev);
@@ -165,6 +162,13 @@ static int da9210_i2c_probe(struct i2c_client *i2c,
 
 	i2c_set_clientdata(i2c, chip);
 
+	return 0;
+}
+
+static int da9210_i2c_remove(struct i2c_client *i2c)
+{
+	struct da9210 *chip = i2c_get_clientdata(i2c);
+	regulator_unregister(chip->rdev);
 	return 0;
 }
 
@@ -181,6 +185,7 @@ static struct i2c_driver da9210_regulator_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = da9210_i2c_probe,
+	.remove = da9210_i2c_remove,
 	.id_table = da9210_i2c_id,
 };
 

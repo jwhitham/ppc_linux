@@ -6700,8 +6700,7 @@ static int sd_start(struct gspca_dev *gspca_dev)
 	};
 
 	/* create the JPEG header */
-	jpeg_define(sd->jpeg_hdr, gspca_dev->pixfmt.height,
-			gspca_dev->pixfmt.width,
+	jpeg_define(sd->jpeg_hdr, gspca_dev->height, gspca_dev->width,
 			0x21);		/* JPEG 422 */
 
 	mode = gspca_dev->cam.cam_mode[gspca_dev->curr_mode].priv;

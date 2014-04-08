@@ -792,8 +792,7 @@ static ssize_t iscsi_stat_sess_show_attr_cmd_pdus(
 	if (se_sess) {
 		sess = se_sess->fabric_sess_ptr;
 		if (sess)
-			ret = snprintf(page, PAGE_SIZE, "%lu\n",
-				       atomic_long_read(&sess->cmd_pdus));
+			ret = snprintf(page, PAGE_SIZE, "%u\n", sess->cmd_pdus);
 	}
 	spin_unlock_bh(&se_nacl->nacl_sess_lock);
 
@@ -816,8 +815,7 @@ static ssize_t iscsi_stat_sess_show_attr_rsp_pdus(
 	if (se_sess) {
 		sess = se_sess->fabric_sess_ptr;
 		if (sess)
-			ret = snprintf(page, PAGE_SIZE, "%lu\n",
-				       atomic_long_read(&sess->rsp_pdus));
+			ret = snprintf(page, PAGE_SIZE, "%u\n", sess->rsp_pdus);
 	}
 	spin_unlock_bh(&se_nacl->nacl_sess_lock);
 
@@ -840,8 +838,8 @@ static ssize_t iscsi_stat_sess_show_attr_txdata_octs(
 	if (se_sess) {
 		sess = se_sess->fabric_sess_ptr;
 		if (sess)
-			ret = snprintf(page, PAGE_SIZE, "%lu\n",
-				       atomic_long_read(&sess->tx_data_octets));
+			ret = snprintf(page, PAGE_SIZE, "%llu\n",
+				(unsigned long long)sess->tx_data_octets);
 	}
 	spin_unlock_bh(&se_nacl->nacl_sess_lock);
 
@@ -864,8 +862,8 @@ static ssize_t iscsi_stat_sess_show_attr_rxdata_octs(
 	if (se_sess) {
 		sess = se_sess->fabric_sess_ptr;
 		if (sess)
-			ret = snprintf(page, PAGE_SIZE, "%lu\n",
-				       atomic_long_read(&sess->rx_data_octets));
+			ret = snprintf(page, PAGE_SIZE, "%llu\n",
+				(unsigned long long)sess->rx_data_octets);
 	}
 	spin_unlock_bh(&se_nacl->nacl_sess_lock);
 
@@ -888,8 +886,8 @@ static ssize_t iscsi_stat_sess_show_attr_conn_digest_errors(
 	if (se_sess) {
 		sess = se_sess->fabric_sess_ptr;
 		if (sess)
-			ret = snprintf(page, PAGE_SIZE, "%lu\n",
-				       atomic_long_read(&sess->conn_digest_errors));
+			ret = snprintf(page, PAGE_SIZE, "%u\n",
+					sess->conn_digest_errors);
 	}
 	spin_unlock_bh(&se_nacl->nacl_sess_lock);
 
@@ -912,8 +910,8 @@ static ssize_t iscsi_stat_sess_show_attr_conn_timeout_errors(
 	if (se_sess) {
 		sess = se_sess->fabric_sess_ptr;
 		if (sess)
-			ret = snprintf(page, PAGE_SIZE, "%lu\n",
-				       atomic_long_read(&sess->conn_timeout_errors));
+			ret = snprintf(page, PAGE_SIZE, "%u\n",
+					sess->conn_timeout_errors);
 	}
 	spin_unlock_bh(&se_nacl->nacl_sess_lock);
 

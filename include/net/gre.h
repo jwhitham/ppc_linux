@@ -38,13 +38,7 @@ void gre_offload_exit(void);
 
 void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 		      int hdr_len);
-
-static inline struct sk_buff *gre_handle_offloads(struct sk_buff *skb,
-						  bool gre_csum)
-{
-	return iptunnel_handle_offloads(skb, gre_csum, SKB_GSO_GRE);
-}
-
+struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum);
 
 static inline int ip_gre_calc_hlen(__be16 o_flags)
 {

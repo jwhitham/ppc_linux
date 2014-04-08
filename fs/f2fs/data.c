@@ -68,6 +68,9 @@ static int check_extent_cache(struct inode *inode, pgoff_t pgofs,
 					struct buffer_head *bh_result)
 {
 	struct f2fs_inode_info *fi = F2FS_I(inode);
+#ifdef CONFIG_F2FS_STAT_FS
+	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
+#endif
 	pgoff_t start_fofs, end_fofs;
 	block_t start_blkaddr;
 
@@ -77,8 +80,9 @@ static int check_extent_cache(struct inode *inode, pgoff_t pgofs,
 		return 0;
 	}
 
-	stat_inc_total_hit(inode->i_sb);
-
+#ifdef CONFIG_F2FS_STAT_FS
+	sbi->total_hit_ext++;
+#endif
 	start_fofs = fi->ext.fofs;
 	end_fofs = fi->ext.fofs + fi->ext.len - 1;
 	start_blkaddr = fi->ext.blk_addr;
@@ -96,7 +100,9 @@ static int check_extent_cache(struct inode *inode, pgoff_t pgofs,
 		else
 			bh_result->b_size = UINT_MAX;
 
-		stat_inc_read_hit(inode->i_sb);
+#ifdef CONFIG_F2FS_STAT_FS
+		sbi->read_hit_ext++;
+#endif
 		read_unlock(&fi->ext.ext_lock);
 		return 1;
 	}
@@ -110,7 +116,7 @@ void update_extent_cache(block_t blk_addr, struct dnode_of_data *dn)
 	pgoff_t fofs, start_fofs, end_fofs;
 	block_t start_blkaddr, end_blkaddr;
 
-	f2fs_bug_on(blk_addr == NEW_ADDR);
+	BUG_ON(blk_addr == NEW_ADDR);
 	fofs = start_bidx_of_node(ofs_of_node(dn->node_page), fi) +
 							dn->ofs_in_node;
 
@@ -436,7 +442,7 @@ static int get_data_block_ro(struct inode *inode, sector_t iblock,
 	}
 
 	/* It does not support data allocation */
-	f2fs_bug_on(create);
+	BUG_ON(create);
 
 	if (dn.data_blkaddr != NEW_ADDR && dn.data_blkaddr != NULL_ADDR) {
 		int i;
@@ -554,9 +560,9 @@ write:
 		inode_dec_dirty_dents(inode);
 		err = do_write_data_page(page);
 	} else {
-		f2fs_lock_op(sbi);
+		int ilock = mutex_lock_op(sbi);
 		err = do_write_data_page(page);
-		f2fs_unlock_op(sbi);
+		mutex_unlock_op(sbi, ilock);
 		need_balance_fs = true;
 	}
 	if (err == -ENOENT)
@@ -635,6 +641,7 @@ static int f2fs_write_begin(struct file *file, struct address_space *mapping,
 	pgoff_t index = ((unsigned long long) pos) >> PAGE_CACHE_SHIFT;
 	struct dnode_of_data dn;
 	int err = 0;
+	int ilock;
 
 	f2fs_balance_fs(sbi);
 repeat:
@@ -643,7 +650,7 @@ repeat:
 		return -ENOMEM;
 	*pagep = page;
 
-	f2fs_lock_op(sbi);
+	ilock = mutex_lock_op(sbi);
 
 	set_new_dnode(&dn, inode, NULL, NULL, 0);
 	err = get_dnode_of_data(&dn, index, ALLOC_NODE);
@@ -657,7 +664,7 @@ repeat:
 	if (err)
 		goto err;
 
-	f2fs_unlock_op(sbi);
+	mutex_unlock_op(sbi, ilock);
 
 	if ((len == PAGE_CACHE_SIZE) || PageUptodate(page))
 		return 0;
@@ -693,7 +700,7 @@ out:
 	return 0;
 
 err:
-	f2fs_unlock_op(sbi);
+	mutex_unlock_op(sbi, ilock);
 	f2fs_put_page(page, 1);
 	return err;
 }
@@ -755,8 +762,6 @@ static int f2fs_set_data_page_dirty(struct page *page)
 {
 	struct address_space *mapping = page->mapping;
 	struct inode *inode = mapping->host;
-
-	trace_f2fs_set_page_dirty(page, DATA);
 
 	SetPageUptodate(page);
 	if (!PageDirty(page)) {

@@ -737,7 +737,7 @@ static struct adapter *rtw_usb_if1_init(struct dvobj_priv *dvobj,
 	status = _SUCCESS;
 
 free_hal_data:
-	if (status != _SUCCESS)
+	if (status != _SUCCESS && padapter->HalData)
 		kfree(padapter->HalData);
 handle_dualmac:
 	if (status != _SUCCESS)

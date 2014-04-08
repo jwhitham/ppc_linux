@@ -611,20 +611,35 @@ static int mc13892_regulator_probe(struct platform_device *pdev)
 		config.driver_data = priv;
 		config.of_node = node;
 
-		priv->regulators[i] = devm_regulator_register(&pdev->dev, desc,
-							      &config);
+		priv->regulators[i] = regulator_register(desc, &config);
 		if (IS_ERR(priv->regulators[i])) {
 			dev_err(&pdev->dev, "failed to register regulator %s\n",
 				mc13892_regulators[i].desc.name);
-			return PTR_ERR(priv->regulators[i]);
+			ret = PTR_ERR(priv->regulators[i]);
+			goto err;
 		}
 	}
 
 	return 0;
+err:
+	while (--i >= 0)
+		regulator_unregister(priv->regulators[i]);
+	return ret;
 
 err_unlock:
 	mc13xxx_unlock(mc13892);
 	return ret;
+}
+
+static int mc13892_regulator_remove(struct platform_device *pdev)
+{
+	struct mc13xxx_regulator_priv *priv = platform_get_drvdata(pdev);
+	int i;
+
+	for (i = 0; i < priv->num_regulators; i++)
+		regulator_unregister(priv->regulators[i]);
+
+	return 0;
 }
 
 static struct platform_driver mc13892_regulator_driver = {
@@ -632,6 +647,7 @@ static struct platform_driver mc13892_regulator_driver = {
 		.name	= "mc13892-regulator",
 		.owner	= THIS_MODULE,
 	},
+	.remove	= mc13892_regulator_remove,
 	.probe	= mc13892_regulator_probe,
 };
 

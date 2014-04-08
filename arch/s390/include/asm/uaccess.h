@@ -94,7 +94,9 @@ static inline unsigned long extable_fixup(const struct exception_table_entry *x)
 
 struct uaccess_ops {
 	size_t (*copy_from_user)(size_t, const void __user *, void *);
+	size_t (*copy_from_user_small)(size_t, const void __user *, void *);
 	size_t (*copy_to_user)(size_t, void __user *, const void *);
+	size_t (*copy_to_user_small)(size_t, void __user *, const void *);
 	size_t (*copy_in_user)(size_t, void __user *, const void __user *);
 	size_t (*clear_user)(size_t, void __user *);
 	size_t (*strnlen_user)(size_t, const char __user *);
@@ -104,20 +106,22 @@ struct uaccess_ops {
 };
 
 extern struct uaccess_ops uaccess;
+extern struct uaccess_ops uaccess_std;
 extern struct uaccess_ops uaccess_mvcos;
+extern struct uaccess_ops uaccess_mvcos_switch;
 extern struct uaccess_ops uaccess_pt;
 
 extern int __handle_fault(unsigned long, unsigned long, int);
 
 static inline int __put_user_fn(size_t size, void __user *ptr, void *x)
 {
-	size = uaccess.copy_to_user(size, ptr, x);
+	size = uaccess.copy_to_user_small(size, ptr, x);
 	return size ? -EFAULT : size;
 }
 
 static inline int __get_user_fn(size_t size, const void __user *ptr, void *x)
 {
-	size = uaccess.copy_from_user(size, ptr, x);
+	size = uaccess.copy_from_user_small(size, ptr, x);
 	return size ? -EFAULT : size;
 }
 
@@ -222,7 +226,10 @@ extern int __get_user_bad(void) __attribute__((noreturn));
 static inline unsigned long __must_check
 __copy_to_user(void __user *to, const void *from, unsigned long n)
 {
-	return uaccess.copy_to_user(n, to, from);
+	if (__builtin_constant_p(n) && (n <= 256))
+		return uaccess.copy_to_user_small(n, to, from);
+	else
+		return uaccess.copy_to_user(n, to, from);
 }
 
 #define __copy_to_user_inatomic __copy_to_user
@@ -268,7 +275,10 @@ copy_to_user(void __user *to, const void *from, unsigned long n)
 static inline unsigned long __must_check
 __copy_from_user(void *to, const void __user *from, unsigned long n)
 {
-	return uaccess.copy_from_user(n, from, to);
+	if (__builtin_constant_p(n) && (n <= 256))
+		return uaccess.copy_from_user_small(n, from, to);
+	else
+		return uaccess.copy_from_user(n, from, to);
 }
 
 extern void copy_from_user_overflow(void)

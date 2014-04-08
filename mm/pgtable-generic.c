@@ -151,14 +151,14 @@ void pmdp_splitting_flush(struct vm_area_struct *vma, unsigned long address,
 void pgtable_trans_huge_deposit(struct mm_struct *mm, pmd_t *pmdp,
 				pgtable_t pgtable)
 {
-	assert_spin_locked(pmd_lockptr(mm, pmdp));
+	assert_spin_locked(&mm->page_table_lock);
 
 	/* FIFO */
-	if (!pmd_huge_pte(mm, pmdp))
+	if (!mm->pmd_huge_pte)
 		INIT_LIST_HEAD(&pgtable->lru);
 	else
-		list_add(&pgtable->lru, &pmd_huge_pte(mm, pmdp)->lru);
-	pmd_huge_pte(mm, pmdp) = pgtable;
+		list_add(&pgtable->lru, &mm->pmd_huge_pte->lru);
+	mm->pmd_huge_pte = pgtable;
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 #endif
@@ -170,14 +170,14 @@ pgtable_t pgtable_trans_huge_withdraw(struct mm_struct *mm, pmd_t *pmdp)
 {
 	pgtable_t pgtable;
 
-	assert_spin_locked(pmd_lockptr(mm, pmdp));
+	assert_spin_locked(&mm->page_table_lock);
 
 	/* FIFO */
-	pgtable = pmd_huge_pte(mm, pmdp);
+	pgtable = mm->pmd_huge_pte;
 	if (list_empty(&pgtable->lru))
-		pmd_huge_pte(mm, pmdp) = NULL;
+		mm->pmd_huge_pte = NULL;
 	else {
-		pmd_huge_pte(mm, pmdp) = list_entry(pgtable->lru.next,
+		mm->pmd_huge_pte = list_entry(pgtable->lru.next,
 					      struct page, lru);
 		list_del(&pgtable->lru);
 	}

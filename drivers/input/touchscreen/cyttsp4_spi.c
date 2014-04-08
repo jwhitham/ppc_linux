@@ -171,7 +171,10 @@ static int cyttsp4_spi_probe(struct spi_device *spi)
 	ts = cyttsp4_probe(&cyttsp_spi_bus_ops, &spi->dev, spi->irq,
 			  CY_SPI_DATA_BUF_SIZE);
 
-	return PTR_ERR_OR_ZERO(ts);
+	if (IS_ERR(ts))
+		return PTR_ERR(ts);
+
+	return 0;
 }
 
 static int cyttsp4_spi_remove(struct spi_device *spi)

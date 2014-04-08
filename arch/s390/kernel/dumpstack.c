@@ -15,7 +15,6 @@
 #include <linux/sched.h>
 #include <asm/processor.h>
 #include <asm/debug.h>
-#include <asm/dis.h>
 #include <asm/ipl.h>
 
 #ifndef CONFIG_64BIT

@@ -1700,8 +1700,7 @@ err_no_context_mgr_node:
 		thread->return_error = return_error;
 }
 
-static int binder_thread_write(struct binder_proc *proc,
-			struct binder_thread *thread,
+int binder_thread_write(struct binder_proc *proc, struct binder_thread *thread,
 			void __user *buffer, size_t size, size_t *consumed)
 {
 	uint32_t cmd;
@@ -1774,7 +1773,7 @@ static int binder_thread_write(struct binder_proc *proc,
 		case BC_INCREFS_DONE:
 		case BC_ACQUIRE_DONE: {
 			void __user *node_ptr;
-			void __user *cookie;
+			void *cookie;
 			struct binder_node *node;
 
 			if (get_user(node_ptr, (void * __user *)ptr))
@@ -2056,8 +2055,8 @@ static int binder_thread_write(struct binder_proc *proc,
 	return 0;
 }
 
-static void binder_stat_br(struct binder_proc *proc,
-			   struct binder_thread *thread, uint32_t cmd)
+void binder_stat_br(struct binder_proc *proc, struct binder_thread *thread,
+		    uint32_t cmd)
 {
 	trace_binder_return(cmd);
 	if (_IOC_NR(cmd) < ARRAY_SIZE(binder_stats.br)) {

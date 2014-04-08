@@ -338,7 +338,7 @@ static int release(struct socket *sock)
 		buf = __skb_dequeue(&sk->sk_receive_queue);
 		if (buf == NULL)
 			break;
-		if (TIPC_SKB_CB(buf)->handle != NULL)
+		if (TIPC_SKB_CB(buf)->handle != 0)
 			kfree_skb(buf);
 		else {
 			if ((sock->state == SS_CONNECTING) ||
@@ -622,11 +622,13 @@ static int send_msg(struct kiocb *iocb, struct socket *sock,
 			res = tipc_send2name(tport->ref,
 					     &dest->addr.name.name,
 					     dest->addr.name.domain,
+					     m->msg_iovlen,
 					     m->msg_iov,
 					     total_len);
 		} else if (dest->addrtype == TIPC_ADDR_ID) {
 			res = tipc_send2port(tport->ref,
 					     &dest->addr.id,
+					     m->msg_iovlen,
 					     m->msg_iov,
 					     total_len);
 		} else if (dest->addrtype == TIPC_ADDR_MCAST) {
@@ -639,6 +641,7 @@ static int send_msg(struct kiocb *iocb, struct socket *sock,
 				break;
 			res = tipc_multicast(tport->ref,
 					     &dest->addr.nameseq,
+					     m->msg_iovlen,
 					     m->msg_iov,
 					     total_len);
 		}
@@ -704,7 +707,8 @@ static int send_packet(struct kiocb *iocb, struct socket *sock,
 			break;
 		}
 
-		res = tipc_send(tport->ref, m->msg_iov, total_len);
+		res = tipc_send(tport->ref, m->msg_iovlen, m->msg_iov,
+				total_len);
 		if (likely(res != -ELINKCONG))
 			break;
 		if (timeout_val <= 0L) {
@@ -980,6 +984,9 @@ static int recv_msg(struct kiocb *iocb, struct socket *sock,
 		goto exit;
 	}
 
+	/* will be updated in set_orig_addr() if needed */
+	m->msg_namelen = 0;
+
 	timeout = sock_rcvtimeo(sk, flags & MSG_DONTWAIT);
 restart:
 
@@ -1087,6 +1094,9 @@ static int recv_stream(struct kiocb *iocb, struct socket *sock,
 		res = -ENOTCONN;
 		goto exit;
 	}
+
+	/* will be updated in set_orig_addr() if needed */
+	m->msg_namelen = 0;
 
 	target = sock_rcvlowat(sk, flags & MSG_WAITALL, buf_len);
 	timeout = sock_rcvtimeo(sk, flags & MSG_DONTWAIT);
@@ -1358,7 +1368,7 @@ static u32 filter_rcv(struct sock *sk, struct sk_buff *buf)
 		return TIPC_ERR_OVERLOAD;
 
 	/* Enqueue message */
-	TIPC_SKB_CB(buf)->handle = NULL;
+	TIPC_SKB_CB(buf)->handle = 0;
 	__skb_queue_tail(&sk->sk_receive_queue, buf);
 	skb_set_owner_r(buf, sk);
 
@@ -1681,7 +1691,7 @@ restart:
 		/* Disconnect and send a 'FIN+' or 'FIN-' message to peer */
 		buf = __skb_dequeue(&sk->sk_receive_queue);
 		if (buf) {
-			if (TIPC_SKB_CB(buf)->handle != NULL) {
+			if (TIPC_SKB_CB(buf)->handle != 0) {
 				kfree_skb(buf);
 				goto restart;
 			}

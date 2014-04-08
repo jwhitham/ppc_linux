@@ -11,4 +11,3 @@ generic-y += module.h
 generic-y += trace_clock.h
 generic-y += vga.h
 generic-y += xor.h
-generic-y += preempt.h

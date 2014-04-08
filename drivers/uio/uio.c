@@ -288,13 +288,13 @@ static int uio_dev_add_attributes(struct uio_device *idev)
 		}
 		map = kzalloc(sizeof(*map), GFP_KERNEL);
 		if (!map)
-			goto err_map_kobj;
+			goto err_map;
 		kobject_init(&map->kobj, &map_attr_type);
 		map->mem = mem;
 		mem->map = map;
 		ret = kobject_add(&map->kobj, idev->map_dir, "map%d", mi);
 		if (ret)
-			goto err_map_kobj;
+			goto err_map;
 		ret = kobject_uevent(&map->kobj, KOBJ_ADD);
 		if (ret)
 			goto err_map;
@@ -313,14 +313,14 @@ static int uio_dev_add_attributes(struct uio_device *idev)
 		}
 		portio = kzalloc(sizeof(*portio), GFP_KERNEL);
 		if (!portio)
-			goto err_portio_kobj;
+			goto err_portio;
 		kobject_init(&portio->kobj, &portio_attr_type);
 		portio->port = port;
 		port->portio = portio;
 		ret = kobject_add(&portio->kobj, idev->portio_dir,
 							"port%d", pi);
 		if (ret)
-			goto err_portio_kobj;
+			goto err_portio;
 		ret = kobject_uevent(&portio->kobj, KOBJ_ADD);
 		if (ret)
 			goto err_portio;
@@ -329,18 +329,14 @@ static int uio_dev_add_attributes(struct uio_device *idev)
 	return 0;
 
 err_portio:
-	pi--;
-err_portio_kobj:
-	for (; pi >= 0; pi--) {
+	for (pi--; pi >= 0; pi--) {
 		port = &idev->info->port[pi];
 		portio = port->portio;
 		kobject_put(&portio->kobj);
 	}
 	kobject_put(idev->portio_dir);
 err_map:
-	mi--;
-err_map_kobj:
-	for (; mi >= 0; mi--) {
+	for (mi--; mi>=0; mi--) {
 		mem = &idev->info->mem[mi];
 		map = mem->map;
 		kobject_put(&map->kobj);
@@ -605,7 +601,6 @@ static int uio_vma_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	struct uio_device *idev = vma->vm_private_data;
 	struct page *page;
 	unsigned long offset;
-	void *addr;
 
 	int mi = uio_find_mem_index(vma);
 	if (mi < 0)
@@ -617,11 +612,10 @@ static int uio_vma_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	 */
 	offset = (vmf->pgoff - mi) << PAGE_SHIFT;
 
-	addr = (void *)(unsigned long)idev->info->mem[mi].addr + offset;
 	if (idev->info->mem[mi].memtype == UIO_MEM_LOGICAL)
-		page = virt_to_page(addr);
+		page = virt_to_page(idev->info->mem[mi].addr + offset);
 	else
-		page = vmalloc_to_page(addr);
+		page = vmalloc_to_page((void *)(unsigned long)idev->info->mem[mi].addr + offset);
 	get_page(page);
 	vmf->page = page;
 	return 0;
@@ -653,8 +647,6 @@ static int uio_mmap_physical(struct vm_area_struct *vma)
 		return -EINVAL;
 	mem = idev->info->mem + mi;
 
-	if (mem->addr & ~PAGE_MASK)
-		return -ENODEV;
 	if (vma->vm_end - vma->vm_start > mem->size)
 		return -EINVAL;
 
@@ -821,9 +813,10 @@ int __uio_register_device(struct module *owner,
 
 	info->uio_dev = NULL;
 
-	idev = devm_kzalloc(parent, sizeof(*idev), GFP_KERNEL);
+	idev = kzalloc(sizeof(*idev), GFP_KERNEL);
 	if (!idev) {
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err_kzalloc;
 	}
 
 	idev->owner = owner;
@@ -833,7 +826,7 @@ int __uio_register_device(struct module *owner,
 
 	ret = uio_get_minor(idev);
 	if (ret)
-		return ret;
+		goto err_get_minor;
 
 	idev->dev = device_create(&uio_class, parent,
 				  MKDEV(uio_major, idev->minor), idev,
@@ -851,7 +844,7 @@ int __uio_register_device(struct module *owner,
 	info->uio_dev = idev;
 
 	if (info->irq && (info->irq != UIO_IRQ_CUSTOM)) {
-		ret = devm_request_irq(parent, info->irq, uio_interrupt,
+		ret = request_irq(info->irq, uio_interrupt,
 				  info->irq_flags, info->name, idev);
 		if (ret)
 			goto err_request_irq;
@@ -865,6 +858,9 @@ err_uio_dev_add_attributes:
 	device_destroy(&uio_class, MKDEV(uio_major, idev->minor));
 err_device_create:
 	uio_free_minor(idev);
+err_get_minor:
+	kfree(idev);
+err_kzalloc:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(__uio_register_device);
@@ -885,9 +881,13 @@ void uio_unregister_device(struct uio_info *info)
 
 	uio_free_minor(idev);
 
+	if (info->irq && (info->irq != UIO_IRQ_CUSTOM))
+		free_irq(info->irq, idev);
+
 	uio_dev_del_attributes(idev);
 
 	device_destroy(&uio_class, MKDEV(uio_major, idev->minor));
+	kfree(idev);
 
 	return;
 }

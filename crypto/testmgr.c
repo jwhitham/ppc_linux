@@ -187,7 +187,7 @@ static int do_one_async_hash_op(struct ahash_request *req,
 		ret = wait_for_completion_interruptible(&tr->completion);
 		if (!ret)
 			ret = tr->err;
-		reinit_completion(&tr->completion);
+		INIT_COMPLETION(tr->completion);
 	}
 	return ret;
 }
@@ -344,7 +344,7 @@ static int __test_hash(struct crypto_ahash *tfm, struct hash_testvec *template,
 				ret = wait_for_completion_interruptible(
 					&tresult.completion);
 				if (!ret && !(ret = tresult.err)) {
-					reinit_completion(&tresult.completion);
+					INIT_COMPLETION(tresult.completion);
 					break;
 				}
 				/* fall through */
@@ -551,7 +551,7 @@ static int __test_aead(struct crypto_aead *tfm, int enc,
 				ret = wait_for_completion_interruptible(
 					&result.completion);
 				if (!ret && !(ret = result.err)) {
-					reinit_completion(&result.completion);
+					INIT_COMPLETION(result.completion);
 					break;
 				}
 			case -EBADMSG:
@@ -703,7 +703,7 @@ static int __test_aead(struct crypto_aead *tfm, int enc,
 				ret = wait_for_completion_interruptible(
 					&result.completion);
 				if (!ret && !(ret = result.err)) {
-					reinit_completion(&result.completion);
+					INIT_COMPLETION(result.completion);
 					break;
 				}
 			case -EBADMSG:
@@ -1191,7 +1191,7 @@ static int __test_skcipher(struct crypto_ablkcipher *tfm, int enc,
 				ret = wait_for_completion_interruptible(
 					&result.completion);
 				if (!ret && !((ret = result.err))) {
-					reinit_completion(&result.completion);
+					INIT_COMPLETION(result.completion);
 					break;
 				}
 				/* fall through */
@@ -1294,7 +1294,7 @@ static int __test_skcipher(struct crypto_ablkcipher *tfm, int enc,
 				ret = wait_for_completion_interruptible(
 					&result.completion);
 				if (!ret && !((ret = result.err))) {
-					reinit_completion(&result.completion);
+					INIT_COMPLETION(result.completion);
 					break;
 				}
 				/* fall through */

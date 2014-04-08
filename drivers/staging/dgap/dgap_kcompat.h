@@ -28,6 +28,11 @@
 #ifndef __DGAP_KCOMPAT_H
 #define __DGAP_KCOMPAT_H
 
+# ifndef KERNEL_VERSION
+#  define KERNEL_VERSION(a,b,c)  (((a) << 16) + ((b) << 8) + (c))
+# endif
+
+
 #if !defined(TTY_FLIPBUF_SIZE)
 # define TTY_FLIPBUF_SIZE 512
 #endif
@@ -60,5 +65,29 @@
 		ulong dgap_##VAR; \
 		module_param(VAR, long, PERM); \
 		MODULE_PARM_DESC(VAR, DESC);
+
+
+
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+
+
+
+
+/* NOTHING YET */
+
+
+
+
+# else
+
+
+
+# error "this driver does not support anything below the 2.6.27 kernel series."
+
+
+
+# endif
 
 #endif /* ! __DGAP_KCOMPAT_H */

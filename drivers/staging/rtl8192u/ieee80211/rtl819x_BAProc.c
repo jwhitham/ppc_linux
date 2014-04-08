@@ -251,8 +251,7 @@ static struct sk_buff *ieee80211_DELBA(
  *  output:  none
  *  notice: If any possible, please hide pBA in ieee. And temporarily use Manage Queue as softmac_mgmt_xmit() usually does
 ********************************************************************************************************************/
-static void ieee80211_send_ADDBAReq(struct ieee80211_device *ieee,
-				    u8 *dst, PBA_RECORD pBA)
+void ieee80211_send_ADDBAReq(struct ieee80211_device *ieee, u8 *dst, PBA_RECORD	pBA)
 {
 	struct sk_buff *skb = NULL;
 	skb = ieee80211_ADDBA(ieee, dst, pBA, 0, ACT_ADDBAREQ); //construct ACT_ADDBAREQ frames so set statuscode zero.
@@ -279,8 +278,7 @@ static void ieee80211_send_ADDBAReq(struct ieee80211_device *ieee,
  *  output:  none
  *  notice: If any possible, please hide pBA in ieee. And temporarily use Manage Queue as softmac_mgmt_xmit() usually does
 ********************************************************************************************************************/
-static void ieee80211_send_ADDBARsp(struct ieee80211_device *ieee, u8 *dst,
-				    PBA_RECORD pBA, u16 StatusCode)
+void ieee80211_send_ADDBARsp(struct ieee80211_device *ieee, u8 *dst, PBA_RECORD pBA, u16 StatusCode)
 {
 	struct sk_buff *skb = NULL;
 	skb = ieee80211_ADDBA(ieee, dst, pBA, StatusCode, ACT_ADDBARSP); //construct ACT_ADDBARSP frames

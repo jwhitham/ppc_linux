@@ -370,7 +370,8 @@ bool MgntActSet_RF_State(struct net_device *dev,
 	case eRfOn:
 		priv->rtllib->RfOffReason &= (~ChangeSource);
 
-		if ((ChangeSource == RF_CHANGE_BY_HW) && priv->bHwRadioOff)
+		if ((ChangeSource == RF_CHANGE_BY_HW) &&
+		    (priv->bHwRadioOff == true))
 			priv->bHwRadioOff = false;
 
 		if (!priv->rtllib->RfOffReason) {
@@ -404,7 +405,8 @@ bool MgntActSet_RF_State(struct net_device *dev,
 						      disas_lv_ss);
 			}
 		}
-		if ((ChangeSource == RF_CHANGE_BY_HW) && !priv->bHwRadioOff)
+		if ((ChangeSource == RF_CHANGE_BY_HW) &&
+		     (priv->bHwRadioOff == false))
 			priv->bHwRadioOff = true;
 		priv->rtllib->RfOffReason |= ChangeSource;
 		bActionAllowed = true;
@@ -426,7 +428,7 @@ bool MgntActSet_RF_State(struct net_device *dev,
 		PHY_SetRFPowerState(dev, StateToSet);
 		if (StateToSet == eRfOn) {
 
-			if (bConnectBySSID && priv->blinked_ingpio) {
+			if (bConnectBySSID && (priv->blinked_ingpio == true)) {
 				queue_delayed_work_rsl(ieee->wq,
 					 &ieee->associate_procedure_wq, 0);
 				priv->blinked_ingpio = false;
@@ -953,7 +955,7 @@ static int _rtl8192_sta_up(struct net_device *dev, bool is_silent_reset)
 	RT_TRACE(COMP_INIT, "Bringing up iface");
 	priv->bfirst_init = true;
 	init_status = priv->ops->initialize_adapter(dev);
-	if (!init_status) {
+	if (init_status != true) {
 		RT_TRACE(COMP_ERR, "ERR!!! %s(): initialization is failed!\n",
 			 __func__);
 		priv->bfirst_init = false;
@@ -998,7 +1000,7 @@ static int rtl8192_sta_down(struct net_device *dev, bool shutdownrf)
 	priv->bDriverIsGoingToUnload = true;
 	priv->up = 0;
 	priv->rtllib->ieee_up = 0;
-	priv->bfirst_after_down = true;
+	priv->bfirst_after_down = 1;
 	RT_TRACE(COMP_DOWN, "==========>%s()\n", __func__);
 	if (!netif_queue_stopped(dev))
 		netif_stop_queue(dev);
@@ -1117,8 +1119,8 @@ static void rtl8192_init_priv_variable(struct net_device *dev)
 	priv->rtllib->hwscan_sem_up = 1;
 	priv->rtllib->status = 0;
 	priv->H2CTxCmdSeq = 0;
-	priv->bDisableFrameBursting = false;
-	priv->bDMInitialGainEnable = true;
+	priv->bDisableFrameBursting = 0;
+	priv->bDMInitialGainEnable = 1;
 	priv->polling_timer_on = 0;
 	priv->up_first_time = 1;
 	priv->blinked_ingpio = false;
@@ -1160,7 +1162,7 @@ static void rtl8192_init_priv_variable(struct net_device *dev)
 	priv->CckPwEnl = 6;
 	priv->ScanDelay = 50;
 	priv->ResetProgress = RESET_TYPE_NORESET;
-	priv->bForcedSilentReset = false;
+	priv->bForcedSilentReset = 0;
 	priv->bDisableNormalResetCheck = false;
 	priv->force_reset = false;
 	memset(priv->rtllib->swcamtable, 0, sizeof(struct sw_cam_table) * 32);
@@ -1169,7 +1171,7 @@ static void rtl8192_init_priv_variable(struct net_device *dev)
 	priv->RxCounter = 0;
 	priv->rtllib->wx_set_enc = 0;
 	priv->bHwRadioOff = false;
-	priv->RegRfOff = false;
+	priv->RegRfOff = 0;
 	priv->isRFOff = false;
 	priv->bInPowerSaveMode = false;
 	priv->rtllib->RfOffReason = 0;
@@ -1645,7 +1647,7 @@ void	rtl819x_watchdog_wqcallback(void *data)
 	bool	bHigherBusyRxTraffic = false;
 	bool bEnterPS = false;
 
-	if (IS_NIC_DOWN(priv) || priv->bHwRadioOff)
+	if (IS_NIC_DOWN(priv) || (priv->bHwRadioOff == true))
 		return;
 
 	if (priv->rtllib->state >= RTLLIB_LINKED) {
@@ -1886,14 +1888,16 @@ void rtl8192_hard_data_xmit(struct sk_buff *skb, struct net_device *dev,
 	memcpy((unsigned char *)(skb->cb), &dev, sizeof(dev));
 	skb_push(skb, priv->rtllib->tx_headroom);
 	ret = rtl8192_tx(dev, skb);
-	if (ret != 0)
+	if (ret != 0) {
 		kfree_skb(skb);
+	};
 
 	if (queue_index != MGNT_QUEUE) {
 		priv->rtllib->stats.tx_bytes += (skb->len -
 						 priv->rtllib->tx_headroom);
 		priv->rtllib->stats.tx_packets++;
 	}
+
 
 	return;
 }
@@ -1926,11 +1930,15 @@ int rtl8192_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		tcb_desc->bTxEnableFwCalcDur = 1;
 		skb_push(skb, priv->rtllib->tx_headroom);
 		ret = rtl8192_tx(dev, skb);
-		if (ret != 0)
+		if (ret != 0) {
 			kfree_skb(skb);
+		};
 	}
 
+
+
 	return ret;
+
 }
 
 static void rtl8192_tx_isr(struct net_device *dev, int prio)
@@ -2593,9 +2601,14 @@ static int rtl8192_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 			goto out;
 		}
 
-		ipw = memdup_user(p->pointer, p->length);
-		if (IS_ERR(ipw)) {
-			ret = PTR_ERR(ipw);
+		ipw = kmalloc(p->length, GFP_KERNEL);
+		if (ipw == NULL) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		if (copy_from_user(ipw, p->pointer, p->length)) {
+			kfree(ipw);
+			ret = -EFAULT;
 			goto out;
 		}
 
@@ -2969,6 +2982,7 @@ err_rel_rtllib:
 	free_rtllib(dev);
 
 	DMESG("wlan driver load failed\n");
+	pci_set_drvdata(pdev, NULL);
 err_pci_disable:
 	pci_disable_device(pdev);
 	return err;
@@ -3038,7 +3052,7 @@ bool NicIFEnableNIC(struct net_device *dev)
 	RT_TRACE(COMP_PS, "===========>%s()\n", __func__);
 	priv->bfirst_init = true;
 	init_status = priv->ops->initialize_adapter(dev);
-	if (!init_status) {
+	if (init_status != true) {
 		RT_TRACE(COMP_ERR, "ERR!!! %s(): initialization is failed!\n",
 			 __func__);
 		priv->bdisable_nic = false;

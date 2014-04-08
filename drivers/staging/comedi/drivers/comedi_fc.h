@@ -30,7 +30,7 @@ extern unsigned int cfc_write_array_to_buffer(struct comedi_subdevice *subd,
 					      unsigned int num_bytes);
 
 static inline unsigned int cfc_write_to_buffer(struct comedi_subdevice *subd,
-					       unsigned short data)
+					       short data)
 {
 	return cfc_write_array_to_buffer(subd, &data, sizeof(data));
 };

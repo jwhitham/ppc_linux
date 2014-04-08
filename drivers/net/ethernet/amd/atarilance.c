@@ -586,10 +586,10 @@ static unsigned long __init lance_probe1( struct net_device *dev,
 	switch( lp->cardtype ) {
 	  case OLD_RIEBL:
 		/* No ethernet address! (Set some default address) */
-		memcpy(dev->dev_addr, OldRieblDefHwaddr, ETH_ALEN);
+		memcpy( dev->dev_addr, OldRieblDefHwaddr, 6 );
 		break;
 	  case NEW_RIEBL:
-		lp->memcpy_f(dev->dev_addr, RIEBL_HWADDR_ADDR, ETH_ALEN);
+		lp->memcpy_f( dev->dev_addr, RIEBL_HWADDR_ADDR, 6 );
 		break;
 	  case PAM_CARD:
 		i = IO->eeprom;

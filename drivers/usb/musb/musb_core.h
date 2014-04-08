@@ -46,7 +46,6 @@
 #include <linux/usb.h>
 #include <linux/usb/otg.h>
 #include <linux/usb/musb.h>
-#include <linux/phy/phy.h>
 
 struct musb;
 struct musb_hw_ep;
@@ -342,7 +341,6 @@ struct musb {
 	u16			int_tx;
 
 	struct usb_phy		*xceiv;
-	struct phy		*phy;
 
 	int nIrq;
 	unsigned		irq_wake:1;

@@ -664,10 +664,16 @@ static int apci3xxx_do_insn_bits(struct comedi_device *dev,
 				 struct comedi_insn *insn,
 				 unsigned int *data)
 {
-	s->state = inl(dev->iobase + 48) & 0xf;
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
 
-	if (comedi_dio_update_state(s, data))
+	s->state = inl(dev->iobase + 48) & 0xf;
+	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
+
 		outl(s->state, dev->iobase + 48);
+	}
 
 	data[1] = s->state;
 
@@ -711,11 +717,16 @@ static int apci3xxx_dio_insn_bits(struct comedi_device *dev,
 				  struct comedi_insn *insn,
 				  unsigned int *data)
 {
-	unsigned int mask;
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
 	unsigned int val;
 
-	mask = comedi_dio_update_state(s, data);
+	/* only update output channels */
+	mask &= s->io_bits;
 	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
+
 		if (mask & 0xff)
 			outl(s->state & 0xff, dev->iobase + 80);
 		if (mask & 0xff0000)

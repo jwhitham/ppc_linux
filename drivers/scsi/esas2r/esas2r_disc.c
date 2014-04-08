@@ -86,9 +86,9 @@ void esas2r_disc_initialize(struct esas2r_adapter *a)
 
 	esas2r_trace_enter();
 
-	clear_bit(AF_DISC_IN_PROG, &a->flags);
-	clear_bit(AF2_DEV_SCAN, &a->flags2);
-	clear_bit(AF2_DEV_CNT_OK, &a->flags2);
+	esas2r_lock_clear_flags(&a->flags, AF_DISC_IN_PROG);
+	esas2r_lock_clear_flags(&a->flags2, AF2_DEV_SCAN);
+	esas2r_lock_clear_flags(&a->flags2, AF2_DEV_CNT_OK);
 
 	a->disc_start_time = jiffies_to_msecs(jiffies);
 	a->disc_wait_time = nvr->dev_wait_time * 1000;
@@ -107,8 +107,7 @@ void esas2r_disc_initialize(struct esas2r_adapter *a)
 
 	a->general_req.interrupt_cx = NULL;
 
-	if (test_bit(AF_CHPRST_DETECTED, &a->flags) ||
-	    test_bit(AF_POWER_MGT, &a->flags)) {
+	if (a->flags & (AF_CHPRST_DETECTED | AF_POWER_MGT)) {
 		if (a->prev_dev_cnt == 0) {
 			/* Don't bother waiting if there is nothing to wait
 			 * for.
@@ -213,7 +212,9 @@ void esas2r_disc_check_complete(struct esas2r_adapter *a)
 			|| a->disc_wait_cnt == 0)) {
 			/* After three seconds of waiting, schedule a scan. */
 			if (time >= 3000
-			    && !test_and_set_bit(AF2_DEV_SCAN, &a->flags2)) {
+			    && !(esas2r_lock_set_flags(&a->flags2,
+						       AF2_DEV_SCAN) &
+				 ilog2(AF2_DEV_SCAN))) {
 				spin_lock_irqsave(&a->mem_lock, flags);
 				esas2r_disc_queue_event(a, DCDE_DEV_SCAN);
 				spin_unlock_irqrestore(&a->mem_lock, flags);
@@ -227,14 +228,18 @@ void esas2r_disc_check_complete(struct esas2r_adapter *a)
 		 * We are done waiting...we think.  Adjust the wait time to
 		 * consume events after the count is met.
 		 */
-		if (!test_and_set_bit(AF2_DEV_CNT_OK, &a->flags2))
+		if (!(esas2r_lock_set_flags(&a->flags2, AF2_DEV_CNT_OK)
+		      & ilog2(AF2_DEV_CNT_OK)))
 			a->disc_wait_time = time + 3000;
 
 		/* If we haven't done a full scan yet, do it now. */
-		if (!test_and_set_bit(AF2_DEV_SCAN, &a->flags2)) {
+		if (!(esas2r_lock_set_flags(&a->flags2,
+					    AF2_DEV_SCAN) &
+		      ilog2(AF2_DEV_SCAN))) {
 			spin_lock_irqsave(&a->mem_lock, flags);
 			esas2r_disc_queue_event(a, DCDE_DEV_SCAN);
 			spin_unlock_irqrestore(&a->mem_lock, flags);
+
 			esas2r_trace_exit();
 			return;
 		}
@@ -248,7 +253,9 @@ void esas2r_disc_check_complete(struct esas2r_adapter *a)
 			return;
 		}
 	} else {
-		if (!test_and_set_bit(AF2_DEV_SCAN, &a->flags2)) {
+		if (!(esas2r_lock_set_flags(&a->flags2,
+					    AF2_DEV_SCAN) &
+		      ilog2(AF2_DEV_SCAN))) {
 			spin_lock_irqsave(&a->mem_lock, flags);
 			esas2r_disc_queue_event(a, DCDE_DEV_SCAN);
 			spin_unlock_irqrestore(&a->mem_lock, flags);
@@ -258,8 +265,8 @@ void esas2r_disc_check_complete(struct esas2r_adapter *a)
 	/* We want to stop waiting for devices. */
 	a->disc_wait_time = 0;
 
-	if (test_bit(AF_DISC_POLLED, &a->flags) &&
-	    test_bit(AF_DISC_IN_PROG, &a->flags)) {
+	if ((a->flags & AF_DISC_POLLED)
+	    && (a->flags & AF_DISC_IN_PROG)) {
 		/*
 		 * Polled discovery is still pending so continue the active
 		 * discovery until it is done.  At that point, we will stop
@@ -273,14 +280,14 @@ void esas2r_disc_check_complete(struct esas2r_adapter *a)
 		 * driven; i.e. There is no transition.
 		 */
 		esas2r_disc_fix_curr_requests(a);
-		clear_bit(AF_DISC_PENDING, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_DISC_PENDING);
 
 		/*
 		 * We have deferred target state changes until now because we
 		 * don't want to report any removals (due to the first arrival)
 		 * until the device wait time expires.
 		 */
-		set_bit(AF_PORT_CHANGE, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_PORT_CHANGE);
 	}
 
 	esas2r_trace_exit();
@@ -301,8 +308,7 @@ void esas2r_disc_queue_event(struct esas2r_adapter *a, u8 disc_evt)
 	 * Don't start discovery before or during polled discovery.  if we did,
 	 * we would have a deadlock if we are in the ISR already.
 	 */
-	if (!test_bit(AF_CHPRST_PENDING, &a->flags) &&
-	    !test_bit(AF_DISC_POLLED, &a->flags))
+	if (!(a->flags & (AF_CHPRST_PENDING | AF_DISC_POLLED)))
 		esas2r_disc_start_port(a);
 
 	esas2r_trace_exit();
@@ -316,7 +322,7 @@ bool esas2r_disc_start_port(struct esas2r_adapter *a)
 
 	esas2r_trace_enter();
 
-	if (test_bit(AF_DISC_IN_PROG, &a->flags)) {
+	if (a->flags & AF_DISC_IN_PROG) {
 		esas2r_trace_exit();
 
 		return false;
@@ -324,7 +330,7 @@ bool esas2r_disc_start_port(struct esas2r_adapter *a)
 
 	/* If there is a discovery waiting, process it. */
 	if (dc->disc_evt) {
-		if (test_bit(AF_DISC_POLLED, &a->flags)
+		if ((a->flags & AF_DISC_POLLED)
 		    && a->disc_wait_time == 0) {
 			/*
 			 * We are doing polled discovery, but we no longer want
@@ -341,7 +347,7 @@ bool esas2r_disc_start_port(struct esas2r_adapter *a)
 
 		esas2r_hdebug("disc done");
 
-		set_bit(AF_PORT_CHANGE, &a->flags);
+		esas2r_lock_set_flags(&a->flags, AF_PORT_CHANGE);
 
 		esas2r_trace_exit();
 
@@ -350,10 +356,10 @@ bool esas2r_disc_start_port(struct esas2r_adapter *a)
 
 	/* Handle the discovery context */
 	esas2r_trace("disc_evt: %d", dc->disc_evt);
-	set_bit(AF_DISC_IN_PROG, &a->flags);
+	esas2r_lock_set_flags(&a->flags, AF_DISC_IN_PROG);
 	dc->flags = 0;
 
-	if (test_bit(AF_DISC_POLLED, &a->flags))
+	if (a->flags & AF_DISC_POLLED)
 		dc->flags |= DCF_POLLED;
 
 	rq->interrupt_cx = dc;
@@ -373,7 +379,7 @@ bool esas2r_disc_start_port(struct esas2r_adapter *a)
 	}
 
 	/* Continue interrupt driven discovery */
-	if (!test_bit(AF_DISC_POLLED, &a->flags))
+	if (!(a->flags & AF_DISC_POLLED))
 		ret = esas2r_disc_continue(a, rq);
 	else
 		ret = true;
@@ -447,10 +453,10 @@ static bool esas2r_disc_continue(struct esas2r_adapter *a,
 	/* Discovery is done...for now. */
 	rq->interrupt_cx = NULL;
 
-	if (!test_bit(AF_DISC_PENDING, &a->flags))
+	if (!(a->flags & AF_DISC_PENDING))
 		esas2r_disc_fix_curr_requests(a);
 
-	clear_bit(AF_DISC_IN_PROG, &a->flags);
+	esas2r_lock_clear_flags(&a->flags, AF_DISC_IN_PROG);
 
 	/* Start the next discovery. */
 	return esas2r_disc_start_port(a);
@@ -474,8 +480,7 @@ static bool esas2r_disc_start_request(struct esas2r_adapter *a,
 
 	spin_lock_irqsave(&a->queue_lock, flags);
 
-	if (!test_bit(AF_CHPRST_PENDING, &a->flags) &&
-	    !test_bit(AF_FLASHING, &a->flags))
+	if (!(a->flags & (AF_CHPRST_PENDING | AF_FLASHING)))
 		esas2r_disc_local_start_request(a, rq);
 	else
 		list_add_tail(&rq->req_list, &a->defer_list);

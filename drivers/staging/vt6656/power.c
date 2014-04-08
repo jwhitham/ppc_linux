@@ -233,8 +233,9 @@ void PSvSendPSPOLL(struct vnt_private *pDevice)
 	pTxPacket->cbPayloadLen = 0;
 
 	/* log failure if sending failed */
-	if (csMgmt_xmit(pDevice, pTxPacket) != CMD_STATUS_PENDING)
+	if (csMgmt_xmit(pDevice, pTxPacket) != CMD_STATUS_PENDING) {
 		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Send PS-Poll packet failed..\n");
+	}
 }
 
 /*
@@ -256,8 +257,10 @@ int PSbSendNullPacket(struct vnt_private *pDevice)
 	if (pDevice->bLinkPass == false)
 		return false;
 
-	if (pDevice->bEnablePSMode == false && pDevice->tx_trigger == false)
-		return false;
+	if ((pDevice->bEnablePSMode == false) &&
+		(pDevice->fTxDataInSleep == false)) {
+			return false;
+	}
 
 	memset(pMgmt->pbyPSPacketPool, 0, sizeof(struct vnt_tx_mgmt)
 		+ WLAN_NULLDATA_FR_MAXLEN);
@@ -266,7 +269,7 @@ int PSbSendNullPacket(struct vnt_private *pDevice)
 		+ sizeof(struct vnt_tx_mgmt));
 
 	flags = WLAN_SET_FC_FTYPE(WLAN_TYPE_DATA) |
-			WLAN_SET_FC_FSTYPE(WLAN_FSTYPE_NULL);
+                        WLAN_SET_FC_FSTYPE(WLAN_FSTYPE_NULL);
 
 	if (pDevice->bEnablePSMode)
 		flags |= WLAN_SET_FC_PWRMGT(1);

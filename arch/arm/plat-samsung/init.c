@@ -11,18 +11,12 @@
  * published by the Free Software Foundation.
 */
 
-/*
- * NOTE: Code in this file is not used on S3C64xx when booting with
- * Device Tree support.
- */
-
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
 #include <linux/serial_core.h>
 #include <linux/platform_device.h>
-#include <linux/of.h>
 
 #include <mach/hardware.h>
 
@@ -154,12 +148,8 @@ static int __init s3c_arch_init(void)
 
 	// do the correct init for cpu
 
-	if (cpu == NULL) {
-		/* Not needed when booting with device tree. */
-		if (of_have_populated_dt())
-			return 0;
+	if (cpu == NULL)
 		panic("s3c_arch_init: NULL cpu\n");
-	}
 
 	ret = (cpu->init)();
 	if (ret != 0)

@@ -20,15 +20,6 @@
 #include <asm/ppc_asm.h>
 
 _GLOBAL(memcpy_power7)
-
-#ifdef __BIG_ENDIAN__
-#define LVS(VRT,RA,RB)		lvsl	VRT,RA,RB
-#define VPERM(VRT,VRA,VRB,VRC)	vperm	VRT,VRA,VRB,VRC
-#else
-#define LVS(VRT,RA,RB)		lvsr	VRT,RA,RB
-#define VPERM(VRT,VRA,VRB,VRC)	vperm	VRT,VRB,VRA,VRC
-#endif
-
 #ifdef CONFIG_ALTIVEC
 	cmpldi	r5,16
 	cmpldi	cr1,r5,4096
@@ -494,13 +485,13 @@ _GLOBAL(memcpy_power7)
 	li	r10,32
 	li	r11,48
 
-	LVS(vr16,0,r4)		/* Setup permute control vector */
+	lvsl	vr16,0,r4	/* Setup permute control vector */
 	lvx	vr0,0,r4
 	addi	r4,r4,16
 
 	bf	cr7*4+3,5f
 	lvx	vr1,r0,r4
-	VPERM(vr8,vr0,vr1,vr16)
+	vperm	vr8,vr0,vr1,vr16
 	addi	r4,r4,16
 	stvx	vr8,r0,r3
 	addi	r3,r3,16
@@ -508,9 +499,9 @@ _GLOBAL(memcpy_power7)
 
 5:	bf	cr7*4+2,6f
 	lvx	vr1,r0,r4
-	VPERM(vr8,vr0,vr1,vr16)
+	vperm	vr8,vr0,vr1,vr16
 	lvx	vr0,r4,r9
-	VPERM(vr9,vr1,vr0,vr16)
+	vperm	vr9,vr1,vr0,vr16
 	addi	r4,r4,32
 	stvx	vr8,r0,r3
 	stvx	vr9,r3,r9
@@ -518,13 +509,13 @@ _GLOBAL(memcpy_power7)
 
 6:	bf	cr7*4+1,7f
 	lvx	vr3,r0,r4
-	VPERM(vr8,vr0,vr3,vr16)
+	vperm	vr8,vr0,vr3,vr16
 	lvx	vr2,r4,r9
-	VPERM(vr9,vr3,vr2,vr16)
+	vperm	vr9,vr3,vr2,vr16
 	lvx	vr1,r4,r10
-	VPERM(vr10,vr2,vr1,vr16)
+	vperm	vr10,vr2,vr1,vr16
 	lvx	vr0,r4,r11
-	VPERM(vr11,vr1,vr0,vr16)
+	vperm	vr11,vr1,vr0,vr16
 	addi	r4,r4,64
 	stvx	vr8,r0,r3
 	stvx	vr9,r3,r9
@@ -553,21 +544,21 @@ _GLOBAL(memcpy_power7)
 	.align	5
 8:
 	lvx	vr7,r0,r4
-	VPERM(vr8,vr0,vr7,vr16)
+	vperm	vr8,vr0,vr7,vr16
 	lvx	vr6,r4,r9
-	VPERM(vr9,vr7,vr6,vr16)
+	vperm	vr9,vr7,vr6,vr16
 	lvx	vr5,r4,r10
-	VPERM(vr10,vr6,vr5,vr16)
+	vperm	vr10,vr6,vr5,vr16
 	lvx	vr4,r4,r11
-	VPERM(vr11,vr5,vr4,vr16)
+	vperm	vr11,vr5,vr4,vr16
 	lvx	vr3,r4,r12
-	VPERM(vr12,vr4,vr3,vr16)
+	vperm	vr12,vr4,vr3,vr16
 	lvx	vr2,r4,r14
-	VPERM(vr13,vr3,vr2,vr16)
+	vperm	vr13,vr3,vr2,vr16
 	lvx	vr1,r4,r15
-	VPERM(vr14,vr2,vr1,vr16)
+	vperm	vr14,vr2,vr1,vr16
 	lvx	vr0,r4,r16
-	VPERM(vr15,vr1,vr0,vr16)
+	vperm	vr15,vr1,vr0,vr16
 	addi	r4,r4,128
 	stvx	vr8,r0,r3
 	stvx	vr9,r3,r9
@@ -591,13 +582,13 @@ _GLOBAL(memcpy_power7)
 
 	bf	cr7*4+1,9f
 	lvx	vr3,r0,r4
-	VPERM(vr8,vr0,vr3,vr16)
+	vperm	vr8,vr0,vr3,vr16
 	lvx	vr2,r4,r9
-	VPERM(vr9,vr3,vr2,vr16)
+	vperm	vr9,vr3,vr2,vr16
 	lvx	vr1,r4,r10
-	VPERM(vr10,vr2,vr1,vr16)
+	vperm	vr10,vr2,vr1,vr16
 	lvx	vr0,r4,r11
-	VPERM(vr11,vr1,vr0,vr16)
+	vperm	vr11,vr1,vr0,vr16
 	addi	r4,r4,64
 	stvx	vr8,r0,r3
 	stvx	vr9,r3,r9
@@ -607,9 +598,9 @@ _GLOBAL(memcpy_power7)
 
 9:	bf	cr7*4+2,10f
 	lvx	vr1,r0,r4
-	VPERM(vr8,vr0,vr1,vr16)
+	vperm	vr8,vr0,vr1,vr16
 	lvx	vr0,r4,r9
-	VPERM(vr9,vr1,vr0,vr16)
+	vperm	vr9,vr1,vr0,vr16
 	addi	r4,r4,32
 	stvx	vr8,r0,r3
 	stvx	vr9,r3,r9
@@ -617,7 +608,7 @@ _GLOBAL(memcpy_power7)
 
 10:	bf	cr7*4+3,11f
 	lvx	vr1,r0,r4
-	VPERM(vr8,vr0,vr1,vr16)
+	vperm	vr8,vr0,vr1,vr16
 	addi	r4,r4,16
 	stvx	vr8,r0,r3
 	addi	r3,r3,16

@@ -88,6 +88,8 @@ struct dataflash {
 	uint8_t			command[4];
 	char			name[24];
 
+	unsigned		partitioned:1;
+
 	unsigned short		page_offset;	/* offset in flash address */
 	unsigned int		page_size;	/* of bytes per page */
 
@@ -879,7 +881,7 @@ static int dataflash_probe(struct spi_device *spi)
 		break;
 	/* obsolete AT45DB1282 not (yet?) supported */
 	default:
-		dev_info(&spi->dev, "unsupported device (%x)\n",
+		pr_debug("%s: unsupported device (%x)\n", dev_name(&spi->dev),
 				status & 0x3c);
 		status = -ENODEV;
 	}

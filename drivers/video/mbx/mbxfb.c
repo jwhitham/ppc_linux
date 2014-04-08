@@ -890,7 +890,7 @@ static int mbxfb_probe(struct platform_device *dev)
 
 	dev_dbg(&dev->dev, "mbxfb_probe\n");
 
-	pdata = dev_get_platdata(&dev->dev);
+	pdata = dev->dev.platform_data;
 	if (!pdata) {
 		dev_err(&dev->dev, "platform data is required\n");
 		return -EINVAL;
@@ -976,7 +976,7 @@ static int mbxfb_probe(struct platform_device *dev)
 
 	platform_set_drvdata(dev, fbi);
 
-	fb_info(fbi, "mbx frame buffer device\n");
+	printk(KERN_INFO "fb%d: mbx frame buffer device\n", fbi->node);
 
 	if (mfbi->platform_probe)
 		mfbi->platform_probe(fbi);

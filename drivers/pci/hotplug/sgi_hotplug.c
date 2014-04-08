@@ -9,7 +9,6 @@
  * Work to add BIOS PROM support was completed by Mike Habeck.
  */
 
-#include <linux/acpi.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -30,6 +29,7 @@
 #include <asm/sn/sn_feature_sets.h>
 #include <asm/sn/sn_sal.h>
 #include <asm/sn/types.h>
+#include <linux/acpi.h>
 #include <asm/sn/acpi.h>
 
 #include "../pci.h"
@@ -414,7 +414,7 @@ static int enable_slot(struct hotplug_slot *bss_hotplug_slot)
 		acpi_handle rethandle;
 		acpi_status ret;
 
-		phandle = acpi_device_handle(PCI_CONTROLLER(slot->pci_bus)->companion);
+		phandle = PCI_CONTROLLER(slot->pci_bus)->acpi_handle;
 
 		if (acpi_bus_get_device(phandle, &pdevice)) {
 			dev_dbg(&slot->pci_bus->self->dev,
@@ -495,7 +495,7 @@ static int disable_slot(struct hotplug_slot *bss_hotplug_slot)
 
 	/* free the ACPI resources for the slot */
 	if (SN_ACPI_BASE_SUPPORT() &&
-            PCI_CONTROLLER(slot->pci_bus)->companion) {
+            PCI_CONTROLLER(slot->pci_bus)->acpi_handle) {
 		unsigned long long adr;
 		struct acpi_device *device;
 		acpi_handle phandle;
@@ -504,7 +504,7 @@ static int disable_slot(struct hotplug_slot *bss_hotplug_slot)
 		acpi_status ret;
 
 		/* Get the rootbus node pointer */
-		phandle = acpi_device_handle(PCI_CONTROLLER(slot->pci_bus)->companion);
+		phandle = PCI_CONTROLLER(slot->pci_bus)->acpi_handle;
 
 		acpi_scan_lock_acquire();
 		/*

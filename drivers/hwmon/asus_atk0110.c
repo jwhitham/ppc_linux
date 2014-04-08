@@ -18,6 +18,7 @@
 #include <linux/err.h>
 
 #include <acpi/acpi.h>
+#include <acpi/acpixf.h>
 #include <acpi/acpi_drivers.h>
 #include <acpi/acpi_bus.h>
 
@@ -118,7 +119,7 @@ struct atk_data {
 	acpi_handle rtmp_handle;
 	acpi_handle rvlt_handle;
 	acpi_handle rfan_handle;
-	/* new interface */
+	/* new inteface */
 	acpi_handle enumerate_handle;
 	acpi_handle read_handle;
 	acpi_handle write_handle;

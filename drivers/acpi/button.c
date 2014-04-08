@@ -383,15 +383,18 @@ static int acpi_button_add(struct acpi_device *device)
 
 	switch (button->type) {
 	case ACPI_BUTTON_TYPE_POWER:
-		input_set_capability(input, EV_KEY, KEY_POWER);
+		input->evbit[0] = BIT_MASK(EV_KEY);
+		set_bit(KEY_POWER, input->keybit);
 		break;
 
 	case ACPI_BUTTON_TYPE_SLEEP:
-		input_set_capability(input, EV_KEY, KEY_SLEEP);
+		input->evbit[0] = BIT_MASK(EV_KEY);
+		set_bit(KEY_SLEEP, input->keybit);
 		break;
 
 	case ACPI_BUTTON_TYPE_LID:
-		input_set_capability(input, EV_SW, SW_LID);
+		input->evbit[0] = BIT_MASK(EV_SW);
+		set_bit(SW_LID, input->swbit);
 		break;
 	}
 

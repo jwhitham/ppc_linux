@@ -88,7 +88,7 @@ static int __init dmar_parse_one_dev_scope(struct acpi_dmar_device_scope *scope,
 			pr_warn("Device scope bus [%d] not found\n", scope->bus);
 			break;
 		}
-		pdev = pci_get_slot(bus, PCI_DEVFN(path->device, path->function));
+		pdev = pci_get_slot(bus, PCI_DEVFN(path->dev, path->fn));
 		if (!pdev) {
 			/* warning will be printed below */
 			break;
@@ -99,7 +99,7 @@ static int __init dmar_parse_one_dev_scope(struct acpi_dmar_device_scope *scope,
 	}
 	if (!pdev) {
 		pr_warn("Device scope device [%04x:%02x:%02x.%02x] not found\n",
-			segment, scope->bus, path->device, path->function);
+			segment, scope->bus, path->dev, path->fn);
 		*dev = NULL;
 		return 0;
 	}
@@ -403,7 +403,7 @@ dmar_find_matched_drhd_unit(struct pci_dev *dev)
 
 	dev = pci_physfn(dev);
 
-	for_each_drhd_unit(dmaru) {
+	list_for_each_entry(dmaru, &dmar_drhd_units, list) {
 		drhd = container_of(dmaru->hdr,
 				    struct acpi_dmar_hardware_unit,
 				    header);

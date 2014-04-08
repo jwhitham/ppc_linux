@@ -10,7 +10,6 @@
 #include <asm/system_info.h>
 
 pgd_t *idmap_pgd;
-phys_addr_t (*arch_virt_to_idmap) (unsigned long x);
 
 #ifdef CONFIG_ARM_LPAE
 static void idmap_add_pmd(pud_t *pud, unsigned long addr, unsigned long end,
@@ -68,9 +67,8 @@ static void identity_mapping_add(pgd_t *pgd, const char *text_start,
 	unsigned long addr, end;
 	unsigned long next;
 
-	addr = virt_to_idmap(text_start);
-	end = virt_to_idmap(text_end);
-	pr_info("Setting up static identity map for 0x%lx - 0x%lx\n", addr, end);
+	addr = virt_to_phys(text_start);
+	end = virt_to_phys(text_end);
 
 	prot |= PMD_TYPE_SECT | PMD_SECT_AP_WRITE | PMD_SECT_AF;
 
@@ -92,6 +90,8 @@ static int __init init_static_idmap(void)
 	if (!idmap_pgd)
 		return -ENOMEM;
 
+	pr_info("Setting up static identity map for 0x%p - 0x%p\n",
+		__idmap_text_start, __idmap_text_end);
 	identity_mapping_add(idmap_pgd, __idmap_text_start,
 			     __idmap_text_end, 0);
 

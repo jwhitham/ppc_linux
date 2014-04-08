@@ -80,7 +80,6 @@ struct hpfs_sb_info {
 	unsigned sb_c_bitmap;		/* current bitmap */
 	unsigned sb_max_fwd_alloc;	/* max forwad allocation */
 	int sb_timeshift;
-	struct rcu_head rcu;
 };
 
 /* Four 512-byte buffers and the 2k block obtained by concatenating them */

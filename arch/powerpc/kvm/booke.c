@@ -40,9 +40,7 @@
 
 #include "timing.h"
 #include "booke.h"
-
-#define CREATE_TRACE_POINTS
-#include "trace_booke.h"
+#include "trace.h"
 
 unsigned long kvmppc_booke_handlers;
 
@@ -683,8 +681,9 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	int ret, s;
 	struct thread_struct thread;
 #ifdef CONFIG_PPC_FPU
-	struct thread_fp_state fp;
+	unsigned int fpscr;
 	int fpexc_mode;
+	u64 fpr[32];
 #endif
 
 #ifdef CONFIG_ALTIVEC
@@ -707,13 +706,13 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 #ifdef CONFIG_PPC_FPU
 	/* Save userspace FPU state in stack */
 	enable_kernel_fp();
-	fp = current->thread.fp_state;
+	memcpy(fpr, current->thread.fpr, sizeof(current->thread.fpr));
+	fpscr = current->thread.fpscr.val;
 	fpexc_mode = current->thread.fpexc_mode;
 
 	/* Restore guest FPU state to thread */
-	memcpy(current->thread.fp_state.fpr, vcpu->arch.fpr,
-	       sizeof(vcpu->arch.fpr));
-	current->thread.fp_state.fpscr = vcpu->arch.fpscr;
+	memcpy(current->thread.fpr, vcpu->arch.fpr, sizeof(vcpu->arch.fpr));
+	current->thread.fpscr.val = vcpu->arch.fpscr;
 
 	/*
 	 * Since we can't trap on MSR_FP in GS-mode, we consider the guest
@@ -769,12 +768,12 @@ int kvmppc_vcpu_run(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	vcpu->fpu_active = 0;
 
 	/* Save guest FPU state from thread */
-	memcpy(vcpu->arch.fpr, current->thread.fp_state.fpr,
-	       sizeof(vcpu->arch.fpr));
-	vcpu->arch.fpscr = current->thread.fp_state.fpscr;
+	memcpy(vcpu->arch.fpr, current->thread.fpr, sizeof(vcpu->arch.fpr));
+	vcpu->arch.fpscr = current->thread.fpscr.val;
 
 	/* Restore userspace FPU state from stack */
-	current->thread.fp_state = fp;
+	memcpy(current->thread.fpr, fpr, sizeof(current->thread.fpr));
+	current->thread.fpscr.val = fpscr;
 	current->thread.fpexc_mode = fpexc_mode;
 #endif
 
@@ -1465,7 +1464,7 @@ static int set_sregs_arch206(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
-int kvmppc_get_sregs_ivor(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
+void kvmppc_get_sregs_ivor(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 {
 	sregs->u.e.features |= KVM_SREGS_E_IVOR;
 
@@ -1485,7 +1484,6 @@ int kvmppc_get_sregs_ivor(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 	sregs->u.e.ivor_low[13] = vcpu->arch.ivor[BOOKE_IRQPRIO_DTLB_MISS];
 	sregs->u.e.ivor_low[14] = vcpu->arch.ivor[BOOKE_IRQPRIO_ITLB_MISS];
 	sregs->u.e.ivor_low[15] = vcpu->arch.ivor[BOOKE_IRQPRIO_DEBUG];
-	return 0;
 }
 
 int kvmppc_set_sregs_ivor(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
@@ -1520,7 +1518,8 @@ int kvm_arch_vcpu_ioctl_get_sregs(struct kvm_vcpu *vcpu,
 
 	get_sregs_base(vcpu, sregs);
 	get_sregs_arch206(vcpu, sregs);
-	return vcpu->kvm->arch.kvm_ops->get_sregs(vcpu, sregs);
+	kvmppc_core_get_sregs(vcpu, sregs);
+	return 0;
 }
 
 int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
@@ -1539,7 +1538,7 @@ int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
 	if (ret < 0)
 		return ret;
 
-	return vcpu->kvm->arch.kvm_ops->set_sregs(vcpu, sregs);
+	return kvmppc_core_set_sregs(vcpu, sregs);
 }
 
 int kvm_vcpu_ioctl_get_one_reg(struct kvm_vcpu *vcpu, struct kvm_one_reg *reg)
@@ -1592,11 +1591,8 @@ int kvm_vcpu_ioctl_get_one_reg(struct kvm_vcpu *vcpu, struct kvm_one_reg *reg)
 	case KVM_REG_PPC_DEBUG_INST:
 		val = get_reg_val(reg->id, KVMPPC_INST_EHPRIV_DEBUG);
 		break;
-	case KVM_REG_PPC_VRSAVE:
-		val = get_reg_val(reg->id, vcpu->arch.vrsave);
-		break;
 	default:
-		r = vcpu->kvm->arch.kvm_ops->get_one_reg(vcpu, reg->id, &val);
+		r = kvmppc_get_one_reg(vcpu, reg->id, &val);
 		break;
 	}
 
@@ -1675,11 +1671,8 @@ int kvm_vcpu_ioctl_set_one_reg(struct kvm_vcpu *vcpu, struct kvm_one_reg *reg)
 		kvmppc_set_tcr(vcpu, tcr);
 		break;
 	}
-	case KVM_REG_PPC_VRSAVE:
-		vcpu->arch.vrsave = set_reg_val(reg->id, val);
-		break;
 	default:
-		r = vcpu->kvm->arch.kvm_ops->set_one_reg(vcpu, reg->id, &val);
+		r = kvmppc_set_one_reg(vcpu, reg->id, &val);
 		break;
 	}
 
@@ -1710,12 +1703,12 @@ int kvm_vm_ioctl_get_dirty_log(struct kvm *kvm, struct kvm_dirty_log *log)
 	return -ENOTSUPP;
 }
 
-void kvmppc_core_free_memslot(struct kvm *kvm, struct kvm_memory_slot *free,
+void kvmppc_core_free_memslot(struct kvm_memory_slot *free,
 			      struct kvm_memory_slot *dont)
 {
 }
 
-int kvmppc_core_create_memslot(struct kvm *kvm, struct kvm_memory_slot *slot,
+int kvmppc_core_create_memslot(struct kvm_memory_slot *slot,
 			       unsigned long npages)
 {
 	return 0;
@@ -1955,41 +1948,6 @@ void kvmppc_booke_vcpu_put(struct kvm_vcpu *vcpu)
 
 	/* Clear pending debug event in DBSR */
 	kvmppc_clear_dbsr();
-}
-
-void kvmppc_mmu_destroy(struct kvm_vcpu *vcpu)
-{
-	vcpu->kvm->arch.kvm_ops->mmu_destroy(vcpu);
-}
-
-int kvmppc_core_init_vm(struct kvm *kvm)
-{
-	return kvm->arch.kvm_ops->init_vm(kvm);
-}
-
-struct kvm_vcpu *kvmppc_core_vcpu_create(struct kvm *kvm, unsigned int id)
-{
-	return kvm->arch.kvm_ops->vcpu_create(kvm, id);
-}
-
-void kvmppc_core_vcpu_free(struct kvm_vcpu *vcpu)
-{
-	vcpu->kvm->arch.kvm_ops->vcpu_free(vcpu);
-}
-
-void kvmppc_core_destroy_vm(struct kvm *kvm)
-{
-	kvm->arch.kvm_ops->destroy_vm(kvm);
-}
-
-void kvmppc_core_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
-{
-	vcpu->kvm->arch.kvm_ops->vcpu_load(vcpu, cpu);
-}
-
-void kvmppc_core_vcpu_put(struct kvm_vcpu *vcpu)
-{
-	vcpu->kvm->arch.kvm_ops->vcpu_put(vcpu);
 }
 
 int __init kvmppc_booke_init(void)

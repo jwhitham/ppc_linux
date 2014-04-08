@@ -64,6 +64,8 @@ struct max77693_muic_platform_data {
 };
 
 struct max77693_platform_data {
+	int wakeup;
+
 	/* regulator data */
 	struct max77693_regulator_data *regulators;
 	int num_regulators;

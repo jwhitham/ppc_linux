@@ -306,8 +306,8 @@ static void s3fb_settile_fast(struct fb_info *info, struct fb_tilemap *map)
 
 	if ((map->width != 8) || (map->height != 16) ||
 	    (map->depth != 1) || (map->length != 256)) {
-		fb_err(info, "unsupported font parameters: width %d, height %d, depth %d, length %d\n",
-		       map->width, map->height, map->depth, map->length);
+	    	printk(KERN_ERR "fb%d: unsupported font parameters: width %d, height %d, depth %d, length %d\n",
+			info->node, map->width, map->height, map->depth, map->length);
 		return;
 	}
 
@@ -476,7 +476,7 @@ static void s3_set_pixclock(struct fb_info *info, u32 pixclock)
 	rv = svga_compute_pll((par->chip == CHIP_365_TRIO3D) ? &s3_trio3d_pll : &s3_pll,
 			      1000000000 / pixclock, &m, &n, &r, info->node);
 	if (rv < 0) {
-		fb_err(info, "cannot set requested pixclock, keeping old value\n");
+		printk(KERN_ERR "fb%d: cannot set requested pixclock, keeping old value\n", info->node);
 		return;
 	}
 
@@ -569,7 +569,7 @@ static int s3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 		rv = -EINVAL;
 
 	if (rv < 0) {
-		fb_err(info, "unsupported mode requested\n");
+		printk(KERN_ERR "fb%d: unsupported mode requested\n", info->node);
 		return rv;
 	}
 
@@ -587,21 +587,22 @@ static int s3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	/* Check whether have enough memory */
 	mem = ((var->bits_per_pixel * var->xres_virtual) >> 3) * var->yres_virtual;
 	if (mem > info->screen_size) {
-		fb_err(info, "not enough framebuffer memory (%d kB requested , %u kB available)\n",
-		       mem >> 10, (unsigned int) (info->screen_size >> 10));
+		printk(KERN_ERR "fb%d: not enough framebuffer memory (%d kB requested , %d kB available)\n",
+			info->node, mem >> 10, (unsigned int) (info->screen_size >> 10));
 		return -EINVAL;
 	}
 
 	rv = svga_check_timings (&s3_timing_regs, var, info->node);
 	if (rv < 0) {
-		fb_err(info, "invalid timings requested\n");
+		printk(KERN_ERR "fb%d: invalid timings requested\n", info->node);
 		return rv;
 	}
 
 	rv = svga_compute_pll(&s3_pll, PICOS2KHZ(var->pixclock), &m, &n, &r,
 				info->node);
 	if (rv < 0) {
-		fb_err(info, "invalid pixclock value requested\n");
+		printk(KERN_ERR "fb%d: invalid pixclock value requested\n",
+			info->node);
 		return rv;
 	}
 
@@ -685,7 +686,7 @@ static int s3fb_set_par(struct fb_info *info)
 
 
 	/* Set the offset register */
-	fb_dbg(info, "offset register       : %d\n", offset_value);
+	pr_debug("fb%d: offset register       : %d\n", info->node, offset_value);
 	svga_wcrt_multi(par->state.vgabase, s3_offset_regs, offset_value);
 
 	if (par->chip != CHIP_357_VIRGE_GX2 &&
@@ -768,7 +769,7 @@ static int s3fb_set_par(struct fb_info *info)
 	/* Set mode-specific register values */
 	switch (mode) {
 	case 0:
-		fb_dbg(info, "text mode\n");
+		pr_debug("fb%d: text mode\n", info->node);
 		svga_set_textmode_vga_regs(par->state.vgabase);
 
 		/* Set additional registers like in 8-bit mode */
@@ -779,12 +780,12 @@ static int s3fb_set_par(struct fb_info *info)
 		svga_wcrt_mask(par->state.vgabase, 0x3A, 0x00, 0x30);
 
 		if (fasttext) {
-			fb_dbg(info, "high speed text mode set\n");
+			pr_debug("fb%d: high speed text mode set\n", info->node);
 			svga_wcrt_mask(par->state.vgabase, 0x31, 0x40, 0x40);
 		}
 		break;
 	case 1:
-		fb_dbg(info, "4 bit pseudocolor\n");
+		pr_debug("fb%d: 4 bit pseudocolor\n", info->node);
 		vga_wgfx(par->state.vgabase, VGA_GFX_MODE, 0x40);
 
 		/* Set additional registers like in 8-bit mode */
@@ -795,7 +796,7 @@ static int s3fb_set_par(struct fb_info *info)
 		svga_wcrt_mask(par->state.vgabase, 0x3A, 0x00, 0x30);
 		break;
 	case 2:
-		fb_dbg(info, "4 bit pseudocolor, planar\n");
+		pr_debug("fb%d: 4 bit pseudocolor, planar\n", info->node);
 
 		/* Set additional registers like in 8-bit mode */
 		svga_wcrt_mask(par->state.vgabase, 0x50, 0x00, 0x30);
@@ -805,7 +806,7 @@ static int s3fb_set_par(struct fb_info *info)
 		svga_wcrt_mask(par->state.vgabase, 0x3A, 0x00, 0x30);
 		break;
 	case 3:
-		fb_dbg(info, "8 bit pseudocolor\n");
+		pr_debug("fb%d: 8 bit pseudocolor\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x50, 0x00, 0x30);
 		if (info->var.pixclock > 20000 ||
 		    par->chip == CHIP_357_VIRGE_GX2 ||
@@ -821,7 +822,7 @@ static int s3fb_set_par(struct fb_info *info)
 		}
 		break;
 	case 4:
-		fb_dbg(info, "5/5/5 truecolor\n");
+		pr_debug("fb%d: 5/5/5 truecolor\n", info->node);
 		if (par->chip == CHIP_988_VIRGE_VX) {
 			if (info->var.pixclock > 20000)
 				svga_wcrt_mask(par->state.vgabase, 0x67, 0x20, 0xF0);
@@ -849,7 +850,7 @@ static int s3fb_set_par(struct fb_info *info)
 		}
 		break;
 	case 5:
-		fb_dbg(info, "5/6/5 truecolor\n");
+		pr_debug("fb%d: 5/6/5 truecolor\n", info->node);
 		if (par->chip == CHIP_988_VIRGE_VX) {
 			if (info->var.pixclock > 20000)
 				svga_wcrt_mask(par->state.vgabase, 0x67, 0x40, 0xF0);
@@ -878,16 +879,16 @@ static int s3fb_set_par(struct fb_info *info)
 		break;
 	case 6:
 		/* VIRGE VX case */
-		fb_dbg(info, "8/8/8 truecolor\n");
+		pr_debug("fb%d: 8/8/8 truecolor\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x67, 0xD0, 0xF0);
 		break;
 	case 7:
-		fb_dbg(info, "8/8/8/8 truecolor\n");
+		pr_debug("fb%d: 8/8/8/8 truecolor\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x50, 0x30, 0x30);
 		svga_wcrt_mask(par->state.vgabase, 0x67, 0xD0, 0xF0);
 		break;
 	default:
-		fb_err(info, "unsupported mode - bug\n");
+		printk(KERN_ERR "fb%d: unsupported mode - bug\n", info->node);
 		return -EINVAL;
 	}
 
@@ -990,27 +991,27 @@ static int s3fb_blank(int blank_mode, struct fb_info *info)
 
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
-		fb_dbg(info, "unblank\n");
+		pr_debug("fb%d: unblank\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x56, 0x00, 0x06);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x00, 0x20);
 		break;
 	case FB_BLANK_NORMAL:
-		fb_dbg(info, "blank\n");
+		pr_debug("fb%d: blank\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x56, 0x00, 0x06);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
 	case FB_BLANK_HSYNC_SUSPEND:
-		fb_dbg(info, "hsync\n");
+		pr_debug("fb%d: hsync\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x56, 0x02, 0x06);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
 	case FB_BLANK_VSYNC_SUSPEND:
-		fb_dbg(info, "vsync\n");
+		pr_debug("fb%d: vsync\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x56, 0x04, 0x06);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
 	case FB_BLANK_POWERDOWN:
-		fb_dbg(info, "sync down\n");
+		pr_debug("fb%d: sync down\n", info->node);
 		svga_wcrt_mask(par->state.vgabase, 0x56, 0x06, 0x06);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		break;
@@ -1351,16 +1352,13 @@ static int s3_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
 		goto err_reg_fb;
 	}
 
-	fb_info(info, "%s on %s, %d MB RAM, %d MHz MCLK\n",
-		info->fix.id, pci_name(dev),
-		info->fix.smem_len >> 20, (par->mclk_freq + 500) / 1000);
+	printk(KERN_INFO "fb%d: %s on %s, %d MB RAM, %d MHz MCLK\n", info->node, info->fix.id,
+		 pci_name(dev), info->fix.smem_len >> 20, (par->mclk_freq + 500) / 1000);
 
 	if (par->chip == CHIP_UNKNOWN)
-		fb_info(info, "unknown chip, CR2D=%x, CR2E=%x, CRT2F=%x, CRT30=%x\n",
-			vga_rcrt(par->state.vgabase, 0x2d),
-			vga_rcrt(par->state.vgabase, 0x2e),
-			vga_rcrt(par->state.vgabase, 0x2f),
-			vga_rcrt(par->state.vgabase, 0x30));
+		printk(KERN_INFO "fb%d: unknown chip, CR2D=%x, CR2E=%x, CRT2F=%x, CRT30=%x\n",
+			info->node, vga_rcrt(par->state.vgabase, 0x2d), vga_rcrt(par->state.vgabase, 0x2e),
+			vga_rcrt(par->state.vgabase, 0x2f), vga_rcrt(par->state.vgabase, 0x30));
 
 	/* Record a reference to the driver data */
 	pci_set_drvdata(dev, info);
@@ -1426,6 +1424,7 @@ static void s3_pci_remove(struct pci_dev *dev)
 		pci_release_regions(dev);
 /*		pci_disable_device(dev); */
 
+		pci_set_drvdata(dev, NULL);
 		framebuffer_release(info);
 	}
 }

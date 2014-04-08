@@ -105,22 +105,6 @@ static int netback_probe(struct xenbus_device *dev,
 			goto abort_transaction;
 		}
 
-		err = xenbus_printf(xbt, dev->nodename, "feature-gso-tcpv6",
-				    "%d", sg);
-		if (err) {
-			message = "writing feature-gso-tcpv6";
-			goto abort_transaction;
-		}
-
-		/* We support partial checksum setup for IPv6 packets */
-		err = xenbus_printf(xbt, dev->nodename,
-				    "feature-ipv6-csum-offload",
-				    "%d", 1);
-		if (err) {
-			message = "writing feature-ipv6-csum-offload";
-			goto abort_transaction;
-		}
-
 		/* We support rx-copy path. */
 		err = xenbus_printf(xbt, dev->nodename,
 				    "feature-rx-copy", "%d", 1);
@@ -577,50 +561,20 @@ static int connect_rings(struct backend_info *be)
 		val = 0;
 	vif->can_sg = !!val;
 
-	vif->gso_mask = 0;
-	vif->gso_prefix_mask = 0;
-
 	if (xenbus_scanf(XBT_NIL, dev->otherend, "feature-gso-tcpv4",
 			 "%d", &val) < 0)
 		val = 0;
-	if (val)
-		vif->gso_mask |= GSO_BIT(TCPV4);
+	vif->gso = !!val;
 
 	if (xenbus_scanf(XBT_NIL, dev->otherend, "feature-gso-tcpv4-prefix",
 			 "%d", &val) < 0)
 		val = 0;
-	if (val)
-		vif->gso_prefix_mask |= GSO_BIT(TCPV4);
-
-	if (xenbus_scanf(XBT_NIL, dev->otherend, "feature-gso-tcpv6",
-			 "%d", &val) < 0)
-		val = 0;
-	if (val)
-		vif->gso_mask |= GSO_BIT(TCPV6);
-
-	if (xenbus_scanf(XBT_NIL, dev->otherend, "feature-gso-tcpv6-prefix",
-			 "%d", &val) < 0)
-		val = 0;
-	if (val)
-		vif->gso_prefix_mask |= GSO_BIT(TCPV6);
-
-	if (vif->gso_mask & vif->gso_prefix_mask) {
-		xenbus_dev_fatal(dev, err,
-				 "%s: gso and gso prefix flags are not "
-				 "mutually exclusive",
-				 dev->otherend);
-		return -EOPNOTSUPP;
-	}
+	vif->gso_prefix = !!val;
 
 	if (xenbus_scanf(XBT_NIL, dev->otherend, "feature-no-csum-offload",
 			 "%d", &val) < 0)
 		val = 0;
-	vif->ip_csum = !val;
-
-	if (xenbus_scanf(XBT_NIL, dev->otherend, "feature-ipv6-csum-offload",
-			 "%d", &val) < 0)
-		val = 0;
-	vif->ipv6_csum = !!val;
+	vif->csum = !val;
 
 	/* Map the shared frame, irq etc. */
 	err = xenvif_connect(vif, tx_ring_ref, rx_ring_ref,

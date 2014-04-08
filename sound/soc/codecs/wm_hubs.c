@@ -611,7 +611,7 @@ static int earpiece_event(struct snd_soc_dapm_widget *w,
 		break;
 
 	default:
-		WARN(1, "Invalid event %d\n", event);
+		BUG();
 		break;
 	}
 

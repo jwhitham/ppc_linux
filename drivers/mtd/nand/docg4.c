@@ -44,7 +44,6 @@
 #include <linux/mtd/nand.h>
 #include <linux/bch.h>
 #include <linux/bitrev.h>
-#include <linux/jiffies.h>
 
 /*
  * In "reliable mode" consecutive 2k pages are used in parallel (in some
@@ -270,7 +269,7 @@ static int poll_status(struct docg4_priv *doc)
 	 */
 
 	uint16_t flash_status;
-	unsigned long timeo;
+	unsigned int timeo;
 	void __iomem *docptr = doc->virtadr;
 
 	dev_dbg(doc->dev, "%s...\n", __func__);
@@ -278,17 +277,21 @@ static int poll_status(struct docg4_priv *doc)
 	/* hardware quirk requires reading twice initially */
 	flash_status = readw(docptr + DOC_FLASHCONTROL);
 
-	timeo = jiffies + msecs_to_jiffies(200); /* generous timeout */
+	timeo = 1000;
 	do {
 		cpu_relax();
 		flash_status = readb(docptr + DOC_FLASHCONTROL);
-	} while (!(flash_status & DOC_CTRL_FLASHREADY) &&
-		 time_before(jiffies, timeo));
+	} while (!(flash_status & DOC_CTRL_FLASHREADY) && --timeo);
 
-	if (unlikely(!(flash_status & DOC_CTRL_FLASHREADY))) {
+
+	if (!timeo) {
 		dev_err(doc->dev, "%s: timed out!\n", __func__);
 		return NAND_STATUS_FAIL;
 	}
+
+	if (unlikely(timeo < 50))
+		dev_warn(doc->dev, "%s: nearly timed out; %d remaining\n",
+			 __func__, timeo);
 
 	return 0;
 }
@@ -491,7 +494,7 @@ static uint8_t docg4_read_byte(struct mtd_info *mtd)
 		return status;
 	}
 
-	dev_warn(doc->dev, "unexpected call to read_byte()\n");
+	dev_warn(doc->dev, "unexpectd call to read_byte()\n");
 
 	return 0;
 }
@@ -1236,6 +1239,7 @@ static void __init init_mtd_structs(struct mtd_info *mtd)
 	nand->block_markbad = docg4_block_markbad;
 	nand->read_buf = docg4_read_buf;
 	nand->write_buf = docg4_write_buf16;
+	nand->scan_bbt = nand_default_bbt;
 	nand->erase_cmd = docg4_erase_block;
 	nand->ecc.read_page = docg4_read_page;
 	nand->ecc.write_page = docg4_write_page;

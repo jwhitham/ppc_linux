@@ -40,7 +40,6 @@
 #include <linux/i2c-xiic.h>
 #include <linux/io.h>
 #include <linux/slab.h>
-#include <linux/of.h>
 
 #define DRIVER_NAME "xiic-i2c"
 
@@ -703,7 +702,7 @@ static int xiic_i2c_probe(struct platform_device *pdev)
 	if (irq < 0)
 		goto resource_missing;
 
-	pdata = dev_get_platdata(&pdev->dev);
+	pdata = (struct xiic_i2c_platform_data *)dev_get_platdata(&pdev->dev);
 
 	i2c = kzalloc(sizeof(*i2c), GFP_KERNEL);
 	if (!i2c)

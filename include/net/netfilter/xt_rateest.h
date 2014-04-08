@@ -16,7 +16,7 @@ struct xt_rateest {
 	struct rcu_head			rcu;
 };
 
-struct xt_rateest *xt_rateest_lookup(const char *name);
-void xt_rateest_put(struct xt_rateest *est);
+extern struct xt_rateest *xt_rateest_lookup(const char *name);
+extern void xt_rateest_put(struct xt_rateest *est);
 
 #endif /* _XT_RATEEST_H */

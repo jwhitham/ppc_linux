@@ -664,9 +664,8 @@ static int omap_dmm_probe(struct platform_device *dev)
 	}
 
 	/* set dma mask for device */
-	ret = dma_set_coherent_mask(&dev->dev, DMA_BIT_MASK(32));
-	if (ret)
-		goto fail;
+	/* NOTE: this is a workaround for the hwmod not initializing properly */
+	dev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 
 	omap_dmm->dummy_pa = page_to_phys(omap_dmm->dummy_page);
 

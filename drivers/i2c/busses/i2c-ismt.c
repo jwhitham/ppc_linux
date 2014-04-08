@@ -541,7 +541,7 @@ static int ismt_access(struct i2c_adapter *adap, u16 addr,
 		desc->dptr_high = upper_32_bits(dma_addr);
 	}
 
-	reinit_completion(&priv->cmp);
+	INIT_COMPLETION(priv->cmp);
 
 	/* Add the descriptor */
 	ismt_submit_desc(priv);

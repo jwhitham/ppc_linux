@@ -489,7 +489,8 @@ static int vesafb_probe(struct platform_device *dev)
 		fb_dealloc_cmap(&info->cmap);
 		goto err;
 	}
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       info->node, info->fix.id);
 	return 0;
 err:
 	if (info->screen_base)

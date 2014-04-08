@@ -493,15 +493,17 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 	unsigned long long fileid;
 	struct dentry *sdentry;
 	struct rpc_task *task;
-	int            error = -EBUSY;
+	int            error = -EIO;
 
-	dfprintk(VFS, "NFS: silly-rename(%pd2, ct=%d)\n",
-		dentry, d_count(dentry));
+	dfprintk(VFS, "NFS: silly-rename(%s/%s, ct=%d)\n",
+		dentry->d_parent->d_name.name, dentry->d_name.name,
+		d_count(dentry));
 	nfs_inc_stats(dir, NFSIOS_SILLYRENAME);
 
 	/*
 	 * We don't allow a dentry to be silly-renamed twice.
 	 */
+	error = -EBUSY;
 	if (dentry->d_flags & DCACHE_NFSFS_RENAMED)
 		goto out;
 
@@ -520,8 +522,8 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 				SILLYNAME_FILEID_LEN, fileid,
 				SILLYNAME_COUNTER_LEN, sillycounter);
 
-		dfprintk(VFS, "NFS: trying to rename %pd to %s\n",
-				dentry, silly);
+		dfprintk(VFS, "NFS: trying to rename %s to %s\n",
+				dentry->d_name.name, silly);
 
 		sdentry = lookup_one_len(silly, dentry->d_parent, slen);
 		/*

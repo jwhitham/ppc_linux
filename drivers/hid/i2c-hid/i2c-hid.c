@@ -455,6 +455,10 @@ static void i2c_hid_init_reports(struct hid_device *hid)
 	}
 
 	list_for_each_entry(report,
+		&hid->report_enum[HID_INPUT_REPORT].report_list, list)
+		i2c_hid_init_report(report, inbuf, ihid->bufsize);
+
+	list_for_each_entry(report,
 		&hid->report_enum[HID_FEATURE_REPORT].report_list, list)
 		i2c_hid_init_report(report, inbuf, ihid->bufsize);
 
@@ -850,10 +854,10 @@ static int i2c_hid_acpi_pdata(struct i2c_client *client,
 		0xF7, 0xF6, 0xDF, 0x3C, 0x67, 0x42, 0x55, 0x45,
 		0xAD, 0x05, 0xB3, 0x0A, 0x3D, 0x89, 0x38, 0xDE,
 	};
-	union acpi_object params[4];
+	struct acpi_buffer buf = { ACPI_ALLOCATE_BUFFER, NULL };
+	union acpi_object params[4], *obj;
 	struct acpi_object_list input;
 	struct acpi_device *adev;
-	unsigned long long value;
 	acpi_handle handle;
 
 	handle = ACPI_HANDLE(&client->dev);
@@ -874,14 +878,22 @@ static int i2c_hid_acpi_pdata(struct i2c_client *client,
 	params[3].package.count = 0;
 	params[3].package.elements = NULL;
 
-	if (ACPI_FAILURE(acpi_evaluate_integer(handle, "_DSM", &input,
-								&value))) {
+	if (ACPI_FAILURE(acpi_evaluate_object(handle, "_DSM", &input, &buf))) {
 		dev_err(&client->dev, "device _DSM execution failed\n");
 		return -ENODEV;
 	}
 
-	pdata->hid_descriptor_address = value;
+	obj = (union acpi_object *)buf.pointer;
+	if (obj->type != ACPI_TYPE_INTEGER) {
+		dev_err(&client->dev, "device _DSM returned invalid type: %d\n",
+			obj->type);
+		kfree(buf.pointer);
+		return -EINVAL;
+	}
 
+	pdata->hid_descriptor_address = obj->integer.value;
+
+	kfree(buf.pointer);
 	return 0;
 }
 
@@ -1008,7 +1020,7 @@ static int i2c_hid_probe(struct i2c_client *client,
 	hid->hid_get_raw_report = i2c_hid_get_raw_report;
 	hid->hid_output_raw_report = i2c_hid_output_raw_report;
 	hid->dev.parent = &client->dev;
-	ACPI_COMPANION_SET(&hid->dev, ACPI_COMPANION(&client->dev));
+	ACPI_HANDLE_SET(&hid->dev, ACPI_HANDLE(&client->dev));
 	hid->bus = BUS_I2C;
 	hid->version = le16_to_cpu(ihid->hdesc.bcdVersion);
 	hid->vendor = le16_to_cpu(ihid->hdesc.wVendorID);

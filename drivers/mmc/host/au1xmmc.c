@@ -1157,6 +1157,11 @@ static int au1xmmc_remove(struct platform_device *pdev)
 static int au1xmmc_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct au1xmmc_host *host = platform_get_drvdata(pdev);
+	int ret;
+
+	ret = mmc_suspend_host(host->mmc);
+	if (ret)
+		return ret;
 
 	au_writel(0, HOST_CONFIG2(host));
 	au_writel(0, HOST_CONFIG(host));
@@ -1173,7 +1178,7 @@ static int au1xmmc_resume(struct platform_device *pdev)
 
 	au1xmmc_reset_controller(host);
 
-	return 0;
+	return mmc_resume_host(host->mmc);
 }
 #else
 #define au1xmmc_suspend NULL

@@ -71,11 +71,9 @@ static inline void local_tick_enable(unsigned long long comp)
 
 typedef unsigned long long cycles_t;
 
-static inline void get_tod_clock_ext(char clk[16])
+static inline void get_tod_clock_ext(char *clk)
 {
-	typedef struct { char _[sizeof(clk)]; } addrtype;
-
-	asm volatile("stcke %0" : "=Q" (*(addrtype *) clk) : : "cc");
+	asm volatile("stcke %0" : "=Q" (*clk) : : "cc");
 }
 
 static inline unsigned long long get_tod_clock(void)

@@ -19,7 +19,6 @@
 #define	__XFS_INODE_FORK_H__
 
 struct xfs_inode_log_item;
-struct xfs_dinode;
 
 /*
  * The following xfs_ext_irec_t struct introduces a second (top) level

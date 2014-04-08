@@ -2362,6 +2362,12 @@ static void savagefb_remove(struct pci_dev *dev)
 		kfree(info->pixmap.addr);
 		pci_release_regions(dev);
 		framebuffer_release(info);
+
+		/*
+		 * Ensure that the driver data is no longer
+		 * valid.
+		 */
+		pci_set_drvdata(dev, NULL);
 	}
 }
 

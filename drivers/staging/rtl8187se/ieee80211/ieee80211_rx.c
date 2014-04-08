@@ -858,7 +858,7 @@ static inline void ieee80211_extract_country_ie(
 
 }
 
-static int
+int
 ieee80211_TranslateToDbm(
 	unsigned char SignalStrengthIndex	// 0-100 index.
 	)

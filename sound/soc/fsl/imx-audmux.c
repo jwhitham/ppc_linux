@@ -66,9 +66,12 @@ static ssize_t audmux_read_file(struct file *file, char __user *user_buf,
 				size_t count, loff_t *ppos)
 {
 	ssize_t ret;
-	char *buf;
+	char *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
 	int port = (int)file->private_data;
 	u32 pdcr, ptcr;
+
+	if (!buf)
+		return -ENOMEM;
 
 	if (audmux_clk) {
 		ret = clk_prepare_enable(audmux_clk);
@@ -81,10 +84,6 @@ static ssize_t audmux_read_file(struct file *file, char __user *user_buf,
 
 	if (audmux_clk)
 		clk_disable_unprepare(audmux_clk);
-
-	buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
 
 	ret = snprintf(buf, PAGE_SIZE, "PDCR: %08x\nPTCR: %08x\n",
 		       pdcr, ptcr);

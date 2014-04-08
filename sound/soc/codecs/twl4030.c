@@ -46,7 +46,13 @@
 /* TWL4030 PMBR1 Register GPIO6 mux bits */
 #define TWL4030_GPIO6_PWM0_MUTE(value)	((value & 0x03) << 2)
 
-#define TWL4030_CACHEREGNUM	(TWL4030_REG_MISC_SET_2 + 1)
+/* Shadow register used by the audio driver */
+#define TWL4030_REG_SW_SHADOW		0x4A
+#define TWL4030_CACHEREGNUM	(TWL4030_REG_SW_SHADOW + 1)
+
+/* TWL4030_REG_SW_SHADOW (0x4A) Fields */
+#define TWL4030_HFL_EN			0x01
+#define TWL4030_HFR_EN			0x02
 
 /*
  * twl4030 register cache & default register settings
@@ -126,6 +132,7 @@ static const u8 twl4030_reg[TWL4030_CACHEREGNUM] = {
 	0x00, /* REG_VIBRA_PWM_SET	(0x47)	*/
 	0x00, /* REG_ANAMIC_GAIN	(0x48)	*/
 	0x00, /* REG_MISC_SET_2		(0x49)	*/
+	0x00, /* REG_SW_SHADOW		(0x4A)	- Shadow, non HW register */
 };
 
 /* codec private data */
@@ -191,41 +198,42 @@ static int twl4030_write(struct snd_soc_codec *codec,
 	int write_to_reg = 0;
 
 	twl4030_write_reg_cache(codec, reg, value);
-	/* Decide if the given register can be written */
-	switch (reg) {
-	case TWL4030_REG_EAR_CTL:
-		if (twl4030->earpiece_enabled)
+	if (likely(reg < TWL4030_REG_SW_SHADOW)) {
+		/* Decide if the given register can be written */
+		switch (reg) {
+		case TWL4030_REG_EAR_CTL:
+			if (twl4030->earpiece_enabled)
+				write_to_reg = 1;
+			break;
+		case TWL4030_REG_PREDL_CTL:
+			if (twl4030->predrivel_enabled)
+				write_to_reg = 1;
+			break;
+		case TWL4030_REG_PREDR_CTL:
+			if (twl4030->predriver_enabled)
+				write_to_reg = 1;
+			break;
+		case TWL4030_REG_PRECKL_CTL:
+			if (twl4030->carkitl_enabled)
+				write_to_reg = 1;
+			break;
+		case TWL4030_REG_PRECKR_CTL:
+			if (twl4030->carkitr_enabled)
+				write_to_reg = 1;
+			break;
+		case TWL4030_REG_HS_GAIN_SET:
+			if (twl4030->hsl_enabled || twl4030->hsr_enabled)
+				write_to_reg = 1;
+			break;
+		default:
+			/* All other register can be written */
 			write_to_reg = 1;
-		break;
-	case TWL4030_REG_PREDL_CTL:
-		if (twl4030->predrivel_enabled)
-			write_to_reg = 1;
-		break;
-	case TWL4030_REG_PREDR_CTL:
-		if (twl4030->predriver_enabled)
-			write_to_reg = 1;
-		break;
-	case TWL4030_REG_PRECKL_CTL:
-		if (twl4030->carkitl_enabled)
-			write_to_reg = 1;
-		break;
-	case TWL4030_REG_PRECKR_CTL:
-		if (twl4030->carkitr_enabled)
-			write_to_reg = 1;
-		break;
-	case TWL4030_REG_HS_GAIN_SET:
-		if (twl4030->hsl_enabled || twl4030->hsr_enabled)
-			write_to_reg = 1;
-		break;
-	default:
-		/* All other register can be written */
-		write_to_reg = 1;
-		break;
+			break;
+		}
+		if (write_to_reg)
+			return twl_i2c_write_u8(TWL4030_MODULE_AUDIO_VOICE,
+						    value, reg);
 	}
-	if (write_to_reg)
-		return twl_i2c_write_u8(TWL4030_MODULE_AUDIO_VOICE,
-					    value, reg);
-
 	return 0;
 }
 
@@ -524,7 +532,7 @@ SOC_DAPM_ENUM("Route", twl4030_handsfreel_enum);
 
 /* Handsfree Left virtual mute */
 static const struct snd_kcontrol_new twl4030_dapm_handsfreelmute_control =
-	SOC_DAPM_SINGLE_VIRT("Switch", 1);
+	SOC_DAPM_SINGLE("Switch", TWL4030_REG_SW_SHADOW, 0, 1, 0);
 
 /* Handsfree Right */
 static const char *twl4030_handsfreer_texts[] =
@@ -540,7 +548,7 @@ SOC_DAPM_ENUM("Route", twl4030_handsfreer_enum);
 
 /* Handsfree Right virtual mute */
 static const struct snd_kcontrol_new twl4030_dapm_handsfreermute_control =
-	SOC_DAPM_SINGLE_VIRT("Switch", 1);
+	SOC_DAPM_SINGLE("Switch", TWL4030_REG_SW_SHADOW, 1, 1, 0);
 
 /* Vibra */
 /* Vibra audio path selection */

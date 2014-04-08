@@ -156,15 +156,19 @@ static struct thermal_cooling_device_ops memory_cooling_ops = {
 static int intel_menlow_memory_add(struct acpi_device *device)
 {
 	int result = -ENODEV;
+	acpi_status status = AE_OK;
+	acpi_handle dummy;
 	struct thermal_cooling_device *cdev;
 
 	if (!device)
 		return -EINVAL;
 
-	if (!acpi_has_method(device->handle, MEMORY_GET_BANDWIDTH))
+	status = acpi_get_handle(device->handle, MEMORY_GET_BANDWIDTH, &dummy);
+	if (ACPI_FAILURE(status))
 		goto end;
 
-	if (!acpi_has_method(device->handle, MEMORY_SET_BANDWIDTH))
+	status = acpi_get_handle(device->handle, MEMORY_SET_BANDWIDTH, &dummy);
+	if (ACPI_FAILURE(status))
 		goto end;
 
 	cdev = thermal_cooling_device_register("Memory controller", device,

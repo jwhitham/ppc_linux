@@ -24,7 +24,6 @@
 #include <linux/gpio.h>
 #include <linux/rotary_encoder.h>
 #include <linux/slab.h>
-#include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
 

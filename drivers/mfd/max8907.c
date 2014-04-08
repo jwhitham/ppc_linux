@@ -17,7 +17,6 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/max8907.h>
 #include <linux/module.h>
-#include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>

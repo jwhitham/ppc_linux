@@ -74,4 +74,3 @@ long kvmppc_h_put_tce(struct kvm_vcpu *vcpu, unsigned long liobn,
 	/* Didn't find the liobn, punt it to userspace */
 	return H_TOO_HARD;
 }
-EXPORT_SYMBOL_GPL(kvmppc_h_put_tce);

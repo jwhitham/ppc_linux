@@ -17,7 +17,6 @@
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
-#include <linux/of.h>
 
 #include <linux/mfd/arizona/core.h>
 

@@ -782,11 +782,7 @@ static struct dma_pte *pfn_to_dma_pte(struct dmar_domain *domain,
 	int offset;
 
 	BUG_ON(!domain->pgd);
-
-	if (addr_width < BITS_PER_LONG && pfn >> addr_width)
-		/* Address beyond IOMMU's addressing capabilities. */
-		return NULL;
-
+	BUG_ON(addr_width < BITS_PER_LONG && pfn >> addr_width);
 	parent = domain->pgd;
 
 	while (level > 0) {
@@ -3781,10 +3777,11 @@ static void iommu_detach_dependent_devices(struct intel_iommu *iommu,
 static void domain_remove_one_dev_info(struct dmar_domain *domain,
 					  struct pci_dev *pdev)
 {
-	struct device_domain_info *info, *tmp;
+	struct device_domain_info *info;
 	struct intel_iommu *iommu;
 	unsigned long flags;
 	int found = 0;
+	struct list_head *entry, *tmp;
 
 	iommu = device_to_iommu(pci_domain_nr(pdev->bus), pdev->bus->number,
 				pdev->devfn);
@@ -3792,7 +3789,8 @@ static void domain_remove_one_dev_info(struct dmar_domain *domain,
 		return;
 
 	spin_lock_irqsave(&device_domain_lock, flags);
-	list_for_each_entry_safe(info, tmp, &domain->devices, link) {
+	list_for_each_safe(entry, tmp, &domain->devices) {
+		info = list_entry(entry, struct device_domain_info, link);
 		if (info->segment == pci_domain_nr(pdev->bus) &&
 		    info->bus == pdev->bus->number &&
 		    info->devfn == pdev->devfn) {

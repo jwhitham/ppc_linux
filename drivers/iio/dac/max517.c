@@ -82,13 +82,15 @@ static int max517_read_raw(struct iio_dev *indio_dev,
 			   long m)
 {
 	struct max517_data *data = iio_priv(indio_dev);
+	unsigned int scale_uv;
 
 	switch (m) {
 	case IIO_CHAN_INFO_SCALE:
 		/* Corresponds to Vref / 2^(bits) */
-		*val = data->vref_mv[chan->channel];
-		*val2 = 8;
-		return IIO_VAL_FRACTIONAL_LOG2;
+		scale_uv = (data->vref_mv[chan->channel] * 1000) >> 8;
+		*val =  scale_uv / 1000000;
+		*val2 = scale_uv % 1000000;
+		return IIO_VAL_INT_PLUS_MICRO;
 	default:
 		break;
 	}
@@ -160,6 +162,7 @@ static int max517_probe(struct i2c_client *client,
 	struct max517_data *data;
 	struct iio_dev *indio_dev;
 	struct max517_platform_data *platform_data = client->dev.platform_data;
+	int err;
 
 	indio_dev = devm_iio_device_alloc(&client->dev, sizeof(*data));
 	if (!indio_dev)
@@ -191,7 +194,13 @@ static int max517_probe(struct i2c_client *client,
 		data->vref_mv[1] = platform_data->vref_mv[1];
 	}
 
-	return iio_device_register(indio_dev);
+	err = iio_device_register(indio_dev);
+	if (err)
+		return err;
+
+	dev_info(&client->dev, "DAC registered\n");
+
+	return 0;
 }
 
 static int max517_remove(struct i2c_client *client)

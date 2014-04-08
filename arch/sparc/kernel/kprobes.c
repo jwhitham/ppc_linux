@@ -8,7 +8,6 @@
 #include <linux/module.h>
 #include <linux/kdebug.h>
 #include <linux/slab.h>
-#include <linux/context_tracking.h>
 #include <asm/signal.h>
 #include <asm/cacheflush.h>
 #include <asm/uaccess.h>
@@ -350,7 +349,7 @@ int __kprobes kprobe_fault_handler(struct pt_regs *regs, int trapnr)
 	case KPROBE_HIT_SSDONE:
 		/*
 		 * We increment the nmissed count for accounting,
-		 * we can also use npre/npostfault count for accounting
+		 * we can also use npre/npostfault count for accouting
 		 * these specific fault cases.
 		 */
 		kprobes_inc_nmissed_count(cur);
@@ -419,14 +418,12 @@ int __kprobes kprobe_exceptions_notify(struct notifier_block *self,
 asmlinkage void __kprobes kprobe_trap(unsigned long trap_level,
 				      struct pt_regs *regs)
 {
-	enum ctx_state prev_state = exception_enter();
-
 	BUG_ON(trap_level != 0x170 && trap_level != 0x171);
 
 	if (user_mode(regs)) {
 		local_irq_enable();
 		bad_trap(regs, trap_level);
-		goto out;
+		return;
 	}
 
 	/* trap_level == 0x170 --> ta 0x70
@@ -436,8 +433,6 @@ asmlinkage void __kprobes kprobe_trap(unsigned long trap_level,
 		       (trap_level == 0x170) ? "debug" : "debug_2",
 		       regs, 0, trap_level, SIGTRAP) != NOTIFY_STOP)
 		bad_trap(regs, trap_level);
-out:
-	exception_exit(prev_state);
 }
 
 /* Jprobes support.  */

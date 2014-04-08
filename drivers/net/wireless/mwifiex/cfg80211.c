@@ -2210,10 +2210,8 @@ struct wireless_dev *mwifiex_add_virtual_intf(struct wiphy *wiphy,
 		priv->bss_started = 0;
 		priv->bss_num = 0;
 
-		if (mwifiex_cfg80211_init_p2p_client(priv)) {
-			wdev = ERR_PTR(-EFAULT);
-			goto done;
-		}
+		if (mwifiex_cfg80211_init_p2p_client(priv))
+			return ERR_PTR(-EFAULT);
 
 		break;
 	default:
@@ -2226,8 +2224,7 @@ struct wireless_dev *mwifiex_add_virtual_intf(struct wiphy *wiphy,
 	if (!dev) {
 		wiphy_err(wiphy, "no memory available for netdevice\n");
 		priv->bss_mode = NL80211_IFTYPE_UNSPECIFIED;
-		wdev = ERR_PTR(-ENOMEM);
-		goto done;
+		return ERR_PTR(-ENOMEM);
 	}
 
 	mwifiex_init_priv_params(priv, dev);
@@ -2267,9 +2264,7 @@ struct wireless_dev *mwifiex_add_virtual_intf(struct wiphy *wiphy,
 		wiphy_err(wiphy, "cannot register virtual network device\n");
 		free_netdev(dev);
 		priv->bss_mode = NL80211_IFTYPE_UNSPECIFIED;
-		priv->netdev = NULL;
-		wdev = ERR_PTR(-EFAULT);
-		goto done;
+		return ERR_PTR(-EFAULT);
 	}
 
 	sema_init(&priv->async_sem, 1);
@@ -2279,13 +2274,6 @@ struct wireless_dev *mwifiex_add_virtual_intf(struct wiphy *wiphy,
 #ifdef CONFIG_DEBUG_FS
 	mwifiex_dev_debugfs_init(priv);
 #endif
-
-done:
-	if (IS_ERR(wdev)) {
-		kfree(priv->wdev);
-		priv->wdev = NULL;
-	}
-
 	return wdev;
 }
 EXPORT_SYMBOL_GPL(mwifiex_add_virtual_intf);
@@ -2310,10 +2298,7 @@ int mwifiex_del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 		unregister_netdevice(wdev->netdev);
 
 	/* Clear the priv in adapter */
-	priv->netdev->ieee80211_ptr = NULL;
 	priv->netdev = NULL;
-	kfree(wdev);
-	priv->wdev = NULL;
 
 	priv->media_connected = false;
 

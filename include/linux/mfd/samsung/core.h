@@ -51,7 +51,6 @@ struct sec_pmic_dev {
 	int ono;
 	int type;
 	bool wakeup;
-	bool wtsr_smpl;
 };
 
 int sec_irq_init(struct sec_pmic_dev *sec_pmic);

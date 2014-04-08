@@ -62,8 +62,7 @@ static const struct backlight_ops gpio_backlight_ops = {
 
 static int gpio_backlight_probe(struct platform_device *pdev)
 {
-	struct gpio_backlight_platform_data *pdata =
-		dev_get_platdata(&pdev->dev);
+	struct gpio_backlight_platform_data *pdata = pdev->dev.platform_data;
 	struct backlight_properties props;
 	struct backlight_device *bl;
 	struct gpio_backlight *gbl;
@@ -95,9 +94,8 @@ static int gpio_backlight_probe(struct platform_device *pdev)
 	memset(&props, 0, sizeof(props));
 	props.type = BACKLIGHT_RAW;
 	props.max_brightness = 1;
-	bl = devm_backlight_device_register(&pdev->dev, dev_name(&pdev->dev),
-					&pdev->dev, gbl, &gpio_backlight_ops,
-					&props);
+	bl = backlight_device_register(dev_name(&pdev->dev), &pdev->dev, gbl,
+				       &gpio_backlight_ops, &props);
 	if (IS_ERR(bl)) {
 		dev_err(&pdev->dev, "failed to register backlight\n");
 		return PTR_ERR(bl);
@@ -110,12 +108,21 @@ static int gpio_backlight_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static int gpio_backlight_remove(struct platform_device *pdev)
+{
+	struct backlight_device *bl = platform_get_drvdata(pdev);
+
+	backlight_device_unregister(bl);
+	return 0;
+}
+
 static struct platform_driver gpio_backlight_driver = {
 	.driver		= {
 		.name		= "gpio-backlight",
 		.owner		= THIS_MODULE,
 	},
 	.probe		= gpio_backlight_probe,
+	.remove		= gpio_backlight_remove,
 };
 
 module_platform_driver(gpio_backlight_driver);

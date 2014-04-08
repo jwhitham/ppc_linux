@@ -41,8 +41,7 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
-#define EXPORT_ACPI_INTERFACES
-
+#include <linux/export.h>
 #include <acpi/acpi.h>
 #include "accommon.h"
 #include "acnamesp.h"
@@ -66,7 +65,7 @@ static acpi_status acpi_tb_load_namespace(void);
  *
  ******************************************************************************/
 
-acpi_status __init acpi_load_tables(void)
+acpi_status acpi_load_tables(void)
 {
 	acpi_status status;
 
@@ -83,7 +82,7 @@ acpi_status __init acpi_load_tables(void)
 	return_ACPI_STATUS(status);
 }
 
-ACPI_EXPORT_SYMBOL_INIT(acpi_load_tables)
+ACPI_EXPORT_SYMBOL(acpi_load_tables)
 
 /*******************************************************************************
  *
@@ -201,7 +200,7 @@ static acpi_status acpi_tb_load_namespace(void)
 
 	ACPI_INFO((AE_INFO, "All ACPI Tables successfully acquired"));
 
-unlock_and_exit:
+      unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_TABLES);
 	return_ACPI_STATUS(status);
 }
@@ -269,7 +268,7 @@ acpi_status acpi_load_table(struct acpi_table_header *table)
 					     acpi_gbl_table_handler_context);
 	}
 
-unlock_and_exit:
+      unlock_and_exit:
 	(void)acpi_ut_release_mutex(ACPI_MTX_INTERPRETER);
 	return_ACPI_STATUS(status);
 }

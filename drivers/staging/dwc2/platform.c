@@ -100,14 +100,13 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	 */
 	if (!dev->dev.dma_mask)
 		dev->dev.dma_mask = &dev->dev.coherent_dma_mask;
-	retval = dma_set_coherent_mask(&dev->dev, DMA_BIT_MASK(32));
-	if (retval)
-		return retval;
+	if (!dev->dev.coherent_dma_mask)
+		dev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 
 	irq = platform_get_irq(dev, 0);
 	if (irq < 0) {
 		dev_err(&dev->dev, "missing IRQ resource\n");
-		return irq;
+		return -EINVAL;
 	}
 
 	res = platform_get_resource(dev, IORESOURCE_MEM, 0);

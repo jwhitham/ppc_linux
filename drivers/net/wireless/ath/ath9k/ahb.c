@@ -54,7 +54,7 @@ static bool ath_ahb_eeprom_read(struct ath_common *common, u32 off, u16 *data)
 	struct platform_device *pdev = to_platform_device(sc->dev);
 	struct ath9k_platform_data *pdata;
 
-	pdata = dev_get_platdata(&pdev->dev);
+	pdata = (struct ath9k_platform_data *) pdev->dev.platform_data;
 	if (off >= (ARRAY_SIZE(pdata->eeprom_data))) {
 		ath_err(common,
 			"%s: flash read failed, offset %08x is out of range\n",
@@ -84,7 +84,7 @@ static int ath_ahb_probe(struct platform_device *pdev)
 	struct ath_hw *ah;
 	char hw_name[64];
 
-	if (!dev_get_platdata(&pdev->dev)) {
+	if (!pdev->dev.platform_data) {
 		dev_err(&pdev->dev, "no platform data specified\n");
 		return -EINVAL;
 	}

@@ -139,7 +139,7 @@ int copy_thread(unsigned long clone_flags, unsigned long new_stackp,
 	if (unlikely(p->flags & PF_KTHREAD)) {
 		/* kernel thread */
 		memset(&frame->childregs, 0, sizeof(struct pt_regs));
-		frame->childregs.psw.mask = PSW_KERNEL_BITS | PSW_MASK_DAT |
+		frame->childregs.psw.mask = psw_kernel_bits | PSW_MASK_DAT |
 				PSW_MASK_IO | PSW_MASK_EXT | PSW_MASK_MCHECK;
 		frame->childregs.psw.addr = PSW_ADDR_AMODE |
 				(unsigned long) kernel_thread_starter;
@@ -165,8 +165,7 @@ int copy_thread(unsigned long clone_flags, unsigned long new_stackp,
 	 * save fprs to current->thread.fp_regs to merge them with
 	 * the emulated registers and then copy the result to the child.
 	 */
-	save_fp_ctl(&current->thread.fp_regs.fpc);
-	save_fp_regs(current->thread.fp_regs.fprs);
+	save_fp_regs(&current->thread.fp_regs);
 	memcpy(&p->thread.fp_regs, &current->thread.fp_regs,
 	       sizeof(s390_fp_regs));
 	/* Set a new TLS ?  */
@@ -174,9 +173,7 @@ int copy_thread(unsigned long clone_flags, unsigned long new_stackp,
 		p->thread.acrs[0] = frame->childregs.gprs[6];
 #else /* CONFIG_64BIT */
 	/* Save the fpu registers to new thread structure. */
-	save_fp_ctl(&p->thread.fp_regs.fpc);
-	save_fp_regs(p->thread.fp_regs.fprs);
-	p->thread.fp_regs.pad = 0;
+	save_fp_regs(&p->thread.fp_regs);
 	/* Set a new TLS ?  */
 	if (clone_flags & CLONE_SETTLS) {
 		unsigned long tls = frame->childregs.gprs[6];
@@ -208,12 +205,10 @@ int dump_fpu (struct pt_regs * regs, s390_fp_regs *fpregs)
 	 * save fprs to current->thread.fp_regs to merge them with
 	 * the emulated registers and then copy the result to the dump.
 	 */
-	save_fp_ctl(&current->thread.fp_regs.fpc);
-	save_fp_regs(current->thread.fp_regs.fprs);
+	save_fp_regs(&current->thread.fp_regs);
 	memcpy(fpregs, &current->thread.fp_regs, sizeof(s390_fp_regs));
 #else /* CONFIG_64BIT */
-	save_fp_ctl(&fpregs->fpc);
-	save_fp_regs(fpregs->fprs);
+	save_fp_regs(fpregs);
 #endif /* CONFIG_64BIT */
 	return 1;
 }

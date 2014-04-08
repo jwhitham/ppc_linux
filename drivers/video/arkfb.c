@@ -137,7 +137,8 @@ static void arkfb_settile(struct fb_info *info, struct fb_tilemap *map)
 
 	if ((map->width != 8) || (map->height != 16) ||
 	    (map->depth != 1) || (map->length != 256)) {
-		fb_err(info, "unsupported font parameters: width %d, height %d, depth %d, length %d\n",
+	    	printk(KERN_ERR "fb%d: unsupported font parameters: width %d, "
+		       "height %d, depth %d, length %d\n", info->node,
 		       map->width, map->height, map->depth, map->length);
 		return;
 	}
@@ -516,7 +517,7 @@ static void ark_set_pixclock(struct fb_info *info, u32 pixclock)
 
 	int rv = dac_set_freq(par->dac, 0, 1000000000 / pixclock);
 	if (rv < 0) {
-		fb_err(info, "cannot set requested pixclock, keeping old value\n");
+		printk(KERN_ERR "fb%d: cannot set requested pixclock, keeping old value\n", info->node);
 		return;
 	}
 
@@ -583,7 +584,7 @@ static int arkfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	rv = svga_match_format (arkfb_formats, var, NULL);
 	if (rv < 0)
 	{
-		fb_err(info, "unsupported mode requested\n");
+		printk(KERN_ERR "fb%d: unsupported mode requested\n", info->node);
 		return rv;
 	}
 
@@ -603,15 +604,14 @@ static int arkfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	mem = ((var->bits_per_pixel * var->xres_virtual) >> 3) * var->yres_virtual;
 	if (mem > info->screen_size)
 	{
-		fb_err(info, "not enough framebuffer memory (%d kB requested, %d kB available)\n",
-		       mem >> 10, (unsigned int) (info->screen_size >> 10));
+		printk(KERN_ERR "fb%d: not enough framebuffer memory (%d kB requested , %d kB available)\n", info->node, mem >> 10, (unsigned int) (info->screen_size >> 10));
 		return -EINVAL;
 	}
 
 	rv = svga_check_timings (&ark_timing_regs, var, info->node);
 	if (rv < 0)
 	{
-		fb_err(info, "invalid timings requested\n");
+		printk(KERN_ERR "fb%d: invalid timings requested\n", info->node);
 		return rv;
 	}
 
@@ -693,7 +693,7 @@ static int arkfb_set_par(struct fb_info *info)
 	vga_wseq(par->state.vgabase, 0x18, regval);
 
 	/* Set the offset register */
-	fb_dbg(info, "offset register       : %d\n", offset_value);
+	pr_debug("fb%d: offset register       : %d\n", info->node, offset_value);
 	svga_wcrt_multi(par->state.vgabase, ark_offset_regs, offset_value);
 
 	/* fix for hi-res textmode */
@@ -716,7 +716,7 @@ static int arkfb_set_par(struct fb_info *info)
 	/* Set mode-specific register values */
 	switch (mode) {
 	case 0:
-		fb_dbg(info, "text mode\n");
+		pr_debug("fb%d: text mode\n", info->node);
 		svga_set_textmode_vga_regs(par->state.vgabase);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x10); /* basic VGA mode */
@@ -725,7 +725,7 @@ static int arkfb_set_par(struct fb_info *info)
 
 		break;
 	case 1:
-		fb_dbg(info, "4 bit pseudocolor\n");
+		pr_debug("fb%d: 4 bit pseudocolor\n", info->node);
 		vga_wgfx(par->state.vgabase, VGA_GFX_MODE, 0x40);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x10); /* basic VGA mode */
@@ -733,44 +733,44 @@ static int arkfb_set_par(struct fb_info *info)
 		dac_set_mode(par->dac, DAC_PSEUDO8_8);
 		break;
 	case 2:
-		fb_dbg(info, "4 bit pseudocolor, planar\n");
+		pr_debug("fb%d: 4 bit pseudocolor, planar\n", info->node);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x10); /* basic VGA mode */
 		svga_wcrt_mask(par->state.vgabase, 0x46, 0x00, 0x04); /* 8bit pixel path */
 		dac_set_mode(par->dac, DAC_PSEUDO8_8);
 		break;
 	case 3:
-		fb_dbg(info, "8 bit pseudocolor\n");
+		pr_debug("fb%d: 8 bit pseudocolor\n", info->node);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x16); /* 8bpp accel mode */
 
 		if (info->var.pixclock > 20000) {
-			fb_dbg(info, "not using multiplex\n");
+			pr_debug("fb%d: not using multiplex\n", info->node);
 			svga_wcrt_mask(par->state.vgabase, 0x46, 0x00, 0x04); /* 8bit pixel path */
 			dac_set_mode(par->dac, DAC_PSEUDO8_8);
 		} else {
-			fb_dbg(info, "using multiplex\n");
+			pr_debug("fb%d: using multiplex\n", info->node);
 			svga_wcrt_mask(par->state.vgabase, 0x46, 0x04, 0x04); /* 16bit pixel path */
 			dac_set_mode(par->dac, DAC_PSEUDO8_16);
 			hdiv = 2;
 		}
 		break;
 	case 4:
-		fb_dbg(info, "5/5/5 truecolor\n");
+		pr_debug("fb%d: 5/5/5 truecolor\n", info->node);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x1A); /* 16bpp accel mode */
 		svga_wcrt_mask(par->state.vgabase, 0x46, 0x04, 0x04); /* 16bit pixel path */
 		dac_set_mode(par->dac, DAC_RGB1555_16);
 		break;
 	case 5:
-		fb_dbg(info, "5/6/5 truecolor\n");
+		pr_debug("fb%d: 5/6/5 truecolor\n", info->node);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x1A); /* 16bpp accel mode */
 		svga_wcrt_mask(par->state.vgabase, 0x46, 0x04, 0x04); /* 16bit pixel path */
 		dac_set_mode(par->dac, DAC_RGB0565_16);
 		break;
 	case 6:
-		fb_dbg(info, "8/8/8 truecolor\n");
+		pr_debug("fb%d: 8/8/8 truecolor\n", info->node);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x16); /* 8bpp accel mode ??? */
 		svga_wcrt_mask(par->state.vgabase, 0x46, 0x04, 0x04); /* 16bit pixel path */
@@ -779,7 +779,7 @@ static int arkfb_set_par(struct fb_info *info)
 		hdiv = 2;
 		break;
 	case 7:
-		fb_dbg(info, "8/8/8/8 truecolor\n");
+		pr_debug("fb%d: 8/8/8/8 truecolor\n", info->node);
 
 		vga_wseq(par->state.vgabase, 0x11, 0x1E); /* 32bpp accel mode */
 		svga_wcrt_mask(par->state.vgabase, 0x46, 0x04, 0x04); /* 16bit pixel path */
@@ -787,7 +787,7 @@ static int arkfb_set_par(struct fb_info *info)
 		hmul = 2;
 		break;
 	default:
-		fb_err(info, "unsupported mode - bug\n");
+		printk(KERN_ERR "fb%d: unsupported mode - bug\n", info->node);
 		return -EINVAL;
 	}
 
@@ -879,19 +879,19 @@ static int arkfb_blank(int blank_mode, struct fb_info *info)
 
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
-		fb_dbg(info, "unblank\n");
+		pr_debug("fb%d: unblank\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x00, 0x20);
 		svga_wcrt_mask(par->state.vgabase, 0x17, 0x80, 0x80);
 		break;
 	case FB_BLANK_NORMAL:
-		fb_dbg(info, "blank\n");
+		pr_debug("fb%d: blank\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		svga_wcrt_mask(par->state.vgabase, 0x17, 0x80, 0x80);
 		break;
 	case FB_BLANK_POWERDOWN:
 	case FB_BLANK_HSYNC_SUSPEND:
 	case FB_BLANK_VSYNC_SUSPEND:
-		fb_dbg(info, "sync down\n");
+		pr_debug("fb%d: sync down\n", info->node);
 		svga_wseq_mask(par->state.vgabase, 0x01, 0x20, 0x20);
 		svga_wcrt_mask(par->state.vgabase, 0x17, 0x00, 0x80);
 		break;
@@ -1048,12 +1048,12 @@ static int ark_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	rc = register_framebuffer(info);
 	if (rc < 0) {
-		dev_err(info->device, "cannot register framebuffer\n");
+		dev_err(info->device, "cannot register framebugger\n");
 		goto err_reg_fb;
 	}
 
-	fb_info(info, "%s on %s, %d MB RAM\n",
-		info->fix.id, pci_name(dev), info->fix.smem_len >> 20);
+	printk(KERN_INFO "fb%d: %s on %s, %d MB RAM\n", info->node, info->fix.id,
+		 pci_name(dev), info->fix.smem_len >> 20);
 
 	/* Record a reference to the driver data */
 	pci_set_drvdata(dev, info);
@@ -1108,6 +1108,7 @@ static void ark_pci_remove(struct pci_dev *dev)
 		pci_release_regions(dev);
 /*		pci_disable_device(dev); */
 
+		pci_set_drvdata(dev, NULL);
 		framebuffer_release(info);
 	}
 }

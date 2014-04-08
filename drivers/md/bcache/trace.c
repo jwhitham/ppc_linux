@@ -1,5 +1,6 @@
 #include "bcache.h"
 #include "btree.h"
+#include "request.h"
 
 #include <linux/blktrace_api.h>
 #include <linux/module.h>

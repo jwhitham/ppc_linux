@@ -1630,10 +1630,8 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 	}
 
 	c->write_reserve_buf = kmalloc(COMPRESSED_DATA_NODE_BUF_SZ, GFP_KERNEL);
-	if (!c->write_reserve_buf) {
-		err = -ENOMEM;
+	if (!c->write_reserve_buf)
 		goto out;
-	}
 
 	err = ubifs_lpt_init(c, 0, 1);
 	if (err)
@@ -2066,10 +2064,8 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	sb->s_root = d_make_root(root);
-	if (!sb->s_root) {
-		err = -ENOMEM;
+	if (!sb->s_root)
 		goto out_umount;
-	}
 
 	mutex_unlock(&c->umount_mutex);
 	return 0;

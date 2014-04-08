@@ -46,43 +46,51 @@ Status: unknown
 #define PCMR  0xa3		/* Port C Mode Register                      */
 #define PCDR  0xa7		/* Port C Data Register                      */
 
+/* ------------------------------------------------------------------------- */
+/* The insn_bits interface allows packed reading/writing of DIO channels.    */
+/* The comedi core can convert between insn_bits and insn_read/write, so you */
+/* are able to use these instructions as well.                               */
+/* ------------------------------------------------------------------------- */
+
 static int dnp_dio_insn_bits(struct comedi_device *dev,
 			     struct comedi_subdevice *s,
-			     struct comedi_insn *insn,
-			     unsigned int *data)
+			     struct comedi_insn *insn, unsigned int *data)
 {
-	unsigned int mask;
-	unsigned int val;
+	/* The insn data is a mask in data[0] and the new data in data[1],   */
+	/* each channel cooresponding to a bit.                              */
 
-	/*
-	 * Ports A and B are straight forward: each bit corresponds to an
-	 * output pin with the same order. Port C is different: bits 0...3
-	 * correspond to bits 4...7 of the output register (PCDR).
-	 */
+	/* Ports A and B are straight forward: each bit corresponds to an    */
+	/* output pin with the same order. Port C is different: bits 0...3   */
+	/* correspond to bits 4...7 of the output register (PCDR).           */
 
-	mask = comedi_dio_update_state(s, data);
-	if (mask) {
+	if (data[0]) {
+
 		outb(PADR, CSCIR);
-		outb(s->state & 0xff, CSCDR);
+		outb((inb(CSCDR)
+		      & ~(u8) (data[0] & 0x0000FF))
+		     | (u8) (data[1] & 0x0000FF), CSCDR);
 
 		outb(PBDR, CSCIR);
-		outb((s->state >> 8) & 0xff, CSCDR);
+		outb((inb(CSCDR)
+		      & ~(u8) ((data[0] & 0x00FF00) >> 8))
+		     | (u8) ((data[1] & 0x00FF00) >> 8), CSCDR);
 
 		outb(PCDR, CSCIR);
-		val = inb(CSCDR) & 0x0f;
-		outb(((s->state >> 12) & 0xf0) | val, CSCDR);
+		outb((inb(CSCDR)
+		      & ~(u8) ((data[0] & 0x0F0000) >> 12))
+		     | (u8) ((data[1] & 0x0F0000) >> 12), CSCDR);
 	}
 
+	/* on return, data[1] contains the value of the digital input lines. */
 	outb(PADR, CSCIR);
-	val = inb(CSCDR);
+	data[0] = inb(CSCDR);
 	outb(PBDR, CSCIR);
-	val |= (inb(CSCDR) << 8);
+	data[0] += inb(CSCDR) << 8;
 	outb(PCDR, CSCIR);
-	val |= ((inb(CSCDR) & 0xf0) << 12);
-
-	data[1] = val;
+	data[0] += ((inb(CSCDR) & 0xF0) << 12);
 
 	return insn->n;
+
 }
 
 static int dnp_dio_insn_config(struct comedi_device *dev,

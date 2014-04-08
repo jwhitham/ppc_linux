@@ -300,29 +300,29 @@ static ssize_t store_ctlr_mode(struct device *dev,
 
 	switch (ctlr->enabled) {
 	case FCOE_CTLR_ENABLED:
-		LIBFCOE_SYSFS_DBG(ctlr, "Cannot change mode when enabled.\n");
+		LIBFCOE_SYSFS_DBG(ctlr, "Cannot change mode when enabled.");
 		return -EBUSY;
 	case FCOE_CTLR_DISABLED:
 		if (!ctlr->f->set_fcoe_ctlr_mode) {
 			LIBFCOE_SYSFS_DBG(ctlr,
-					  "Mode change not supported by LLD.\n");
+					  "Mode change not supported by LLD.");
 			return -ENOTSUPP;
 		}
 
 		ctlr->mode = fcoe_parse_mode(mode);
 		if (ctlr->mode == FIP_CONN_TYPE_UNKNOWN) {
-			LIBFCOE_SYSFS_DBG(ctlr, "Unknown mode %s provided.\n",
-					  buf);
+			LIBFCOE_SYSFS_DBG(ctlr,
+					  "Unknown mode %s provided.", buf);
 			return -EINVAL;
 		}
 
 		ctlr->f->set_fcoe_ctlr_mode(ctlr);
-		LIBFCOE_SYSFS_DBG(ctlr, "Mode changed to %s.\n", buf);
+		LIBFCOE_SYSFS_DBG(ctlr, "Mode changed to %s.", buf);
 
 		return count;
 	case FCOE_CTLR_UNUSED:
 	default:
-		LIBFCOE_SYSFS_DBG(ctlr, "Mode change not supported.\n");
+		LIBFCOE_SYSFS_DBG(ctlr, "Mode change not supported.");
 		return -ENOTSUPP;
 	};
 }
@@ -553,20 +553,16 @@ static struct device_type fcoe_fcf_device_type = {
 	.release = fcoe_fcf_device_release,
 };
 
-static BUS_ATTR(ctlr_create, S_IWUSR, NULL, fcoe_ctlr_create_store);
-static BUS_ATTR(ctlr_destroy, S_IWUSR, NULL, fcoe_ctlr_destroy_store);
-
-static struct attribute *fcoe_bus_attrs[] = {
-	&bus_attr_ctlr_create.attr,
-	&bus_attr_ctlr_destroy.attr,
-	NULL,
+static struct bus_attribute fcoe_bus_attr_group[] = {
+	__ATTR(ctlr_create, S_IWUSR, NULL, fcoe_ctlr_create_store),
+	__ATTR(ctlr_destroy, S_IWUSR, NULL, fcoe_ctlr_destroy_store),
+	__ATTR_NULL
 };
-ATTRIBUTE_GROUPS(fcoe_bus);
 
 static struct bus_type fcoe_bus_type = {
 	.name = "fcoe",
 	.match = &fcoe_bus_match,
-	.bus_groups = fcoe_bus_groups,
+	.bus_attrs = fcoe_bus_attr_group,
 };
 
 /**
@@ -657,7 +653,7 @@ static int fcoe_fcf_device_match(struct fcoe_fcf_device *new,
 	if (new->switch_name == old->switch_name &&
 	    new->fabric_name == old->fabric_name &&
 	    new->fc_map == old->fc_map &&
-	    ether_addr_equal(new->mac, old->mac))
+	    compare_ether_addr(new->mac, old->mac) == 0)
 		return 1;
 	return 0;
 }

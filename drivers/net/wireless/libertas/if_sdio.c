@@ -708,16 +708,20 @@ static void if_sdio_do_prog_firmware(struct lbs_private *priv, int ret,
 
 	ret = if_sdio_prog_helper(card, helper);
 	if (ret)
-		return;
+		goto out;
 
 	lbs_deb_sdio("Helper firmware loaded\n");
 
 	ret = if_sdio_prog_real(card, mainfw);
 	if (ret)
-		return;
+		goto out;
 
 	lbs_deb_sdio("Firmware loaded\n");
 	if_sdio_finish_power_on(card);
+
+out:
+	release_firmware(helper);
+	release_firmware(mainfw);
 }
 
 static int if_sdio_prog_firmware(struct if_sdio_card *card)

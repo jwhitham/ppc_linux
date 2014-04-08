@@ -161,8 +161,8 @@ kvmppc_handler_trampoline_enter_end:
 .global kvmppc_handler_trampoline_exit
 kvmppc_handler_trampoline_exit:
 
-.global kvmppc_interrupt_pr
-kvmppc_interrupt_pr:
+.global kvmppc_interrupt
+kvmppc_interrupt:
 
 	/* Register usage at this point:
 	 *

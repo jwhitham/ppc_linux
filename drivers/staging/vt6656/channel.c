@@ -403,7 +403,7 @@ exit:
 
 void CHvInitChannelTable(struct vnt_private *pDevice)
 {
-	bool bMultiBand = false;
+	int bMultiBand = false;
 	int ii;
 
     for (ii = 1; ii <= CB_MAX_CHANNEL; ii++)

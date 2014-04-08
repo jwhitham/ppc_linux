@@ -21,6 +21,7 @@
 #include <asm/setup.h>
 #include <asm/page.h>
 #include <asm/irq.h>
+#include <asm/prom.h>
 #include <asm/unwind.h>
 #include <asm/clk.h>
 #include <asm/mach_desc.h>
@@ -30,13 +31,14 @@
 int running_on_hw = 1;	/* vs. on ISS */
 
 char __initdata command_line[COMMAND_LINE_SIZE];
-const struct machine_desc *machine_desc;
+struct machine_desc *machine_desc;
 
 struct task_struct *_current_task[NR_CPUS];	/* For stack switching */
 
 struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
 
-static void read_arc_build_cfg_regs(void)
+
+void read_arc_build_cfg_regs(void)
 {
 	struct bcr_perip uncached_space;
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[smp_processor_id()];
@@ -104,7 +106,7 @@ static const struct cpuinfo_data arc_cpu_tbl[] = {
 	{ {0x00, NULL		} }
 };
 
-static char *arc_cpu_mumbojumbo(int cpu_id, char *buf, int len)
+char *arc_cpu_mumbojumbo(int cpu_id, char *buf, int len)
 {
 	int n = 0;
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[cpu_id];
@@ -169,7 +171,7 @@ static const struct id_to_str mac_mul_nm[] = {
 	{0x6, "Dual 16x16 and 32x16"}
 };
 
-static char *arc_extn_mumbojumbo(int cpu_id, char *buf, int len)
+char *arc_extn_mumbojumbo(int cpu_id, char *buf, int len)
 {
 	int n = 0;
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[cpu_id];
@@ -232,7 +234,7 @@ static char *arc_extn_mumbojumbo(int cpu_id, char *buf, int len)
 	return buf;
 }
 
-static void arc_chk_ccms(void)
+void arc_chk_ccms(void)
 {
 #if defined(CONFIG_ARC_HAS_DCCM) || defined(CONFIG_ARC_HAS_ICCM)
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[smp_processor_id()];
@@ -267,7 +269,7 @@ static void arc_chk_ccms(void)
  * hardware has dedicated regs which need to be saved/restored on ctx-sw
  * (Single Precision uses core regs), thus kernel is kind of oblivious to it
  */
-static void arc_chk_fpu(void)
+void arc_chk_fpu(void)
 {
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[smp_processor_id()];
 
@@ -344,7 +346,8 @@ void __init setup_arch(char **cmdline_p)
 	setup_arch_memory();
 
 	/* copy flat DT out of .init and then unflatten it */
-	unflatten_and_copy_device_tree();
+	copy_devtree();
+	unflatten_device_tree();
 
 	/* Can be issue if someone passes cmd line arg "ro"
 	 * But that is unlikely so keeping it as it is

@@ -177,13 +177,9 @@ struct smk_port_label {
 #define SMACK_CIPSO_MAXCATNUM           184     /* 23 * 8 */
 
 /*
- * Flags for untraditional access modes.
- * It shouldn't be necessary to avoid conflicts with definitions
- * in fs.h, but do so anyway.
+ * Flag for transmute access
  */
-#define MAY_TRANSMUTE	0x00001000	/* Controls directory labeling */
-#define MAY_LOCK	0x00002000	/* Locks should be writes, but ... */
-
+#define MAY_TRANSMUTE	64
 /*
  * Just to make the common cases easier to deal with
  */
@@ -192,9 +188,9 @@ struct smk_port_label {
 #define MAY_NOT		0
 
 /*
- * Number of access types used by Smack (rwxatl)
+ * Number of access types used by Smack (rwxat)
  */
-#define SMK_NUM_ACCESS_TYPE 6
+#define SMK_NUM_ACCESS_TYPE 5
 
 /* SMACK data */
 struct smack_audit_data {

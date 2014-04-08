@@ -3354,7 +3354,7 @@ use_random_mac_addr:
 #if defined(CONFIG_SPARC)
 	addr = of_get_property(cp->of_node, "local-mac-address", NULL);
 	if (addr != NULL) {
-		memcpy(dev_addr, addr, ETH_ALEN);
+		memcpy(dev_addr, addr, 6);
 		goto done;
 	}
 #endif
@@ -5168,6 +5168,7 @@ err_out_free_netdev:
 
 err_out_disable_pdev:
 	pci_disable_device(pdev);
+	pci_set_drvdata(pdev, NULL);
 	return -ENODEV;
 }
 
@@ -5205,6 +5206,7 @@ static void cas_remove_one(struct pci_dev *pdev)
 	free_netdev(dev);
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
+	pci_set_drvdata(pdev, NULL);
 }
 
 #ifdef CONFIG_PM

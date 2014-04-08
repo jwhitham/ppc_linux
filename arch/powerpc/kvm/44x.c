@@ -31,13 +31,13 @@
 #include "44x_tlb.h"
 #include "booke.h"
 
-static void kvmppc_core_vcpu_load_44x(struct kvm_vcpu *vcpu, int cpu)
+void kvmppc_core_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	kvmppc_booke_vcpu_load(vcpu, cpu);
 	kvmppc_44x_tlb_load(vcpu);
 }
 
-static void kvmppc_core_vcpu_put_44x(struct kvm_vcpu *vcpu)
+void kvmppc_core_vcpu_put(struct kvm_vcpu *vcpu)
 {
 	kvmppc_44x_tlb_put(vcpu);
 	kvmppc_booke_vcpu_put(vcpu);
@@ -114,32 +114,29 @@ int kvmppc_core_vcpu_translate(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
-static int kvmppc_core_get_sregs_44x(struct kvm_vcpu *vcpu,
-				      struct kvm_sregs *sregs)
+void kvmppc_core_get_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 {
-	return kvmppc_get_sregs_ivor(vcpu, sregs);
+	kvmppc_get_sregs_ivor(vcpu, sregs);
 }
 
-static int kvmppc_core_set_sregs_44x(struct kvm_vcpu *vcpu,
-				     struct kvm_sregs *sregs)
+int kvmppc_core_set_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 {
 	return kvmppc_set_sregs_ivor(vcpu, sregs);
 }
 
-static int kvmppc_get_one_reg_44x(struct kvm_vcpu *vcpu, u64 id,
-				  union kvmppc_one_reg *val)
+int kvmppc_get_one_reg(struct kvm_vcpu *vcpu, u64 id,
+			union kvmppc_one_reg *val)
 {
 	return -EINVAL;
 }
 
-static int kvmppc_set_one_reg_44x(struct kvm_vcpu *vcpu, u64 id,
-				  union kvmppc_one_reg *val)
+int kvmppc_set_one_reg(struct kvm_vcpu *vcpu, u64 id,
+		       union kvmppc_one_reg *val)
 {
 	return -EINVAL;
 }
 
-static struct kvm_vcpu *kvmppc_core_vcpu_create_44x(struct kvm *kvm,
-						    unsigned int id)
+struct kvm_vcpu *kvmppc_core_vcpu_create(struct kvm *kvm, unsigned int id)
 {
 	struct kvmppc_vcpu_44x *vcpu_44x;
 	struct kvm_vcpu *vcpu;
@@ -170,7 +167,7 @@ out:
 	return ERR_PTR(err);
 }
 
-static void kvmppc_core_vcpu_free_44x(struct kvm_vcpu *vcpu)
+void kvmppc_core_vcpu_free(struct kvm_vcpu *vcpu)
 {
 	struct kvmppc_vcpu_44x *vcpu_44x = to_44x(vcpu);
 
@@ -179,31 +176,14 @@ static void kvmppc_core_vcpu_free_44x(struct kvm_vcpu *vcpu)
 	kmem_cache_free(kvm_vcpu_cache, vcpu_44x);
 }
 
-static int kvmppc_core_init_vm_44x(struct kvm *kvm)
+int kvmppc_core_init_vm(struct kvm *kvm)
 {
 	return 0;
 }
 
-static void kvmppc_core_destroy_vm_44x(struct kvm *kvm)
+void kvmppc_core_destroy_vm(struct kvm *kvm)
 {
 }
-
-static struct kvmppc_ops kvm_ops_44x = {
-	.get_sregs = kvmppc_core_get_sregs_44x,
-	.set_sregs = kvmppc_core_set_sregs_44x,
-	.get_one_reg = kvmppc_get_one_reg_44x,
-	.set_one_reg = kvmppc_set_one_reg_44x,
-	.vcpu_load   = kvmppc_core_vcpu_load_44x,
-	.vcpu_put    = kvmppc_core_vcpu_put_44x,
-	.vcpu_create = kvmppc_core_vcpu_create_44x,
-	.vcpu_free   = kvmppc_core_vcpu_free_44x,
-	.mmu_destroy  = kvmppc_mmu_destroy_44x,
-	.init_vm = kvmppc_core_init_vm_44x,
-	.destroy_vm = kvmppc_core_destroy_vm_44x,
-	.emulate_op = kvmppc_core_emulate_op_44x,
-	.emulate_mtspr = kvmppc_core_emulate_mtspr_44x,
-	.emulate_mfspr = kvmppc_core_emulate_mfspr_44x,
-};
 
 static int __init kvmppc_44x_init(void)
 {
@@ -211,21 +191,13 @@ static int __init kvmppc_44x_init(void)
 
 	r = kvmppc_booke_init();
 	if (r)
-		goto err_out;
+		return r;
 
-	r = kvm_init(NULL, sizeof(struct kvmppc_vcpu_44x), 0, THIS_MODULE);
-	if (r)
-		goto err_out;
-	kvm_ops_44x.owner = THIS_MODULE;
-	kvmppc_pr_ops = &kvm_ops_44x;
-
-err_out:
-	return r;
+	return kvm_init(NULL, sizeof(struct kvmppc_vcpu_44x), 0, THIS_MODULE);
 }
 
 static void __exit kvmppc_44x_exit(void)
 {
-	kvmppc_pr_ops = NULL;
 	kvmppc_booke_exit();
 }
 

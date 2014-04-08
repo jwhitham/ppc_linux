@@ -54,8 +54,7 @@ scsi_bus_suspend_common(struct device *dev, int (*cb)(struct device *))
 		/*
 		 * All the high-level SCSI drivers that implement runtime
 		 * PM treat runtime suspend, system suspend, and system
-		 * hibernate nearly identically. In all cases the requirements
-		 * for runtime suspension are stricter.
+		 * hibernate identically.
 		 */
 		if (pm_runtime_suspended(dev))
 			return 0;

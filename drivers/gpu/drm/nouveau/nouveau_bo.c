@@ -98,7 +98,12 @@ nv10_bo_put_tile_region(struct drm_device *dev, struct nouveau_drm_tile *tile,
 
 	if (tile) {
 		spin_lock(&drm->tile.lock);
-		tile->fence = nouveau_fence_ref(fence);
+		if (fence) {
+			/* Mark it as pending. */
+			tile->fence = fence;
+			nouveau_fence_ref(fence);
+		}
+
 		tile->used = false;
 		spin_unlock(&drm->tile.lock);
 	}
@@ -141,7 +146,7 @@ nouveau_bo_del_ttm(struct ttm_buffer_object *bo)
 	struct drm_device *dev = drm->dev;
 	struct nouveau_bo *nvbo = nouveau_bo(bo);
 
-	if (unlikely(nvbo->gem.filp))
+	if (unlikely(nvbo->gem))
 		DRM_ERROR("bo %p still attached to GEM object\n", bo);
 	WARN_ON(nvbo->pin_refcnt > 0);
 	nv10_bo_put_tile_region(dev, nvbo->tile, NULL);
@@ -264,8 +269,7 @@ set_placement_range(struct nouveau_bo *nvbo, uint32_t type)
 	struct nouveau_fb *pfb = nouveau_fb(drm->device);
 	u32 vram_pages = pfb->ram->size >> PAGE_SHIFT;
 
-	if ((nv_device(drm->device)->card_type == NV_10 ||
-	     nv_device(drm->device)->card_type == NV_11) &&
+	if (nv_device(drm->device)->card_type == NV_10 &&
 	    nvbo->tile_mode && (type & TTM_PL_FLAG_VRAM) &&
 	    nvbo->bo.mem.num_pages < vram_pages / 4) {
 		/*
@@ -978,7 +982,7 @@ nouveau_bo_move_m2mf(struct ttm_buffer_object *bo, int evict, bool intr,
 		     bool no_wait_gpu, struct ttm_mem_reg *new_mem)
 {
 	struct nouveau_drm *drm = nouveau_bdev(bo->bdev);
-	struct nouveau_channel *chan = drm->ttm.chan;
+	struct nouveau_channel *chan = chan = drm->ttm.chan;
 	struct nouveau_bo *nvbo = nouveau_bo(bo);
 	struct ttm_mem_reg *old_mem = &bo->mem;
 	int ret;
@@ -1263,7 +1267,7 @@ nouveau_bo_verify_access(struct ttm_buffer_object *bo, struct file *filp)
 {
 	struct nouveau_bo *nvbo = nouveau_bo(bo);
 
-	return drm_vma_node_verify_access(&nvbo->gem.vma_node, filp);
+	return drm_vma_node_verify_access(&nvbo->gem->vma_node, filp);
 }
 
 static int
@@ -1457,12 +1461,14 @@ nouveau_ttm_tt_unpopulate(struct ttm_tt *ttm)
 void
 nouveau_bo_fence(struct nouveau_bo *nvbo, struct nouveau_fence *fence)
 {
-	struct nouveau_fence *new_fence = nouveau_fence_ref(fence);
 	struct nouveau_fence *old_fence = NULL;
+
+	if (likely(fence))
+		nouveau_fence_ref(fence);
 
 	spin_lock(&nvbo->bo.bdev->fence_lock);
 	old_fence = nvbo->bo.sync_obj;
-	nvbo->bo.sync_obj = new_fence;
+	nvbo->bo.sync_obj = fence;
 	spin_unlock(&nvbo->bo.bdev->fence_lock);
 
 	nouveau_fence_unref(&old_fence);
@@ -1545,8 +1551,7 @@ nouveau_bo_vma_add(struct nouveau_bo *nvbo, struct nouveau_vm *vm,
 
 	if (nvbo->bo.mem.mem_type == TTM_PL_VRAM)
 		nouveau_vm_map(vma, nvbo->bo.mem.mm_node);
-	else if (nvbo->bo.mem.mem_type == TTM_PL_TT &&
-		 nvbo->page_shift == vma->vm->vmm->spg_shift) {
+	else if (nvbo->bo.mem.mem_type == TTM_PL_TT) {
 		if (node->sg)
 			nouveau_vm_map_sg_table(vma, 0, size, node);
 		else

@@ -20,7 +20,6 @@
 #include <linux/memory.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_data/mipi-csis.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -181,7 +180,6 @@ struct csis_drvdata {
  * @sd: v4l2_subdev associated with CSIS device instance
  * @index: the hardware instance index
  * @pdev: CSIS platform device
- * @phy: pointer to the CSIS generic PHY
  * @regs: mmaped I/O registers memory
  * @supplies: CSIS regulator supplies
  * @clock: CSIS clocks
@@ -205,7 +203,6 @@ struct csis_state {
 	struct v4l2_subdev sd;
 	u8 index;
 	struct platform_device *pdev;
-	struct phy *phy;
 	void __iomem *regs;
 	struct regulator_bulk_data supplies[CSIS_NUM_SUPPLIES];
 	struct clk *clock[NUM_CSIS_CLOCKS];
@@ -782,8 +779,8 @@ static int s5pcsis_parse_dt(struct platform_device *pdev,
 					"samsung,csis-wclk");
 
 	state->num_lanes = endpoint.bus.mipi_csi2.num_data_lanes;
-	of_node_put(node);
 
+	of_node_put(node);
 	return 0;
 }
 #else
@@ -831,10 +828,6 @@ static int s5pcsis_probe(struct platform_device *pdev)
 			state->num_lanes, state->max_num_lanes);
 		return -EINVAL;
 	}
-
-	state->phy = devm_phy_get(dev, "csis");
-	if (IS_ERR(state->phy))
-		return PTR_ERR(state->phy);
 
 	mem_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	state->regs = devm_ioremap_resource(dev, mem_res);
@@ -929,7 +922,7 @@ static int s5pcsis_pm_suspend(struct device *dev, bool runtime)
 	mutex_lock(&state->lock);
 	if (state->flags & ST_POWERED) {
 		s5pcsis_stop_stream(state);
-		ret = phy_power_off(state->phy);
+		ret = s5p_csis_phy_enable(state->index, false);
 		if (ret)
 			goto unlock;
 		ret = regulator_bulk_disable(CSIS_NUM_SUPPLIES,
@@ -965,7 +958,7 @@ static int s5pcsis_pm_resume(struct device *dev, bool runtime)
 					    state->supplies);
 		if (ret)
 			goto unlock;
-		ret = phy_power_on(state->phy);
+		ret = s5p_csis_phy_enable(state->index, true);
 		if (!ret) {
 			state->flags |= ST_POWERED;
 		} else {

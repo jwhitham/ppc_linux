@@ -87,8 +87,17 @@ static int apci16xx_dio_insn_bits(struct comedi_device *dev,
 				  struct comedi_insn *insn,
 				  unsigned int *data)
 {
-	if (comedi_dio_update_state(s, data))
+	unsigned int mask = data[0];
+	unsigned int bits = data[1];
+
+	/* Only update the channels configured as outputs */
+	mask &= s->io_bits;
+	if (mask) {
+		s->state &= ~mask;
+		s->state |= (bits & mask);
+
 		outl(s->state, dev->iobase + APCI16XX_OUT_REG(s->index));
+	}
 
 	data[1] = inl(dev->iobase + APCI16XX_IN_REG(s->index));
 

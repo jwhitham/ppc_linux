@@ -35,6 +35,15 @@
 #include <net/netfilter/nf_conntrack.h>
 #endif
 
+static void
+xt_socket_put_sk(struct sock *sk)
+{
+	if (sk->sk_state == TCP_TIME_WAIT)
+		inet_twsk_put(inet_twsk(sk));
+	else
+		sock_put(sk);
+}
+
 static int
 extract_icmp4_fields(const struct sk_buff *skb,
 		    u8 *protocol,
@@ -207,7 +216,7 @@ socket_match(const struct sk_buff *skb, struct xt_action_param *par,
 					inet_twsk(sk)->tw_transparent));
 
 		if (sk != skb->sk)
-			sock_gen_put(sk);
+			xt_socket_put_sk(sk);
 
 		if (wildcard || !transparent)
 			sk = NULL;
@@ -361,7 +370,7 @@ socket_mt6_v1_v2(const struct sk_buff *skb, struct xt_action_param *par)
 		 */
 		wildcard = (!(info->flags & XT_SOCKET_NOWILDCARD) &&
 			    sk->sk_state != TCP_TIME_WAIT &&
-			    ipv6_addr_any(&sk->sk_v6_rcv_saddr));
+			    ipv6_addr_any(&inet6_sk(sk)->rcv_saddr));
 
 		/* Ignore non-transparent sockets,
 		   if XT_SOCKET_TRANSPARENT is used */
@@ -372,7 +381,7 @@ socket_mt6_v1_v2(const struct sk_buff *skb, struct xt_action_param *par)
 					inet_twsk(sk)->tw_transparent));
 
 		if (sk != skb->sk)
-			sock_gen_put(sk);
+			xt_socket_put_sk(sk);
 
 		if (wildcard || !transparent)
 			sk = NULL;

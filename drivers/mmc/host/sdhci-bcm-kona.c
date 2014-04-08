@@ -316,7 +316,19 @@ err_pltfm_free:
 
 static int __exit sdhci_bcm_kona_remove(struct platform_device *pdev)
 {
-	return sdhci_pltfm_unregister(pdev);
+	struct sdhci_host *host = platform_get_drvdata(pdev);
+	int dead;
+	u32 scratch;
+
+	dead = 0;
+	scratch = readl(host->ioaddr + SDHCI_INT_STATUS);
+	if (scratch == (u32)-1)
+		dead = 1;
+	sdhci_remove_host(host, dead);
+
+	sdhci_free_host(host);
+
+	return 0;
 }
 
 static struct platform_driver sdhci_bcm_kona_driver = {

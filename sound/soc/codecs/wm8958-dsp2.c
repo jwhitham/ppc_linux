@@ -348,7 +348,7 @@ static void wm8958_dsp_apply(struct snd_soc_codec *codec, int path, int start)
 		aif = 1;
 		break;
 	default:
-		WARN(1, "Invalid path %d\n", path);
+		BUG();
 		return;
 	}
 

@@ -298,7 +298,8 @@ static int hpfb_init_one(unsigned long phys_base, unsigned long virt_base)
 	if (ret < 0)
 		goto dealloc_cmap;
 
-	fb_info(&fb_info, "%s frame buffer device\n", fb_info.fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       fb_info.node, fb_info.fix.id);
 
 	return 0;
 

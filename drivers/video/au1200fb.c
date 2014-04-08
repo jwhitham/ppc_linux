@@ -1853,7 +1853,21 @@ static struct platform_driver au1200fb_driver = {
 	.probe		= au1200fb_drv_probe,
 	.remove		= au1200fb_drv_remove,
 };
-module_platform_driver(au1200fb_driver);
+
+/*-------------------------------------------------------------------------*/
+
+static int __init au1200fb_init(void)
+{
+	return platform_driver_register(&au1200fb_driver);
+}
+
+static void __exit au1200fb_cleanup(void)
+{
+	platform_driver_unregister(&au1200fb_driver);
+}
+
+module_init(au1200fb_init);
+module_exit(au1200fb_cleanup);
 
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");

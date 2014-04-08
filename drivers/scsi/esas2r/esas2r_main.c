@@ -889,7 +889,7 @@ int esas2r_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	/* Assume success, if it fails we will fix the result later. */
 	cmd->result = DID_OK << 16;
 
-	if (unlikely(test_bit(AF_DEGRADED_MODE, &a->flags))) {
+	if (unlikely(a->flags & AF_DEGRADED_MODE)) {
 		cmd->result = DID_NO_CONNECT << 16;
 		cmd->scsi_done(cmd);
 		return 0;
@@ -1050,7 +1050,7 @@ int esas2r_eh_abort(struct scsi_cmnd *cmd)
 
 	esas2r_log(ESAS2R_LOG_INFO, "eh_abort (%p)", cmd);
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags)) {
+	if (a->flags & AF_DEGRADED_MODE) {
 		cmd->result = DID_ABORT << 16;
 
 		scsi_set_resid(cmd, 0);
@@ -1131,7 +1131,7 @@ static int esas2r_host_bus_reset(struct scsi_cmnd *cmd, bool host_reset)
 	struct esas2r_adapter *a =
 		(struct esas2r_adapter *)cmd->device->host->hostdata;
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		return FAILED;
 
 	if (host_reset)
@@ -1141,14 +1141,14 @@ static int esas2r_host_bus_reset(struct scsi_cmnd *cmd, bool host_reset)
 
 	/* above call sets the AF_OS_RESET flag.  wait for it to clear. */
 
-	while (test_bit(AF_OS_RESET, &a->flags)) {
+	while (a->flags & AF_OS_RESET) {
 		msleep(10);
 
-		if (test_bit(AF_DEGRADED_MODE, &a->flags))
+		if (a->flags & AF_DEGRADED_MODE)
 			return FAILED;
 	}
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		return FAILED;
 
 	return SUCCESS;
@@ -1176,7 +1176,7 @@ static int esas2r_dev_targ_reset(struct scsi_cmnd *cmd, bool target_reset)
 	u8 task_management_status = RS_PENDING;
 	bool completed;
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		return FAILED;
 
 retry:
@@ -1229,7 +1229,7 @@ retry:
 			msleep(10);
 	}
 
-	if (test_bit(AF_DEGRADED_MODE, &a->flags))
+	if (a->flags & AF_DEGRADED_MODE)
 		return FAILED;
 
 	if (task_management_status == RS_BUSY) {
@@ -1666,13 +1666,13 @@ void esas2r_adapter_tasklet(unsigned long context)
 {
 	struct esas2r_adapter *a = (struct esas2r_adapter *)context;
 
-	if (unlikely(test_bit(AF2_TIMER_TICK, &a->flags2))) {
-		clear_bit(AF2_TIMER_TICK, &a->flags2);
+	if (unlikely(a->flags2 & AF2_TIMER_TICK)) {
+		esas2r_lock_clear_flags(&a->flags2, AF2_TIMER_TICK);
 		esas2r_timer_tick(a);
 	}
 
-	if (likely(test_bit(AF2_INT_PENDING, &a->flags2))) {
-		clear_bit(AF2_INT_PENDING, &a->flags2);
+	if (likely(a->flags2 & AF2_INT_PENDING)) {
+		esas2r_lock_clear_flags(&a->flags2, AF2_INT_PENDING);
 		esas2r_adapter_interrupt(a);
 	}
 
@@ -1680,12 +1680,12 @@ void esas2r_adapter_tasklet(unsigned long context)
 		esas2r_do_tasklet_tasks(a);
 
 	if (esas2r_is_tasklet_pending(a)
-	    || (test_bit(AF2_INT_PENDING, &a->flags2))
-	    || (test_bit(AF2_TIMER_TICK, &a->flags2))) {
-		clear_bit(AF_TASKLET_SCHEDULED, &a->flags);
+	    || (a->flags2 & AF2_INT_PENDING)
+	    || (a->flags2 & AF2_TIMER_TICK)) {
+		esas2r_lock_clear_flags(&a->flags, AF_TASKLET_SCHEDULED);
 		esas2r_schedule_tasklet(a);
 	} else {
-		clear_bit(AF_TASKLET_SCHEDULED, &a->flags);
+		esas2r_lock_clear_flags(&a->flags, AF_TASKLET_SCHEDULED);
 	}
 }
 
@@ -1707,7 +1707,7 @@ static void esas2r_timer_callback(unsigned long context)
 {
 	struct esas2r_adapter *a = (struct esas2r_adapter *)context;
 
-	set_bit(AF2_TIMER_TICK, &a->flags2);
+	esas2r_lock_set_flags(&a->flags2, AF2_TIMER_TICK);
 
 	esas2r_schedule_tasklet(a);
 

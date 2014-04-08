@@ -75,6 +75,12 @@ static int pcmad_ai_wait_for_eoc(struct comedi_device *dev,
 	return -ETIME;
 }
 
+static bool pcmad_range_is_bipolar(struct comedi_subdevice *s,
+				   unsigned int range)
+{
+	return s->range_table->range[range].min < 0;
+}
+
 static int pcmad_ai_insn_read(struct comedi_device *dev,
 			      struct comedi_subdevice *s,
 			      struct comedi_insn *insn,
@@ -100,7 +106,7 @@ static int pcmad_ai_insn_read(struct comedi_device *dev,
 		if (s->maxdata == 0x0fff)
 			val >>= 4;
 
-		if (comedi_range_is_bipolar(s, range)) {
+		if (pcmad_range_is_bipolar(s, range)) {
 			/* munge the two's complement value */
 			val ^= ((s->maxdata + 1) >> 1);
 		}

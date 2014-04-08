@@ -68,7 +68,8 @@ acpi_status acpi_tb_validate_rsdp(struct acpi_table_rsdp *rsdp)
 	 * Note: Sometimes there exists more than one RSDP in memory; the valid
 	 * RSDP has a valid checksum, all others have an invalid checksum.
 	 */
-	if (!ACPI_VALIDATE_RSDP_SIG(rsdp->signature)) {
+	if (ACPI_STRNCMP((char *)rsdp->signature, ACPI_SIG_RSDP,
+			 sizeof(ACPI_SIG_RSDP) - 1) != 0) {
 
 		/* Nope, BAD Signature */
 
@@ -111,7 +112,7 @@ acpi_status acpi_tb_validate_rsdp(struct acpi_table_rsdp *rsdp)
  *
  ******************************************************************************/
 
-acpi_status __init acpi_find_root_pointer(acpi_size *table_address)
+acpi_status acpi_find_root_pointer(acpi_size *table_address)
 {
 	u8 *table_ptr;
 	u8 *mem_rover;

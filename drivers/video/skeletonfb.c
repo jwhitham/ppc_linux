@@ -824,7 +824,8 @@ static int xxxfb_probe(struct pci_dev *dev, const struct pci_device_id *ent)
 	fb_dealloc_cmap(&info->cmap);
 	return -EINVAL;
     }
-    fb_info(info, "%s frame buffer device\n", info->fix.id);
+    printk(KERN_INFO "fb%d: %s frame buffer device\n", info->node,
+	   info->fix.id);
     pci_set_drvdata(dev, info); /* or platform_set_drvdata(pdev, info) */
     return 0;
 }

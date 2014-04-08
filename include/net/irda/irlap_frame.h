@@ -163,7 +163,7 @@ void irlap_resend_rejected_frame(struct irlap_cb *self, int command);
 void irlap_send_ui_frame(struct irlap_cb *self, struct sk_buff *skb,
 			 __u8 caddr, int command);
 
-int irlap_insert_qos_negotiation_params(struct irlap_cb *self,
-					struct sk_buff *skb);
+extern int irlap_insert_qos_negotiation_params(struct irlap_cb *self, 
+					       struct sk_buff *skb);
 
 #endif

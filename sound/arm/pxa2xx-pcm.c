@@ -11,7 +11,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
 
 #include <sound/core.h>
@@ -84,6 +83,8 @@ static struct snd_pcm_ops pxa2xx_pcm_ops = {
 	.mmap		= pxa2xx_pcm_mmap,
 };
 
+static u64 pxa2xx_pcm_dmamask = 0xffffffff;
+
 int pxa2xx_pcm_new(struct snd_card *card, struct pxa2xx_pcm_client *client,
 		   struct snd_pcm **rpcm)
 {
@@ -99,9 +100,10 @@ int pxa2xx_pcm_new(struct snd_card *card, struct pxa2xx_pcm_client *client,
 	pcm->private_data = client;
 	pcm->private_free = pxa2xx_pcm_free_dma_buffers;
 
-	ret = dma_coerce_mask_and_coherent(card->dev, DMA_BIT_MASK(32));
-	if (ret)
-		goto out;
+	if (!card->dev->dma_mask)
+		card->dev->dma_mask = &pxa2xx_pcm_dmamask;
+	if (!card->dev->coherent_dma_mask)
+		card->dev->coherent_dma_mask = 0xffffffff;
 
 	if (play) {
 		int stream = SNDRV_PCM_STREAM_PLAYBACK;

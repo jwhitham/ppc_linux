@@ -216,21 +216,14 @@ static int ohci_hcd_sm501_drv_remove(struct platform_device *pdev)
 static int ohci_sm501_suspend(struct platform_device *pdev, pm_message_t msg)
 {
 	struct device *dev = &pdev->dev;
-	struct usb_hcd  *hcd = platform_get_drvdata(pdev);
-	struct ohci_hcd	*ohci = hcd_to_ohci(hcd);
-	bool do_wakeup = device_may_wakeup(dev);
-	int ret;
+	struct ohci_hcd	*ohci = hcd_to_ohci(platform_get_drvdata(pdev));
 
 	if (time_before(jiffies, ohci->next_statechange))
 		msleep(5);
 	ohci->next_statechange = jiffies;
 
-	ret = ohci_suspend(hcd, do_wakeup);
-	if (ret)
-		return ret;
-
 	sm501_unit_power(dev->parent, SM501_GATE_USB_HOST, 0);
-	return ret;
+	return 0;
 }
 
 static int ohci_sm501_resume(struct platform_device *pdev)

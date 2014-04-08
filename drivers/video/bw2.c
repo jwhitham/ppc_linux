@@ -363,6 +363,8 @@ static int bw2_remove(struct platform_device *op)
 
 	framebuffer_release(info);
 
+	dev_set_drvdata(&op->dev, NULL);
+
 	return 0;
 }
 

@@ -177,12 +177,9 @@ static ssize_t store_modes(struct device *device,
 	if (i * sizeof(struct fb_videomode) != count)
 		return -EINVAL;
 
-	console_lock();
-	if (!lock_fb_info(fb_info)) {
-		console_unlock();
+	if (!lock_fb_info(fb_info))
 		return -ENODEV;
-	}
-
+	console_lock();
 	list_splice(&fb_info->modelist, &old_list);
 	fb_videomode_to_modelist((const struct fb_videomode *)buf, i,
 				 &fb_info->modelist);
@@ -192,8 +189,8 @@ static ssize_t store_modes(struct device *device,
 	} else
 		fb_destroy_modelist(&old_list);
 
-	unlock_fb_info(fb_info);
 	console_unlock();
+	unlock_fb_info(fb_info);
 
 	return 0;
 }
@@ -407,16 +404,12 @@ static ssize_t store_fbstate(struct device *device,
 
 	state = simple_strtoul(buf, &last, 0);
 
-	console_lock();
-	if (!lock_fb_info(fb_info)) {
-		console_unlock();
+	if (!lock_fb_info(fb_info))
 		return -ENODEV;
-	}
-
+	console_lock();
 	fb_set_suspend(fb_info, (int)state);
-
-	unlock_fb_info(fb_info);
 	console_unlock();
+	unlock_fb_info(fb_info);
 
 	return count;
 }

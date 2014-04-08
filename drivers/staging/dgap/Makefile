@@ -1,3 +1,5 @@
+EXTRA_CFLAGS += -DDG_NAME=\"dgap-1.3-16\" -DDG_PART=\"40002347_C\"
+
 obj-$(CONFIG_DGAP) += dgap.o
 
 

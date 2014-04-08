@@ -16,7 +16,6 @@
 #include <linux/initrd.h>
 #include <linux/console.h>
 #include <linux/debugfs.h>
-#include <linux/of_fdt.h>
 
 #include <asm/setup.h>
 #include <asm/sections.h>
@@ -51,7 +50,7 @@ char cmd_line[COMMAND_LINE_SIZE] __attribute__ ((section(".data")));
 
 void __init setup_arch(char **cmdline_p)
 {
-	*cmdline_p = boot_command_line;
+	*cmdline_p = cmd_line;
 
 	console_verbose();
 

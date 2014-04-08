@@ -63,17 +63,20 @@ extern void kvm_set_spte_hva(struct kvm *kvm, unsigned long hva, pte_t pte);
 
 #endif
 
+/* We don't currently support large pages. */
+#define KVM_HPAGE_GFN_SHIFT(x)	0
+#define KVM_NR_PAGE_SIZES	1
+#define KVM_PAGES_PER_HPAGE(x)	(1UL<<31)
+
 #define HPTEG_CACHE_NUM			(1 << 15)
 #define HPTEG_HASH_BITS_PTE		13
 #define HPTEG_HASH_BITS_PTE_LONG	12
 #define HPTEG_HASH_BITS_VPTE		13
 #define HPTEG_HASH_BITS_VPTE_LONG	5
-#define HPTEG_HASH_BITS_VPTE_64K	11
 #define HPTEG_HASH_NUM_PTE		(1 << HPTEG_HASH_BITS_PTE)
 #define HPTEG_HASH_NUM_PTE_LONG		(1 << HPTEG_HASH_BITS_PTE_LONG)
 #define HPTEG_HASH_NUM_VPTE		(1 << HPTEG_HASH_BITS_VPTE)
 #define HPTEG_HASH_NUM_VPTE_LONG	(1 << HPTEG_HASH_BITS_VPTE_LONG)
-#define HPTEG_HASH_NUM_VPTE_64K		(1 << HPTEG_HASH_BITS_VPTE_64K)
 
 /* Physical Address Mask - allowed range of real mode RAM access */
 #define KVM_PAM			0x0fffffffffffffffULL
@@ -85,9 +88,6 @@ struct kvm_vcpu;
 struct lppaca;
 struct slb_shadow;
 struct dtl_entry;
-
-struct kvmppc_vcpu_book3s;
-struct kvmppc_book3s_shadow_vcpu;
 
 struct kvm_vm_stat {
 	u32 remote_tlb_flush;
@@ -225,10 +225,10 @@ struct revmap_entry {
 #define KVMPPC_GOT_PAGE		0x80
 
 struct kvm_arch_memory_slot {
-#ifdef CONFIG_KVM_BOOK3S_HV_POSSIBLE
+#ifdef CONFIG_KVM_BOOK3S_64_HV
 	unsigned long *rmap;
 	unsigned long *slot_phys;
-#endif /* CONFIG_KVM_BOOK3S_HV_POSSIBLE */
+#endif /* CONFIG_KVM_BOOK3S_64_HV */
 };
 
 struct kvm_arch {
@@ -237,7 +237,7 @@ struct kvm_arch {
 #else
 	unsigned int lpid;
 #endif
-#ifdef CONFIG_KVM_BOOK3S_HV_POSSIBLE
+#ifdef CONFIG_KVM_BOOK3S_64_HV
 	unsigned long hpt_virt;
 	struct revmap_entry *revmap;
 	unsigned int host_lpid;
@@ -261,10 +261,7 @@ struct kvm_arch {
 	cpumask_t need_tlb_flush;
 	struct kvmppc_vcore *vcores[KVM_MAX_VCORES];
 	int hpt_cma_alloc;
-#endif /* CONFIG_KVM_BOOK3S_HV_POSSIBLE */
-#ifdef CONFIG_KVM_BOOK3S_PR_POSSIBLE
-	struct mutex hpt_mutex;
-#endif
+#endif /* CONFIG_KVM_BOOK3S_64_HV */
 #ifdef CONFIG_PPC_BOOK3S_64
 	struct list_head spapr_tce_tables;
 	struct list_head rtas_tokens;
@@ -275,7 +272,6 @@ struct kvm_arch {
 #ifdef CONFIG_KVM_XICS
 	struct kvmppc_xics *xics;
 #endif
-	struct kvmppc_ops *kvm_ops;
 };
 
 /*
@@ -303,10 +299,6 @@ struct kvmppc_vcore {
 	u64 stolen_tb;
 	u64 preempt_tb;
 	struct kvm_vcpu *runner;
-	u64 tb_offset;		/* guest timebase - host timebase */
-	ulong lpcr;
-	u32 arch_compat;
-	ulong pcr;
 };
 
 #define VCORE_ENTRY_COUNT(vc)	((vc)->entry_exit_count & 0xff)
@@ -341,7 +333,6 @@ struct kvmppc_pte {
 	bool may_read		: 1;
 	bool may_write		: 1;
 	bool may_execute	: 1;
-	u8 page_size;		/* MMU_PAGE_xxx */
 };
 
 struct kvmppc_mmu {
@@ -354,8 +345,7 @@ struct kvmppc_mmu {
 	/* book3s */
 	void (*mtsrin)(struct kvm_vcpu *vcpu, u32 srnum, ulong value);
 	u32  (*mfsrin)(struct kvm_vcpu *vcpu, u32 srnum);
-	int  (*xlate)(struct kvm_vcpu *vcpu, gva_t eaddr,
-		      struct kvmppc_pte *pte, bool data, bool iswrite);
+	int  (*xlate)(struct kvm_vcpu *vcpu, gva_t eaddr, struct kvmppc_pte *pte, bool data);
 	void (*reset_msr)(struct kvm_vcpu *vcpu);
 	void (*tlbie)(struct kvm_vcpu *vcpu, ulong addr, bool large);
 	int  (*esid_to_vsid)(struct kvm_vcpu *vcpu, ulong esid, u64 *vsid);
@@ -375,7 +365,6 @@ struct kvmppc_slb {
 	bool large	: 1;	/* PTEs are 16MB */
 	bool tb		: 1;	/* 1TB segment */
 	bool class	: 1;
-	u8 base_page_size;	/* MMU_PAGE_xxx */
 };
 
 # ifdef CONFIG_PPC_FSL_BOOK3E
@@ -407,10 +396,6 @@ struct kvm_vcpu_arch {
 	int slb_max;		/* 1 + index of last valid entry in slb[] */
 	int slb_nr;		/* total number of entries in SLB */
 	struct kvmppc_mmu mmu;
-	struct kvmppc_vcpu_book3s *book3s;
-#endif
-#ifdef CONFIG_PPC_BOOK3S_32
-	struct kvmppc_book3s_shadow_vcpu *shadow_vcpu;
 #endif
 
 	ulong gpr[32];
@@ -474,8 +459,6 @@ struct kvm_vcpu_arch {
 	u32 ctrl;
 	ulong dabr;
 	ulong cfar;
-	ulong ppr;
-	ulong shadow_srr1;
 #endif
 	u32 vrsave; /* also USPRG0 */
 	u32 mmucr;
@@ -511,8 +494,6 @@ struct kvm_vcpu_arch {
 
 	u64 mmcr[3];
 	u32 pmc[8];
-	u64 siar;
-	u64 sdar;
 
 #ifdef CONFIG_KVM_EXIT_TIMING
 	struct mutex exit_timing_lock;
@@ -605,7 +586,7 @@ struct kvm_vcpu_arch {
 	struct kvmppc_icp *icp; /* XICS presentation controller */
 #endif
 
-#ifdef CONFIG_KVM_BOOK3S_HV_POSSIBLE
+#ifdef CONFIG_KVM_BOOK3S_64_HV
 	struct kvm_vcpu_arch_shared shregs;
 
 	unsigned long pgfault_addr;

@@ -24,7 +24,6 @@
 #include <linux/mutex.h>
 #include <linux/io.h>
 
-#include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <asm/mpc5xxx.h>
 #include <asm/mpc5121.h>

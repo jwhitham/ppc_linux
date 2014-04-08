@@ -670,9 +670,9 @@ static int ds1307_probe(struct i2c_client *client,
 	int			tmp;
 	const struct chip_desc	*chip = &chips[id->driver_data];
 	struct i2c_adapter	*adapter = to_i2c_adapter(client->dev.parent);
-	bool			want_irq = false;
+	int			want_irq = false;
 	unsigned char		*buf;
-	struct ds1307_platform_data *pdata = dev_get_platdata(&client->dev);
+	struct ds1307_platform_data *pdata = client->dev.platform_data;
 	static const int	bbsqi_bitpos[] = {
 		[ds_1337] = 0,
 		[ds_1339] = DS1339_BIT_BBSQI,
@@ -956,7 +956,7 @@ read_rtc:
 					GFP_KERNEL);
 		if (!ds1307->nvram) {
 			err = -ENOMEM;
-			goto err_irq;
+			goto exit;
 		}
 		ds1307->nvram->attr.name = "nvram";
 		ds1307->nvram->attr.mode = S_IRUGO | S_IWUSR;
@@ -967,15 +967,13 @@ read_rtc:
 		ds1307->nvram_offset = chip->nvram_offset;
 		err = sysfs_create_bin_file(&client->dev.kobj, ds1307->nvram);
 		if (err)
-			goto err_irq;
+			goto exit;
 		set_bit(HAS_NVRAM, &ds1307->flags);
 		dev_info(&client->dev, "%zu bytes nvram\n", ds1307->nvram->size);
 	}
 
 	return 0;
 
-err_irq:
-	free_irq(client->irq, client);
 exit:
 	return err;
 }

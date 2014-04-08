@@ -178,7 +178,13 @@ err:
 
 static int bcm2835_sdhci_remove(struct platform_device *pdev)
 {
-	return sdhci_pltfm_unregister(pdev);
+	struct sdhci_host *host = platform_get_drvdata(pdev);
+	int dead = (readl(host->ioaddr + SDHCI_INT_STATUS) == 0xffffffff);
+
+	sdhci_remove_host(host, dead);
+	sdhci_pltfm_free(pdev);
+
+	return 0;
 }
 
 static const struct of_device_id bcm2835_sdhci_of_match[] = {

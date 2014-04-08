@@ -25,17 +25,36 @@ MODULE_LICENSE("GPL");
 
 static int smartconnect_acpi_init(struct acpi_device *acpi)
 {
-	unsigned long long value;
+	struct acpi_object_list input;
+	struct acpi_buffer output = { ACPI_ALLOCATE_BUFFER, NULL };
+	union acpi_object *result;
+	union acpi_object param;
 	acpi_status status;
 
-	status = acpi_evaluate_integer(acpi->handle, "GAOS", NULL, &value);
+	status = acpi_evaluate_object(acpi->handle, "GAOS", NULL, &output);
 	if (!ACPI_SUCCESS(status))
 		return -EINVAL;
 
-	if (value & 0x1) {
-		dev_info(&acpi->dev, "Disabling Intel Smart Connect\n");
-		status = acpi_execute_simple_method(acpi->handle, "SAOS", 0);
+	result = output.pointer;
+
+	if (result->type != ACPI_TYPE_INTEGER) {
+		kfree(result);
+		return -EINVAL;
 	}
+
+	if (result->integer.value & 0x1) {
+		param.type = ACPI_TYPE_INTEGER;
+		param.integer.value = 0;
+
+		input.count = 1;
+		input.pointer = &param;
+
+		dev_info(&acpi->dev, "Disabling Intel Smart Connect\n");
+		status = acpi_evaluate_object(acpi->handle, "SAOS", &input,
+					      NULL);
+	}
+
+	kfree(result);
 
 	return 0;
 }

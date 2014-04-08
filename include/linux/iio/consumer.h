@@ -77,7 +77,7 @@ struct iio_cb_buffer;
  * fail.
  */
 struct iio_cb_buffer *iio_channel_get_all_cb(struct device *dev,
-					     int (*cb)(const void *data,
+					     int (*cb)(u8 *data,
 						       void *private),
 					     void *private);
 /**

@@ -42,6 +42,9 @@ static void pcm_period_tasklet(unsigned long data);
 int amdtp_out_stream_init(struct amdtp_out_stream *s, struct fw_unit *unit,
 			  enum cip_out_flags flags)
 {
+	if (flags != CIP_NONBLOCKING)
+		return -EINVAL;
+
 	s->unit = fw_unit_get(unit);
 	s->flags = flags;
 	s->context = ERR_PTR(-1);
@@ -59,91 +62,73 @@ EXPORT_SYMBOL(amdtp_out_stream_init);
  */
 void amdtp_out_stream_destroy(struct amdtp_out_stream *s)
 {
-	WARN_ON(amdtp_out_stream_running(s));
+	WARN_ON(!IS_ERR(s->context));
 	mutex_destroy(&s->mutex);
 	fw_unit_put(s->unit);
 }
 EXPORT_SYMBOL(amdtp_out_stream_destroy);
 
-const unsigned int amdtp_syt_intervals[CIP_SFC_COUNT] = {
-	[CIP_SFC_32000]  =  8,
-	[CIP_SFC_44100]  =  8,
-	[CIP_SFC_48000]  =  8,
-	[CIP_SFC_88200]  = 16,
-	[CIP_SFC_96000]  = 16,
-	[CIP_SFC_176400] = 32,
-	[CIP_SFC_192000] = 32,
-};
-EXPORT_SYMBOL(amdtp_syt_intervals);
-
 /**
- * amdtp_out_stream_set_parameters - set stream parameters
+ * amdtp_out_stream_set_rate - set the sample rate
  * @s: the AMDTP output stream to configure
  * @rate: the sample rate
- * @pcm_channels: the number of PCM samples in each data block, to be encoded
- *                as AM824 multi-bit linear audio
- * @midi_ports: the number of MIDI ports (i.e., MPX-MIDI Data Channels)
  *
- * The parameters must be set before the stream is started, and must not be
+ * The sample rate must be set before the stream is started, and must not be
  * changed while the stream is running.
  */
-void amdtp_out_stream_set_parameters(struct amdtp_out_stream *s,
-				     unsigned int rate,
-				     unsigned int pcm_channels,
-				     unsigned int midi_ports)
+void amdtp_out_stream_set_rate(struct amdtp_out_stream *s, unsigned int rate)
 {
-	static const unsigned int rates[] = {
-		[CIP_SFC_32000]  =  32000,
-		[CIP_SFC_44100]  =  44100,
-		[CIP_SFC_48000]  =  48000,
-		[CIP_SFC_88200]  =  88200,
-		[CIP_SFC_96000]  =  96000,
-		[CIP_SFC_176400] = 176400,
-		[CIP_SFC_192000] = 192000,
+	static const struct {
+		unsigned int rate;
+		unsigned int syt_interval;
+	} rate_info[] = {
+		[CIP_SFC_32000]  = {  32000,  8, },
+		[CIP_SFC_44100]  = {  44100,  8, },
+		[CIP_SFC_48000]  = {  48000,  8, },
+		[CIP_SFC_88200]  = {  88200, 16, },
+		[CIP_SFC_96000]  = {  96000, 16, },
+		[CIP_SFC_176400] = { 176400, 32, },
+		[CIP_SFC_192000] = { 192000, 32, },
 	};
 	unsigned int sfc;
 
-	if (WARN_ON(amdtp_out_stream_running(s)))
+	if (WARN_ON(!IS_ERR(s->context)))
 		return;
 
-	for (sfc = 0; sfc < CIP_SFC_COUNT; ++sfc)
-		if (rates[sfc] == rate)
-			goto sfc_found;
+	for (sfc = 0; sfc < ARRAY_SIZE(rate_info); ++sfc)
+		if (rate_info[sfc].rate == rate) {
+			s->sfc = sfc;
+			s->syt_interval = rate_info[sfc].syt_interval;
+			return;
+		}
 	WARN_ON(1);
-	return;
-
-sfc_found:
-	s->dual_wire = (s->flags & CIP_HI_DUALWIRE) && sfc > CIP_SFC_96000;
-	if (s->dual_wire) {
-		sfc -= 2;
-		rate /= 2;
-		pcm_channels *= 2;
-	}
-	s->sfc = sfc;
-	s->data_block_quadlets = pcm_channels + DIV_ROUND_UP(midi_ports, 8);
-	s->pcm_channels = pcm_channels;
-	s->midi_ports = midi_ports;
-
-	s->syt_interval = amdtp_syt_intervals[sfc];
-
-	/* default buffering in the device */
-	s->transfer_delay = TRANSFER_DELAY_TICKS - TICKS_PER_CYCLE;
-	if (s->flags & CIP_BLOCKING)
-		/* additional buffering needed to adjust for no-data packets */
-		s->transfer_delay += TICKS_PER_SECOND * s->syt_interval / rate;
 }
-EXPORT_SYMBOL(amdtp_out_stream_set_parameters);
+EXPORT_SYMBOL(amdtp_out_stream_set_rate);
 
 /**
  * amdtp_out_stream_get_max_payload - get the stream's packet size
  * @s: the AMDTP output stream
  *
  * This function must not be called before the stream has been configured
- * with amdtp_out_stream_set_parameters().
+ * with amdtp_out_stream_set_hw_params(), amdtp_out_stream_set_pcm(), and
+ * amdtp_out_stream_set_midi().
  */
 unsigned int amdtp_out_stream_get_max_payload(struct amdtp_out_stream *s)
 {
-	return 8 + s->syt_interval * s->data_block_quadlets * 4;
+	static const unsigned int max_data_blocks[] = {
+		[CIP_SFC_32000]  =  4,
+		[CIP_SFC_44100]  =  6,
+		[CIP_SFC_48000]  =  6,
+		[CIP_SFC_88200]  = 12,
+		[CIP_SFC_96000]  = 12,
+		[CIP_SFC_176400] = 23,
+		[CIP_SFC_192000] = 24,
+	};
+
+	s->data_block_quadlets = s->pcm_channels;
+	s->data_block_quadlets += DIV_ROUND_UP(s->midi_ports, 8);
+
+	return 8 + max_data_blocks[s->sfc] * 4 * s->data_block_quadlets;
 }
 EXPORT_SYMBOL(amdtp_out_stream_get_max_payload);
 
@@ -153,26 +138,19 @@ static void amdtp_write_s16(struct amdtp_out_stream *s,
 static void amdtp_write_s32(struct amdtp_out_stream *s,
 			    struct snd_pcm_substream *pcm,
 			    __be32 *buffer, unsigned int frames);
-static void amdtp_write_s16_dualwire(struct amdtp_out_stream *s,
-				     struct snd_pcm_substream *pcm,
-				     __be32 *buffer, unsigned int frames);
-static void amdtp_write_s32_dualwire(struct amdtp_out_stream *s,
-				     struct snd_pcm_substream *pcm,
-				     __be32 *buffer, unsigned int frames);
 
 /**
  * amdtp_out_stream_set_pcm_format - set the PCM format
  * @s: the AMDTP output stream to configure
  * @format: the format of the ALSA PCM device
  *
- * The sample format must be set after the other paramters (rate/PCM channels/
- * MIDI) and before the stream is started, and must not be changed while the
- * stream is running.
+ * The sample format must be set before the stream is started, and must not be
+ * changed while the stream is running.
  */
 void amdtp_out_stream_set_pcm_format(struct amdtp_out_stream *s,
 				     snd_pcm_format_t format)
 {
-	if (WARN_ON(amdtp_out_stream_running(s)))
+	if (WARN_ON(!IS_ERR(s->context)))
 		return;
 
 	switch (format) {
@@ -180,16 +158,10 @@ void amdtp_out_stream_set_pcm_format(struct amdtp_out_stream *s,
 		WARN_ON(1);
 		/* fall through */
 	case SNDRV_PCM_FORMAT_S16:
-		if (s->dual_wire)
-			s->transfer_samples = amdtp_write_s16_dualwire;
-		else
-			s->transfer_samples = amdtp_write_s16;
+		s->transfer_samples = amdtp_write_s16;
 		break;
 	case SNDRV_PCM_FORMAT_S32:
-		if (s->dual_wire)
-			s->transfer_samples = amdtp_write_s32_dualwire;
-		else
-			s->transfer_samples = amdtp_write_s32;
+		s->transfer_samples = amdtp_write_s32;
 		break;
 	}
 }
@@ -276,7 +248,7 @@ static unsigned int calculate_syt(struct amdtp_out_stream *s,
 	s->last_syt_offset = syt_offset;
 
 	if (syt_offset < TICKS_PER_CYCLE) {
-		syt_offset += s->transfer_delay;
+		syt_offset += TRANSFER_DELAY_TICKS - TICKS_PER_CYCLE;
 		syt = (cycle + syt_offset / TICKS_PER_CYCLE) << 12;
 		syt += syt_offset % TICKS_PER_CYCLE;
 
@@ -296,7 +268,7 @@ static void amdtp_write_s32(struct amdtp_out_stream *s,
 
 	channels = s->pcm_channels;
 	src = (void *)runtime->dma_area +
-			frames_to_bytes(runtime, s->pcm_buffer_pointer);
+			s->pcm_buffer_pointer * (runtime->frame_bits / 8);
 	remaining_frames = runtime->buffer_size - s->pcm_buffer_pointer;
 	frame_step = s->data_block_quadlets - channels;
 
@@ -322,7 +294,7 @@ static void amdtp_write_s16(struct amdtp_out_stream *s,
 
 	channels = s->pcm_channels;
 	src = (void *)runtime->dma_area +
-			frames_to_bytes(runtime, s->pcm_buffer_pointer);
+			s->pcm_buffer_pointer * (runtime->frame_bits / 8);
 	remaining_frames = runtime->buffer_size - s->pcm_buffer_pointer;
 	frame_step = s->data_block_quadlets - channels;
 
@@ -335,68 +307,6 @@ static void amdtp_write_s16(struct amdtp_out_stream *s,
 		buffer += frame_step;
 		if (--remaining_frames == 0)
 			src = (void *)runtime->dma_area;
-	}
-}
-
-static void amdtp_write_s32_dualwire(struct amdtp_out_stream *s,
-				     struct snd_pcm_substream *pcm,
-				     __be32 *buffer, unsigned int frames)
-{
-	struct snd_pcm_runtime *runtime = pcm->runtime;
-	unsigned int channels, frame_adjust_1, frame_adjust_2, i, c;
-	const u32 *src;
-
-	channels = s->pcm_channels;
-	src = (void *)runtime->dma_area +
-			s->pcm_buffer_pointer * (runtime->frame_bits / 8);
-	frame_adjust_1 = channels - 1;
-	frame_adjust_2 = 1 - (s->data_block_quadlets - channels);
-
-	channels /= 2;
-	for (i = 0; i < frames; ++i) {
-		for (c = 0; c < channels; ++c) {
-			*buffer = cpu_to_be32((*src >> 8) | 0x40000000);
-			src++;
-			buffer += 2;
-		}
-		buffer -= frame_adjust_1;
-		for (c = 0; c < channels; ++c) {
-			*buffer = cpu_to_be32((*src >> 8) | 0x40000000);
-			src++;
-			buffer += 2;
-		}
-		buffer -= frame_adjust_2;
-	}
-}
-
-static void amdtp_write_s16_dualwire(struct amdtp_out_stream *s,
-				     struct snd_pcm_substream *pcm,
-				     __be32 *buffer, unsigned int frames)
-{
-	struct snd_pcm_runtime *runtime = pcm->runtime;
-	unsigned int channels, frame_adjust_1, frame_adjust_2, i, c;
-	const u16 *src;
-
-	channels = s->pcm_channels;
-	src = (void *)runtime->dma_area +
-			s->pcm_buffer_pointer * (runtime->frame_bits / 8);
-	frame_adjust_1 = channels - 1;
-	frame_adjust_2 = 1 - (s->data_block_quadlets - channels);
-
-	channels /= 2;
-	for (i = 0; i < frames; ++i) {
-		for (c = 0; c < channels; ++c) {
-			*buffer = cpu_to_be32((*src << 8) | 0x40000000);
-			src++;
-			buffer += 2;
-		}
-		buffer -= frame_adjust_1;
-		for (c = 0; c < channels; ++c) {
-			*buffer = cpu_to_be32((*src << 8) | 0x40000000);
-			src++;
-			buffer += 2;
-		}
-		buffer -= frame_adjust_2;
 	}
 }
 
@@ -434,14 +344,8 @@ static void queue_out_packet(struct amdtp_out_stream *s, unsigned int cycle)
 		return;
 	index = s->packet_index;
 
-	/* this module generate empty packet for 'no data' */
+	data_blocks = calculate_data_blocks(s);
 	syt = calculate_syt(s, cycle);
-	if (!(s->flags & CIP_BLOCKING))
-		data_blocks = calculate_data_blocks(s);
-	else if (syt != 0xffff)
-		data_blocks = s->syt_interval;
-	else
-		data_blocks = 0;
 
 	buffer = s->buffer.packets[index].buffer;
 	buffer[0] = cpu_to_be32(ACCESS_ONCE(s->source_node_id_field) |
@@ -482,9 +386,6 @@ static void queue_out_packet(struct amdtp_out_stream *s, unsigned int cycle)
 	s->packet_index = index;
 
 	if (pcm) {
-		if (s->dual_wire)
-			data_blocks *= 2;
-
 		ptr = s->pcm_buffer_pointer + data_blocks;
 		if (ptr >= pcm->runtime->buffer_size)
 			ptr -= pcm->runtime->buffer_size;
@@ -554,8 +455,9 @@ static int queue_initial_skip_packets(struct amdtp_out_stream *s)
  * @speed: firewire speed code
  *
  * The stream cannot be started until it has been configured with
- * amdtp_out_stream_set_parameters() and amdtp_out_stream_set_pcm_format(),
- * and it must be started before any PCM or MIDI device can be started.
+ * amdtp_out_stream_set_hw_params(), amdtp_out_stream_set_pcm(), and
+ * amdtp_out_stream_set_midi(); and it must be started before any
+ * PCM or MIDI device can be started.
  */
 int amdtp_out_stream_start(struct amdtp_out_stream *s, int channel, int speed)
 {
@@ -575,7 +477,7 @@ int amdtp_out_stream_start(struct amdtp_out_stream *s, int channel, int speed)
 
 	mutex_lock(&s->mutex);
 
-	if (WARN_ON(amdtp_out_stream_running(s) ||
+	if (WARN_ON(!IS_ERR(s->context) ||
 		    (!s->pcm_channels && !s->midi_ports))) {
 		err = -EBADFD;
 		goto err_unlock;
@@ -671,7 +573,7 @@ void amdtp_out_stream_stop(struct amdtp_out_stream *s)
 {
 	mutex_lock(&s->mutex);
 
-	if (!amdtp_out_stream_running(s)) {
+	if (IS_ERR(s->context)) {
 		mutex_unlock(&s->mutex);
 		return;
 	}

@@ -9,7 +9,6 @@
  *
  *  DMA uncached mapping support.
  */
-#include <linux/bootmem.h>
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/gfp.h>
@@ -160,11 +159,9 @@ EXPORT_SYMBOL(arm_coherent_dma_ops);
 
 static u64 get_coherent_dma_mask(struct device *dev)
 {
-	u64 mask = (u64)DMA_BIT_MASK(32);
+	u64 mask = (u64)arm_dma_limit;
 
 	if (dev) {
-		unsigned long max_dma_pfn;
-
 		mask = dev->coherent_dma_mask;
 
 		/*
@@ -176,32 +173,10 @@ static u64 get_coherent_dma_mask(struct device *dev)
 			return 0;
 		}
 
-		max_dma_pfn = min(max_pfn, arm_dma_pfn_limit);
-
-		/*
-		 * If the mask allows for more memory than we can address,
-		 * and we actually have that much memory, then fail the
-		 * allocation.
-		 */
-		if (sizeof(mask) != sizeof(dma_addr_t) &&
-		    mask > (dma_addr_t)~0 &&
-		    dma_to_pfn(dev, ~0) > max_dma_pfn) {
-			dev_warn(dev, "Coherent DMA mask %#llx is larger than dma_addr_t allows\n",
-				 mask);
-			dev_warn(dev, "Driver did not use or check the return value from dma_set_coherent_mask()?\n");
-			return 0;
-		}
-
-		/*
-		 * Now check that the mask, when translated to a PFN,
-		 * fits within the allowable addresses which we can
-		 * allocate.
-		 */
-		if (dma_to_pfn(dev, mask) < max_dma_pfn) {
-			dev_warn(dev, "Coherent DMA mask %#llx (pfn %#lx-%#lx) covers a smaller range of system memory than the DMA zone pfn 0x0-%#lx\n",
-				 mask,
-				 dma_to_pfn(dev, 0), dma_to_pfn(dev, mask) + 1,
-				 arm_dma_pfn_limit + 1);
+		if ((~mask) & (u64)arm_dma_limit) {
+			dev_warn(dev, "coherent DMA mask %#llx is smaller "
+				 "than system GFP_DMA mask %#llx\n",
+				 mask, (u64)arm_dma_limit);
 			return 0;
 		}
 	}
@@ -712,7 +687,7 @@ static void *__dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 void *arm_dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 		    gfp_t gfp, struct dma_attrs *attrs)
 {
-	pgprot_t prot = __get_dma_pgprot(attrs, PAGE_KERNEL);
+	pgprot_t prot = __get_dma_pgprot(attrs, pgprot_kernel);
 	void *memory;
 
 	if (dma_alloc_from_coherent(dev, size, handle, &memory))
@@ -725,7 +700,7 @@ void *arm_dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 static void *arm_coherent_dma_alloc(struct device *dev, size_t size,
 	dma_addr_t *handle, gfp_t gfp, struct dma_attrs *attrs)
 {
-	pgprot_t prot = __get_dma_pgprot(attrs, PAGE_KERNEL);
+	pgprot_t prot = __get_dma_pgprot(attrs, pgprot_kernel);
 	void *memory;
 
 	if (dma_alloc_from_coherent(dev, size, handle, &memory))
@@ -1032,27 +1007,8 @@ void arm_dma_sync_sg_for_device(struct device *dev, struct scatterlist *sg,
  */
 int dma_supported(struct device *dev, u64 mask)
 {
-	unsigned long limit;
-
-	/*
-	 * If the mask allows for more memory than we can address,
-	 * and we actually have that much memory, then we must
-	 * indicate that DMA to this device is not supported.
-	 */
-	if (sizeof(mask) != sizeof(dma_addr_t) &&
-	    mask > (dma_addr_t)~0 &&
-	    dma_to_pfn(dev, ~0) > arm_dma_pfn_limit)
+	if (mask < (u64)arm_dma_limit)
 		return 0;
-
-	/*
-	 * Translate the device's DMA mask to a PFN limit.  This
-	 * PFN number includes the page which we can DMA to.
-	 */
-	limit = dma_to_pfn(dev, mask);
-
-	if (limit < arm_dma_pfn_limit)
-		return 0;
-
 	return 1;
 }
 EXPORT_SYMBOL(dma_supported);

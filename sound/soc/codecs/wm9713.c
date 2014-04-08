@@ -221,8 +221,7 @@ static int wm9713_voice_shutdown(struct snd_soc_dapm_widget *w,
 	struct snd_soc_codec *codec = w->codec;
 	u16 status, rate;
 
-	if (WARN_ON(event != SND_SOC_DAPM_PRE_PMD))
-		return -EINVAL;
+	BUG_ON(event != SND_SOC_DAPM_PRE_PMD);
 
 	/* Gracefully shut down the voice interface. */
 	status = ac97_read(codec, AC97_EXTENDED_MID) | 0x1000;

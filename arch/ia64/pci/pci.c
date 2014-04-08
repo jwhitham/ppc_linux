@@ -436,9 +436,9 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	if (!controller)
 		return NULL;
 
-	controller->companion = device;
+	controller->acpi_handle = device->handle;
 
-	pxm = acpi_get_pxm(device->handle);
+	pxm = acpi_get_pxm(controller->acpi_handle);
 #ifdef CONFIG_NUMA
 	if (pxm >= 0)
 		controller->node = pxm_to_node(pxm);
@@ -489,7 +489,7 @@ int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
 {
 	struct pci_controller *controller = bridge->bus->sysdata;
 
-	ACPI_COMPANION_SET(&bridge->dev, controller->companion);
+	ACPI_HANDLE_SET(&bridge->dev, controller->acpi_handle);
 	return 0;
 }
 

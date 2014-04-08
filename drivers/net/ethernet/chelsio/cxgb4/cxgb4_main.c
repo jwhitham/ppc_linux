@@ -3983,7 +3983,6 @@ static int cxgb4_inet6addr_handler(struct notifier_block *this,
 	struct net_device *event_dev;
 	int ret = NOTIFY_DONE;
 	struct bonding *bond = netdev_priv(ifa->idev->dev);
-	struct list_head *iter;
 	struct slave *slave;
 	struct pci_dev *first_pdev = NULL;
 
@@ -3996,7 +3995,7 @@ static int cxgb4_inet6addr_handler(struct notifier_block *this,
 		 * in all of them only once.
 		 */
 		read_lock(&bond->lock);
-		bond_for_each_slave(bond, slave, iter) {
+		bond_for_each_slave(bond, slave) {
 			if (!first_pdev) {
 				ret = clip_add(slave->dev, ifa, event);
 				/* If clip_add is success then only initialize
@@ -6075,6 +6074,7 @@ sriov:
 	pci_disable_device(pdev);
  out_release_regions:
 	pci_release_regions(pdev);
+	pci_set_drvdata(pdev, NULL);
 	return err;
 }
 
@@ -6122,6 +6122,7 @@ static void remove_one(struct pci_dev *pdev)
 		pci_disable_pcie_error_reporting(pdev);
 		pci_disable_device(pdev);
 		pci_release_regions(pdev);
+		pci_set_drvdata(pdev, NULL);
 	} else
 		pci_release_regions(pdev);
 }

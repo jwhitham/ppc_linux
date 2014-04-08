@@ -1711,6 +1711,7 @@ static void amd8111e_remove_one(struct pci_dev *pdev)
 		free_netdev(dev);
 		pci_release_regions(pdev);
 		pci_disable_device(pdev);
+		pci_set_drvdata(pdev, NULL);
 	}
 }
 static void amd8111e_config_ipg(struct net_device* dev)
@@ -1966,6 +1967,7 @@ err_free_reg:
 
 err_disable_pdev:
 	pci_disable_device(pdev);
+	pci_set_drvdata(pdev, NULL);
 	return err;
 
 }

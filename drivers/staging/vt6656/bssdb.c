@@ -57,7 +57,6 @@
 #include "control.h"
 #include "rndis.h"
 #include "iowpa.h"
-#include "power.h"
 
 static int          msglevel                =MSG_LEVEL_INFO;
 //static int          msglevel                =MSG_LEVEL_DEBUG;
@@ -127,7 +126,7 @@ PKnownBSS BSSpSearchBSSList(struct vnt_private *pDevice,
 
             if ((pCurrBSS->bActive) &&
                 (pCurrBSS->bSelected == false)) {
-		    if (ether_addr_equal(pCurrBSS->abyBSSID, pbyBSSID)) {
+		    if (!compare_ether_addr(pCurrBSS->abyBSSID, pbyBSSID)) {
                     if (pSSID != NULL) {
                         // compare ssid
                         if ( !memcmp(pSSID->abySSID,
@@ -243,8 +242,8 @@ void BSSvClearBSSList(struct vnt_private *pDevice, int bKeepCurrBSSID)
     for (ii = 0; ii < MAX_BSS_NUM; ii++) {
         if (bKeepCurrBSSID) {
             if (pMgmt->sBSSList[ii].bActive &&
-		ether_addr_equal(pMgmt->sBSSList[ii].abyBSSID,
-				 pMgmt->abyCurrBSSID)) {
+		!compare_ether_addr(pMgmt->sBSSList[ii].abyBSSID,
+				    pMgmt->abyCurrBSSID)) {
  //mike mark: there are two BSSID's in list. If that AP is in hidden ssid mode, one SSID is null,
  //                 but other's might not be obvious, so if it associate's with your STA,
  //                 you must keep the two of them!!
@@ -278,7 +277,7 @@ PKnownBSS BSSpAddrIsInBSSList(struct vnt_private *pDevice,
     for (ii = 0; ii < MAX_BSS_NUM; ii++) {
         pBSSList = &(pMgmt->sBSSList[ii]);
         if (pBSSList->bActive) {
-		if (ether_addr_equal(pBSSList->abyBSSID, abyBSSID)) {
+		if (!compare_ether_addr(pBSSList->abyBSSID, abyBSSID)) {
                 if (pSSID->len == ((PWLAN_IE_SSID)pBSSList->abySSID)->len){
                     if (memcmp(pSSID->abySSID,
                             ((PWLAN_IE_SSID)pBSSList->abySSID)->abySSID,
@@ -624,8 +623,8 @@ int BSSbIsSTAInNodeDB(struct vnt_private *pDevice,
     // Index = 0 reserved for AP Node
     for (ii = 1; ii < (MAX_NODE_NUM + 1); ii++) {
         if (pMgmt->sNodeDBTable[ii].bActive) {
-		if (ether_addr_equal(abyDstAddr,
-				     pMgmt->sNodeDBTable[ii].abyMACAddr)) {
+		if (!compare_ether_addr(abyDstAddr,
+					pMgmt->sNodeDBTable[ii].abyMACAddr)) {
                 *puNodeIndex = ii;
                 return true;
             }
@@ -814,19 +813,14 @@ void BSSvAddMulticastNode(struct vnt_private *pDevice)
  *
 -*/
 
-void BSSvSecondCallBack(struct work_struct *work)
+void BSSvSecondCallBack(struct vnt_private *pDevice)
 {
-	struct vnt_private *pDevice = container_of(work,
-			struct vnt_private, second_callback_work.work);
 	struct vnt_manager *pMgmt = &pDevice->vnt_mgmt;
 	int ii;
 	PWLAN_IE_SSID pItemSSID, pCurrSSID;
 	u32 uSleepySTACnt = 0;
 	u32 uNonShortSlotSTACnt = 0;
 	u32 uLongPreambleSTACnt = 0;
-
-	if (pDevice->Flags & fMP_DISCONNECTED)
-		return;
 
     spin_lock_irq(&pDevice->lock);
 
@@ -1125,26 +1119,15 @@ else {
         }
     }
 
-	if (pDevice->bLinkPass == true) {
-		if (pMgmt->eAuthenMode < WMAC_AUTH_WPA ||
-			pDevice->fWPA_Authened == true) {
-			if (++pDevice->tx_data_time_out > 40) {
-				pDevice->tx_trigger = true;
-
-				PSbSendNullPacket(pDevice);
-
-				pDevice->tx_trigger = false;
-				pDevice->tx_data_time_out = 0;
-			}
-		}
-
-		if (netif_queue_stopped(pDevice->dev))
-			netif_wake_queue(pDevice->dev);
-	}
+    if (pDevice->bLinkPass == true) {
+        if (netif_queue_stopped(pDevice->dev))
+            netif_wake_queue(pDevice->dev);
+    }
 
     spin_unlock_irq(&pDevice->lock);
 
-	schedule_delayed_work(&pDevice->second_callback_work, HZ);
+    pMgmt->sTimerSecondCallback.expires = RUN_AT(HZ);
+    add_timer(&pMgmt->sTimerSecondCallback);
 }
 
 /*+

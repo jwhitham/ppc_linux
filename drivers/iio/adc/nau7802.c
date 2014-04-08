@@ -12,7 +12,6 @@
 #include <linux/module.h>
 #include <linux/wait.h>
 #include <linux/log2.h>
-#include <linux/of.h>
 
 #include <linux/iio/iio.h>
 #include <linux/iio/sysfs.h>
@@ -190,7 +189,7 @@ static int nau7802_read_irq(struct iio_dev *indio_dev,
 	struct nau7802_state *st = iio_priv(indio_dev);
 	int ret;
 
-	reinit_completion(&st->value_ok);
+	INIT_COMPLETION(st->value_ok);
 	enable_irq(st->client->irq);
 
 	nau7802_sync(st);
@@ -570,7 +569,7 @@ static struct i2c_driver nau7802_driver = {
 	.id_table = nau7802_i2c_id,
 	.driver = {
 		   .name = "nau7802",
-		   .of_match_table = nau7802_dt_ids,
+		   .of_match_table = of_match_ptr(nau7802_dt_ids),
 	},
 };
 

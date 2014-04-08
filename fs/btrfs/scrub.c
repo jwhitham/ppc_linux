@@ -208,6 +208,7 @@ static void scrub_recheck_block_checksum(struct btrfs_fs_info *fs_info,
 					 int is_metadata, int have_csum,
 					 const u8 *csum, u64 generation,
 					 u16 csum_size);
+static void scrub_complete_bio_end_io(struct bio *bio, int err);
 static int scrub_repair_block_from_good_copy(struct scrub_block *sblock_bad,
 					     struct scrub_block *sblock_good,
 					     int force_write);
@@ -937,10 +938,8 @@ static int scrub_handle_errored_block(struct scrub_block *sblock_to_check)
 				BTRFS_DEV_STAT_CORRUPTION_ERRS);
 	}
 
-	if (sctx->readonly) {
-		ASSERT(!sctx->is_dev_replace);
-		goto out;
-	}
+	if (sctx->readonly && !sctx->is_dev_replace)
+		goto did_not_correct_error;
 
 	if (!is_metadata && !have_csum) {
 		struct scrub_fixup_nodatasum *fixup_nodatasum;
@@ -1293,6 +1292,7 @@ static void scrub_recheck_block(struct btrfs_fs_info *fs_info,
 	for (page_num = 0; page_num < sblock->page_count; page_num++) {
 		struct bio *bio;
 		struct scrub_page *page = sblock->pagev[page_num];
+		DECLARE_COMPLETION_ONSTACK(complete);
 
 		if (page->dev->bdev == NULL) {
 			page->io_error = 1;
@@ -1309,11 +1309,18 @@ static void scrub_recheck_block(struct btrfs_fs_info *fs_info,
 		}
 		bio->bi_bdev = page->dev->bdev;
 		bio->bi_sector = page->physical >> 9;
+		bio->bi_end_io = scrub_complete_bio_end_io;
+		bio->bi_private = &complete;
 
 		bio_add_page(bio, page->page, PAGE_SIZE, 0);
-		if (btrfsic_submit_bio_wait(READ, bio))
-			sblock->no_io_error_seen = 0;
+		btrfsic_submit_bio(READ, bio);
 
+		/* this will also unplug the queue */
+		wait_for_completion(&complete);
+
+		page->io_error = !test_bit(BIO_UPTODATE, &bio->bi_flags);
+		if (!test_bit(BIO_UPTODATE, &bio->bi_flags))
+			sblock->no_io_error_seen = 0;
 		bio_put(bio);
 	}
 
@@ -1382,6 +1389,11 @@ static void scrub_recheck_block_checksum(struct btrfs_fs_info *fs_info,
 		sblock->checksum_error = 1;
 }
 
+static void scrub_complete_bio_end_io(struct bio *bio, int err)
+{
+	complete((struct completion *)bio->bi_private);
+}
+
 static int scrub_repair_block_from_good_copy(struct scrub_block *sblock_bad,
 					     struct scrub_block *sblock_good,
 					     int force_write)
@@ -1416,6 +1428,7 @@ static int scrub_repair_page_from_good_copy(struct scrub_block *sblock_bad,
 	    sblock_bad->checksum_error || page_bad->io_error) {
 		struct bio *bio;
 		int ret;
+		DECLARE_COMPLETION_ONSTACK(complete);
 
 		if (!page_bad->dev->bdev) {
 			printk_ratelimited(KERN_WARNING
@@ -1428,14 +1441,19 @@ static int scrub_repair_page_from_good_copy(struct scrub_block *sblock_bad,
 			return -EIO;
 		bio->bi_bdev = page_bad->dev->bdev;
 		bio->bi_sector = page_bad->physical >> 9;
+		bio->bi_end_io = scrub_complete_bio_end_io;
+		bio->bi_private = &complete;
 
 		ret = bio_add_page(bio, page_good->page, PAGE_SIZE, 0);
 		if (PAGE_SIZE != ret) {
 			bio_put(bio);
 			return -EIO;
 		}
+		btrfsic_submit_bio(WRITE, bio);
 
-		if (btrfsic_submit_bio_wait(WRITE, bio)) {
+		/* this will also unplug the queue */
+		wait_for_completion(&complete);
+		if (!bio_flagged(bio, BIO_UPTODATE)) {
 			btrfs_dev_stat_inc_and_print(page_bad->dev,
 				BTRFS_DEV_STAT_WRITE_ERRS);
 			btrfs_dev_replace_stats_inc(
@@ -2699,6 +2717,8 @@ int scrub_enumerate_chunks(struct scrub_ctx *sctx,
 		mutex_unlock(&fs_info->scrub_lock);
 		wake_up(&fs_info->scrub_pause_wait);
 
+		dev_replace->cursor_left = dev_replace->cursor_right;
+		dev_replace->item_needs_writeback = 1;
 		btrfs_put_block_group(cache);
 		if (ret)
 			break;
@@ -2711,9 +2731,6 @@ int scrub_enumerate_chunks(struct scrub_ctx *sctx,
 			ret = -ENOMEM;
 			break;
 		}
-
-		dev_replace->cursor_left = dev_replace->cursor_right;
-		dev_replace->item_needs_writeback = 1;
 
 		key.offset = found_key.offset + length;
 		btrfs_release_path(path);
@@ -2766,6 +2783,7 @@ static noinline_for_stack int scrub_workers_get(struct btrfs_fs_info *fs_info,
 {
 	int ret = 0;
 
+	mutex_lock(&fs_info->scrub_lock);
 	if (fs_info->scrub_workers_refcnt == 0) {
 		if (is_dev_replace)
 			btrfs_init_workers(&fs_info->scrub_workers, "scrub", 1,
@@ -2795,17 +2813,21 @@ static noinline_for_stack int scrub_workers_get(struct btrfs_fs_info *fs_info,
 	}
 	++fs_info->scrub_workers_refcnt;
 out:
+	mutex_unlock(&fs_info->scrub_lock);
+
 	return ret;
 }
 
 static noinline_for_stack void scrub_workers_put(struct btrfs_fs_info *fs_info)
 {
+	mutex_lock(&fs_info->scrub_lock);
 	if (--fs_info->scrub_workers_refcnt == 0) {
 		btrfs_stop_workers(&fs_info->scrub_workers);
 		btrfs_stop_workers(&fs_info->scrub_wr_completion_workers);
 		btrfs_stop_workers(&fs_info->scrub_nocow_workers);
 	}
 	WARN_ON(fs_info->scrub_workers_refcnt < 0);
+	mutex_unlock(&fs_info->scrub_lock);
 }
 
 int btrfs_scrub_dev(struct btrfs_fs_info *fs_info, u64 devid, u64 start,
@@ -2866,18 +2888,23 @@ int btrfs_scrub_dev(struct btrfs_fs_info *fs_info, u64 devid, u64 start,
 		return -EINVAL;
 	}
 
+	ret = scrub_workers_get(fs_info, is_dev_replace);
+	if (ret)
+		return ret;
 
 	mutex_lock(&fs_info->fs_devices->device_list_mutex);
 	dev = btrfs_find_device(fs_info, devid, NULL, NULL);
 	if (!dev || (dev->missing && !is_dev_replace)) {
 		mutex_unlock(&fs_info->fs_devices->device_list_mutex);
+		scrub_workers_put(fs_info);
 		return -ENODEV;
 	}
-
 	mutex_lock(&fs_info->scrub_lock);
+
 	if (!dev->in_fs_metadata || dev->is_tgtdev_for_dev_replace) {
 		mutex_unlock(&fs_info->scrub_lock);
 		mutex_unlock(&fs_info->fs_devices->device_list_mutex);
+		scrub_workers_put(fs_info);
 		return -EIO;
 	}
 
@@ -2888,17 +2915,10 @@ int btrfs_scrub_dev(struct btrfs_fs_info *fs_info, u64 devid, u64 start,
 		btrfs_dev_replace_unlock(&fs_info->dev_replace);
 		mutex_unlock(&fs_info->scrub_lock);
 		mutex_unlock(&fs_info->fs_devices->device_list_mutex);
+		scrub_workers_put(fs_info);
 		return -EINPROGRESS;
 	}
 	btrfs_dev_replace_unlock(&fs_info->dev_replace);
-
-	ret = scrub_workers_get(fs_info, is_dev_replace);
-	if (ret) {
-		mutex_unlock(&fs_info->scrub_lock);
-		mutex_unlock(&fs_info->fs_devices->device_list_mutex);
-		return ret;
-	}
-
 	sctx = scrub_setup_ctx(dev, is_dev_replace);
 	if (IS_ERR(sctx)) {
 		mutex_unlock(&fs_info->scrub_lock);
@@ -2911,15 +2931,13 @@ int btrfs_scrub_dev(struct btrfs_fs_info *fs_info, u64 devid, u64 start,
 
 	atomic_inc(&fs_info->scrubs_running);
 	mutex_unlock(&fs_info->scrub_lock);
+	mutex_unlock(&fs_info->fs_devices->device_list_mutex);
 
 	if (!is_dev_replace) {
-		/*
-		 * by holding device list mutex, we can
-		 * kick off writing super in log tree sync.
-		 */
+		down_read(&fs_info->scrub_super_lock);
 		ret = scrub_supers(sctx, dev);
+		up_read(&fs_info->scrub_super_lock);
 	}
-	mutex_unlock(&fs_info->fs_devices->device_list_mutex);
 
 	if (!ret)
 		ret = scrub_enumerate_chunks(sctx, dev, start, end,
@@ -2936,10 +2954,10 @@ int btrfs_scrub_dev(struct btrfs_fs_info *fs_info, u64 devid, u64 start,
 
 	mutex_lock(&fs_info->scrub_lock);
 	dev->scrub_device = NULL;
-	scrub_workers_put(fs_info);
 	mutex_unlock(&fs_info->scrub_lock);
 
 	scrub_free_ctx(sctx);
+	scrub_workers_put(fs_info);
 
 	return ret;
 }
@@ -2967,6 +2985,16 @@ void btrfs_scrub_continue(struct btrfs_root *root)
 
 	atomic_dec(&fs_info->scrub_pause_req);
 	wake_up(&fs_info->scrub_pause_wait);
+}
+
+void btrfs_scrub_pause_super(struct btrfs_root *root)
+{
+	down_write(&root->fs_info->scrub_super_lock);
+}
+
+void btrfs_scrub_continue_super(struct btrfs_root *root)
+{
+	up_write(&root->fs_info->scrub_super_lock);
 }
 
 int btrfs_scrub_cancel(struct btrfs_fs_info *fs_info)
@@ -3355,6 +3383,7 @@ static int write_page_nocow(struct scrub_ctx *sctx,
 	struct bio *bio;
 	struct btrfs_device *dev;
 	int ret;
+	DECLARE_COMPLETION_ONSTACK(compl);
 
 	dev = sctx->wr_ctx.tgtdev;
 	if (!dev)
@@ -3371,6 +3400,8 @@ static int write_page_nocow(struct scrub_ctx *sctx,
 		spin_unlock(&sctx->stat_lock);
 		return -ENOMEM;
 	}
+	bio->bi_private = &compl;
+	bio->bi_end_io = scrub_complete_bio_end_io;
 	bio->bi_size = 0;
 	bio->bi_sector = physical_for_dev_replace >> 9;
 	bio->bi_bdev = dev->bdev;
@@ -3381,8 +3412,10 @@ leave_with_eio:
 		btrfs_dev_stat_inc_and_print(dev, BTRFS_DEV_STAT_WRITE_ERRS);
 		return -EIO;
 	}
+	btrfsic_submit_bio(WRITE_SYNC, bio);
+	wait_for_completion(&compl);
 
-	if (btrfsic_submit_bio_wait(WRITE_SYNC, bio))
+	if (!test_bit(BIO_UPTODATE, &bio->bi_flags))
 		goto leave_with_eio;
 
 	bio_put(bio);

@@ -21,8 +21,11 @@
 #include <linux/export.h>
 #include <linux/spi/spi.h>
 #include <linux/crc-ccitt.h>
+#include <linux/nfc.h>
 #include <net/nfc/nci_core.h>
 
+#define NCI_SPI_HDR_LEN			4
+#define NCI_SPI_CRC_LEN			2
 #define NCI_SPI_ACK_SHIFT		6
 #define NCI_SPI_MSB_PAYLOAD_MASK	0x3F
 
@@ -38,48 +41,54 @@
 
 #define CRC_INIT		0xFFFF
 
-static int __nci_spi_send(struct nci_spi *nspi, struct sk_buff *skb,
-			  int cs_change)
+static int nci_spi_open(struct nci_dev *nci_dev)
+{
+	struct nci_spi_dev *ndev = nci_get_drvdata(nci_dev);
+
+	return ndev->ops->open(ndev);
+}
+
+static int nci_spi_close(struct nci_dev *nci_dev)
+{
+	struct nci_spi_dev *ndev = nci_get_drvdata(nci_dev);
+
+	return ndev->ops->close(ndev);
+}
+
+static int __nci_spi_send(struct nci_spi_dev *ndev, struct sk_buff *skb)
 {
 	struct spi_message m;
 	struct spi_transfer t;
 
-	memset(&t, 0, sizeof(struct spi_transfer));
-	/* a NULL skb means we just want the SPI chip select line to raise */
-	if (skb) {
-		t.tx_buf = skb->data;
-		t.len = skb->len;
-	} else {
-		/* still set tx_buf non NULL to make the driver happy */
-		t.tx_buf = &t;
-		t.len = 0;
-	}
-	t.cs_change = cs_change;
-	t.delay_usecs = nspi->xfer_udelay;
+	t.tx_buf = skb->data;
+	t.len = skb->len;
+	t.cs_change = 0;
+	t.delay_usecs = ndev->xfer_udelay;
 
 	spi_message_init(&m);
 	spi_message_add_tail(&t, &m);
 
-	return spi_sync(nspi->spi, &m);
+	return spi_sync(ndev->spi, &m);
 }
 
-int nci_spi_send(struct nci_spi *nspi,
-		 struct completion *write_handshake_completion,
-		 struct sk_buff *skb)
+static int nci_spi_send(struct nci_dev *nci_dev, struct sk_buff *skb)
 {
+	struct nci_spi_dev *ndev = nci_get_drvdata(nci_dev);
 	unsigned int payload_len = skb->len;
 	unsigned char *hdr;
 	int ret;
 	long completion_rc;
 
+	ndev->ops->deassert_int(ndev);
+
 	/* add the NCI SPI header to the start of the buffer */
 	hdr = skb_push(skb, NCI_SPI_HDR_LEN);
 	hdr[0] = NCI_SPI_DIRECT_WRITE;
-	hdr[1] = nspi->acknowledge_mode;
+	hdr[1] = ndev->acknowledge_mode;
 	hdr[2] = payload_len >> 8;
 	hdr[3] = payload_len & 0xFF;
 
-	if (nspi->acknowledge_mode == NCI_SPI_CRC_ENABLED) {
+	if (ndev->acknowledge_mode == NCI_SPI_CRC_ENABLED) {
 		u16 crc;
 
 		crc = crc_ccitt(CRC_INIT, skb->data, skb->len);
@@ -87,77 +96,123 @@ int nci_spi_send(struct nci_spi *nspi,
 		*skb_put(skb, 1) = crc & 0xFF;
 	}
 
-	if (write_handshake_completion)	{
-		/* Trick SPI driver to raise chip select */
-		ret = __nci_spi_send(nspi, NULL, 1);
-		if (ret)
-			goto done;
+	ret = __nci_spi_send(ndev, skb);
 
-		/* wait for NFC chip hardware handshake to complete */
-		if (wait_for_completion_timeout(write_handshake_completion,
-						msecs_to_jiffies(1000)) == 0) {
-			ret = -ETIME;
-			goto done;
-		}
-	}
+	kfree_skb(skb);
+	ndev->ops->assert_int(ndev);
 
-	ret = __nci_spi_send(nspi, skb, 0);
-	if (ret != 0 || nspi->acknowledge_mode == NCI_SPI_CRC_DISABLED)
+	if (ret != 0 || ndev->acknowledge_mode == NCI_SPI_CRC_DISABLED)
 		goto done;
 
-	init_completion(&nspi->req_completion);
-	completion_rc =	wait_for_completion_interruptible_timeout(
-							&nspi->req_completion,
-							NCI_SPI_SEND_TIMEOUT);
+	init_completion(&ndev->req_completion);
+	completion_rc =
+		wait_for_completion_interruptible_timeout(&ndev->req_completion,
+							  NCI_SPI_SEND_TIMEOUT);
 
-	if (completion_rc <= 0 || nspi->req_result == ACKNOWLEDGE_NACK)
+	if (completion_rc <= 0 || ndev->req_result == ACKNOWLEDGE_NACK)
 		ret = -EIO;
 
 done:
-	kfree_skb(skb);
-
 	return ret;
 }
-EXPORT_SYMBOL_GPL(nci_spi_send);
+
+static struct nci_ops nci_spi_ops = {
+	.open = nci_spi_open,
+	.close = nci_spi_close,
+	.send = nci_spi_send,
+};
 
 /* ---- Interface to NCI SPI drivers ---- */
 
 /**
- * nci_spi_allocate_spi - allocate a new nci spi
+ * nci_spi_allocate_device - allocate a new nci spi device
  *
  * @spi: SPI device
- * @acknowledge_mode: Acknowledge mode used by the NFC device
+ * @ops: device operations
+ * @supported_protocols: NFC protocols supported by the device
+ * @supported_se: NFC Secure Elements supported by the device
+ * @acknowledge_mode: Acknowledge mode used by the device
  * @delay: delay between transactions in us
- * @ndev: nci dev to send incoming nci frames to
  */
-struct nci_spi *nci_spi_allocate_spi(struct spi_device *spi,
-				     u8 acknowledge_mode, unsigned int delay,
-				     struct nci_dev *ndev)
+struct nci_spi_dev *nci_spi_allocate_device(struct spi_device *spi,
+						struct nci_spi_ops *ops,
+						u32 supported_protocols,
+						u32 supported_se,
+						u8 acknowledge_mode,
+						unsigned int delay)
 {
-	struct nci_spi *nspi;
+	struct nci_spi_dev *ndev;
+	int tailroom = 0;
 
-	nspi = devm_kzalloc(&spi->dev, sizeof(struct nci_spi), GFP_KERNEL);
-	if (!nspi)
+	if (!ops->open || !ops->close || !ops->assert_int || !ops->deassert_int)
 		return NULL;
 
-	nspi->acknowledge_mode = acknowledge_mode;
-	nspi->xfer_udelay = delay;
+	if (!supported_protocols)
+		return NULL;
 
-	nspi->spi = spi;
-	nspi->ndev = ndev;
+	ndev = devm_kzalloc(&spi->dev, sizeof(struct nci_dev), GFP_KERNEL);
+	if (!ndev)
+		return NULL;
 
-	return nspi;
+	ndev->ops = ops;
+	ndev->acknowledge_mode = acknowledge_mode;
+	ndev->xfer_udelay = delay;
+
+	if (acknowledge_mode == NCI_SPI_CRC_ENABLED)
+		tailroom += NCI_SPI_CRC_LEN;
+
+	ndev->nci_dev = nci_allocate_device(&nci_spi_ops, supported_protocols,
+					    NCI_SPI_HDR_LEN, tailroom);
+	if (!ndev->nci_dev)
+		return NULL;
+
+	nci_set_drvdata(ndev->nci_dev, ndev);
+
+	return ndev;
 }
-EXPORT_SYMBOL_GPL(nci_spi_allocate_spi);
+EXPORT_SYMBOL_GPL(nci_spi_allocate_device);
 
-static int send_acknowledge(struct nci_spi *nspi, u8 acknowledge)
+/**
+ * nci_spi_free_device - deallocate nci spi device
+ *
+ * @ndev: The nci spi device to deallocate
+ */
+void nci_spi_free_device(struct nci_spi_dev *ndev)
+{
+	nci_free_device(ndev->nci_dev);
+}
+EXPORT_SYMBOL_GPL(nci_spi_free_device);
+
+/**
+ * nci_spi_register_device - register a nci spi device in the nfc subsystem
+ *
+ * @pdev: The nci spi device to register
+ */
+int nci_spi_register_device(struct nci_spi_dev *ndev)
+{
+	return nci_register_device(ndev->nci_dev);
+}
+EXPORT_SYMBOL_GPL(nci_spi_register_device);
+
+/**
+ * nci_spi_unregister_device - unregister a nci spi device in the nfc subsystem
+ *
+ * @dev: The nci spi device to unregister
+ */
+void nci_spi_unregister_device(struct nci_spi_dev *ndev)
+{
+	nci_unregister_device(ndev->nci_dev);
+}
+EXPORT_SYMBOL_GPL(nci_spi_unregister_device);
+
+static int send_acknowledge(struct nci_spi_dev *ndev, u8 acknowledge)
 {
 	struct sk_buff *skb;
 	unsigned char *hdr;
 	u16 crc;
 	int ret;
 
-	skb = nci_skb_alloc(nspi->ndev, 0, GFP_KERNEL);
+	skb = nci_skb_alloc(ndev->nci_dev, 0, GFP_KERNEL);
 
 	/* add the NCI SPI header to the start of the buffer */
 	hdr = skb_push(skb, NCI_SPI_HDR_LEN);
@@ -170,14 +225,14 @@ static int send_acknowledge(struct nci_spi *nspi, u8 acknowledge)
 	*skb_put(skb, 1) = crc >> 8;
 	*skb_put(skb, 1) = crc & 0xFF;
 
-	ret = __nci_spi_send(nspi, skb, 0);
+	ret = __nci_spi_send(ndev, skb);
 
 	kfree_skb(skb);
 
 	return ret;
 }
 
-static struct sk_buff *__nci_spi_read(struct nci_spi *nspi)
+static struct sk_buff *__nci_spi_recv_frame(struct nci_spi_dev *ndev)
 {
 	struct sk_buff *skb;
 	struct spi_message m;
@@ -187,49 +242,43 @@ static struct sk_buff *__nci_spi_read(struct nci_spi *nspi)
 	int ret;
 
 	spi_message_init(&m);
-
-	memset(&tx, 0, sizeof(struct spi_transfer));
 	req[0] = NCI_SPI_DIRECT_READ;
-	req[1] = nspi->acknowledge_mode;
+	req[1] = ndev->acknowledge_mode;
 	tx.tx_buf = req;
 	tx.len = 2;
 	tx.cs_change = 0;
 	spi_message_add_tail(&tx, &m);
-
-	memset(&rx, 0, sizeof(struct spi_transfer));
 	rx.rx_buf = resp_hdr;
 	rx.len = 2;
 	rx.cs_change = 1;
 	spi_message_add_tail(&rx, &m);
+	ret = spi_sync(ndev->spi, &m);
 
-	ret = spi_sync(nspi->spi, &m);
 	if (ret)
 		return NULL;
 
-	if (nspi->acknowledge_mode == NCI_SPI_CRC_ENABLED)
+	if (ndev->acknowledge_mode == NCI_SPI_CRC_ENABLED)
 		rx_len = ((resp_hdr[0] & NCI_SPI_MSB_PAYLOAD_MASK) << 8) +
 				resp_hdr[1] + NCI_SPI_CRC_LEN;
 	else
 		rx_len = (resp_hdr[0] << 8) | resp_hdr[1];
 
-	skb = nci_skb_alloc(nspi->ndev, rx_len, GFP_KERNEL);
+	skb = nci_skb_alloc(ndev->nci_dev, rx_len, GFP_KERNEL);
 	if (!skb)
 		return NULL;
 
 	spi_message_init(&m);
-
-	memset(&rx, 0, sizeof(struct spi_transfer));
 	rx.rx_buf = skb_put(skb, rx_len);
 	rx.len = rx_len;
 	rx.cs_change = 0;
-	rx.delay_usecs = nspi->xfer_udelay;
+	rx.delay_usecs = ndev->xfer_udelay;
 	spi_message_add_tail(&rx, &m);
+	ret = spi_sync(ndev->spi, &m);
 
-	ret = spi_sync(nspi->spi, &m);
 	if (ret)
 		goto receive_error;
 
-	if (nspi->acknowledge_mode == NCI_SPI_CRC_ENABLED) {
+	if (ndev->acknowledge_mode == NCI_SPI_CRC_ENABLED) {
 		*skb_push(skb, 1) = resp_hdr[1];
 		*skb_push(skb, 1) = resp_hdr[0];
 	}
@@ -269,53 +318,61 @@ static u8 nci_spi_get_ack(struct sk_buff *skb)
 }
 
 /**
- * nci_spi_read - read frame from NCI SPI drivers
+ * nci_spi_recv_frame - receive frame from NCI SPI drivers
  *
- * @nspi: The nci spi
+ * @ndev: The nci spi device
  * Context: can sleep
  *
  * This call may only be used from a context that may sleep.  The sleep
  * is non-interruptible, and has no timeout.
  *
- * It returns an allocated skb containing the frame on success, or NULL.
+ * It returns zero on success, else a negative error code.
  */
-struct sk_buff *nci_spi_read(struct nci_spi *nspi)
+int nci_spi_recv_frame(struct nci_spi_dev *ndev)
 {
 	struct sk_buff *skb;
+	int ret = 0;
+
+	ndev->ops->deassert_int(ndev);
 
 	/* Retrieve frame from SPI */
-	skb = __nci_spi_read(nspi);
-	if (!skb)
+	skb = __nci_spi_recv_frame(ndev);
+	if (!skb) {
+		ret = -EIO;
 		goto done;
+	}
 
-	if (nspi->acknowledge_mode == NCI_SPI_CRC_ENABLED) {
+	if (ndev->acknowledge_mode == NCI_SPI_CRC_ENABLED) {
 		if (!nci_spi_check_crc(skb)) {
-			send_acknowledge(nspi, ACKNOWLEDGE_NACK);
+			send_acknowledge(ndev, ACKNOWLEDGE_NACK);
 			goto done;
 		}
 
 		/* In case of acknowledged mode: if ACK or NACK received,
 		 * unblock completion of latest frame sent.
 		 */
-		nspi->req_result = nci_spi_get_ack(skb);
-		if (nspi->req_result)
-			complete(&nspi->req_completion);
+		ndev->req_result = nci_spi_get_ack(skb);
+		if (ndev->req_result)
+			complete(&ndev->req_completion);
 	}
 
 	/* If there is no payload (ACK/NACK only frame),
 	 * free the socket buffer
 	 */
-	if (!skb->len) {
+	if (skb->len == 0) {
 		kfree_skb(skb);
-		skb = NULL;
 		goto done;
 	}
 
-	if (nspi->acknowledge_mode == NCI_SPI_CRC_ENABLED)
-		send_acknowledge(nspi, ACKNOWLEDGE_ACK);
+	if (ndev->acknowledge_mode == NCI_SPI_CRC_ENABLED)
+		send_acknowledge(ndev, ACKNOWLEDGE_ACK);
+
+	/* Forward skb to NCI core layer */
+	ret = nci_recv_frame(ndev->nci_dev, skb);
 
 done:
+	ndev->ops->assert_int(ndev);
 
-	return skb;
+	return ret;
 }
-EXPORT_SYMBOL_GPL(nci_spi_read);
+EXPORT_SYMBOL_GPL(nci_spi_recv_frame);

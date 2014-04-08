@@ -422,15 +422,14 @@ static struct gameport *gameport_get_pending_child(struct gameport *parent)
  * Gameport port operations
  */
 
-static ssize_t gameport_description_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t gameport_show_description(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct gameport *gameport = to_gameport_port(dev);
 
 	return sprintf(buf, "%s\n", gameport->name);
 }
-static DEVICE_ATTR(description, S_IRUGO, gameport_description_show, NULL);
 
-static ssize_t drvctl_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t gameport_rebind_driver(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct gameport *gameport = to_gameport_port(dev);
 	struct device_driver *drv;
@@ -458,14 +457,12 @@ static ssize_t drvctl_store(struct device *dev, struct device_attribute *attr, c
 
 	return error ? error : count;
 }
-static DEVICE_ATTR_WO(drvctl);
 
-static struct attribute *gameport_device_attrs[] = {
-	&dev_attr_description.attr,
-	&dev_attr_drvctl.attr,
-	NULL,
+static struct device_attribute gameport_device_attrs[] = {
+	__ATTR(description, S_IRUGO, gameport_show_description, NULL),
+	__ATTR(drvctl, S_IWUSR, NULL, gameport_rebind_driver),
+	__ATTR_NULL
 };
-ATTRIBUTE_GROUPS(gameport_device);
 
 static void gameport_release_port(struct device *dev)
 {
@@ -753,7 +750,7 @@ static int gameport_bus_match(struct device *dev, struct device_driver *drv)
 
 static struct bus_type gameport_bus = {
 	.name		= "gameport",
-	.dev_groups	= gameport_device_groups,
+	.dev_attrs	= gameport_device_attrs,
 	.drv_groups	= gameport_driver_groups,
 	.match		= gameport_bus_match,
 	.probe		= gameport_driver_probe,

@@ -119,7 +119,8 @@ static int q40fb_probe(struct platform_device *dev)
 		return -EINVAL;
 	}
 
-	fb_info(info, "Q40 frame buffer alive and kicking !\n");
+        printk(KERN_INFO "fb%d: Q40 frame buffer alive and kicking !\n",
+	       info->node);
 	return 0;
 }
 

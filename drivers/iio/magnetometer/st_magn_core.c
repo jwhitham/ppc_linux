@@ -348,9 +348,8 @@ static const struct iio_info magn_info = {
 int st_magn_common_probe(struct iio_dev *indio_dev,
 					struct st_sensors_platform_data *pdata)
 {
-	struct st_sensor_data *mdata = iio_priv(indio_dev);
-	int irq = mdata->get_irq_data_ready(indio_dev);
 	int err;
+	struct st_sensor_data *mdata = iio_priv(indio_dev);
 
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->info = &magn_info;
@@ -358,7 +357,7 @@ int st_magn_common_probe(struct iio_dev *indio_dev,
 	err = st_sensors_check_device_support(indio_dev,
 				ARRAY_SIZE(st_magn_sensors), st_magn_sensors);
 	if (err < 0)
-		return err;
+		goto st_magn_common_probe_error;
 
 	mdata->num_data_channels = ST_MAGN_NUMBER_DATA_CHANNELS;
 	mdata->multiread_bit = mdata->sensor->multi_read_bit;
@@ -371,13 +370,12 @@ int st_magn_common_probe(struct iio_dev *indio_dev,
 
 	err = st_sensors_init_sensor(indio_dev, pdata);
 	if (err < 0)
-		return err;
+		goto st_magn_common_probe_error;
 
-	err = st_magn_allocate_ring(indio_dev);
-	if (err < 0)
-		return err;
-
-	if (irq > 0) {
+	if (mdata->get_irq_data_ready(indio_dev) > 0) {
+		err = st_magn_allocate_ring(indio_dev);
+		if (err < 0)
+			goto st_magn_common_probe_error;
 		err = st_sensors_allocate_trigger(indio_dev, NULL);
 		if (err < 0)
 			goto st_magn_probe_trigger_error;
@@ -387,14 +385,15 @@ int st_magn_common_probe(struct iio_dev *indio_dev,
 	if (err)
 		goto st_magn_device_register_error;
 
-	return 0;
+	return err;
 
 st_magn_device_register_error:
-	if (irq > 0)
+	if (mdata->get_irq_data_ready(indio_dev) > 0)
 		st_sensors_deallocate_trigger(indio_dev);
 st_magn_probe_trigger_error:
-	st_magn_deallocate_ring(indio_dev);
-
+	if (mdata->get_irq_data_ready(indio_dev) > 0)
+		st_magn_deallocate_ring(indio_dev);
+st_magn_common_probe_error:
 	return err;
 }
 EXPORT_SYMBOL(st_magn_common_probe);
@@ -404,10 +403,10 @@ void st_magn_common_remove(struct iio_dev *indio_dev)
 	struct st_sensor_data *mdata = iio_priv(indio_dev);
 
 	iio_device_unregister(indio_dev);
-	if (mdata->get_irq_data_ready(indio_dev) > 0)
+	if (mdata->get_irq_data_ready(indio_dev) > 0) {
 		st_sensors_deallocate_trigger(indio_dev);
-
-	st_magn_deallocate_ring(indio_dev);
+		st_magn_deallocate_ring(indio_dev);
+	}
 }
 EXPORT_SYMBOL(st_magn_common_remove);
 

@@ -119,7 +119,7 @@ enum ht_channel_width {
 };
 
 /*  */
-/*  Represent Extension Channel Offset in HT Capabilities */
+/*  Represent Extention Channel Offset in HT Capabilities */
 /*  This is available only in 40Mhz mode. */
 /*  */
 enum ht_extchnl_offset {

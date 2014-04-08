@@ -273,14 +273,12 @@ static int apds9300_read_raw(struct iio_dev *indio_dev,
 	return ret;
 }
 
-static int apds9300_read_thresh(struct iio_dev *indio_dev,
-		const struct iio_chan_spec *chan, enum iio_event_type type,
-		enum iio_event_direction dir, enum iio_event_info info,
-		int *val, int *val2)
+static int apds9300_read_thresh(struct iio_dev *indio_dev, u64 event_code,
+		int *val)
 {
 	struct apds9300_data *data = iio_priv(indio_dev);
 
-	switch (dir) {
+	switch (IIO_EVENT_CODE_EXTRACT_DIR(event_code)) {
 	case IIO_EV_DIR_RISING:
 		*val = data->thresh_hi;
 		break;
@@ -291,19 +289,17 @@ static int apds9300_read_thresh(struct iio_dev *indio_dev,
 		return -EINVAL;
 	}
 
-	return IIO_VAL_INT;
+	return 0;
 }
 
-static int apds9300_write_thresh(struct iio_dev *indio_dev,
-		const struct iio_chan_spec *chan, enum iio_event_type type,
-		enum iio_event_direction dir, enum iio_event_info info, int val,
-		int val2)
+static int apds9300_write_thresh(struct iio_dev *indio_dev, u64 event_code,
+		int val)
 {
 	struct apds9300_data *data = iio_priv(indio_dev);
 	int ret;
 
 	mutex_lock(&data->mutex);
-	if (dir == IIO_EV_DIR_RISING)
+	if (IIO_EVENT_CODE_EXTRACT_DIR(event_code) == IIO_EV_DIR_RISING)
 		ret = apds9300_set_thresh_hi(data, val);
 	else
 		ret = apds9300_set_thresh_low(data, val);
@@ -313,9 +309,7 @@ static int apds9300_write_thresh(struct iio_dev *indio_dev,
 }
 
 static int apds9300_read_interrupt_config(struct iio_dev *indio_dev,
-		const struct iio_chan_spec *chan,
-		enum iio_event_type type,
-		enum iio_event_direction dir)
+		u64 event_code)
 {
 	struct apds9300_data *data = iio_priv(indio_dev);
 
@@ -323,8 +317,7 @@ static int apds9300_read_interrupt_config(struct iio_dev *indio_dev,
 }
 
 static int apds9300_write_interrupt_config(struct iio_dev *indio_dev,
-		const struct iio_chan_spec *chan, enum iio_event_type type,
-		enum iio_event_direction dir, int state)
+		u64 event_code, int state)
 {
 	struct apds9300_data *data = iio_priv(indio_dev);
 	int ret;
@@ -344,24 +337,10 @@ static const struct iio_info apds9300_info_no_irq = {
 static const struct iio_info apds9300_info = {
 	.driver_module		= THIS_MODULE,
 	.read_raw		= apds9300_read_raw,
-	.read_event_value_new	= apds9300_read_thresh,
-	.write_event_value_new	= apds9300_write_thresh,
-	.read_event_config_new	= apds9300_read_interrupt_config,
-	.write_event_config_new	= apds9300_write_interrupt_config,
-};
-
-static const struct iio_event_spec apds9300_event_spec[] = {
-	{
-		.type = IIO_EV_TYPE_THRESH,
-		.dir = IIO_EV_DIR_RISING,
-		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
-			BIT(IIO_EV_INFO_ENABLE),
-	}, {
-		.type = IIO_EV_TYPE_THRESH,
-		.dir = IIO_EV_DIR_FALLING,
-		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
-			BIT(IIO_EV_INFO_ENABLE),
-	},
+	.read_event_value	= apds9300_read_thresh,
+	.write_event_value	= apds9300_write_thresh,
+	.read_event_config	= apds9300_read_interrupt_config,
+	.write_event_config	= apds9300_write_interrupt_config,
 };
 
 static const struct iio_chan_spec apds9300_channels[] = {
@@ -376,8 +355,10 @@ static const struct iio_chan_spec apds9300_channels[] = {
 		.channel2 = IIO_MOD_LIGHT_BOTH,
 		.indexed = true,
 		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
-		.event_spec = apds9300_event_spec,
-		.num_event_specs = ARRAY_SIZE(apds9300_event_spec),
+		.event_mask = (IIO_EV_BIT(IIO_EV_TYPE_THRESH,
+					  IIO_EV_DIR_RISING) |
+			       IIO_EV_BIT(IIO_EV_TYPE_THRESH,
+					  IIO_EV_DIR_FALLING)),
 	}, {
 		.type = IIO_INTENSITY,
 		.channel = 1,

@@ -407,8 +407,8 @@ static inline u8 first_antenna(u8 mask)
 
 
 /* Initialize station's rate scaling information after adding station */
-void iwl_rs_rate_init(struct iwl_priv *priv, struct ieee80211_sta *sta,
-		      u8 sta_id);
+extern void iwl_rs_rate_init(struct iwl_priv *priv,
+			     struct ieee80211_sta *sta, u8 sta_id);
 
 /**
  * iwl_rate_control_register - Register the rate control algorithm callbacks
@@ -420,7 +420,7 @@ void iwl_rs_rate_init(struct iwl_priv *priv, struct ieee80211_sta *sta,
  * ieee80211_register_hw
  *
  */
-int iwlagn_rate_control_register(void);
+extern int iwlagn_rate_control_register(void);
 
 /**
  * iwl_rate_control_unregister - Unregister the rate control callbacks
@@ -428,6 +428,6 @@ int iwlagn_rate_control_register(void);
  * This should be called after calling ieee80211_unregister_hw, but before
  * the driver is unloaded.
  */
-void iwlagn_rate_control_unregister(void);
+extern void iwlagn_rate_control_unregister(void);
 
 #endif /* __iwl_agn__rs__ */

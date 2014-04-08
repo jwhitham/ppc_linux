@@ -231,7 +231,7 @@ static void __init bootmem_init_one_node(unsigned int nid)
 	if (!p->node_spanned_pages)
 		return;
 
-	end_pfn = pgdat_end_pfn(p);
+	end_pfn = p->node_start_pfn + p->node_spanned_pages;
 
 	total_pages = bootmem_bootmap_pages(p->node_spanned_pages);
 

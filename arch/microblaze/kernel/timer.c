@@ -15,7 +15,6 @@
 #include <linux/clk.h>
 #include <linux/clockchips.h>
 #include <linux/of_address.h>
-#include <linux/of_irq.h>
 #include <asm/cpuinfo.h>
 #include <linux/cnt32_to_63.h>
 
@@ -149,7 +148,7 @@ static irqreturn_t timer_interrupt(int irq, void *dev_id)
 
 static struct irqaction timer_irqaction = {
 	.handler = timer_interrupt,
-	.flags = IRQF_TIMER,
+	.flags = IRQF_DISABLED | IRQF_TIMER,
 	.name = "timer",
 	.dev_id = &clockevent_xilinx_timer,
 };

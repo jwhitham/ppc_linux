@@ -13,8 +13,8 @@
 		bootargs = "root=/dev/ram0 console=ttyAMA0,38400n8 earlyprintk";
 	};
 
-	syscon {
-		compatible = "arm,integrator-cp-syscon";
+	cpcon {
+		/* CP controller registers */
 		reg = <0xcb000000 0x100>;
 	};
 

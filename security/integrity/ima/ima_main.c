@@ -24,7 +24,6 @@
 #include <linux/slab.h>
 #include <linux/xattr.h>
 #include <linux/ima.h>
-#include <crypto/hash_info.h>
 
 #include "ima.h"
 
@@ -36,33 +35,11 @@ int ima_appraise = IMA_APPRAISE_ENFORCE;
 int ima_appraise;
 #endif
 
-int ima_hash_algo = HASH_ALGO_SHA1;
-static int hash_setup_done;
-
+char *ima_hash = "sha1";
 static int __init hash_setup(char *str)
 {
-	struct ima_template_desc *template_desc = ima_template_desc_current();
-	int i;
-
-	if (hash_setup_done)
-		return 1;
-
-	if (strcmp(template_desc->name, IMA_TEMPLATE_IMA_NAME) == 0) {
-		if (strncmp(str, "sha1", 4) == 0)
-			ima_hash_algo = HASH_ALGO_SHA1;
-		else if (strncmp(str, "md5", 3) == 0)
-			ima_hash_algo = HASH_ALGO_MD5;
-		goto out;
-	}
-
-	for (i = 0; i < HASH_ALGO__LAST; i++) {
-		if (strcmp(str, hash_algo_name[i]) == 0) {
-			ima_hash_algo = i;
-			break;
-		}
-	}
-out:
-	hash_setup_done = 1;
+	if (strncmp(str, "md5", 3) == 0)
+		ima_hash = "md5";
 	return 1;
 }
 __setup("ima_hash=", hash_setup);
@@ -115,9 +92,10 @@ out:
 		pathname = dentry->d_name.name;
 
 	if (send_tomtou)
-		ima_add_violation(file, pathname, "invalid_pcr", "ToMToU");
+		ima_add_violation(inode, pathname,
+				  "invalid_pcr", "ToMToU");
 	if (send_writers)
-		ima_add_violation(file, pathname,
+		ima_add_violation(inode, pathname,
 				  "invalid_pcr", "open_writers");
 	kfree(pathbuf);
 }
@@ -166,12 +144,9 @@ static int process_measurement(struct file *file, const char *filename,
 {
 	struct inode *inode = file_inode(file);
 	struct integrity_iint_cache *iint;
-	struct ima_template_desc *template_desc = ima_template_desc_current();
 	char *pathbuf = NULL;
 	const char *pathname = NULL;
 	int rc = -ENOMEM, action, must_appraise, _func;
-	struct evm_ima_xattr_data *xattr_value = NULL, **xattr_ptr = NULL;
-	int xattr_len = 0;
 
 	if (!ima_initialized || !S_ISREG(inode->i_mode))
 		return 0;
@@ -210,13 +185,7 @@ static int process_measurement(struct file *file, const char *filename,
 		goto out_digsig;
 	}
 
-	if (strcmp(template_desc->name, IMA_TEMPLATE_IMA_NAME) == 0) {
-		if (action & IMA_APPRAISE_SUBMASK)
-			xattr_ptr = &xattr_value;
-	} else
-		xattr_ptr = &xattr_value;
-
-	rc = ima_collect_measurement(iint, file, xattr_ptr, &xattr_len);
+	rc = ima_collect_measurement(iint, file);
 	if (rc != 0)
 		goto out_digsig;
 
@@ -225,11 +194,9 @@ static int process_measurement(struct file *file, const char *filename,
 		pathname = (const char *)file->f_dentry->d_name.name;
 
 	if (action & IMA_MEASURE)
-		ima_store_measurement(iint, file, pathname,
-				      xattr_value, xattr_len);
+		ima_store_measurement(iint, file, pathname);
 	if (action & IMA_APPRAISE_SUBMASK)
-		rc = ima_appraise_measurement(_func, iint, file, pathname,
-					      xattr_value, xattr_len);
+		rc = ima_appraise_measurement(_func, iint, file, pathname);
 	if (action & IMA_AUDIT)
 		ima_audit_measurement(iint, pathname);
 	kfree(pathbuf);
@@ -238,7 +205,6 @@ out_digsig:
 		rc = -EACCES;
 out:
 	mutex_unlock(&inode->i_mutex);
-	kfree(xattr_value);
 	if ((rc && must_appraise) && (ima_appraise & IMA_APPRAISE_ENFORCE))
 		return -EACCES;
 	return 0;
@@ -278,9 +244,9 @@ int ima_file_mmap(struct file *file, unsigned long prot)
 int ima_bprm_check(struct linux_binprm *bprm)
 {
 	return process_measurement(bprm->file,
-				   (strcmp(bprm->filename, bprm->interp) == 0) ?
-				   bprm->filename : bprm->interp,
-				   MAY_EXEC, BPRM_CHECK);
+				 (strcmp(bprm->filename, bprm->interp) == 0) ?
+				 bprm->filename : bprm->interp,
+				 MAY_EXEC, BPRM_CHECK);
 }
 
 /**
@@ -297,8 +263,8 @@ int ima_file_check(struct file *file, int mask)
 {
 	ima_rdwr_violation_check(file);
 	return process_measurement(file, NULL,
-				   mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
-				   FILE_CHECK);
+				 mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
+				 FILE_CHECK);
 }
 EXPORT_SYMBOL_GPL(ima_file_check);
 
@@ -328,7 +294,6 @@ static int __init init_ima(void)
 {
 	int error;
 
-	hash_setup(CONFIG_IMA_DEFAULT_HASH);
 	error = ima_init();
 	if (!error)
 		ima_initialized = 1;

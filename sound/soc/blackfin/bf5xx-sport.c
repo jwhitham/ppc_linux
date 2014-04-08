@@ -179,9 +179,8 @@ static inline int sport_hook_rx_dummy(struct sport_device *sport)
 	struct dmasg *desc, temp_desc;
 	unsigned long flags;
 
-	if (WARN_ON(!sport->dummy_rx_desc) ||
-	    WARN_ON(sport->curr_rx_desc == sport->dummy_rx_desc))
-		return -EINVAL;
+	BUG_ON(sport->dummy_rx_desc == NULL);
+	BUG_ON(sport->curr_rx_desc == sport->dummy_rx_desc);
 
 	/* Maybe the dummy buffer descriptor ring is damaged */
 	sport->dummy_rx_desc->next_desc_addr = sport->dummy_rx_desc + 1;
@@ -251,9 +250,8 @@ int sport_rx_start(struct sport_device *sport)
 		return -EBUSY;
 	if (sport->tx_run) {
 		/* tx is running, rx is not running */
-		if (WARN_ON(!sport->dma_rx_desc) ||
-		    WARN_ON(sport->curr_rx_desc != sport->dummy_rx_desc))
-			return -EINVAL;
+		BUG_ON(sport->dma_rx_desc == NULL);
+		BUG_ON(sport->curr_rx_desc != sport->dummy_rx_desc);
 		local_irq_save(flags);
 		while ((get_dma_curr_desc_ptr(sport->dma_rx_chan) -
 			sizeof(struct dmasg)) != sport->dummy_rx_desc)
@@ -300,9 +298,8 @@ static inline int sport_hook_tx_dummy(struct sport_device *sport)
 	struct dmasg *desc, temp_desc;
 	unsigned long flags;
 
-	if (WARN_ON(!sport->dummy_tx_desc) ||
-	    WARN_ON(sport->curr_tx_desc == sport->dummy_tx_desc))
-		return -EINVAL;
+	BUG_ON(sport->dummy_tx_desc == NULL);
+	BUG_ON(sport->curr_tx_desc == sport->dummy_tx_desc);
 
 	sport->dummy_tx_desc->next_desc_addr = sport->dummy_tx_desc + 1;
 
@@ -334,9 +331,8 @@ int sport_tx_start(struct sport_device *sport)
 	if (sport->tx_run)
 		return -EBUSY;
 	if (sport->rx_run) {
-		if (WARN_ON(!sport->dma_tx_desc) ||
-		    WARN_ON(sport->curr_tx_desc != sport->dummy_tx_desc))
-			return -EINVAL;
+		BUG_ON(sport->dma_tx_desc == NULL);
+		BUG_ON(sport->curr_tx_desc != sport->dummy_tx_desc);
 		/* Hook the normal buffer descriptor */
 		local_irq_save(flags);
 		while ((get_dma_curr_desc_ptr(sport->dma_tx_chan) -
@@ -771,8 +767,7 @@ static irqreturn_t err_handler(int irq, void *dev_id)
 int sport_set_rx_callback(struct sport_device *sport,
 		       void (*rx_callback)(void *), void *rx_data)
 {
-	if (WARN_ON(!rx_callback))
-		return -EINVAL;
+	BUG_ON(rx_callback == NULL);
 	sport->rx_callback = rx_callback;
 	sport->rx_data = rx_data;
 
@@ -783,8 +778,7 @@ EXPORT_SYMBOL(sport_set_rx_callback);
 int sport_set_tx_callback(struct sport_device *sport,
 		void (*tx_callback)(void *), void *tx_data)
 {
-	if (WARN_ON(!tx_callback))
-		return -EINVAL;
+	BUG_ON(tx_callback == NULL);
 	sport->tx_callback = tx_callback;
 	sport->tx_data = tx_data;
 
@@ -795,8 +789,7 @@ EXPORT_SYMBOL(sport_set_tx_callback);
 int sport_set_err_callback(struct sport_device *sport,
 		void (*err_callback)(void *), void *err_data)
 {
-	if (WARN_ON(!err_callback))
-		return -EINVAL;
+	BUG_ON(err_callback == NULL);
 	sport->err_callback = err_callback;
 	sport->err_data = err_data;
 
@@ -863,8 +856,7 @@ struct sport_device *sport_init(struct platform_device *pdev,
 
 	param.wdsize = wdsize;
 	param.dummy_count = dummy_count;
-	if (WARN_ON(param.wdsize == 0 || param.dummy_count == 0))
-		return NULL;
+	BUG_ON(param.wdsize == 0 || param.dummy_count == 0);
 
 	ret = sport_config_pdev(pdev, &param);
 	if (ret)

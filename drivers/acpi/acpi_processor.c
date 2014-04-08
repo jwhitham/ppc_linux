@@ -140,10 +140,14 @@ static int acpi_processor_errata_piix4(struct pci_dev *dev)
 	return 0;
 }
 
-static int acpi_processor_errata(void)
+static int acpi_processor_errata(struct acpi_processor *pr)
 {
 	int result = 0;
 	struct pci_dev *dev = NULL;
+
+
+	if (!pr)
+		return -EINVAL;
 
 	/*
 	 * PIIX4
@@ -177,7 +181,7 @@ static int acpi_processor_hotadd_init(struct acpi_processor *pr)
 	cpu_maps_update_begin();
 	cpu_hotplug_begin();
 
-	ret = acpi_map_lsapic(pr->handle, pr->apic_id, &pr->id);
+	ret = acpi_map_lsapic(pr->handle, &pr->id);
 	if (ret)
 		goto out;
 
@@ -215,9 +219,11 @@ static int acpi_processor_get_info(struct acpi_device *device)
 	int cpu_index, device_declaration = 0;
 	acpi_status status = AE_OK;
 	static int cpu0_initialized;
-	unsigned long long value;
 
-	acpi_processor_errata();
+	if (num_online_cpus() > 1)
+		errata.smp = TRUE;
+
+	acpi_processor_errata(pr);
 
 	/*
 	 * Check to see if we have bus mastering arbitration control.  This
@@ -241,12 +247,18 @@ static int acpi_processor_get_info(struct acpi_device *device)
 			return -ENODEV;
 		}
 
+		/*
+		 * TBD: Synch processor ID (via LAPIC/LSAPIC structures) on SMP.
+		 *      >>> 'acpi_get_processor_id(acpi_id, &id)' in
+		 *      arch/xxx/acpi.c
+		 */
 		pr->acpi_id = object.processor.proc_id;
 	} else {
 		/*
 		 * Declared with "Device" statement; match _UID.
 		 * Note that we don't handle string _UIDs yet.
 		 */
+		unsigned long long value;
 		status = acpi_evaluate_integer(pr->handle, METHOD_NAME__UID,
 						NULL, &value);
 		if (ACPI_FAILURE(status)) {
@@ -258,9 +270,7 @@ static int acpi_processor_get_info(struct acpi_device *device)
 		device_declaration = 1;
 		pr->acpi_id = value;
 	}
-	pr->apic_id = acpi_get_apicid(pr->handle, device_declaration,
-					pr->acpi_id);
-	cpu_index = acpi_map_cpuid(pr->apic_id, pr->acpi_id);
+	cpu_index = acpi_get_cpuid(pr->handle, device_declaration, pr->acpi_id);
 
 	/* Handle UP system running SMP kernel, with no LAPIC in MADT */
 	if (!cpu0_initialized && (cpu_index == -1) &&
@@ -322,9 +332,9 @@ static int acpi_processor_get_info(struct acpi_device *device)
 	 * ensure we get the right value in the "physical id" field
 	 * of /proc/cpuinfo
 	 */
-	status = acpi_evaluate_integer(pr->handle, "_SUN", NULL, &value);
+	status = acpi_evaluate_object(pr->handle, "_SUN", NULL, &buffer);
 	if (ACPI_SUCCESS(status))
-		arch_fix_phys_package_id(pr->id, value);
+		arch_fix_phys_package_id(pr->id, object.integer.value);
 
 	return 0;
 }

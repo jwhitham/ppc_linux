@@ -392,7 +392,7 @@ static int crypt_scatterlist(struct ecryptfs_crypt_stat *crypt_stat,
 
 		wait_for_completion(&ecr->completion);
 		rc = ecr->rc;
-		reinit_completion(&ecr->completion);
+		INIT_COMPLETION(ecr->completion);
 	}
 out:
 	ablkcipher_request_free(req);

@@ -392,7 +392,7 @@ int __init valkyriefb_init(void)
 	if ((err = register_framebuffer(&p->info)) != 0)
 		goto out_cmap_free;
 
-	fb_info(&p->info, "valkyrie frame buffer device\n");
+	printk(KERN_INFO "fb%d: valkyrie frame buffer device\n", p->info.node);
 	return 0;
 
  out_cmap_free:

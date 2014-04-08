@@ -843,7 +843,7 @@ static int qec_ether_init(struct platform_device *op)
 	if (!dev)
 		return -ENOMEM;
 
-	memcpy(dev->dev_addr, idprom->id_ethaddr, ETH_ALEN);
+	memcpy(dev->dev_addr, idprom->id_ethaddr, 6);
 
 	qe = netdev_priv(dev);
 

@@ -112,10 +112,9 @@ static int kxsd9_read(struct iio_dev *indio_dev, u8 address)
 	mutex_lock(&st->buf_lock);
 	st->tx[0] = KXSD9_READ(address);
 	ret = spi_sync_transfer(st->us, xfers, ARRAY_SIZE(xfers));
-	if (!ret)
-		ret = (((u16)(st->rx[0])) << 8) | (st->rx[1] & 0xF0);
-	mutex_unlock(&st->buf_lock);
-	return ret;
+	if (ret)
+		return ret;
+	return (((u16)(st->rx[0])) << 8) | (st->rx[1] & 0xF0);
 }
 
 static IIO_CONST_ATTR(accel_scale_available,
@@ -223,6 +222,7 @@ static int kxsd9_probe(struct spi_device *spi)
 {
 	struct iio_dev *indio_dev;
 	struct kxsd9_state *st;
+	int ret;
 
 	indio_dev = devm_iio_device_alloc(&spi->dev, sizeof(*st));
 	if (!indio_dev)
@@ -244,7 +244,11 @@ static int kxsd9_probe(struct spi_device *spi)
 	spi_setup(spi);
 	kxsd9_power_up(st);
 
-	return iio_device_register(indio_dev);
+	ret = iio_device_register(indio_dev);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 static int kxsd9_remove(struct spi_device *spi)

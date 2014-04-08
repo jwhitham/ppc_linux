@@ -20,7 +20,6 @@
 #include <linux/errno.h>
 #include <linux/interrupt.h>
 #include <linux/of_address.h>
-#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/completion.h>
 #include <linux/io.h>
@@ -167,7 +166,7 @@ static int mpc512x_psc_spi_transfer_rxtx(struct spi_device *spi,
 			}
 
 			/* have the ISR trigger when the TX FIFO is empty */
-			reinit_completion(&mps->txisrdone);
+			INIT_COMPLETION(mps->txisrdone);
 			out_be32(&fifo->txisr, MPC512x_PSC_FIFO_EMPTY);
 			out_be32(&fifo->tximr, MPC512x_PSC_FIFO_EMPTY);
 			wait_for_completion(&mps->txisrdone);
@@ -537,7 +536,7 @@ static int mpc512x_psc_spi_do_probe(struct device *dev, u32 regaddr,
 	if (ret < 0)
 		goto free_clock;
 
-	ret = devm_spi_register_master(dev, master);
+	ret = spi_register_master(master);
 	if (ret < 0)
 		goto free_clock;
 
@@ -557,13 +556,15 @@ free_master:
 
 static int mpc512x_psc_spi_do_remove(struct device *dev)
 {
-	struct spi_master *master = dev_get_drvdata(dev);
+	struct spi_master *master = spi_master_get(dev_get_drvdata(dev));
 	struct mpc512x_psc_spi *mps = spi_master_get_devdata(master);
 
+	spi_unregister_master(master);
 	clk_disable_unprepare(mps->clk_mclk);
 	free_irq(mps->irq, mps);
 	if (mps->psc)
 		iounmap(mps->psc);
+	spi_master_put(master);
 
 	return 0;
 }

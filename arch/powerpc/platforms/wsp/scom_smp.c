@@ -116,14 +116,7 @@ static int a2_scom_ram(scom_map_t scom, int thread, u32 insn, int extmask)
 
 	scom_write(scom, SCOM_RAMIC, cmd);
 
-	for (;;) {
-		if (scom_read(scom, SCOM_RAMC, &val) != 0) {
-			pr_err("SCOM error on instruction 0x%08x, thread %d\n",
-			       insn, thread);
-			return -1;
-		}
-		if (val & mask)
-			break;
+	while (!((val = scom_read(scom, SCOM_RAMC)) & mask)) {
 		pr_devel("Waiting on RAMC = 0x%llx\n", val);
 		if (++n == 3) {
 			pr_err("RAMC timeout on instruction 0x%08x, thread %d\n",
@@ -158,7 +151,9 @@ static int a2_scom_getgpr(scom_map_t scom, int thread, int gpr, int alt,
 	if (rc)
 		return rc;
 
-	return scom_read(scom, SCOM_RAMD, out_gpr);
+	*out_gpr = scom_read(scom, SCOM_RAMD);
+
+	return 0;
 }
 
 static int a2_scom_getspr(scom_map_t scom, int thread, int spr, u64 *out_spr)
@@ -358,10 +353,7 @@ int a2_scom_startup_cpu(unsigned int lcpu, int thr_idx, struct device_node *np)
 
 	pr_devel("Bringing up CPU%d using SCOM...\n", lcpu);
 
-	if (scom_read(scom, SCOM_PCCR0, &pccr0) != 0) {
-		printk(KERN_ERR "XSCOM failure readng PCCR0 on CPU%d\n", lcpu);
-		return -1;
-	}
+	pccr0 = scom_read(scom, SCOM_PCCR0);
 	scom_write(scom, SCOM_PCCR0, pccr0 | SCOM_PCCR0_ENABLE_DEBUG |
 				     SCOM_PCCR0_ENABLE_RAM);
 

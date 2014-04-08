@@ -158,9 +158,7 @@ struct parse_opt_ctx_t {
 };
 
 extern int parse_options_usage(const char * const *usagestr,
-			       const struct option *opts,
-			       const char *optstr,
-			       bool short_opt);
+			       const struct option *opts);
 
 extern void parse_options_start(struct parse_opt_ctx_t *ctx,
 				int argc, const char **argv, int flags);

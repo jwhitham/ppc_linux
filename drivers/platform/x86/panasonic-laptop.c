@@ -490,8 +490,11 @@ static int acpi_pcc_init_input(struct pcc_acpi *pcc)
 	int error;
 
 	input_dev = input_allocate_device();
-	if (!input_dev)
+	if (!input_dev) {
+		ACPI_DEBUG_PRINT((ACPI_DB_ERROR,
+				  "Couldn't allocate input device for hotkey"));
 		return -ENOMEM;
+	}
 
 	input_dev->name = ACPI_PCC_DRIVER_NAME;
 	input_dev->phys = ACPI_PCC_INPUT_PHYS;

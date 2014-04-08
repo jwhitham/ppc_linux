@@ -51,6 +51,7 @@ static int adis16080_read_sample(struct iio_dev *indio_dev,
 		u16 addr, int *val)
 {
 	struct adis16080_state *st = iio_priv(indio_dev);
+	struct spi_message m;
 	int ret;
 	struct spi_transfer	t[] = {
 		{
@@ -65,7 +66,11 @@ static int adis16080_read_sample(struct iio_dev *indio_dev,
 
 	st->buf = cpu_to_be16(addr | ADIS16080_DIN_WRITE);
 
-	ret = spi_sync_transfer(st->us, t, ARRAY_SIZE(t));
+	spi_message_init(&m);
+	spi_message_add_tail(&t[0], &m);
+	spi_message_add_tail(&t[1], &m);
+
+	ret = spi_sync(st->us, &m);
 	if (ret == 0)
 		*val = sign_extend32(be16_to_cpu(st->buf), 11);
 

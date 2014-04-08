@@ -1580,7 +1580,8 @@ icn_addcard(int port, char *id1, char *id2)
 	}
 	if (!(card2 = icn_initcard(port, id2))) {
 		printk(KERN_INFO
-		       "icn: (%s) half ICN-4B, port 0x%x added\n", id2, port);
+		       "icn: (%s) half ICN-4B, port 0x%x added\n",
+		       card2->interface.id, port);
 		return 0;
 	}
 	card->doubleS0 = 1;

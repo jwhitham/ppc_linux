@@ -17,7 +17,6 @@
 #include <linux/mfd/as3711.h>
 #include <linux/mfd/core.h>
 #include <linux/module.h>
-#include <linux/of.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
 

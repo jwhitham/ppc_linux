@@ -114,8 +114,7 @@ illegal_syscall:
 	END(handle_sys64)
 
 	.align	3
-	.type	sys_call_table, @object
-EXPORT(sys_call_table)
+sys_call_table:
 	PTR	sys_read			/* 5000 */
 	PTR	sys_write
 	PTR	sys_open

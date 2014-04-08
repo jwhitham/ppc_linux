@@ -27,6 +27,7 @@
 #include <linux/string.h>
 #include <linux/parser.h>
 #include <linux/timer.h>
+#include <linux/blkdev.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <scsi/scsi.h>

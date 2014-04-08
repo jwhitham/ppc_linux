@@ -44,11 +44,13 @@ static int __ref cpu_subsys_online(struct device *dev)
 	struct cpu *cpu = container_of(dev, struct cpu, dev);
 	int cpuid = dev->id;
 	int from_nid, to_nid;
-	int ret;
+	int ret = -ENODEV;
+
+	cpu_hotplug_driver_lock();
 
 	from_nid = cpu_to_node(cpuid);
 	if (from_nid == NUMA_NO_NODE)
-		return -ENODEV;
+		goto out;
 
 	ret = cpu_up(cpuid);
 	/*
@@ -59,12 +61,19 @@ static int __ref cpu_subsys_online(struct device *dev)
 	if (from_nid != to_nid)
 		change_cpu_under_node(cpu, from_nid, to_nid);
 
+ out:
+	cpu_hotplug_driver_unlock();
 	return ret;
 }
 
 static int cpu_subsys_offline(struct device *dev)
 {
-	return cpu_down(dev->id);
+	int ret;
+
+	cpu_hotplug_driver_lock();
+	ret = cpu_down(dev->id);
+	cpu_hotplug_driver_unlock();
+	return ret;
 }
 
 void unregister_cpu(struct cpu *cpu)
@@ -84,17 +93,7 @@ static ssize_t cpu_probe_store(struct device *dev,
 			       const char *buf,
 			       size_t count)
 {
-	ssize_t cnt;
-	int ret;
-
-	ret = lock_device_hotplug_sysfs();
-	if (ret)
-		return ret;
-
-	cnt = arch_cpu_probe(buf, count);
-
-	unlock_device_hotplug();
-	return cnt;
+	return arch_cpu_probe(buf, count);
 }
 
 static ssize_t cpu_release_store(struct device *dev,
@@ -102,17 +101,7 @@ static ssize_t cpu_release_store(struct device *dev,
 				 const char *buf,
 				 size_t count)
 {
-	ssize_t cnt;
-	int ret;
-
-	ret = lock_device_hotplug_sysfs();
-	if (ret)
-		return ret;
-
-	cnt = arch_cpu_release(buf, count);
-
-	unlock_device_hotplug();
-	return cnt;
+	return arch_cpu_release(buf, count);
 }
 
 static DEVICE_ATTR(probe, S_IWUSR, NULL, cpu_probe_store);

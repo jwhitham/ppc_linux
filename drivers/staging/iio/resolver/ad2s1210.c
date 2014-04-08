@@ -206,10 +206,10 @@ static ssize_t ad2s1210_store_fclkin(struct device *dev,
 				     size_t len)
 {
 	struct ad2s1210_state *st = iio_priv(dev_to_iio_dev(dev));
-	unsigned int fclkin;
+	unsigned long fclkin;
 	int ret;
 
-	ret = kstrtouint(buf, 10, &fclkin);
+	ret = strict_strtoul(buf, 10, &fclkin);
 	if (ret)
 		return ret;
 	if (fclkin < AD2S1210_MIN_CLKIN || fclkin > AD2S1210_MAX_CLKIN) {
@@ -243,10 +243,10 @@ static ssize_t ad2s1210_store_fexcit(struct device *dev,
 				     const char *buf, size_t len)
 {
 	struct ad2s1210_state *st = iio_priv(dev_to_iio_dev(dev));
-	unsigned int fexcit;
+	unsigned long fexcit;
 	int ret;
 
-	ret = kstrtouint(buf, 10, &fexcit);
+	ret = strict_strtoul(buf, 10, &fexcit);
 	if (ret < 0)
 		return ret;
 	if (fexcit < AD2S1210_MIN_EXCIT || fexcit > AD2S1210_MAX_EXCIT) {
@@ -282,11 +282,11 @@ static ssize_t ad2s1210_store_control(struct device *dev,
 			const char *buf, size_t len)
 {
 	struct ad2s1210_state *st = iio_priv(dev_to_iio_dev(dev));
-	unsigned char udata;
+	unsigned long udata;
 	unsigned char data;
 	int ret;
 
-	ret = kstrtou8(buf, 16, &udata);
+	ret = strict_strtoul(buf, 16, &udata);
 	if (ret)
 		return -EINVAL;
 
@@ -337,10 +337,10 @@ static ssize_t ad2s1210_store_resolution(struct device *dev,
 {
 	struct ad2s1210_state *st = iio_priv(dev_to_iio_dev(dev));
 	unsigned char data;
-	unsigned char udata;
+	unsigned long udata;
 	int ret;
 
-	ret = kstrtou8(buf, 10, &udata);
+	ret = strict_strtoul(buf, 10, &udata);
 	if (ret || udata < 10 || udata > 16) {
 		pr_err("ad2s1210: resolution out of range\n");
 		return -EINVAL;
@@ -438,11 +438,11 @@ static ssize_t ad2s1210_store_reg(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	struct ad2s1210_state *st = iio_priv(dev_to_iio_dev(dev));
-	unsigned char data;
+	unsigned long data;
 	int ret;
 	struct iio_dev_attr *iattr = to_iio_dev_attr(attr);
 
-	ret = kstrtou8(buf, 10, &data);
+	ret = strict_strtoul(buf, 10, &data);
 	if (ret)
 		return -EINVAL;
 	mutex_lock(&st->lock);
@@ -669,14 +669,16 @@ static int ad2s1210_probe(struct spi_device *spi)
 	if (spi->dev.platform_data == NULL)
 		return -EINVAL;
 
-	indio_dev = devm_iio_device_alloc(&spi->dev, sizeof(*st));
-	if (!indio_dev)
-		return -ENOMEM;
+	indio_dev = iio_device_alloc(sizeof(*st));
+	if (indio_dev == NULL) {
+		ret = -ENOMEM;
+		goto error_ret;
+	}
 	st = iio_priv(indio_dev);
 	st->pdata = spi->dev.platform_data;
 	ret = ad2s1210_setup_gpios(st);
 	if (ret < 0)
-		return ret;
+		goto error_free_dev;
 
 	spi_set_drvdata(spi, indio_dev);
 
@@ -707,6 +709,9 @@ static int ad2s1210_probe(struct spi_device *spi)
 
 error_free_gpios:
 	ad2s1210_free_gpios(st);
+error_free_dev:
+	iio_device_free(indio_dev);
+error_ret:
 	return ret;
 }
 
@@ -716,6 +721,7 @@ static int ad2s1210_remove(struct spi_device *spi)
 
 	iio_device_unregister(indio_dev);
 	ad2s1210_free_gpios(iio_priv(indio_dev));
+	iio_device_free(indio_dev);
 
 	return 0;
 }

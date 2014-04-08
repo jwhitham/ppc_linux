@@ -1080,16 +1080,13 @@ unsigned long clk_get_rate(struct clk *clk)
 }
 EXPORT_SYMBOL_GPL(clk_get_rate);
 
-static int clk_fetch_parent_index(struct clk *clk, struct clk *parent)
+static u8 clk_fetch_parent_index(struct clk *clk, struct clk *parent)
 {
-	int i;
+	u8 i;
 
-	if (!clk->parents) {
-		clk->parents = kcalloc(clk->num_parents,
-					sizeof(struct clk *), GFP_KERNEL);
-		if (!clk->parents)
-			return -ENOMEM;
-	}
+	if (!clk->parents)
+		clk->parents = kzalloc((sizeof(struct clk*) * clk->num_parents),
+								GFP_KERNEL);
 
 	/*
 	 * find index of new parent clock using cached parent ptrs,
@@ -1097,19 +1094,16 @@ static int clk_fetch_parent_index(struct clk *clk, struct clk *parent)
 	 * them now to avoid future calls to __clk_lookup.
 	 */
 	for (i = 0; i < clk->num_parents; i++) {
-		if (clk->parents[i] == parent)
-			return i;
-
-		if (clk->parents[i])
-			continue;
-
-		if (!strcmp(clk->parent_names[i], parent->name)) {
-			clk->parents[i] = __clk_lookup(parent->name);
-			return i;
+		if (clk->parents && clk->parents[i] == parent)
+			break;
+		else if (!strcmp(clk->parent_names[i], parent->name)) {
+			if (clk->parents)
+				clk->parents[i] = __clk_lookup(parent->name);
+			break;
 		}
 	}
 
-	return -EINVAL;
+	return i;
 }
 
 static void clk_reparent(struct clk *clk, struct clk *new_parent)
@@ -1271,7 +1265,7 @@ static struct clk *clk_calc_new_rates(struct clk *clk, unsigned long rate)
 	struct clk *old_parent, *parent;
 	unsigned long best_parent_rate = 0;
 	unsigned long new_rate;
-	int p_index = 0;
+	u8 p_index = 0;
 
 	/* sanity */
 	if (IS_ERR_OR_NULL(clk))
@@ -1312,7 +1306,7 @@ static struct clk *clk_calc_new_rates(struct clk *clk, unsigned long rate)
 	/* try finding the new parent index */
 	if (parent) {
 		p_index = clk_fetch_parent_index(clk, parent);
-		if (p_index < 0) {
+		if (p_index == clk->num_parents) {
 			pr_debug("%s: clk %s can not be parent of clk %s\n",
 				 __func__, parent->name, clk->name);
 			return NULL;
@@ -1538,7 +1532,7 @@ static struct clk *__clk_init_parent(struct clk *clk)
 
 	if (!clk->parents)
 		clk->parents =
-			kcalloc(clk->num_parents, sizeof(struct clk *),
+			kzalloc((sizeof(struct clk*) * clk->num_parents),
 					GFP_KERNEL);
 
 	ret = clk_get_parent_by_index(clk, index);
@@ -1574,7 +1568,7 @@ void __clk_reparent(struct clk *clk, struct clk *new_parent)
 int clk_set_parent(struct clk *clk, struct clk *parent)
 {
 	int ret = 0;
-	int p_index = 0;
+	u8 p_index = 0;
 	unsigned long p_rate = 0;
 
 	if (!clk)
@@ -1603,10 +1597,10 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 	if (parent) {
 		p_index = clk_fetch_parent_index(clk, parent);
 		p_rate = parent->rate;
-		if (p_index < 0) {
+		if (p_index == clk->num_parents) {
 			pr_debug("%s: clk %s can not be parent of clk %s\n",
 					__func__, parent->name, clk->name);
-			ret = p_index;
+			ret = -EINVAL;
 			goto out;
 		}
 	}
@@ -1695,8 +1689,8 @@ int __clk_init(struct device *dev, struct clk *clk)
 	 * for clock drivers to statically initialize clk->parents.
 	 */
 	if (clk->num_parents > 1 && !clk->parents) {
-		clk->parents = kcalloc(clk->num_parents, sizeof(struct clk *),
-					GFP_KERNEL);
+		clk->parents = kzalloc((sizeof(struct clk*) * clk->num_parents),
+				GFP_KERNEL);
 		/*
 		 * __clk_lookup returns NULL for parents that have not been
 		 * clk_init'd; thus any access to clk->parents[] must check
@@ -1836,8 +1830,8 @@ static int _clk_register(struct device *dev, struct clk_hw *hw, struct clk *clk)
 	hw->clk = clk;
 
 	/* allocate local copy in case parent_names is __initdata */
-	clk->parent_names = kcalloc(clk->num_parents, sizeof(char *),
-					GFP_KERNEL);
+	clk->parent_names = kzalloc((sizeof(char*) * clk->num_parents),
+			GFP_KERNEL);
 
 	if (!clk->parent_names) {
 		pr_err("%s: could not allocate clk->parent_names\n", __func__);
@@ -2201,12 +2195,6 @@ struct clk *of_clk_get_from_provider(struct of_phandle_args *clkspec)
 
 	return clk;
 }
-
-int of_clk_get_parent_count(struct device_node *np)
-{
-	return of_count_phandle_with_args(np, "clocks", "#clock-cells");
-}
-EXPORT_SYMBOL_GPL(of_clk_get_parent_count);
 
 const char *of_clk_get_parent_name(struct device_node *np, int index)
 {

@@ -96,7 +96,6 @@ enum radeon_family {
 	CHIP_BONAIRE,
 	CHIP_KAVERI,
 	CHIP_KABINI,
-	CHIP_HAWAII,
 	CHIP_LAST,
 };
 

@@ -405,7 +405,8 @@ static int hitfb_probe(struct platform_device *dev)
 
 	platform_set_drvdata(dev, info);
 
-	fb_info(info, "%s frame buffer device\n", info->fix.id);
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       info->node, info->fix.id);
 
 	return 0;
 

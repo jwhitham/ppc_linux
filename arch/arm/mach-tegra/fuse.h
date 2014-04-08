@@ -29,7 +29,6 @@
 #define TEGRA20		0x20
 #define TEGRA30		0x30
 #define TEGRA114	0x35
-#define TEGRA124	0x40
 
 #ifndef __ASSEMBLY__
 enum tegra_revision {

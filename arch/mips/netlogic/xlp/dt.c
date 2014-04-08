@@ -39,11 +39,8 @@
 #include <linux/of_platform.h>
 #include <linux/of_device.h>
 
-#include <asm/prom.h>
-
 extern u32 __dtb_xlp_evp_begin[], __dtb_xlp_svp_begin[],
 	__dtb_xlp_fvp_begin[], __dtb_start[];
-static void *xlp_fdt_blob;
 
 void __init *xlp_dt_init(void *fdtp)
 {
@@ -70,26 +67,19 @@ void __init *xlp_dt_init(void *fdtp)
 			break;
 		}
 	}
-	xlp_fdt_blob = fdtp;
+	initial_boot_params = fdtp;
 	return fdtp;
-}
-
-void __init xlp_early_init_devtree(void)
-{
-	__dt_setup_arch(xlp_fdt_blob);
-	strlcpy(arcs_cmdline, boot_command_line, COMMAND_LINE_SIZE);
 }
 
 void __init device_tree_init(void)
 {
 	unsigned long base, size;
-	struct boot_param_header *fdtp = xlp_fdt_blob;
 
-	if (!fdtp)
+	if (!initial_boot_params)
 		return;
 
-	base = virt_to_phys(fdtp);
-	size = be32_to_cpu(fdtp->totalsize);
+	base = virt_to_phys((void *)initial_boot_params);
+	size = be32_to_cpu(initial_boot_params->totalsize);
 
 	/* Before we do anything, lets reserve the dt blob */
 	reserve_bootmem(base, size, BOOTMEM_DEFAULT);

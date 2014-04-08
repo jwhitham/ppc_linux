@@ -678,7 +678,7 @@ static int timb_probe(struct pci_dev *dev,
 	priv->ctl_mapbase = mapbase + CHIPCTLOFFSET;
 	if (!request_mem_region(priv->ctl_mapbase, CHIPCTLSIZE, "timb-ctl")) {
 		dev_err(&dev->dev, "Failed to request ctl mem\n");
-		goto err_start;
+		goto err_request;
 	}
 
 	priv->ctl_membase = ioremap(priv->ctl_mapbase, CHIPCTLSIZE);
@@ -828,10 +828,13 @@ err_config:
 	iounmap(priv->ctl_membase);
 err_ioremap:
 	release_mem_region(priv->ctl_mapbase, CHIPCTLSIZE);
+err_request:
+	pci_set_drvdata(dev, NULL);
 err_start:
 	pci_disable_device(dev);
 err_enable:
 	kfree(priv);
+	pci_set_drvdata(dev, NULL);
 	return -ENODEV;
 }
 
@@ -848,6 +851,7 @@ static void timb_remove(struct pci_dev *dev)
 
 	pci_disable_msix(dev);
 	pci_disable_device(dev);
+	pci_set_drvdata(dev, NULL);
 	kfree(priv);
 }
 

@@ -1848,6 +1848,7 @@ static int atyfb_ioctl(struct fb_info *info, u_int cmd, u_long arg)
 
 			return aty_waitforvblank(par, crtc);
 		}
+		break;
 
 #if defined(DEBUG) && defined(CONFIG_FB_ATY_CT)
 	case ATYIO_CLKR:

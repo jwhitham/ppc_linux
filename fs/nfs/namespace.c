@@ -253,8 +253,9 @@ struct vfsmount *nfs_do_submount(struct dentry *dentry, struct nfs_fh *fh,
 
 	dprintk("--> nfs_do_submount()\n");
 
-	dprintk("%s: submounting on %pd2\n", __func__,
-			dentry);
+	dprintk("%s: submounting on %s/%s\n", __func__,
+			dentry->d_parent->d_name.name,
+			dentry->d_name.name);
 	if (page == NULL)
 		goto out;
 	devname = nfs_devname(dentry, page, PAGE_SIZE);

@@ -21,12 +21,6 @@ static const char * const cache_replacement_policies[] = {
 	NULL
 };
 
-static const char * const error_actions[] = {
-	"unregister",
-	"panic",
-	NULL
-};
-
 write_attribute(attach);
 write_attribute(detach);
 write_attribute(unregister);
@@ -72,6 +66,7 @@ rw_attribute(congested_read_threshold_us);
 rw_attribute(congested_write_threshold_us);
 
 rw_attribute(sequential_cutoff);
+rw_attribute(sequential_merge);
 rw_attribute(data_csum);
 rw_attribute(cache_mode);
 rw_attribute(writeback_metadata);
@@ -95,14 +90,11 @@ rw_attribute(discard);
 rw_attribute(running);
 rw_attribute(label);
 rw_attribute(readahead);
-rw_attribute(errors);
 rw_attribute(io_error_limit);
 rw_attribute(io_error_halflife);
 rw_attribute(verify);
-rw_attribute(bypass_torture_test);
 rw_attribute(key_merging_disabled);
 rw_attribute(gc_always_rewrite);
-rw_attribute(expensive_debug_checks);
 rw_attribute(freelist_percent);
 rw_attribute(cache_replacement_policy);
 rw_attribute(btree_shrinker_disabled);
@@ -124,7 +116,6 @@ SHOW(__bch_cached_dev)
 
 	sysfs_printf(data_csum,		"%i", dc->disk.data_csum);
 	var_printf(verify,		"%i");
-	var_printf(bypass_torture_test,	"%i");
 	var_printf(writeback_metadata,	"%i");
 	var_printf(writeback_running,	"%i");
 	var_print(writeback_delay);
@@ -159,9 +150,10 @@ SHOW(__bch_cached_dev)
 	sysfs_hprint(dirty_data,
 		     bcache_dev_sectors_dirty(&dc->disk) << 9);
 
-	sysfs_hprint(stripe_size,	dc->disk.stripe_size << 9);
+	sysfs_hprint(stripe_size,	(1 << dc->disk.stripe_size_bits) << 9);
 	var_printf(partial_stripes_expensive,	"%u");
 
+	var_printf(sequential_merge,	"%i");
 	var_hprint(sequential_cutoff);
 	var_hprint(readahead);
 
@@ -193,7 +185,6 @@ STORE(__cached_dev)
 
 	sysfs_strtoul(data_csum,	dc->disk.data_csum);
 	d_strtoul(verify);
-	d_strtoul(bypass_torture_test);
 	d_strtoul(writeback_metadata);
 	d_strtoul(writeback_running);
 	d_strtoul(writeback_delay);
@@ -208,6 +199,7 @@ STORE(__cached_dev)
 			    dc->writeback_rate_p_term_inverse, 1, INT_MAX);
 	d_strtoul(writeback_rate_d_smooth);
 
+	d_strtoul(sequential_merge);
 	d_strtoi_h(sequential_cutoff);
 	d_strtoi_h(readahead);
 
@@ -319,6 +311,7 @@ static struct attribute *bch_cached_dev_files[] = {
 	&sysfs_stripe_size,
 	&sysfs_partial_stripes_expensive,
 	&sysfs_sequential_cutoff,
+	&sysfs_sequential_merge,
 	&sysfs_clear_stats,
 	&sysfs_running,
 	&sysfs_state,
@@ -326,7 +319,6 @@ static struct attribute *bch_cached_dev_files[] = {
 	&sysfs_readahead,
 #ifdef CONFIG_BCACHE_DEBUG
 	&sysfs_verify,
-	&sysfs_bypass_torture_test,
 #endif
 	NULL
 };
@@ -374,7 +366,7 @@ STORE(__bch_flash_dev)
 	}
 
 	if (attr == &sysfs_unregister) {
-		set_bit(BCACHE_DEV_DETACHING, &d->flags);
+		atomic_set(&d->detaching, 1);
 		bcache_device_stop(d);
 	}
 
@@ -489,6 +481,7 @@ lock_root:
 
 	sysfs_print(btree_used_percent,	btree_used(c));
 	sysfs_print(btree_nodes,	c->gc_stats.nodes);
+	sysfs_hprint(dirty_data,	c->gc_stats.dirty);
 	sysfs_hprint(average_key_size,	average_key_size(c));
 
 	sysfs_print(cache_read_races,
@@ -498,10 +491,6 @@ lock_root:
 		    atomic_long_read(&c->writeback_keys_done));
 	sysfs_print(writeback_keys_failed,
 		    atomic_long_read(&c->writeback_keys_failed));
-
-	if (attr == &sysfs_errors)
-		return bch_snprint_string_list(buf, PAGE_SIZE, error_actions,
-					       c->on_error);
 
 	/* See count_io_errors for why 88 */
 	sysfs_print(io_error_halflife,	c->error_decay * 88);
@@ -517,8 +506,6 @@ lock_root:
 	sysfs_print(active_journal_entries,	fifo_used(&c->journal.pin));
 	sysfs_printf(verify,			"%i", c->verify);
 	sysfs_printf(key_merging_disabled,	"%i", c->key_merging_disabled);
-	sysfs_printf(expensive_debug_checks,
-		     "%i", c->expensive_debug_checks);
 	sysfs_printf(gc_always_rewrite,		"%i", c->gc_always_rewrite);
 	sysfs_printf(btree_shrinker_disabled,	"%i", c->shrinker_disabled);
 	sysfs_printf(copy_gc_enabled,		"%i", c->copy_gc_enabled);
@@ -568,7 +555,7 @@ STORE(__bch_cache_set)
 	}
 
 	if (attr == &sysfs_trigger_gc)
-		wake_up_gc(c);
+		bch_queue_gc(c);
 
 	if (attr == &sysfs_prune_cache) {
 		struct shrink_control sc;
@@ -582,15 +569,6 @@ STORE(__bch_cache_set)
 	sysfs_strtoul(congested_write_threshold_us,
 		      c->congested_write_threshold_us);
 
-	if (attr == &sysfs_errors) {
-		ssize_t v = bch_read_string_list(buf, error_actions);
-
-		if (v < 0)
-			return v;
-
-		c->on_error = v;
-	}
-
 	if (attr == &sysfs_io_error_limit)
 		c->error_limit = strtoul_or_return(buf) << IO_ERROR_SHIFT;
 
@@ -601,7 +579,6 @@ STORE(__bch_cache_set)
 	sysfs_strtoul(journal_delay_ms,		c->journal_delay_ms);
 	sysfs_strtoul(verify,			c->verify);
 	sysfs_strtoul(key_merging_disabled,	c->key_merging_disabled);
-	sysfs_strtoul(expensive_debug_checks,	c->expensive_debug_checks);
 	sysfs_strtoul(gc_always_rewrite,	c->gc_always_rewrite);
 	sysfs_strtoul(btree_shrinker_disabled,	c->shrinker_disabled);
 	sysfs_strtoul(copy_gc_enabled,		c->copy_gc_enabled);
@@ -641,8 +618,8 @@ static struct attribute *bch_cache_set_files[] = {
 	&sysfs_cache_available_percent,
 
 	&sysfs_average_key_size,
+	&sysfs_dirty_data,
 
-	&sysfs_errors,
 	&sysfs_io_error_limit,
 	&sysfs_io_error_halflife,
 	&sysfs_congested,
@@ -676,7 +653,6 @@ static struct attribute *bch_cache_set_internal_files[] = {
 #ifdef CONFIG_BCACHE_DEBUG
 	&sysfs_verify,
 	&sysfs_key_merging_disabled,
-	&sysfs_expensive_debug_checks,
 #endif
 	&sysfs_gc_always_rewrite,
 	&sysfs_btree_shrinker_disabled,

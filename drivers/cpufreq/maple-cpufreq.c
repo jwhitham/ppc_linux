@@ -64,10 +64,17 @@ static struct cpufreq_frequency_table maple_cpu_freqs[] = {
 	{0,			CPUFREQ_TABLE_END},
 };
 
+static struct freq_attr *maple_cpu_freqs_attr[] = {
+	&cpufreq_freq_attr_scaling_available_freqs,
+	NULL,
+};
+
 /* Power mode data is an array of the 32 bits PCR values to use for
  * the various frequencies, retrieved from the device-tree
  */
 static int maple_pmode_cur;
+
+static DEFINE_MUTEX(maple_switch_mutex);
 
 static const u32 *maple_pmode_data;
 static int maple_pmode_max;
@@ -128,10 +135,37 @@ static int maple_scom_query_freq(void)
  * Common interface to the cpufreq core
  */
 
-static int maple_cpufreq_target(struct cpufreq_policy *policy,
-	unsigned int index)
+static int maple_cpufreq_verify(struct cpufreq_policy *policy)
 {
-	return maple_scom_switch_freq(index);
+	return cpufreq_frequency_table_verify(policy, maple_cpu_freqs);
+}
+
+static int maple_cpufreq_target(struct cpufreq_policy *policy,
+	unsigned int target_freq, unsigned int relation)
+{
+	unsigned int newstate = 0;
+	struct cpufreq_freqs freqs;
+	int rc;
+
+	if (cpufreq_frequency_table_target(policy, maple_cpu_freqs,
+			target_freq, relation, &newstate))
+		return -EINVAL;
+
+	if (maple_pmode_cur == newstate)
+		return 0;
+
+	mutex_lock(&maple_switch_mutex);
+
+	freqs.old = maple_cpu_freqs[maple_pmode_cur].frequency;
+	freqs.new = maple_cpu_freqs[newstate].frequency;
+
+	cpufreq_notify_transition(policy, &freqs, CPUFREQ_PRECHANGE);
+	rc = maple_scom_switch_freq(newstate);
+	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
+
+	mutex_unlock(&maple_switch_mutex);
+
+	return rc;
 }
 
 static unsigned int maple_cpufreq_get_speed(unsigned int cpu)
@@ -141,17 +175,27 @@ static unsigned int maple_cpufreq_get_speed(unsigned int cpu)
 
 static int maple_cpufreq_cpu_init(struct cpufreq_policy *policy)
 {
-	return cpufreq_generic_init(policy, maple_cpu_freqs, 12000);
+	policy->cpuinfo.transition_latency = 12000;
+	policy->cur = maple_cpu_freqs[maple_scom_query_freq()].frequency;
+	/* secondary CPUs are tied to the primary one by the
+	 * cpufreq core if in the secondary policy we tell it that
+	 * it actually must be one policy together with all others. */
+	cpumask_setall(policy->cpus);
+	cpufreq_frequency_table_get_attr(maple_cpu_freqs, policy->cpu);
+
+	return cpufreq_frequency_table_cpuinfo(policy,
+		maple_cpu_freqs);
 }
+
 
 static struct cpufreq_driver maple_cpufreq_driver = {
 	.name		= "maple",
 	.flags		= CPUFREQ_CONST_LOOPS,
 	.init		= maple_cpufreq_cpu_init,
-	.verify		= cpufreq_generic_frequency_table_verify,
-	.target_index	= maple_cpufreq_target,
+	.verify		= maple_cpufreq_verify,
+	.target		= maple_cpufreq_target,
 	.get		= maple_cpufreq_get_speed,
-	.attr		= cpufreq_generic_attr,
+	.attr		= maple_cpu_freqs_attr,
 };
 
 static int __init maple_cpufreq_init(void)

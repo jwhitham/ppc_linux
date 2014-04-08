@@ -17,31 +17,31 @@
  * Inc.,  51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 #include "xfs.h"
-#include "xfs_shared.h"
 #include "xfs_fs.h"
 #include "xfs_format.h"
-#include "xfs_log_format.h"
-#include "xfs_trans_resv.h"
 #include "xfs_bit.h"
+#include "xfs_log.h"
+#include "xfs_trans.h"
 #include "xfs_sb.h"
 #include "xfs_ag.h"
 #include "xfs_mount.h"
-#include "xfs_da_format.h"
+#include "xfs_da_btree.h"
+#include "xfs_dir2_format.h"
 #include "xfs_dir2.h"
+#include "xfs_bmap_btree.h"
+#include "xfs_ialloc_btree.h"
+#include "xfs_dinode.h"
 #include "xfs_inode.h"
 #include "xfs_ialloc.h"
 #include "xfs_alloc.h"
 #include "xfs_bmap.h"
-#include "xfs_bmap_btree.h"
 #include "xfs_bmap_util.h"
 #include "xfs_error.h"
 #include "xfs_quota.h"
 #include "xfs_trans_space.h"
 #include "xfs_trace.h"
 #include "xfs_symlink.h"
-#include "xfs_trans.h"
-#include "xfs_log.h"
-#include "xfs_dinode.h"
+#include "xfs_buf_item.h"
 
 /* ----- Kernel only functions below ----- */
 STATIC int
@@ -424,7 +424,8 @@ xfs_symlink(
  */
 STATIC int
 xfs_inactive_symlink_rmt(
-	struct xfs_inode *ip)
+	xfs_inode_t	*ip,
+	xfs_trans_t	**tpp)
 {
 	xfs_buf_t	*bp;
 	int		committed;
@@ -436,9 +437,11 @@ xfs_inactive_symlink_rmt(
 	xfs_mount_t	*mp;
 	xfs_bmbt_irec_t	mval[XFS_SYMLINK_MAPS];
 	int		nmaps;
+	xfs_trans_t	*ntp;
 	int		size;
 	xfs_trans_t	*tp;
 
+	tp = *tpp;
 	mp = ip->i_mount;
 	ASSERT(ip->i_df.if_flags & XFS_IFEXTENTS);
 	/*
@@ -449,16 +452,6 @@ xfs_inactive_symlink_rmt(
 	 * free them all in one bunmapi call.
 	 */
 	ASSERT(ip->i_d.di_nextents > 0 && ip->i_d.di_nextents <= 2);
-
-	tp = xfs_trans_alloc(mp, XFS_TRANS_INACTIVE);
-	error = xfs_trans_reserve(tp, &M_RES(mp)->tr_itruncate, 0, 0);
-	if (error) {
-		xfs_trans_cancel(tp, 0);
-		return error;
-	}
-
-	xfs_ilock(ip, XFS_ILOCK_EXCL);
-	xfs_trans_ijoin(tp, ip, 0);
 
 	/*
 	 * Lock the inode, fix the size, and join it to the transaction.
@@ -478,7 +471,7 @@ xfs_inactive_symlink_rmt(
 	error = xfs_bmapi_read(ip, 0, xfs_symlink_blocks(mp, size),
 				mval, &nmaps, 0);
 	if (error)
-		goto error_trans_cancel;
+		goto error0;
 	/*
 	 * Invalidate the block(s). No validation is done.
 	 */
@@ -488,24 +481,22 @@ xfs_inactive_symlink_rmt(
 			XFS_FSB_TO_BB(mp, mval[i].br_blockcount), 0);
 		if (!bp) {
 			error = ENOMEM;
-			goto error_bmap_cancel;
+			goto error1;
 		}
 		xfs_trans_binval(tp, bp);
 	}
 	/*
 	 * Unmap the dead block(s) to the free_list.
 	 */
-	error = xfs_bunmapi(tp, ip, 0, size, XFS_BMAPI_METADATA, nmaps,
-			    &first_block, &free_list, &done);
-	if (error)
-		goto error_bmap_cancel;
+	if ((error = xfs_bunmapi(tp, ip, 0, size, XFS_BMAPI_METADATA, nmaps,
+			&first_block, &free_list, &done)))
+		goto error1;
 	ASSERT(done);
 	/*
 	 * Commit the first transaction.  This logs the EFI and the inode.
 	 */
-	error = xfs_bmap_finish(&tp, &free_list, &committed);
-	if (error)
-		goto error_bmap_cancel;
+	if ((error = xfs_bmap_finish(&tp, &free_list, &committed)))
+		goto error1;
 	/*
 	 * The transaction must have been committed, since there were
 	 * actually extents freed by xfs_bunmapi.  See xfs_bmap_finish.
@@ -520,13 +511,26 @@ xfs_inactive_symlink_rmt(
 	xfs_trans_ijoin(tp, ip, 0);
 	xfs_trans_log_inode(tp, ip, XFS_ILOG_CORE);
 	/*
-	 * Commit the transaction containing extent freeing and EFDs.
+	 * Get a new, empty transaction to return to our caller.
 	 */
-	error = xfs_trans_commit(tp, XFS_TRANS_RELEASE_LOG_RES);
+	ntp = xfs_trans_dup(tp);
+	/*
+	 * Commit the transaction containing extent freeing and EFDs.
+	 * If we get an error on the commit here or on the reserve below,
+	 * we need to unlock the inode since the new transaction doesn't
+	 * have the inode attached.
+	 */
+	error = xfs_trans_commit(tp, 0);
+	tp = ntp;
 	if (error) {
 		ASSERT(XFS_FORCED_SHUTDOWN(mp));
-		goto error_unlock;
+		goto error0;
 	}
+	/*
+	 * transaction commit worked ok so we can drop the extra ticket
+	 * reference that we gained in xfs_trans_dup()
+	 */
+	xfs_log_ticket_put(tp->t_ticket);
 
 	/*
 	 * Remove the memory for extent descriptions (just bookkeeping).
@@ -534,16 +538,23 @@ xfs_inactive_symlink_rmt(
 	if (ip->i_df.if_bytes)
 		xfs_idata_realloc(ip, -ip->i_df.if_bytes, XFS_DATA_FORK);
 	ASSERT(ip->i_df.if_bytes == 0);
+	/*
+	 * Put an itruncate log reservation in the new transaction
+	 * for our caller.
+	 */
+	error = xfs_trans_reserve(tp, &M_RES(mp)->tr_itruncate, 0, 0);
+	if (error) {
+		ASSERT(XFS_FORCED_SHUTDOWN(mp));
+		goto error0;
+	}
 
-	xfs_iunlock(ip, XFS_ILOCK_EXCL);
+	xfs_trans_ijoin(tp, ip, 0);
+	*tpp = tp;
 	return 0;
 
-error_bmap_cancel:
+ error1:
 	xfs_bmap_cancel(&free_list);
-error_trans_cancel:
-	xfs_trans_cancel(tp, XFS_TRANS_RELEASE_LOG_RES | XFS_TRANS_ABORT);
-error_unlock:
-	xfs_iunlock(ip, XFS_ILOCK_EXCL);
+ error0:
 	return error;
 }
 
@@ -552,46 +563,41 @@ error_unlock:
  */
 int
 xfs_inactive_symlink(
-	struct xfs_inode	*ip)
+	struct xfs_inode	*ip,
+	struct xfs_trans	**tp)
 {
 	struct xfs_mount	*mp = ip->i_mount;
 	int			pathlen;
 
 	trace_xfs_inactive_symlink(ip);
 
+	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
+
 	if (XFS_FORCED_SHUTDOWN(mp))
 		return XFS_ERROR(EIO);
-
-	xfs_ilock(ip, XFS_ILOCK_EXCL);
 
 	/*
 	 * Zero length symlinks _can_ exist.
 	 */
 	pathlen = (int)ip->i_d.di_size;
-	if (!pathlen) {
-		xfs_iunlock(ip, XFS_ILOCK_EXCL);
+	if (!pathlen)
 		return 0;
-	}
 
 	if (pathlen < 0 || pathlen > MAXPATHLEN) {
 		xfs_alert(mp, "%s: inode (0x%llx) bad symlink length (%d)",
 			 __func__, (unsigned long long)ip->i_ino, pathlen);
-		xfs_iunlock(ip, XFS_ILOCK_EXCL);
 		ASSERT(0);
 		return XFS_ERROR(EFSCORRUPTED);
 	}
 
 	if (ip->i_df.if_flags & XFS_IFINLINE) {
-		if (ip->i_df.if_bytes > 0) 
+		if (ip->i_df.if_bytes > 0)
 			xfs_idata_realloc(ip, -(ip->i_df.if_bytes),
 					  XFS_DATA_FORK);
-		xfs_iunlock(ip, XFS_ILOCK_EXCL);
 		ASSERT(ip->i_df.if_bytes == 0);
 		return 0;
 	}
 
-	xfs_iunlock(ip, XFS_ILOCK_EXCL);
-
 	/* remove the remote symlink */
-	return xfs_inactive_symlink_rmt(ip);
+	return xfs_inactive_symlink_rmt(ip, tp);
 }

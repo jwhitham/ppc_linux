@@ -7,36 +7,26 @@
 
 struct iio_cb_buffer {
 	struct iio_buffer buffer;
-	int (*cb)(const void *data, void *private);
+	int (*cb)(u8 *data, void *private);
 	void *private;
 	struct iio_channel *channels;
 };
 
-static struct iio_cb_buffer *buffer_to_cb_buffer(struct iio_buffer *buffer)
+static int iio_buffer_cb_store_to(struct iio_buffer *buffer, u8 *data)
 {
-	return container_of(buffer, struct iio_cb_buffer, buffer);
-}
+	struct iio_cb_buffer *cb_buff = container_of(buffer,
+						     struct iio_cb_buffer,
+						     buffer);
 
-static int iio_buffer_cb_store_to(struct iio_buffer *buffer, const void *data)
-{
-	struct iio_cb_buffer *cb_buff = buffer_to_cb_buffer(buffer);
 	return cb_buff->cb(data, cb_buff->private);
 }
 
-static void iio_buffer_cb_release(struct iio_buffer *buffer)
-{
-	struct iio_cb_buffer *cb_buff = buffer_to_cb_buffer(buffer);
-	kfree(cb_buff->buffer.scan_mask);
-	kfree(cb_buff);
-}
-
-static const struct iio_buffer_access_funcs iio_cb_access = {
+static struct iio_buffer_access_funcs iio_cb_access = {
 	.store_to = &iio_buffer_cb_store_to,
-	.release = &iio_buffer_cb_release,
 };
 
 struct iio_cb_buffer *iio_channel_get_all_cb(struct device *dev,
-					     int (*cb)(const void *data,
+					     int (*cb)(u8 *data,
 						       void *private),
 					     void *private)
 {
@@ -114,8 +104,9 @@ EXPORT_SYMBOL_GPL(iio_channel_stop_all_cb);
 
 void iio_channel_release_all_cb(struct iio_cb_buffer *cb_buff)
 {
+	kfree(cb_buff->buffer.scan_mask);
 	iio_channel_release_all(cb_buff->channels);
-	iio_buffer_put(&cb_buff->buffer);
+	kfree(cb_buff);
 }
 EXPORT_SYMBOL_GPL(iio_channel_release_all_cb);
 

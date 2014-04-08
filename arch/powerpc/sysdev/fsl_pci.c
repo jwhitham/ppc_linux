@@ -41,12 +41,12 @@
 
 static int fsl_pcie_bus_fixup, is_mpc83xx_pci;
 
-static void quirk_fsl_pcie_early(struct pci_dev *dev)
+static void quirk_fsl_pcie_header(struct pci_dev *dev)
 {
 	u8 hdr_type;
 
 	/* if we aren't a PCIe don't bother */
-	if (!pci_is_pcie(dev))
+	if (!pci_find_capability(dev, PCI_CAP_ID_EXP))
 		return;
 
 	/* if we aren't in host mode don't bother */
@@ -623,8 +623,7 @@ no_bridge:
 }
 #endif /* CONFIG_FSL_SOC_BOOKE || CONFIG_PPC_86xx */
 
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_FREESCALE, PCI_ANY_ID,
-			quirk_fsl_pcie_early);
+DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_FREESCALE, PCI_ANY_ID, quirk_fsl_pcie_header);
 
 #if defined(CONFIG_PPC_83xx) || defined(CONFIG_PPC_MPC512x)
 struct mpc83xx_pcie_priv {

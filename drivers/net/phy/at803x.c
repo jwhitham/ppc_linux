@@ -103,45 +103,6 @@ static void at803x_get_wol(struct phy_device *phydev,
 		wol->wolopts |= WAKE_MAGIC;
 }
 
-static int at803x_suspend(struct phy_device *phydev)
-{
-	int value;
-	int wol_enabled;
-
-	mutex_lock(&phydev->lock);
-
-	value = phy_read(phydev, AT803X_INTR_ENABLE);
-	wol_enabled = value & AT803X_WOL_ENABLE;
-
-	value = phy_read(phydev, MII_BMCR);
-
-	if (wol_enabled)
-		value |= BMCR_ISOLATE;
-	else
-		value |= BMCR_PDOWN;
-
-	phy_write(phydev, MII_BMCR, value);
-
-	mutex_unlock(&phydev->lock);
-
-	return 0;
-}
-
-static int at803x_resume(struct phy_device *phydev)
-{
-	int value;
-
-	mutex_lock(&phydev->lock);
-
-	value = phy_read(phydev, MII_BMCR);
-	value &= ~(BMCR_PDOWN | BMCR_ISOLATE);
-	phy_write(phydev, MII_BMCR, value);
-
-	mutex_unlock(&phydev->lock);
-
-	return 0;
-}
-
 static int at803x_config_init(struct phy_device *phydev)
 {
 	int val;
@@ -228,12 +189,10 @@ static struct phy_driver at803x_driver[] = {
 	.config_init	= at803x_config_init,
 	.set_wol	= at803x_set_wol,
 	.get_wol	= at803x_get_wol,
-	.suspend	= at803x_suspend,
-	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= genphy_read_status,
+	.config_aneg	= &genphy_config_aneg,
+	.read_status	= &genphy_read_status,
 	.driver		= {
 		.owner = THIS_MODULE,
 	},
@@ -243,8 +202,6 @@ static struct phy_driver at803x_driver[] = {
 	.name		= "Atheros 8033 ethernet",
 	.phy_id_mask	= 0xffffffef,
 	.config_init	= at803x_config_init,
-	.suspend	= at803x_suspend,
-	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
 	.config_aneg	= &genphy_config_aneg,
@@ -262,12 +219,10 @@ static struct phy_driver at803x_driver[] = {
 	.config_init	= at803x_config_init,
 	.set_wol	= at803x_set_wol,
 	.get_wol	= at803x_get_wol,
-	.suspend	= at803x_suspend,
-	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= genphy_read_status,
+	.config_aneg	= &genphy_config_aneg,
+	.read_status	= &genphy_read_status,
 	.driver		= {
 		.owner = THIS_MODULE,
 	},
@@ -279,12 +234,10 @@ static struct phy_driver at803x_driver[] = {
 	.config_init	= at803x_config_init,
 	.set_wol	= at803x_set_wol,
 	.get_wol	= at803x_get_wol,
-	.suspend	= at803x_suspend,
-	.resume		= at803x_resume,
 	.features	= PHY_GBIT_FEATURES,
 	.flags		= PHY_HAS_INTERRUPT,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= genphy_read_status,
+	.config_aneg	= &genphy_config_aneg,
+	.read_status	= &genphy_read_status,
 	.driver		= {
 		.owner = THIS_MODULE,
 	},

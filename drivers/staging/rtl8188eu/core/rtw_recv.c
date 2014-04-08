@@ -204,14 +204,11 @@ void rtw_init_recvframe(union recv_frame *precvframe, struct recv_priv *precvpri
 int rtw_free_recvframe(union recv_frame *precvframe, struct __queue *pfree_recv_queue)
 {
 	unsigned long irqL;
-	struct adapter *padapter;
-	struct recv_priv *precvpriv;
+	struct adapter *padapter = precvframe->u.hdr.adapter;
+	struct recv_priv *precvpriv = &padapter->recvpriv;
 
 _func_enter_;
-	if (!precvframe)
-		return _FAIL;
-	padapter = precvframe->u.hdr.adapter;
-	precvpriv = &padapter->recvpriv;
+
 	if (precvframe->u.hdr.pkt) {
 		dev_kfree_skb_any(precvframe->u.hdr.pkt);/* free skb by driver */
 		precvframe->u.hdr.pkt = NULL;
@@ -1586,7 +1583,7 @@ _func_enter_;
 
 		pfhdr->attrib.icv_len = pnfhdr->attrib.icv_len;
 		plist = get_next(plist);
-	}
+	};
 
 	/* free the defrag_q queue and return the prframe */
 	rtw_free_recvframe_queue(defrag_q, pfree_recv_queue);
@@ -1801,14 +1798,16 @@ static int amsdu_to_msdu(struct adapter *padapter, union recv_frame *prframe)
 			memcpy(skb_push(sub_skb, ETH_ALEN), pattrib->dst, ETH_ALEN);
 		}
 
-		/* Indicate the packets to upper layer */
-		/*  Insert NAT2.5 RX here! */
-		sub_skb->protocol = eth_type_trans(sub_skb, padapter->pnetdev);
-		sub_skb->dev = padapter->pnetdev;
+		/* Indicat the packets to upper layer */
+		if (sub_skb) {
+			/*  Insert NAT2.5 RX here! */
+			sub_skb->protocol = eth_type_trans(sub_skb, padapter->pnetdev);
+			sub_skb->dev = padapter->pnetdev;
 
-		sub_skb->ip_summed = CHECKSUM_NONE;
+			sub_skb->ip_summed = CHECKSUM_NONE;
 
-		netif_rx(sub_skb);
+			netif_rx(sub_skb);
+		}
 	}
 
 exit:

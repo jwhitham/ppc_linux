@@ -32,7 +32,6 @@
 #include <linux/mount.h>
 #include <linux/blkpg.h>
 #include <linux/magic.h>
-#include <linux/major.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/map.h>
@@ -1100,7 +1099,7 @@ static unsigned long mtdchar_get_unmapped_area(struct file *file,
 		return (unsigned long) -EINVAL;
 
 	ret = mtd_get_unmapped_area(mtd, len, offset, flags);
-	return ret == -EOPNOTSUPP ? -ENODEV : ret;
+	return ret == -EOPNOTSUPP ? -ENOSYS : ret;
 }
 #endif
 
@@ -1125,9 +1124,9 @@ static int mtdchar_mmap(struct file *file, struct vm_area_struct *vma)
 #endif
 		return vm_iomap_memory(vma, map->phys, map->size);
 	}
-	return -ENODEV;
+	return -ENOSYS;
 #else
-	return vma->vm_flags & VM_SHARED ? 0 : -EACCES;
+	return vma->vm_flags & VM_SHARED ? 0 : -ENOSYS;
 #endif
 }
 

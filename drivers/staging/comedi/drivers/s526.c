@@ -499,11 +499,14 @@ static int s526_ao_rinsn(struct comedi_device *dev, struct comedi_subdevice *s,
 
 static int s526_dio_insn_bits(struct comedi_device *dev,
 			      struct comedi_subdevice *s,
-			      struct comedi_insn *insn,
-			      unsigned int *data)
+			      struct comedi_insn *insn, unsigned int *data)
 {
-	if (comedi_dio_update_state(s, data))
+	if (data[0]) {
+		s->state &= ~data[0];
+		s->state |= data[0] & data[1];
+
 		outw(s->state, dev->iobase + REG_DIO);
+	}
 
 	data[1] = inw(dev->iobase + REG_DIO) & 0xff;
 

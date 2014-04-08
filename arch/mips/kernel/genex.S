@@ -374,20 +374,12 @@ NESTED(except_vec_nmi, 0, sp)
 NESTED(nmi_handler, PT_SIZE, sp)
 	.set	push
 	.set	noat
-	/*
-	 * Clear ERL - restore segment mapping
-	 * Clear BEV - required for page fault exception handler to work
-	 */
-	mfc0	k0, CP0_STATUS
-	ori     k0, k0, ST0_EXL
-	li	k1, ~(ST0_BEV | ST0_ERL)
-	and     k0, k0, k1
-	mtc0    k0, CP0_STATUS
-	_ehb
 	SAVE_ALL
 	move	a0, sp
 	jal	nmi_exception_handler
-	/* nmi_exception_handler never returns */
+	RESTORE_ALL
+	.set	mips3
+	eret
 	.set	pop
 	END(nmi_handler)
 
