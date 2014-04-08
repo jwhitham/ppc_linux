@@ -101,8 +101,9 @@
 #define GIGABYTE            ((uint64_t)(KILOBYTE * MEGABYTE))   /* 1024*1024*1024 */
 #define TERABYTE            ((uint64_t)(KILOBYTE * GIGABYTE))   /* 1024*1024*1024*1024 */
 
-#undef  NO_IRQ
-#define NO_IRQ              (-1)
+#ifndef NO_IRQ
+#define NO_IRQ		(0)
+#endif
 #define NCSW_MASTER_ID      (0)
 
 /* Macro for checking if a number is a power of 2 */
