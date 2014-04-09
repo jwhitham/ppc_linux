@@ -153,6 +153,5 @@ config CRYPTO_DEV_FSL_CAAM_DEBUG
 
 config CRYPTO_DEV_FSL_CAAM_JR_UIO
 	tristate "Freescale Job Ring UIO support"
-	depends on CRYPTO_DEV_FSL_CAAM
-	depends on UIO
+	depends on CRYPTO_DEV_FSL_CAAM && CRYPTO_DEV_FSL_CAAM_JR && UIO
 	default y
