@@ -1533,6 +1533,7 @@ out:
 		chan = fdev->chan[i];
 		if (!chan)
 			continue;
+		chan->pm_state = RUNNING;
 		spin_unlock_bh(&chan->desc_lock);
 	}
 	return -EBUSY;
