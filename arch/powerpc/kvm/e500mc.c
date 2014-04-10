@@ -354,8 +354,8 @@ void kvmppc_prepare_for_emulation(struct kvm_vcpu *vcpu, unsigned int *exit_nr)
 	kunmap_atomic((u32 *)eaddr);
 }
 
-struct kvm_vcpu *kvmppc_core_vcpu_create_e500mc(struct kvm *kvm,
-						unsigned int id)
+struct kvm_vcpu *kvmppc_core_vcpu_create(struct kvm *kvm,
+					 unsigned int id)
 {
 	struct kvmppc_vcpu_e500 *vcpu_e500;
 	struct kvm_vcpu *vcpu;

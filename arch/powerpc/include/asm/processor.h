@@ -144,8 +144,20 @@ typedef struct {
 
 #define TS_FPROFFSET 0
 #define TS_VSRLOWOFFSET 1
-#define TS_FPR(i) fpr[i][TS_FPROFFSET]
-#define TS_TRANS_FPR(i) transact_fpr[i][TS_FPROFFSET]
+#define TS_FPR(i) fp_state.fpr[i][TS_FPROFFSET]
+#define TS_TRANS_FPR(i) transact_fp.fpr[i][TS_FPROFFSET]
+
+/* FP and VSX 0-31 register set */
+struct thread_fp_state {
+	u64	fpr[32][TS_FPRWIDTH] __attribute__((aligned(16)));
+	u64	fpscr;		/* Floating point status */
+};
+
+/* Complete AltiVec register set including VSCR */
+struct thread_vr_state {
+	vector128	vr[32] __attribute__((aligned(16)));
+	vector128	vscr __attribute__((aligned(16)));
+};
 
 struct debug_reg {
 #ifdef CONFIG_PPC_ADV_DEBUG_REGS
@@ -205,13 +217,8 @@ struct thread_struct {
 	/* Debug Registers */
 	struct debug_reg debug;
 
-	/* FP and VSX 0-31 register set */
-	double		fpr[32][TS_FPRWIDTH] __attribute__((aligned(16)));
-	struct {
-
-		unsigned int pad;
-		unsigned int val;	/* Floating point status */
-	} fpscr;
+	struct thread_fp_state	fp_state;
+	struct thread_fp_state	*fp_save_area;
 	int		fpexc_mode;	/* floating-point exception mode */
 	unsigned int	align_ctl;	/* alignment handling control */
 #ifdef CONFIG_PPC64
@@ -229,10 +236,8 @@ struct thread_struct {
 	struct arch_hw_breakpoint hw_brk; /* info on the hardware breakpoint */
 	unsigned long	trap_nr;	/* last trap # on this thread */
 #ifdef CONFIG_ALTIVEC
-	/* Complete AltiVec register set */
-	vector128	vr[32] __attribute__((aligned(16)));
-	/* AltiVec status */
-	vector128	vscr __attribute__((aligned(16)));
+	struct thread_vr_state vr_state;
+	struct thread_vr_state *vr_save_area;
 	unsigned long	vrsave;
 	int		used_vr;	/* set if process has used altivec */
 #endif /* CONFIG_ALTIVEC */
@@ -269,13 +274,8 @@ struct thread_struct {
 	 * transact_fpr[] is the new set of transactional values.
 	 * VRs work the same way.
 	 */
-	double		transact_fpr[32][TS_FPRWIDTH];
-	struct {
-		unsigned int pad;
-		unsigned int val;	/* Floating point status */
-	} transact_fpscr;
-	vector128	transact_vr[32] __attribute__((aligned(16)));
-	vector128	transact_vscr __attribute__((aligned(16)));
+	struct thread_fp_state transact_fp;
+	struct thread_vr_state transact_vr;
 	unsigned long	transact_vrsave;
 #endif /* CONFIG_PPC_TRANSACTIONAL_MEM */
 #ifdef CONFIG_KVM_BOOK3S_32_HANDLER
@@ -329,8 +329,6 @@ struct thread_struct {
 	.ksp = INIT_SP, \
 	.regs = (struct pt_regs *)INIT_SP - 1, /* XXX bogus, I think */ \
 	.fs = KERNEL_DS, \
-	.fpr = {{0}}, \
-	.fpscr = { .val = 0, }, \
 	.fpexc_mode = 0, \
 	.ppr = INIT_PPR, \
 }
@@ -367,6 +365,11 @@ extern int set_endian(struct task_struct *tsk, unsigned int val);
 
 extern int get_unalign_ctl(struct task_struct *tsk, unsigned long adr);
 extern int set_unalign_ctl(struct task_struct *tsk, unsigned int val);
+
+extern void load_fp_state(struct thread_fp_state *fp);
+extern void store_fp_state(struct thread_fp_state *fp);
+extern void load_vr_state(struct thread_vr_state *vr);
+extern void store_vr_state(struct thread_vr_state *vr);
 
 static inline unsigned int __unpack_fe01(unsigned long msr_bits)
 {
