@@ -1378,7 +1378,7 @@ int get_oh_info(void)
 	struct platform_device	*oh_of_dev, *of_dev;
 	struct device	*dpa_oh_dev, *oh_dev;
 	struct device_node	*dpa_oh_node = NULL, *oh_node;
-	int	lenp, errno = BOND_OH_SUCCESS, i = 0;
+	int fqcount, lenp, errno = BOND_OH_SUCCESS, i = 0;
 	const phandle	*p_oh_port_handle;
 	const unsigned int	*p_port_id;
 	const unsigned int	*p_channel_id;
@@ -1481,9 +1481,9 @@ int get_oh_info(void)
 			memcpy(poh[i].friendname,
 					dpa_oh_node->full_name + 14, 10);
 
+			fqcount = roundup_pow_of_two(FM_MAX_NUM_OF_MACS);
 			if (qman_alloc_fqid_range(&poh[i].pcd_fqids_base,
-						FM_MAX_NUM_OF_MACS, true, 0)
-					!= FM_MAX_NUM_OF_MACS) {
+					fqcount, fqcount, 0) != fqcount) {
 				pr_err("error on alloc continuous pcd fqid\n");
 				return -EINVAL;
 			}
