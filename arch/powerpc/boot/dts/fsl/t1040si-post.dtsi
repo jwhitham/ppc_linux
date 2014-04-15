@@ -638,6 +638,7 @@ sata@221000 {
 			status = "disabled";
 		};
 	};
+/include/ "qoriq-l2switch-0.dtsi"
 	l2switch@800000 {
 	        interrupts = <26 2 0 0>;
 
