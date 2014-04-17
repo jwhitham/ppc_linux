@@ -95,6 +95,8 @@ struct ioc_compat_sa_out_params {
 	compat_uptr_t outer_ip_header;
 	compat_uptr_t outer_udp_header;
 	uint16_t post_sec_flow_id;
+	uint8_t dscp_start;
+	uint8_t dscp_end;
 };
 
 struct ioc_compat_sa_in_params {
@@ -158,6 +160,7 @@ struct ioc_compat_policy_params {
 	uint8_t dest_prefix_len;
 	uint8_t protocol;
 	bool masked_proto;
+	bool use_dscp;
 	union {
 		struct dpa_ipsec_l4_params	l4;
 		struct dpa_ipsec_icmp_params	icmp;
