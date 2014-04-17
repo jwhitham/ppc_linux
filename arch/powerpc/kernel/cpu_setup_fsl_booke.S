@@ -128,6 +128,12 @@ _GLOBAL(__setup_cpu_e6500)
 	mflr	r6
 #ifdef CONFIG_PPC64
 	bl	.setup_altivec_ivors
+	/* Touch IVOR42 only if the CPU supports E.HV category */
+	mfspr	r10,SPRN_MMUCFG
+	rlwinm.	r10,r10,0,MMUCFG_LPIDSIZE
+	beq	1f
+	bl	.setup_lrat_ivor
+1:
 #endif
 	bl	.setup_pw20_idle
 	bl	.setup_altivec_idle
@@ -195,6 +201,12 @@ _GLOBAL(__restore_cpu_e6500)
 	bl	.setup_altivec_ivors
 	bl	.setup_pw20_idle
 	bl	.setup_altivec_idle
+	/* Touch IVOR42 only if the CPU supports E.HV category */
+	mfspr	r10,SPRN_MMUCFG
+	rlwinm.	r10,r10,0,MMUCFG_LPIDSIZE
+	beq	1f
+	bl	.setup_lrat_ivor
+1:
 	bl	__restore_cpu_e5500
 	mtlr	r5
 	blr
