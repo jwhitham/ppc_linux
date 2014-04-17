@@ -25,6 +25,7 @@
 #include <linux/uio_driver.h>
 #include <linux/list.h>
 #include <linux/io.h>
+#include <linux/mm.h>
 
 static const char dma_uio_version[] = "DMA UIO driver v1.0";
 
@@ -82,6 +83,32 @@ static irqreturn_t dma_uio_irq_handler(int irq, struct uio_info *dev_info)
 	return IRQ_HANDLED;
 }
 
+static int dma_uio_mmap(struct uio_info *info, struct vm_area_struct *vma)
+{
+	int mi;
+	struct uio_mem *mem;
+
+	if (vma->vm_pgoff < MAX_UIO_MAPS) {
+		if (info->mem[vma->vm_pgoff].size == 0)
+			return -EINVAL;
+		mi = (int)vma->vm_pgoff;
+	} else
+		return -EINVAL;
+
+	mem = info->mem + mi;
+
+	if (vma->vm_end - vma->vm_start > mem->size)
+		return -EINVAL;
+
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	return remap_pfn_range(vma,
+			       vma->vm_start,
+			       mem->addr >> PAGE_SHIFT,
+			       vma->vm_end - vma->vm_start,
+			       vma->vm_page_prot);
+}
+
 static int dma_chan_uio_setup(struct dma_chan *dma_ch)
 {
 	int ret;
@@ -112,6 +139,7 @@ static int dma_chan_uio_setup(struct dma_chan *dma_ch)
 	info->uio.handler = dma_uio_irq_handler;
 	info->uio.open = dma_uio_open;
 	info->uio.release = dma_uio_release;
+	info->uio.mmap = dma_uio_mmap;
 	info->uio.priv = dma_ch;
 	ret = uio_register_device(dma_ch->dev, &info->uio);
 	if (ret) {
