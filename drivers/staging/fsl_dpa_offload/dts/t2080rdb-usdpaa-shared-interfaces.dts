@@ -97,16 +97,11 @@
 			fsl,qman-frame-queues-rx = <0x90 1 0x91 1>;
 			fsl,qman-frame-queues-tx = <0x98 1 0x99 1>;
 		};
-		/* ethernet@1 declared as shared MAC. USDPAA will seed buffers to
-		 * this buffer pool. The ethernet driver will initialize the RX default,
-		 * RX error, TX error, TX confirm and 8 TX Frame queues. On receiving frame
-		 * at this interface, the ethernet driver will do kmap_atomic/kunmap_atomic
-		 * for that frame. */
 		ethernet@1 {/* 10G */
-			compatible = "fsl,t2080-dpa-ethernet-shared", "fsl,dpa-ethernet-shared";
-			fsl,bman-buffer-pools = <&bp17>;
-			fsl,qman-frame-queues-rx = <0x92 1 0x93 1 0x2000 3>;
-			fsl,qman-frame-queues-tx = <0 1 0 1 0x3000 8>;
+			compatible = "fsl,t2080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			fsl,bman-buffer-pools = <&bp7 &bp8 &bp9>;
+			fsl,qman-frame-queues-rx = <0x92 1 0x93 1>;
+			fsl,qman-frame-queues-tx = <0x9a 1 0x9b 1>;
 		};
 		ethernet@2 {/* 1G */
 			compatible = "fsl,t2080-dpa-ethernet-init", "fsl,dpa-ethernet-init";
