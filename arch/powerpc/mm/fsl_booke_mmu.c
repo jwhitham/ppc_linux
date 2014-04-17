@@ -198,6 +198,15 @@ unsigned long map_mem_in_cams(unsigned long ram, int max_cam_idx)
 	get_paca()->tlb_per_core.esel_max =
 		mfspr(SPRN_TLB1CFG) & TLBnCFG_N_ENTRY;
 	get_paca()->tlb_per_core.esel_first = i;
+
+	get_paca()->tlb_per_core.lrat_next = 0;
+	if (((mfspr(SPRN_MMUCFG) & MMUCFG_MAVN) == MMUCFG_MAVN_V2) &&
+	    (mfspr(SPRN_MMUCFG) & MMUCFG_LRAT)) {
+		get_paca()->tlb_per_core.lrat_max =
+			mfspr(SPRN_LRATCFG) & LRATCFG_NENTRY;
+	} else {
+		get_paca()->tlb_per_core.lrat_max = 0;
+	}
 #endif
 
 	return amount_mapped;
