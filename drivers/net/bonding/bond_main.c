@@ -1643,6 +1643,10 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 		new_slave->link != BOND_LINK_DOWN ? "n up" : " down");
 
 	/* enslave is successful */
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	fill_oh_pcd_fqs_with_slave_info(bond, new_slave);
+	apply_pcd(bond, NO_POLICY);
+#endif
 	return 0;
 
 /* Undo stages on error */
@@ -1891,6 +1895,9 @@ static int __bond_release_one(struct net_device *bond_dev,
 
 	slave_dev->priv_flags &= ~IFF_BONDING;
 
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	del_oh_pcd_fqs_with_slave_info(bond, slave);
+#endif
 	kfree(slave);
 
 	return 0;  /* deletion OK */
@@ -3256,6 +3263,10 @@ static struct rtnl_link_stats64 *bond_get_stats(struct net_device *bond_dev,
 		stats->tx_heartbeat_errors += sstats->tx_heartbeat_errors;
 		stats->tx_window_errors += sstats->tx_window_errors;
 	}
+
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	add_statistics(bond, stats);
+#endif
 	read_unlock_bh(&bond->lock);
 
 	return stats;
@@ -3989,6 +4000,9 @@ static const struct device_type bond_type = {
 static void bond_destructor(struct net_device *bond_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	release_pcd_mem(bond);
+#endif
 	if (bond->wq)
 		destroy_workqueue(bond->wq);
 	free_netdev(bond_dev);
@@ -4548,7 +4562,10 @@ int bond_create(struct net *net, const char *name)
 	res = register_netdevice(bond_dev);
 
 	netif_carrier_off(bond_dev);
-
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	if (res == 0)
+		init_status(bond_dev);
+#endif
 	rtnl_unlock();
 	if (res < 0)
 		bond_destructor(bond_dev);
@@ -4620,6 +4637,13 @@ static int __init bonding_init(void)
 	}
 
 	register_netdevice_notifier(&bond_netdev_notifier);
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	if (get_oh_info())
+		pr_err("oh ports probe error, use software distribution\n");
+	else
+		pr_info("get offline ports information ok.\n");
+#endif
+
 out:
 	return res;
 err:
@@ -4638,6 +4662,10 @@ static void __exit bonding_exit(void)
 
 	rtnl_link_unregister(&bond_link_ops);
 	unregister_pernet_subsys(&bond_net_ops);
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	kfree(poh);
+	hw_lag_dbg("released offline port resources\n");
+#endif
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	/*
@@ -4646,8 +4674,13 @@ static void __exit bonding_exit(void)
 	WARN_ON(atomic_read(&netpoll_block_tx));
 #endif
 }
-
-module_init(bonding_init);
+/**
+ * late init to wait till oh port initilization ready,
+ * oh port can help distribute outgoing traffics based
+ * on hardware (FSL DPAA Offline port and PCD).
+ * module_init(bonding_init);
+ */
+late_initcall(bonding_init);
 module_exit(bonding_exit);
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);

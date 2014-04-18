@@ -25,6 +25,9 @@
 #include <linux/etherdevice.h>
 #include "bond_3ad.h"
 #include "bond_alb.h"
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+#include "hw_distribution.h"
+#endif
 
 #define DRV_VERSION	"3.7.1"
 #define DRV_RELDATE	"April 27, 2011"
@@ -177,6 +180,10 @@ struct bond_params {
 	int all_slaves_active;
 	int resend_igmp;
 	int lp_interval;
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	struct oh_port_priv *ohp;
+	struct rtnl_link_stats64 oh_stats;
+#endif
 };
 
 struct bond_parm_tbl {

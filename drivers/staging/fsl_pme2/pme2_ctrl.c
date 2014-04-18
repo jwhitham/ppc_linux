@@ -295,6 +295,7 @@ static int of_fsl_pme_probe(struct platform_device *ofdev)
 	int srec_aim = 0, srec_esr = 0;
 	u32 srecontextsize_code;
 	u32 dec1;
+	struct pme2_private_data *priv_data;
 
 	/*
 	 * TODO: This standby handling won't work properly after failover, it's
@@ -339,8 +340,8 @@ static int of_fsl_pme_probe(struct platform_device *ofdev)
 
 	if (likely(pme_err_irq != NO_IRQ)) {
 		/* Register the pme ISR handler */
-		err = request_irq(pme_err_irq, pme_isr, IRQF_SHARED, "pme-err",
-				  dev);
+		err = request_irq(pme_err_irq, pme_isr,
+			IRQF_SHARED | IRQF_PERCPU, "pme-err", dev);
 		if (err) {
 			dev_err(dev, "request_irq() failed\n");
 			goto out_unmap_ctrl_region;
@@ -415,6 +416,11 @@ static int of_fsl_pme_probe(struct platform_device *ofdev)
 		(CONFIG_FSL_PME2_SRE_MAX_INSTRUCTION_LIMIT << 16) |
 		CONFIG_FSL_PME2_SRE_MAX_BLOCK_NUMBER);
 
+#ifdef CONFIG_PM
+	/* can't flush pme device easily. Disable caching for FC and RES */
+	pme_out(global_pme, CDCR, 0x00000009);
+#endif
+
 	/* Setup Accumulator */
 	if (pme_stat_interval)
 		schedule_delayed_work(&accumulator_work,
@@ -423,6 +429,19 @@ static int of_fsl_pme_probe(struct platform_device *ofdev)
 	err = pme2_create_sysfs_dev_files(ofdev);
 	if (err)
 		goto out_stop_accumulator;
+
+	priv_data = kzalloc(sizeof(*priv_data), GFP_KERNEL);
+	if (!priv_data)
+		goto out_stop_accumulator;
+
+	priv_data->regs = (uint32_t __iomem *)regs;
+	priv_data->pme_rev1 = pme_in(global_pme, PM_IP_REV1);
+	dev_set_drvdata(dev, priv_data);
+
+#ifdef CONFIG_PM
+	/* setup resources required for power management */
+	init_pme_suspend(priv_data);
+#endif
 
 	/* Enable interrupts */
 	pme_out(global_pme, IER, PME_ALL_ERR);
@@ -448,11 +467,96 @@ out:
 	return err;
 }
 
+#ifdef CONFIG_PM
+void restore_all_ccsr(struct ccsr_backup_info *save_ccsr,
+				uint32_t __iomem *regs)
+{
+	int i;
+	int num_regs = sizeof(save_ccsr->regdb)/sizeof(uint32_t);
+	uint32_t *pme_reg = &save_ccsr->regdb.pmfa.isr;
+#ifdef CONFIG_PM_DEBUG
+	int diff_count = 0;
+#endif
+
+	for (i = 0; i < num_regs; i++) {
+#ifdef CONFIG_PM_DEBUG
+		/* skip enable register */
+		if ((pme_reg + i) != (&save_ccsr->regdb.pmfa.faconf)) {
+			uint32_t pme_reg_val;
+			pme_reg_val = in_be32(regs + i);
+			if (pme_reg_val != *(pme_reg + i))
+				diff_count++;
+			out_be32(regs + i, *(pme_reg + i));
+		}
+#else
+		/* skip enable register */
+		if ((pme_reg + i) != (&save_ccsr->regdb.pmfa.faconf))
+			out_be32(regs + i, *(pme_reg + i));
+#endif
+	}
+
+#ifdef CONFIG_PM_DEBUG
+	pr_info("pme ccsr restore: %d registers were different\n", diff_count);
+#endif
+}
+
+void save_all_ccsr(struct ccsr_backup_info *save_ccsr, uint32_t __iomem *regs)
+{
+	int i;
+	int num_regs = sizeof(save_ccsr->regdb)/sizeof(uint32_t);
+	uint32_t *pme_reg;
+
+	/* setup ddr space to save ccsr */
+	pme_reg = &save_ccsr->regdb.pmfa.isr;
+
+	for (i = 0; i < num_regs; i++)
+		*(pme_reg+i) = in_be32(regs + i);
+}
+
+static int pme2_pm_suspend(struct device *dev)
+{
+	struct pme2_private_data *priv_data;
+
+	priv_data = dev_get_drvdata(dev);
+	if (!priv_data) {
+		pr_err("No device data\n");
+		return -ENOMEM;
+	}
+	dev_dbg(dev, "fsl-pme PM suspend\n");
+
+	return pme_suspend(priv_data);
+}
+
+static int pme2_pm_resume(struct device *dev)
+{
+	struct pme2_private_data *priv_data;
+
+	priv_data = dev_get_drvdata(dev);
+	if (!priv_data) {
+		pr_err("No device data\n");
+		return -ENOMEM;
+	}
+	dev_dbg(dev, "fsl-pme PM resume\n");
+
+	return pme_resume(priv_data);
+
+}
+#else
+#define pme2_pm_suspend	NULL
+#define pme2_pm_resume	NULL
+#endif
+
+static const struct dev_pm_ops pme2_pm_ops = {
+	.suspend = pme2_pm_suspend,
+	.resume = pme2_pm_resume,
+};
+
 static struct platform_driver of_fsl_pme_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = DRV_NAME,
 		.of_match_table = of_fsl_pme_ids,
+		.pm = &pme2_pm_ops,
 	},
 	.probe = of_fsl_pme_probe,
 	.remove      = of_fsl_pme_remove,
@@ -768,7 +872,25 @@ int pme_attr_set(enum pme_attr attr, u32 val)
 	case pme_attr_pmtr:
 		pme_out(global_pme, PMTR, val);
 		break;
-
+	case pme_attr_faconf_rst:
+		attr_val = pme_in(global_pme, FACONF);
+		if (val)
+			attr_val |= PME_FACONF_RESET;
+		else
+			attr_val &= ~(PME_FACONF_RESET);
+		pme_out(global_pme, FACONF, attr_val);
+		break;
+	case pme_attr_faconf_en:
+		attr_val = pme_in(global_pme, FACONF);
+		if (val)
+			attr_val |= PME_FACONF_ENABLE;
+		else
+			attr_val &= ~(PME_FACONF_ENABLE);
+		pme_out(global_pme, FACONF, attr_val);
+		break;
+	case pme_attr_efqc:
+		pme_out(global_pme, EFQC, val);
+		break;
 	default:
 		pr_err("pme: Unknown attr %u\n", attr);
 		return -EINVAL;
@@ -1245,6 +1367,22 @@ int pme_attr_get(enum pme_attr attr, u32 *val)
 	case pme_attr_srrwc:
 		attr_val = pme_in(global_pme, SRRWC);
 		break;
+
+	case pme_attr_faconf_rst:
+		attr_val = pme_in(global_pme, FACONF);
+		attr_val &= PME_FACONF_RESET;
+		break;
+
+	case pme_attr_faconf_en:
+		attr_val = pme_in(global_pme, FACONF);
+		attr_val &= PME_FACONF_ENABLE;
+		attr_val >>= 1;
+		break;
+
+	case pme_attr_efqc:
+		attr_val = pme_in(global_pme, EFQC);
+		break;
+
 
 	default:
 		pr_err("pme: Unknown attr %u\n", attr);

@@ -35,11 +35,7 @@ extern void giveup_vsx(struct task_struct *);
 extern void enable_kernel_spe(void);
 extern void giveup_spe(struct task_struct *);
 extern void load_up_spe(struct task_struct *);
-extern void switch_booke_debug_regs(struct thread_struct *new_thread);
-
-#ifdef CONFIG_PPC_ADV_DEBUG_REGS
-extern void switch_booke_debug_regs(struct thread_struct *new_thread);
-#endif
+extern void switch_booke_debug_regs(struct debug_reg *new_debug);
 
 #ifndef CONFIG_SMP
 extern void discard_lazy_cpu_state(void);

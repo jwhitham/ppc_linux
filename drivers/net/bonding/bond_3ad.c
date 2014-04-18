@@ -2440,6 +2440,15 @@ int bond_3ad_xmit_xor(struct sk_buff *skb, struct net_device *dev)
 		goto out;
 	}
 
+#ifdef CONFIG_HW_DISTRIBUTION_WITH_OH
+	hw_lag_dbg("skb->protocol:0x%0x\n", skb->protocol);
+	/* exclude ARP/LACP */
+	if ((bond->slave_cnt == SLAVES_PER_BOND) &&
+			are_all_slaves_linkup(bond) &&
+			(bond->params.ohp) && (bond->params.ohp->oh_en == 1))
+		return enqueue_pkt_to_oh(bond, skb, NULL);
+#endif
+
 	slave_agg_no = bond->xmit_hash_policy(skb, slaves_in_agg);
 
 	bond_for_each_slave(bond, slave) {

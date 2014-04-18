@@ -25,6 +25,7 @@
 #include <linux/uio_driver.h>
 #include <linux/list.h>
 #include <linux/io.h>
+#include <linux/mm.h>
 
 static const char dma_uio_version[] = "DMA UIO driver v1.0";
 
@@ -82,7 +83,33 @@ static irqreturn_t dma_uio_irq_handler(int irq, struct uio_info *dev_info)
 	return IRQ_HANDLED;
 }
 
-static int __init dma_chan_uio_setup(struct dma_chan *dma_ch)
+static int dma_uio_mmap(struct uio_info *info, struct vm_area_struct *vma)
+{
+	int mi;
+	struct uio_mem *mem;
+
+	if (vma->vm_pgoff < MAX_UIO_MAPS) {
+		if (info->mem[vma->vm_pgoff].size == 0)
+			return -EINVAL;
+		mi = (int)vma->vm_pgoff;
+	} else
+		return -EINVAL;
+
+	mem = info->mem + mi;
+
+	if (vma->vm_end - vma->vm_start > mem->size)
+		return -EINVAL;
+
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	return remap_pfn_range(vma,
+			       vma->vm_start,
+			       mem->addr >> PAGE_SHIFT,
+			       vma->vm_end - vma->vm_start,
+			       vma->vm_page_prot);
+}
+
+static int dma_chan_uio_setup(struct dma_chan *dma_ch)
 {
 	int ret;
 	struct dma_uio_info *info;
@@ -112,8 +139,8 @@ static int __init dma_chan_uio_setup(struct dma_chan *dma_ch)
 	info->uio.handler = dma_uio_irq_handler;
 	info->uio.open = dma_uio_open;
 	info->uio.release = dma_uio_release;
+	info->uio.mmap = dma_uio_mmap;
 	info->uio.priv = dma_ch;
-
 	ret = uio_register_device(dma_ch->dev, &info->uio);
 	if (ret) {
 		dev_err(dma_ch->dev, "dma_uio: UIO registration failed\n");
@@ -124,13 +151,13 @@ static int __init dma_chan_uio_setup(struct dma_chan *dma_ch)
 }
 
 static int fsl_dma_chan_probe(struct fsldma_device *fdev,
-					struct device_node *node)
+			      struct device_node *node,
+			      u32 chanid)
 {
 	struct resource regs;
 	struct dma_chan *dma_ch;
 	struct device_node *dma_node;
 	int err;
-	u32 *cell;
 	struct platform_device *dev = fdev->dev;
 
 	dma_node = node;
@@ -142,14 +169,9 @@ static int fsl_dma_chan_probe(struct fsldma_device *fdev,
 		return -ENOMEM;
 	}
 
-	cell = (u32 *)of_get_property(dma_node, "cell-index", NULL);
-	if (!cell) {
-		dev_err(&dev->dev, "Can't get property 'cell-index'\n");
-		return -EFAULT;
-	}
 
 	dma_ch->dma_id = fdev->dma_id;
-	dma_ch->ch_id = *cell;
+	dma_ch->ch_id = chanid;
 	dma_ch->dev = &dev->dev;
 
 	err = of_address_to_resource(dma_node, 0, &regs);
@@ -201,13 +223,8 @@ static int fsl_dma_uio_probe(struct platform_device *dev)
 {
 	struct device_node *child;
 	struct fsldma_device *fdev;
-	u32 *cell;
-
-	cell = (u32 *)of_get_property(dev->dev.of_node, "cell-index", NULL);
-	if (!cell) {
-		dev_err(&dev->dev, "Can't get property 'cell-index'\n");
-		return -ENODEV;
-	}
+	static u32 dmaid;
+	u32 chanid = 0;
 
 	fdev = devm_kzalloc(&dev->dev, sizeof(struct fsldma_device),
 				GFP_KERNEL);
@@ -216,15 +233,14 @@ static int fsl_dma_uio_probe(struct platform_device *dev)
 		return -ENOMEM;
 	}
 
-	fdev->dma_id = *cell;
+	fdev->dma_id = dmaid++;
 	fdev->dev = dev;
 	INIT_LIST_HEAD(&fdev->ch_list);
 	dev_set_drvdata(&dev->dev, fdev);
 
 	for_each_child_of_node(dev->dev.of_node, child)
 		if (of_device_is_compatible(child, "fsl,eloplus-dma-channel"))
-			fsl_dma_chan_probe(fdev, child);
-
+			fsl_dma_chan_probe(fdev, child, chanid++);
 	return 0;
 }
 
@@ -244,9 +260,8 @@ static int fsl_dma_uio_remove(struct platform_device *dev)
 
 
 static const struct of_device_id fsl_of_dma_match[] = {
-	{
-		.compatible = "fsl,eloplus-dma",
-	},
+	{ .compatible = "fsl,elo3-dma", },
+	{ .compatible = "fsl,eloplus-dma", },
 	{}
 };
 

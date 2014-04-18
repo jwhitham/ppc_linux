@@ -118,6 +118,8 @@ static void compat_copy_sa_out_params(struct dpa_ipsec_sa_out_params *prm,
 	prm->outer_udp_header =	(void *)
 				compat_ptr(compat_prm->outer_udp_header);
 	prm->post_sec_flow_id = compat_prm->post_sec_flow_id;
+	prm->dscp_start = compat_prm->dscp_start;
+	prm->dscp_end = compat_prm->dscp_end;
 }
 
 static void compat_copy_sa_crypto_params(struct dpa_ipsec_sa_crypto_params *prm,
@@ -205,6 +207,7 @@ static void compat_copy_dpa_ipsec_add_rem_policy(
 		prm->pol_params.protocol = compat_prm->pol_params.protocol;
 		prm->pol_params.masked_proto =
 					    compat_prm->pol_params.masked_proto;
+		prm->pol_params.use_dscp = compat_prm->pol_params.use_dscp;
 		prm->pol_params.l4 = compat_prm->pol_params.l4;
 		if (compat_prm->pol_params.dir_params.type ==
 						DPA_IPSEC_POL_DIR_PARAMS_MANIP)
@@ -231,6 +234,7 @@ static void compat_copy_dpa_ipsec_add_rem_policy(
 		compat_prm->pol_params.protocol = prm->pol_params.protocol;
 		compat_prm->pol_params.masked_proto =
 						   prm->pol_params.masked_proto;
+		compat_prm->pol_params.use_dscp = prm->pol_params.use_dscp;
 		compat_prm->pol_params.l4 = prm->pol_params.l4;
 		if (prm->pol_params.dir_params.type ==
 						DPA_IPSEC_POL_DIR_PARAMS_MANIP)
