@@ -102,7 +102,7 @@ static int xgmac_mdio_write(struct mii_bus *bus, int phy_id, int regnum, u16 val
 	if (regnum & MII_ADDR_C45) {
 		/* Clause 45 (ie 10G) */
 		dev_addr = (regnum >> 16) & 0x1f;
-		mdio_stat |= MDIO_STAT_ENC | MDIO_STAT_HOLD_15_CLK;
+		mdio_stat |= MDIO_STAT_ENC;
 	} else {
 		/* Clause 22 (ie 1G) */
 		dev_addr = regnum & 0x1f;
@@ -155,7 +155,7 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	mdio_stat = in_be32(&regs->mdio_stat);
 	if (regnum & MII_ADDR_C45) {
 		dev_addr = (regnum >> 16) & 0x1f;
-		mdio_stat |= MDIO_STAT_ENC | MDIO_STAT_HOLD_15_CLK;
+		mdio_stat |= MDIO_STAT_ENC;
 	} else {
 		dev_addr = regnum & 0x1f;
 		mdio_stat = ~MDIO_STAT_ENC;
