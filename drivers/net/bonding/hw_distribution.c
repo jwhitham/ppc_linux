@@ -348,10 +348,9 @@ static bool is_dpa_eth_port(struct net_device *netdev)
 bool are_all_slaves_linkup(struct bonding *bond)
 {
 	struct slave *slave;
-	struct list_head *iter;
 
 	read_lock(&bond->lock);
-	bond_for_each_slave(bond, slave, iter)
+	bond_for_each_slave(bond, slave)
 		if (!(SLAVE_IS_OK(slave))) {
 			read_unlock(&bond->lock);
 			return false;
