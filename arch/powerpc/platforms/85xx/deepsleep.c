@@ -21,6 +21,9 @@
 #define SIZE_1MB	0x100000
 #define SIZE_2MB	0x200000
 
+#define CPC_CPCHDBCR0		0x10f00
+#define CPC_CPCHDBCR0_SPEC_DIS	0x08000000
+
 #define CCSR_SCFG_DPSLPCR	0xfc000
 #define CCSR_SCFG_DPSLPCR_WDRR_EN	0x1
 #define CCSR_SCFG_SPARECR2	0xfc504
@@ -168,6 +171,13 @@ int fsl_enter_epu_deepsleep(void)
 	clrbits32(ccsr_base + CCSR_GPIO1_GPDAT, CCSR_GPIO1_GPDIR_29);
 	clrbits32(ccsr_base + CCSR_GPIO1_GPODR, CCSR_GPIO1_GPDIR_29);
 	setbits32(ccsr_base + CCSR_GPIO1_GPDIR, CCSR_GPIO1_GPDIR_29);
+
+	/*
+	 * Disable CPC speculation to avoid deep sleep hang, especially
+	 * in secure boot mode. This bit will be cleared automatically
+	 * when resuming from deep sleep.
+	 */
+	setbits32(ccsr_base + CPC_CPCHDBCR0, CPC_CPCHDBCR0_SPEC_DIS);
 
 	fsl_dp_fsm_setup(dcsr_base, NULL);
 
