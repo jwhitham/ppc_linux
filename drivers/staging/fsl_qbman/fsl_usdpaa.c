@@ -699,6 +699,9 @@ static unsigned long usdpaa_get_unmapped_area(struct file *file,
 
 	if (len % PAGE_SIZE)
 		return -EINVAL;
+	/* Need to align to largest pagesize to ensure all pages
+	   will be correctly aligned */
+	len = largest_page_size(len);
 
 	addr = USDPAA_MEM_ROUNDUP(addr, len);
 	vma = find_vma(current->mm, addr);
@@ -904,15 +907,6 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 		ret = -EINVAL;
 		goto out;
 	}
-	/* Verify there is sufficient space to do the mapping */
-	down_write(&current->mm->mmap_sem);
-	next_addr = usdpaa_get_unmapped_area(fp, next_addr, i->len, 0, 0);
-	up_write(&current->mm->mmap_sem);
-
-	if (next_addr & ~PAGE_MASK) {
-		ret = -ENOMEM;
-		goto out;
-	}
 
 	/* Find one of more contiguous fragments that satisfy the total length
 	   trying to minimize the number of fragments
@@ -964,6 +958,16 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 	}
 	i->did_create = 1;
 do_map:
+	/* Verify there is sufficient space to do the mapping */
+	down_write(&current->mm->mmap_sem);
+	next_addr = usdpaa_get_unmapped_area(fp, next_addr, i->len, 0, 0);
+	up_write(&current->mm->mmap_sem);
+
+	if (next_addr & ~PAGE_MASK) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
 	/* We may need to divide the final fragment to accomidate the mapping */
 	next_frag = start_frag;
 	while (so_far != i->len) {
@@ -1000,7 +1004,7 @@ out:
 	if (!ret) {
 		unsigned long longret;
 		down_write(&current->mm->mmap_sem);
-		longret = do_mmap_pgoff(fp, PAGE_SIZE, map->total_size,
+		longret = do_mmap_pgoff(fp, next_addr, map->total_size,
 					PROT_READ |
 					(i->flags &
 					 USDPAA_DMA_FLAG_RDONLY ? 0
