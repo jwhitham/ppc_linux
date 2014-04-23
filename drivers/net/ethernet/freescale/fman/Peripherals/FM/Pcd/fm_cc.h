@@ -50,7 +50,7 @@
 /*          Coarse classification defines                              */
 /***********************************************************************/
 
-#define CC_MAX_NUM_OF_KEYS                  MAX(FM_PCD_MAX_NUM_OF_KEYS + 1, FM_PCD_MAX_NUM_OF_FLOWS)
+#define CC_MAX_NUM_OF_KEYS                  (FM_PCD_MAX_NUM_OF_KEYS + 1)
 
 #define CC_PC_FF_MACDST                     0x00
 #define CC_PC_FF_MACSRC                     0x01
