@@ -284,6 +284,7 @@ void fman_memac_set_tx_pause_frames(struct memac_regs *regs,
 		GET_TX_EMPTY_DEFAULT_VALUE(tmp);
 		iowrite32be(tmp, &regs->tx_fifo_sections);
 
+		tmp = ioread32be(&regs->command_config);
 		tmp &= ~CMD_CFG_PFC_MODE;
 		priority = 0;
 	} else {
