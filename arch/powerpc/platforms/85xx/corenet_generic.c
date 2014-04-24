@@ -31,6 +31,7 @@
 #include <linux/of_platform.h>
 #include <sysdev/fsl_soc.h>
 #include <sysdev/fsl_pci.h>
+#include <asm/mpc85xx.h>
 #include "smp.h"
 #include "mpc85xx.h"
 
@@ -39,12 +40,23 @@
 void __init corenet_gen_pic_init(void)
 {
 	struct mpic *mpic;
+	u32 svr = mfspr(SPRN_SVR);
 	unsigned int flags = MPIC_BIG_ENDIAN | MPIC_SINGLE_DEST_CPU |
 		MPIC_NO_RESET;
 
 #ifdef CONFIG_QUICC_ENGINE
 	struct device_node *np;
 #endif
+	/*
+	 * The deep sleep does not wake consistently on T1040 and T1042 with
+	 * the external proxy facility mode of MPIC (MPIC_ENABLE_COREINT),
+	 * so use the mixed mode of MPIC. Set mpic_get_irq to ppc_md.get_irq
+	 * to enable the mixed mode of MPIC.
+	 */
+	if ((SVR_SOC_VER(svr) == SVR_T1040) ||
+	    (SVR_SOC_VER(svr) == SVR_T1042)) {
+		ppc_md.get_irq = mpic_get_irq;
+	}
 
 	if (ppc_md.get_irq == mpic_get_coreint_irq)
 		flags |= MPIC_ENABLE_COREINT;
