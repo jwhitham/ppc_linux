@@ -1323,7 +1323,9 @@ struct gfar_private {
 		/* Flow control flags */
 		pause_aneg_en:1,
 		tx_pause_en:1,
-		rx_pause_en:1;
+		rx_pause_en:1,
+		/* L2 SRAM alloc of BDs */
+		bd_l2sram_en:1;
 
 	/* The total tx and rx ring size for the enabled queues */
 	unsigned int total_tx_ring_size;
@@ -1355,6 +1357,9 @@ struct gfar_private {
 	unsigned int ftp_rqfcr[MAX_FILER_IDX + 1];
 };
 
+#define BD_RING_REG_SZ(priv) ( \
+	sizeof(struct txbd8) * (priv)->total_tx_ring_size + \
+	sizeof(struct rxbd8) * (priv)->total_rx_ring_size)
 
 static inline int gfar_has_errata(struct gfar_private *priv,
 				  enum gfar_errata err)

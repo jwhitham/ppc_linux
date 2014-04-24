@@ -105,6 +105,10 @@
 
 #include "gianfar.h"
 
+#ifdef CONFIG_FSL_85XX_CACHE_SRAM
+#include <asm/fsl_85xx_cache_sram.h>
+#endif
+
 #ifdef CONFIG_AS_FASTPATH
 #include "asf_gianfar.h"
 #endif
@@ -155,6 +159,11 @@ static void gfar_clear_exact_match(struct net_device *dev);
 static void gfar_set_mac_for_addr(struct net_device *dev, int num,
 				  const u8 *addr);
 static int gfar_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
+
+bool gfar_l2sram_en = true;
+module_param(gfar_l2sram_en, bool, 0444);
+MODULE_PARM_DESC(gfar_l2sram_en,
+		 "Enable allocation to L2 SRAM.");
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc");
 MODULE_DESCRIPTION("Gianfar Ethernet Driver");
@@ -228,8 +237,9 @@ static int gfar_init_bds(struct net_device *ndev)
 
 static int gfar_alloc_skb_resources(struct net_device *ndev)
 {
-	void *vaddr;
+	void *vaddr = NULL;
 	dma_addr_t addr;
+	phys_addr_t paddr;
 	int i, j, k;
 	struct gfar_private *priv = netdev_priv(ndev);
 	struct device *dev = priv->dev;
@@ -245,12 +255,23 @@ static int gfar_alloc_skb_resources(struct net_device *ndev)
 		priv->total_rx_ring_size += priv->rx_queue[i]->rx_ring_size;
 
 	/* Allocate memory for the buffer descriptors */
-	vaddr = dma_alloc_coherent(dev,
-				   (priv->total_tx_ring_size *
-				    sizeof(struct txbd8)) +
-				   (priv->total_rx_ring_size *
-				    sizeof(struct rxbd8)),
-				   &addr, GFP_KERNEL);
+	if (priv->bd_l2sram_en) {
+		vaddr = mpc85xx_cache_sram_alloc(BD_RING_REG_SZ(priv),
+						 &paddr, L1_CACHE_BYTES);
+		if (vaddr)
+			addr = phys_to_dma(dev, paddr);
+		else {
+			netif_dbg(priv, ifup, ndev, "%s, %s\n",
+				  "Could not allocate BDs to SRAM",
+				  "fallback to DDR");
+			priv->bd_l2sram_en = 0;
+		}
+	}
+
+	if (!priv->bd_l2sram_en)
+		vaddr = dma_alloc_coherent(dev, BD_RING_REG_SZ(priv),
+					   &addr, GFP_KERNEL);
+
 	if (!vaddr)
 		return -ENOMEM;
 
@@ -844,6 +865,11 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 		err = gfar_parse_group(np, priv, model);
 		if (err)
 			goto err_grp_init;
+	}
+
+	if (gfar_l2sram_en) {
+		/* try to alloc the BD rings to L2 SRAM */
+		priv->bd_l2sram_en = 1;
 	}
 
 	stash = of_get_property(np, "bd-stash", NULL);
@@ -2096,11 +2122,12 @@ static void free_skb_resources(struct gfar_private *priv)
 			free_skb_rx_queue(rx_queue);
 	}
 
-	dma_free_coherent(priv->dev,
-			  sizeof(struct txbd8) * priv->total_tx_ring_size +
-			  sizeof(struct rxbd8) * priv->total_rx_ring_size,
-			  priv->tx_queue[0]->tx_bd_base,
-			  priv->tx_queue[0]->tx_bd_dma_base);
+	if (priv->bd_l2sram_en)
+		mpc85xx_cache_sram_free(priv->tx_queue[0]->tx_bd_base);
+	else
+		dma_free_coherent(priv->dev, BD_RING_REG_SZ(priv),
+				  priv->tx_queue[0]->tx_bd_base,
+				  priv->tx_queue[0]->tx_bd_dma_base);
 }
 
 void gfar_start(struct gfar_private *priv)
