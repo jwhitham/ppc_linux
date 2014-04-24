@@ -931,7 +931,7 @@ static int __test_tls(struct crypto_aead *tfm, int enc,
 			ret = wait_for_completion_interruptible(
 						&result.completion);
 			if (!ret && !result.err) {
-				reinit_completion(&result.completion);
+				INIT_COMPLETION(result.completion);
 				break;
 			} else {
 				ret = result.err;
