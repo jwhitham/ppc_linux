@@ -634,7 +634,7 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	struct device *jrdev = ctx->jrdev;
 	bool keys_fit_inline = false;
 	u32 *key_jump_cmd, *zero_payload_jump_cmd, *skip_zero_jump_cmd;
-	u32 genpad, jumpback, stidx;
+	u32 genpad, idx_ld_datasz, idx_ld_pad, jumpback, stidx;
 	u32 *desc;
 	unsigned int blocksize = crypto_aead_blocksize(aead);
 	/* Associated data length is always = 13 for TLS */
@@ -648,10 +648,26 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	 * Job Descriptor and Shared Descriptor
 	 * must fit into the 64-word Descriptor h/w Buffer
 	 */
+
+	/*
+	 * Compute the index (in bytes) for the LOAD with destination of
+	 * Class 1 Data Size Register and for the LOAD that generates padding
+	 */
 	if (DESC_TLS10_ENC_LEN + DESC_JOB_IO_LEN +
 	    ctx->split_key_pad_len + ctx->enckeylen <=
-	    CAAM_DESC_BYTES_MAX)
+	    CAAM_DESC_BYTES_MAX) {
 		keys_fit_inline = true;
+
+		idx_ld_datasz = DESC_TLS10_ENC_LEN + ctx->split_key_pad_len +
+				ctx->enckeylen - 4 * CAAM_CMD_SZ;
+		idx_ld_pad = DESC_TLS10_ENC_LEN + ctx->split_key_pad_len +
+			     ctx->enckeylen - 2 * CAAM_CMD_SZ;
+	} else {
+		idx_ld_datasz = DESC_TLS10_ENC_LEN + 2 * CAAM_PTR_SZ -
+				4 * CAAM_CMD_SZ;
+		idx_ld_pad = DESC_TLS10_ENC_LEN + 2 * CAAM_PTR_SZ -
+			     2 * CAAM_CMD_SZ;
+	}
 
 	desc = ctx->sh_desc_enc;
 
@@ -702,15 +718,15 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	 * for the LOAD in the class 1 data size register.
 	 */
 	append_move(desc, MOVE_SRC_DESCBUF | MOVE_DEST_MATH2 |
-			(45 * 4 << MOVE_OFFSET_SHIFT) | 7);
+			(idx_ld_datasz << MOVE_OFFSET_SHIFT) | 7);
 	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH2 | MOVE_DEST_DESCBUF |
-			(45 * 4 << MOVE_OFFSET_SHIFT) | 8);
+			(idx_ld_datasz << MOVE_OFFSET_SHIFT) | 8);
 
 	/* overwrite PL field for the padding iNFO FIFO entry  */
 	append_move(desc, MOVE_SRC_DESCBUF | MOVE_DEST_MATH2 |
-			(47 * 4 << MOVE_OFFSET_SHIFT) | 7);
+			(idx_ld_pad << MOVE_OFFSET_SHIFT) | 7);
 	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH2 | MOVE_DEST_DESCBUF |
-			(47 * 4 << MOVE_OFFSET_SHIFT) | 8);
+			(idx_ld_pad << MOVE_OFFSET_SHIFT) | 8);
 
 	/* store encrypted payload, icv and padding */
 	append_seq_fifo_store(desc, 0, FIFOST_TYPE_MESSAGE_DATA | LDST_VLF);
