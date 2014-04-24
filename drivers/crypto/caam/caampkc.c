@@ -143,10 +143,8 @@ static void rsa_op_done(struct device *dev, u32 *desc, u32 err, void *context)
 	edesc = (struct rsa_edesc *)((char *)desc -
 				     offsetof(struct rsa_edesc, hw_desc));
 
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-		dev_err(dev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(dev, err);
 
 	rsa_unmap(dev, edesc, req);
 	kfree(edesc);
@@ -269,10 +267,8 @@ static void dsa_op_done(struct device *dev, u32 *desc, u32 err, void *context)
 	edesc = (struct dsa_edesc_s *)((char *)desc -
 				     offsetof(struct dsa_edesc_s, hw_desc));
 
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-		dev_err(dev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(dev, err);
 
 	dsa_unmap(dev, edesc, req);
 	kfree(edesc);
@@ -1225,10 +1221,8 @@ static void dh_op_done(struct device *dev, u32 *desc, u32 err, void *context)
 	edesc = (struct dh_edesc_s *)((char *)desc -
 				     offsetof(struct dh_edesc_s, hw_desc));
 
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-		dev_err(dev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(dev, err);
 
 	dh_unmap(dev, edesc, req);
 	kfree(edesc);

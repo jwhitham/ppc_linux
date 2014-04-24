@@ -995,9 +995,7 @@ static inline void aead_done(struct caam_drv_req *drv_req, u32 status)
 	qidev = caam_ctx->qidev;
 
 	if (status) {
-		char tmp[CAAM_ERROR_STR_MAX];
-		dev_err(qidev, "Rsp status: %#x: %s\n",
-			status, caam_jr_strstatus(tmp, status));
+		caam_jr_strstatus(qidev, status);
 		ecode = -EIO;
 	}
 
@@ -1021,9 +1019,7 @@ static inline void tls_encrypt_done(struct caam_drv_req *drv_req, u32 status)
 	qidev = caam_ctx->qidev;
 
 	if (status) {
-		char tmp[CAAM_ERROR_STR_MAX];
-		dev_err(qidev, "Rsp status: %#x: %s\n",
-			status, caam_jr_strstatus(tmp, status));
+		caam_jr_strstatus(qidev, status);
 		ecode = -EIO;
 	}
 
@@ -1050,9 +1046,7 @@ static inline void tls_decrypt_done(struct caam_drv_req *drv_req, u32 status)
 	qidev = caam_ctx->qidev;
 
 	if (status) {
-		char tmp[CAAM_ERROR_STR_MAX];
-		dev_err(qidev, "Rsp status: %#x: %s\n",
-			status, caam_jr_strstatus(tmp, status));
+		caam_jr_strstatus(qidev, status);
 		ecode = -EIO;
 	}
 
