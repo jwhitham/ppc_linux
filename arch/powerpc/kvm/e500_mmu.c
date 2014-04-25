@@ -945,11 +945,7 @@ static int vcpu_mmu_init(struct kvm_vcpu *vcpu,
 		vcpu->arch.tlbps[1] = mfspr(SPRN_TLB1PS);
 
 		vcpu->arch.mmucfg &= ~MMUCFG_LRAT;
-
-		/* Guest mmu emulation currently doesn't handle E.PT */
-		vcpu->arch.eptcfg = 0;
-		vcpu->arch.tlbcfg[0] &= ~TLBnCFG_PT;
-		vcpu->arch.tlbcfg[1] &= ~TLBnCFG_IND;
+		vcpu->arch.eptcfg = mfspr(SPRN_EPTCFG);
 	}
 
 	return 0;
