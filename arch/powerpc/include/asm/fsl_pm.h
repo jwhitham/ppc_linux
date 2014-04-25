@@ -13,6 +13,8 @@
 #ifdef	__KERNEL__
 
 #ifndef __ASSEMBLY__
+#include <linux/suspend.h>
+
 #define E500_PM_PH10	1
 #define E500_PM_PH15	2
 #define E500_PM_PH20	3
@@ -47,6 +49,10 @@ extern int fsl_enter_epu_deepsleep(void);
 extern void fsl_dp_enter_low(void __iomem *ccsr_base, void __iomem *dcsr_base,
 			     void __iomem *pld_base, int pld_flag);
 extern void fsl_booke_deep_sleep_resume(void);
+
+void set_pm_suspend_state(suspend_state_t state);
+suspend_state_t pm_suspend_state(void);
+
 #endif	/* __ASSEMBLY__ */
 
 #define T1040QDS_TETRA_FLAG	1
