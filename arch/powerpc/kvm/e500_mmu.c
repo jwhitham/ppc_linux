@@ -287,6 +287,7 @@ static void tlbilx_all(struct kvmppc_vcpu_e500 *vcpu_e500, int tlbsel,
 {
 	struct kvm_book3e_206_tlb_entry *tlbe;
 	int tid, esel;
+	int sind = get_cur_sind(&vcpu_e500->vcpu);
 
 	/* invalidate all entries */
 	for (esel = 0; esel < vcpu_e500->gtlb_params[tlbsel].entries; esel++) {
@@ -297,6 +298,10 @@ static void tlbilx_all(struct kvmppc_vcpu_e500 *vcpu_e500, int tlbsel,
 			kvmppc_e500_gtlbe_invalidate(vcpu_e500, tlbsel, esel);
 		}
 	}
+
+	/* Invalidate enties added by HTW */
+	if (has_feature(&vcpu_e500->vcpu, VCPU_FTR_MMU_V2) && (!sind))
+		inval_tlb_on_host(&vcpu_e500->vcpu, type, pid);
 }
 
 static void tlbilx_one(struct kvmppc_vcpu_e500 *vcpu_e500, int pid,

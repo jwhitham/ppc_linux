@@ -90,16 +90,54 @@ void kvmppc_e500_tlbil_one(struct kvmppc_vcpu_e500 *vcpu_e500,
 	local_irq_restore(flags);
 }
 
-void kvmppc_e500_tlbil_all(struct kvmppc_vcpu_e500 *vcpu_e500)
+void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea, int pid, int sas,
+		      int sind)
 {
 	unsigned long flags;
 
 	local_irq_save(flags);
-	mtspr(SPRN_MAS5, MAS5_SGS | vcpu_e500->vcpu.arch.lpid);
+	mtspr(SPRN_MAS5, MAS5_SGS | vcpu->arch.lpid);
+	mtspr(SPRN_MAS6, (pid << MAS6_SPID_SHIFT) |
+		sas | (sind << MAS6_SIND_SHIFT));
+	asm volatile("tlbilx 3, 0, %[ea]\n" : :
+					[ea] "r" (ea));
+	local_irq_restore(flags);
+}
+
+void kvmppc_e500_tlbil_pid(struct kvm_vcpu *vcpu, int pid)
+{
+	unsigned long flags;
+
+	local_irq_save(flags);
+	mtspr(SPRN_MAS5, MAS5_SGS | vcpu->arch.lpid);
+	mtspr(SPRN_MAS6, pid << MAS6_SPID_SHIFT);
+	asm volatile("tlbilxpid");
+	mtspr(SPRN_MAS5, 0);
+	local_irq_restore(flags);
+}
+
+void kvmppc_e500_tlbil_lpid(struct kvm_vcpu *vcpu)
+{
+	unsigned long flags;
+
+	local_irq_save(flags);
+	mtspr(SPRN_MAS5, MAS5_SGS | vcpu->arch.lpid);
 	asm volatile("tlbilxlpid");
 	mtspr(SPRN_MAS5, 0);
 	local_irq_restore(flags);
+}
 
+void inval_tlb_on_host(struct kvm_vcpu *vcpu, int type, int pid)
+{
+	if (type == 0)
+		kvmppc_e500_tlbil_lpid(vcpu);
+	else
+		kvmppc_e500_tlbil_pid(vcpu, pid);
+}
+
+void kvmppc_e500_tlbil_all(struct kvmppc_vcpu_e500 *vcpu_e500)
+{
+	kvmppc_e500_tlbil_lpid(&vcpu_e500->vcpu);
 	kvmppc_lrat_invalidate(&vcpu_e500->vcpu);
 }
 

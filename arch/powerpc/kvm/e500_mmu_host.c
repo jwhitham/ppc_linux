@@ -232,22 +232,6 @@ void kvmppc_lrat_invalidate(struct kvm_vcpu *vcpu)
 	book3e_tlb_unlock();
 	local_irq_restore(flags);
 }
-
-void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea,
-					int pid, int sas, int sind)
-{
-	unsigned long flags;
-
-	local_irq_save(flags);
-	mtspr(SPRN_MAS6, (pid << MAS6_SPID_SHIFT) |
-			sas | (sind << MAS6_SIND_SHIFT));
-	mtspr(SPRN_MAS5, MAS5_SGS | vcpu->arch.lpid);
-	asm volatile("tlbilx 3, 0, %[ea]\n" : :
-				 [ea] "r" (ea));
-	mtspr(SPRN_MAS5, 0);
-	isync();
-	local_irq_restore(flags);
-}
 #endif
 
 /*

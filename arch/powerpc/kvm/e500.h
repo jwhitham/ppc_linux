@@ -333,6 +333,22 @@ void kvmppc_e500_tlbil_one(struct kvmppc_vcpu_e500 *vcpu_e500,
 void kvmppc_e500_tlbil_all(struct kvmppc_vcpu_e500 *vcpu_e500);
 
 #ifdef CONFIG_KVM_BOOKE_HV
+void inval_tlb_on_host(struct kvm_vcpu *vcpu, int type, int pid);
+
+void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea, int pid, int sas,
+		      int sind);
+#else
+/* TLB is fully virtualized */
+static inline void inval_tlb_on_host(struct kvm_vcpu *vcpu,
+				     int type, int pid)
+{}
+
+static inline void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea, int pid,
+				    int sas, int sind)
+{}
+#endif
+
+#ifdef CONFIG_KVM_BOOKE_HV
 #define kvmppc_e500_get_tlb_stid(vcpu, gtlbe)       get_tlb_tid(gtlbe)
 #define get_tlbmiss_tid(vcpu)           get_cur_pid(vcpu)
 #define get_tlb_sts(gtlbe)              (gtlbe->mas1 & MAS1_TS)
