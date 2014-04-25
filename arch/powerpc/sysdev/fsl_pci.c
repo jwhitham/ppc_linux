@@ -22,13 +22,17 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/init.h>
+#include <linux/interrupt.h>
 #include <linux/bootmem.h>
 #include <linux/memblock.h>
 #include <linux/log2.h>
 #include <linux/slab.h>
+#include <linux/suspend.h>
+#include <linux/syscore_ops.h>
 #include <linux/uaccess.h>
 
 #include <asm/io.h>
+#include <asm/fsl_pm.h>
 #include <asm/prom.h>
 #include <asm/pci-bridge.h>
 #include <asm/ppc-pci.h>
@@ -1153,6 +1157,229 @@ void fsl_pci_assign_primary(void)
 	}
 }
 
+#ifdef CONFIG_PM_SLEEP
+static irqreturn_t fsl_pci_pme_handle(int irq, void *dev_id)
+{
+	struct pci_controller *hose = dev_id;
+	struct ccsr_pci __iomem *pci = hose->private_data;
+	u32 dr;
+
+	dr = in_be32(&pci->pex_pme_mes_dr);
+	if (!dr)
+		return IRQ_NONE;
+
+	out_be32(&pci->pex_pme_mes_dr, dr);
+
+	return IRQ_HANDLED;
+}
+
+static int fsl_pci_pme_probe(struct pci_controller *hose)
+{
+	struct ccsr_pci __iomem *pci;
+	struct pci_dev *dev;
+	int pme_irq;
+	int res;
+	u16 pms;
+
+	/* Get hose's pci_dev */
+	dev = list_first_entry(&hose->bus->devices, typeof(*dev), bus_list);
+
+	/* PME Disable */
+	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pms);
+	pms &= ~PCI_PM_CTRL_PME_ENABLE;
+	pci_write_config_word(dev, dev->pm_cap + PCI_PM_CTRL, pms);
+
+	pme_irq = irq_of_parse_and_map(hose->dn, 0);
+	if (!pme_irq) {
+		dev_err(&dev->dev, "Failed to map PME interrupt.\n");
+		return -ENXIO;
+	}
+
+	res = devm_request_irq(hose->parent, pme_irq,
+			fsl_pci_pme_handle,
+			IRQF_SHARED,
+			"[PCI] PME", hose);
+	if (res < 0) {
+		dev_err(&dev->dev, "PCI: Requiest irq %d failed\n", pme_irq);
+		irq_dispose_mapping(pme_irq);
+		return -ENODEV;
+	}
+
+	pci = hose->private_data;
+
+	/* Enable PTOD, ENL23D & EXL23D */
+	clrbits32(&pci->pex_pme_mes_disr,
+		  PME_DISR_EN_PTOD | PME_DISR_EN_ENL23D | PME_DISR_EN_EXL23D);
+
+	out_be32(&pci->pex_pme_mes_ier, 0);
+	setbits32(&pci->pex_pme_mes_ier,
+		  PME_DISR_EN_PTOD | PME_DISR_EN_ENL23D | PME_DISR_EN_EXL23D);
+
+	/* PME Enable */
+	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pms);
+	pms |= PCI_PM_CTRL_PME_ENABLE;
+	pci_write_config_word(dev, dev->pm_cap + PCI_PM_CTRL, pms);
+
+	return 0;
+}
+
+static int pcie_slot_flag;
+
+/* Workaround: p1022ds need reset slot when the system wakeup from deep sleep */
+static int reset_pcie_slot(void)
+{
+#ifdef CONFIG_P1022_DS
+	p1022ds_reset_pcie_slot();
+#endif
+	return 0;
+}
+
+static void send_pme_turnoff_message(struct pci_controller *hose)
+{
+	struct ccsr_pci __iomem *pci = hose->private_data;
+	u32 dr;
+	int i;
+
+	/* Send PME_Turn_Off Message Request */
+	setbits32(&pci->pex_pmcr, PEX_PMCR_PTOMR);
+
+	/* Wait trun off done */
+	/* RC will get this detect quickly */
+	for (i = 0; i < 50; i++) {
+		dr = in_be32(&pci->pex_pme_mes_dr);
+		if (dr & ENL23_DETECT_BIT) {
+			out_be32(&pci->pex_pme_mes_dr, dr);
+			break;
+		}
+
+		mdelay(1);
+	}
+
+	/*
+	 * "PCI Bus Power Management Interface Specification" define
+	 * Minimum System Software Guaranteed Delays
+	 *
+	 * D0, D1 or D2 --> D3, need delay 10ms.
+	 * But based on my test results, we need to delay 30ms when EP
+	 * plug in p1022 slot2. And we need to delay 100ms when EP plug
+	 * in p1022 slot1. So need to get maximum delay.
+	 */
+	mdelay(100);
+}
+
+static void fsl_pci_syscore_do_suspend(struct pci_controller *hose)
+{
+	suspend_state_t pm_state;
+	pm_state = pm_suspend_state();
+
+	send_pme_turnoff_message(hose);
+
+	if (pm_state == PM_SUSPEND_MEM)
+		pcie_slot_flag = 0;
+}
+
+static int fsl_pci_syscore_suspend(void)
+{
+	struct pci_controller *hose, *tmp;
+
+	list_for_each_entry_safe(hose, tmp, &hose_list, list_node)
+		fsl_pci_syscore_do_suspend(hose);
+
+	return 0;
+}
+
+#define PCIE_RESET_SLOT_WAITTIME	100000 /* wait 100 ms */
+static void fsl_pci_syscore_do_resume(struct pci_controller *hose)
+{
+	struct ccsr_pci __iomem *pci = hose->private_data;
+	struct pci_dev *dev;
+	u32 svr = mfspr(SPRN_SVR);
+	u32 dr;
+	suspend_state_t pm_state;
+	int i;
+	u16 pms;
+
+	/* Send Exit L2 State Message */
+	setbits32(&pci->pex_pmcr, PEX_PMCR_EXL2S);
+
+	/* Wait exit done */
+	/* RC will get this detect quickly */
+	for (i = 0; i < 50; i++) {
+		dr = in_be32(&pci->pex_pme_mes_dr);
+		if (dr & EXL23_DETECT_BIT) {
+			out_be32(&pci->pex_pme_mes_dr, dr);
+			break;
+		}
+
+		mdelay(1);
+	}
+
+	/*
+	 * "PCI Bus Power Management Interface Specification" define
+	 * Minimum System Software Guaranteed Delays
+	 *
+	 * D0, D1 or D2 --> D3, need delay 10ms.
+	 * But based on my test results, we need to delay 30ms when EP
+	 * plug in p1022 slot2. And we need to delay 100ms when EP plug
+	 * in p1022 slot1. So need to get maximum delay.
+	 */
+	mdelay(100);
+
+	pm_state = pm_suspend_state();
+	if (pm_state != PM_SUSPEND_MEM)
+		goto setup_atmu;
+
+	/* After resume from deep-sleep, we need to restore below registers */
+	/* Enable PTOD, ENL23D & EXL23D */
+	clrbits32(&pci->pex_pme_mes_disr,
+		  PME_DISR_EN_PTOD | PME_DISR_EN_ENL23D | PME_DISR_EN_EXL23D);
+
+	out_be32(&pci->pex_pme_mes_ier, 0);
+	setbits32(&pci->pex_pme_mes_ier,
+		  PME_DISR_EN_PTOD | PME_DISR_EN_ENL23D | PME_DISR_EN_EXL23D);
+
+	/* Get hose's pci_dev */
+	dev = list_first_entry(&hose->bus->devices, typeof(*dev), bus_list);
+
+	/* PME Enable */
+	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pms);
+	pms |= PCI_PM_CTRL_PME_ENABLE;
+	pci_write_config_word(dev, dev->pm_cap + PCI_PM_CTRL, pms);
+
+	/* Only reset slot, we can rework the EP device */
+	if (SVR_SOC_VER(svr) == SVR_P1022 && !pcie_slot_flag) {
+		reset_pcie_slot();
+		pcie_slot_flag = 1;
+	}
+
+	spin_event_timeout(!fsl_pcie_check_link(hose),
+			   PCIE_RESET_SLOT_WAITTIME, 0);
+
+setup_atmu:
+	setup_pci_atmu(hose);
+}
+
+static void fsl_pci_syscore_resume(void)
+{
+	struct pci_controller *hose, *tmp;
+
+	list_for_each_entry_safe(hose, tmp, &hose_list, list_node)
+		fsl_pci_syscore_do_resume(hose);
+}
+
+static struct syscore_ops pci_syscore_pm_ops = {
+	.suspend = fsl_pci_syscore_suspend,
+	.resume = fsl_pci_syscore_resume,
+};
+#endif
+
+void fsl_pcibios_fixup_phb(struct pci_controller *phb)
+{
+#ifdef CONFIG_PM_SLEEP
+	fsl_pci_pme_probe(phb);
+#endif
+}
+
 static int fsl_pci_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -1166,42 +1393,9 @@ static int fsl_pci_probe(struct platform_device *pdev)
 	return ret;
 }
 
-#ifdef CONFIG_PM
-static int fsl_pci_resume(struct device *dev)
-{
-	struct pci_controller *hose;
-	struct resource pci_rsrc;
-
-	hose = pci_find_hose_for_OF_device(dev->of_node);
-	if (!hose)
-		return -ENODEV;
-
-	if (of_address_to_resource(dev->of_node, 0, &pci_rsrc)) {
-		dev_err(dev, "Get pci register base failed.");
-		return -ENODEV;
-	}
-
-	setup_pci_atmu(hose);
-
-	return 0;
-}
-
-static const struct dev_pm_ops pci_pm_ops = {
-	.resume = fsl_pci_resume,
-};
-
-#define PCI_PM_OPS (&pci_pm_ops)
-
-#else
-
-#define PCI_PM_OPS NULL
-
-#endif
-
 static struct platform_driver fsl_pci_driver = {
 	.driver = {
 		.name = "fsl-pci",
-		.pm = PCI_PM_OPS,
 		.of_match_table = pci_ids,
 	},
 	.probe = fsl_pci_probe,
@@ -1209,6 +1403,9 @@ static struct platform_driver fsl_pci_driver = {
 
 static int __init fsl_pci_init(void)
 {
+#ifdef CONFIG_PM_SLEEP
+	register_syscore_ops(&pci_syscore_pm_ops);
+#endif
 	return platform_driver_register(&fsl_pci_driver);
 }
 arch_initcall(fsl_pci_init);
