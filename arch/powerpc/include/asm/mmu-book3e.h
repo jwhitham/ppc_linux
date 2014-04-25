@@ -40,6 +40,8 @@
 
 /* MAS registers bit definitions */
 
+#define MAS0_ATSEL		0x80000000
+#define MAS0_ATSEL_SHIFT	31
 #define MAS0_TLBSEL_MASK	0x30000000
 #define MAS0_TLBSEL_SHIFT	28
 #define MAS0_TLBSEL(x)		(((x) << MAS0_TLBSEL_SHIFT) & MAS0_TLBSEL_MASK)
@@ -54,6 +56,7 @@
 #define MAS0_WQ_CLR_RSRV       	0x00002000
 
 #define MAS1_VALID		0x80000000
+#define MAS1_VALID_SHIFT	31
 #define MAS1_IPROT		0x40000000
 #define MAS1_TID(x)		(((x) << 16) & 0x3FFF0000)
 #define MAS1_IND		0x00002000

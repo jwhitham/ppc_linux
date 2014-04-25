@@ -98,6 +98,8 @@ void kvmppc_e500_tlbil_all(struct kvmppc_vcpu_e500 *vcpu_e500)
 	asm volatile("tlbilxlpid");
 	mtspr(SPRN_MAS5, 0);
 	local_irq_restore(flags);
+
+	kvmppc_lrat_invalidate(&vcpu_e500->vcpu);
 }
 
 void kvmppc_set_pid(struct kvm_vcpu *vcpu, u32 pid)
@@ -301,7 +303,9 @@ void kvmppc_prepare_for_emulation(struct kvm_vcpu *vcpu, unsigned int *exit_nr)
 
 	if ((*exit_nr != BOOKE_INTERRUPT_DATA_STORAGE) &&
 	    (*exit_nr != BOOKE_INTERRUPT_DTLB_MISS) &&
-	    (*exit_nr != BOOKE_INTERRUPT_HV_PRIV))
+	    (*exit_nr != BOOKE_INTERRUPT_HV_PRIV) &&
+	    ((*exit_nr != BOOKE_INTERRUPT_LRAT_ERROR) ||
+	     (!(vcpu->arch.fault_esr & ESR_DATA))))
 		return;
 
 	/* Search guest translation to find the real addressss */
