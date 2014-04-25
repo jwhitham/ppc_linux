@@ -58,16 +58,17 @@ void kvmppc_set_pending_interrupt(struct kvm_vcpu *vcpu, enum int_class type)
 void kvmppc_e500_tlbil_one(struct kvmppc_vcpu_e500 *vcpu_e500,
 			   struct kvm_book3e_206_tlb_entry *gtlbe)
 {
-	unsigned int tid, ts;
+	unsigned int tid, ts, ind;
 	gva_t eaddr;
 	u32 val;
 	unsigned long flags;
 
 	ts = get_tlb_ts(gtlbe);
 	tid = get_tlb_tid(gtlbe);
+	ind = get_tlb_ind(&vcpu_e500->vcpu, gtlbe);
 
 	/* We search the host TLB to invalidate its shadow TLB entry */
-	val = (tid << 16) | ts;
+	val = (tid << 16) | ts | (ind << MAS6_SIND_SHIFT);
 	eaddr = get_tlb_eaddr(gtlbe);
 
 	local_irq_save(flags);

@@ -12,6 +12,16 @@
 void inval_gtlbe_on_host(struct kvmppc_vcpu_e500 *vcpu_e500, int tlbsel,
 			 int esel);
 
+#ifdef CONFIG_KVM_BOOKE_HV
+	void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea,
+						int pid, int sas, int sind);
+#else
+/* TLB is fully virtualized */
+static inline void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea,
+						int pid, int sas, int sind)
+{}
+#endif
+
 int e500_mmu_host_init(struct kvmppc_vcpu_e500 *vcpu_e500);
 void e500_mmu_host_uninit(struct kvmppc_vcpu_e500 *vcpu_e500);
 
