@@ -363,6 +363,17 @@ static int smp_85xx_kick_cpu(int nr)
 		out_be32(&spin_table->addr_l, 0);
 		flush_spin_table(spin_table);
 
+#ifdef CONFIG_PPC_E500MC
+		/*
+		 * Errata-A-006568. If SOC-rcpm is V1, we need enable
+		 * cpu first, T4240rev2 and later Soc has been fixed.
+		 * But before this errata is still needed.
+		 */
+		if (get_rcpm_version() == RCPM_V1 &&
+		    qoriq_pm_ops->cpu_exit_state)
+			qoriq_pm_ops->cpu_exit_state(nr, qoriq_cpu_die_state);
+#endif
+
 		/*
 		 * We don't set the BPTR register here since it already points
 		 * to the boot page properly.

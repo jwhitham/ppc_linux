@@ -50,6 +50,14 @@ extern void fsl_dp_enter_low(void __iomem *ccsr_base, void __iomem *dcsr_base,
 			     void __iomem *pld_base, int pld_flag);
 extern void fsl_booke_deep_sleep_resume(void);
 
+/*
+ * RCPM definition
+ */
+#define RCPM_V1		1
+#define RCPM_V2		2
+
+unsigned long get_rcpm_version(void);
+
 void set_pm_suspend_state(suspend_state_t state);
 suspend_state_t pm_suspend_state(void);
 

@@ -20,13 +20,11 @@
 #include <asm/cputhreads.h>
 #include <asm/fsl_pm.h>
 
-#define RCPM_V1		1
-#define RCPM_V2		2
-
 const struct fsl_pm_ops *qoriq_pm_ops;
 
 static struct ccsr_rcpm_v1 __iomem *rcpm_v1_regs;
 static struct ccsr_rcpm_v2 __iomem *rcpm_v2_regs;
+static unsigned long rcpm_version;
 
 static void rcpm_v1_irq_mask(int cpu)
 {
@@ -292,6 +290,11 @@ static const struct of_device_id rcpm_matches[] = {
 	{},
 };
 
+unsigned long get_rcpm_version(void)
+{
+	return rcpm_version;
+}
+
 int fsl_rcpm_init(void)
 {
 	struct device_node *np;
@@ -309,7 +312,9 @@ int fsl_rcpm_init(void)
 	if (!base)
 		return -ENOMEM;
 
-	switch ((unsigned long)match->data) {
+	rcpm_version = (unsigned long)match->data;
+
+	switch (rcpm_version) {
 	case RCPM_V1:
 		rcpm_v1_regs = base;
 		qoriq_pm_ops = &qoriq_rcpm_v1_ops;
