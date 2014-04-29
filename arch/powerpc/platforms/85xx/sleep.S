@@ -1071,8 +1071,10 @@ _GLOBAL(fsl_booke_deep_sleep_resume)
 	/* disable interrupts */
 	FSL_DIS_ALL_IRQ
 
+#define ENTRY_DEEPSLEEP_SETUP
 #define ENTRY_MAPPING_BOOT_SETUP
 #include <../../kernel/fsl_booke_entry_mapping.S>
+#undef ENTRY_DEEPSLEEP_SETUP
 #undef ENTRY_MAPPING_BOOT_SETUP
 
 	li	r3, 0
@@ -1083,10 +1085,10 @@ _GLOBAL(fsl_booke_deep_sleep_resume)
 	LOAD_REG_ADDR(r3, tlbcam_index)
 	lwz	r3, 0(r3)
 	mtctr	r3
-	li	r0, 0
-3:	mr	r3, r0
+	li	r9, 0
+3:	mr	r3, r9
 	bl	loadcam_entry
-	addi	r0, r0, 1
+	addi	r9, r9, 1
 	bdnz	3b
 
 	/* restore cpu registers */
@@ -1095,9 +1097,11 @@ _GLOBAL(fsl_booke_deep_sleep_resume)
 
 	/* restore return address */
 	LOAD_REG_ADDR(r3, buf_tmp)
-	ld	r4, 0(r3)
+	lwz	r4, 16(r3)
+	mtspr	SPRN_TCR, r4
+	lwz	r4, 0(r3)
 	mtlr	r4
-	ld	r4, 8(r3)
+	lwz	r4, 8(r3)
 	mtmsr	r4
 
 	blr
