@@ -441,7 +441,10 @@ static void calc_in_pol_key_size(struct dpa_ipsec *dpa_ipsec, uint8_t *key_size)
 			*key_size += PORT_FIELD_LEN;
 			break;
 		case DPA_IPSEC_KEY_FIELD_DSCP:
-			*key_size += DSCP_FIELD_LEN;
+			if (dpa_ipsec->config.post_sec_in_params.use_ipv6_pol)
+				*key_size += DSCP_FIELD_LEN_IPv4;
+			else
+				*key_size += DSCP_FIELD_LEN_IPv6;
 			break;
 		}
 	}
@@ -1347,6 +1350,45 @@ static int set_flow_id_action(struct dpa_ipsec_sa *sa,
 	return 0;
 }
 
+static inline void fill_dscp_field(struct dpa_ipsec_policy_params *pol_params,
+				  uint8_t *key, uint8_t *mask, uint8_t *offset,
+				  uint8_t dscp)
+{
+	uint16_t mask_val = 0xFC;
+	uint16_t dscp_val;
+	switch (pol_params->src_addr.version) {
+	case DPA_IPSEC_ADDR_T_IPv4:
+		if (pol_params->use_dscp) {
+			*(uint8_t *)(key + *offset) = dscp << 2;
+			SET_BYTE_VAL_IN_ARRAY(mask, *offset, mask_val);
+		} else {
+			*(uint8_t *)(key + *offset) = 0;
+			SET_BYTE_VAL_IN_ARRAY(mask, *offset, 0);
+		}
+		*offset += DSCP_FIELD_LEN_IPv4;
+		break;
+	case DPA_IPSEC_ADDR_T_IPv6:
+		/*
+		 * In order to extract Traffic Class in case of IPv6, the keygen
+		 * will add two bytes to the key, which hold: IPv6 version (4
+		 * bits), TC (8 bits) and 4 bits zero.
+		 */
+		dscp_val = dscp << 6;
+		mask_val = mask_val << 4;
+		if (pol_params->use_dscp) {
+			memcpy(key + *offset, &dscp_val, DSCP_FIELD_LEN_IPv6);
+			memcpy(mask + *offset, &mask_val, DSCP_FIELD_LEN_IPv6);
+		} else {
+			memset(key + *offset, 0, DSCP_FIELD_LEN_IPv6);
+			memset(mask + *offset, 0, DSCP_FIELD_LEN_IPv6);
+		}
+		*offset += DSCP_FIELD_LEN_IPv6;
+		break;
+	default:
+		break;
+	}
+}
+
 static int fill_policy_key(int td,
 			   struct dpa_ipsec_policy_params *pol_params,
 			   uint8_t key_fields,
@@ -1435,14 +1477,8 @@ static int fill_policy_key(int td,
 			break;
 
 		case DPA_IPSEC_KEY_FIELD_DSCP:
-			if (pol_params->use_dscp) {
-				*(uint8_t *)(key + offset) = dscp_value << 2;
-				SET_BYTE_VAL_IN_ARRAY(mask, offset, 0xFC);
-			} else {
-				*(uint8_t *)(key + offset) = 0;
-				SET_BYTE_VAL_IN_ARRAY(mask, offset, 0);
-			}
-			offset += DSCP_FIELD_LEN;
+			fill_dscp_field(pol_params, key, mask, &offset,
+					dscp_value);
 			break;
 		}
 	}

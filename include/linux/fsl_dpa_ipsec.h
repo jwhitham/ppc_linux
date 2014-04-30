@@ -43,7 +43,12 @@
 #define ESP_SPI_FIELD_LEN		4
 #define PORT_FIELD_LEN			2
 #define ICMP_HDR_FIELD_LEN		1
-#define DSCP_FIELD_LEN			1
+#define DSCP_FIELD_LEN_IPv4		1
+/*
+ * In order to extract Traffic Class in case of IPv6, the keygen will add two
+ * bytes to the key, which hold: IPv6 version(4bits), TC(8bits) and 4 bits zero.
+ */
+#define DSCP_FIELD_LEN_IPv6		2
 
 #define MAX_SIZE_IP_UDP_SPI_KEY	\
 		(1 * DPA_OFFLD_IPv6_ADDR_LEN_BYTES + \
