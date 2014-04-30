@@ -1420,6 +1420,13 @@ static int __init caam_pkc_init(void)
 	priv = dev_get_drvdata(ctrldev);
 	of_node_put(dev_node);
 
+	/*
+	 * If priv is NULL, it's probably because the caam driver wasn't
+	 * properly initialized (e.g. RNG4 init failed). Thus, bail out here.
+	 */
+	if (!priv)
+		return -ENODEV;
+
 	INIT_LIST_HEAD(&priv->pkc_list);
 
 	/* register crypto algorithms the device supports */
