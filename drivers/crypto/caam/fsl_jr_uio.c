@@ -35,7 +35,7 @@ struct jr_dev {
 	u32 irq;
 	struct caam_job_ring __iomem *global_regs;
 	struct device *dev;
-	struct resource res;
+	struct resource *res;
 	struct jr_uio_info info;
 	struct list_head node;
 	struct list_head jr_list;
@@ -70,7 +70,6 @@ static irqreturn_t jr_uio_irq_handler(int irq, struct uio_info *dev_info)
 	u32 irqstate;
 	irqstate = rd_reg32(&jrdev->global_regs->jrintstatus);
 	if (!irqstate) {
-		dev_warn(jrdev->dev, "Spurious interrupt received\n");
 		return IRQ_NONE;
 	}
 
@@ -119,8 +118,8 @@ static int __init jr_uio_init(struct jr_dev *uio_dev)
 	info->uio.version = jr_uio_version;
 	info->uio.name = uio_dev->info.name;
 	info->uio.mem[0].name = "JR config space";
-	info->uio.mem[0].addr = uio_dev->res.start;
-	info->uio.mem[0].size = uio_dev->res.end - uio_dev->res.start + 1;
+	info->uio.mem[0].addr = uio_dev->res->start;
+	info->uio.mem[0].size = uio_dev->res->end - uio_dev->res->start + 1;
 	info->uio.mem[0].internal_addr = uio_dev->global_regs;
 	info->uio.mem[0].memtype = UIO_MEM_PHYS;
 	info->uio.irq = uio_dev->irq;
@@ -162,7 +161,7 @@ static int fsl_jr_probe(struct platform_device *dev)
 		return -EFAULT;
 	}
 
-	jr_dev = kzalloc(sizeof(struct jr_dev), GFP_KERNEL);
+	jr_dev = devm_kzalloc(&dev->dev, sizeof(struct jr_dev), GFP_KERNEL);
 	if (!jr_dev) {
 		dev_err(&dev->dev, "kzalloc failed\n");
 		return -ENOMEM;
@@ -188,10 +187,22 @@ static int fsl_jr_probe(struct platform_device *dev)
 		goto abort;
 	}
 
-	jr_dev->res = regs;
+	jr_dev->res = devm_request_mem_region(&dev->dev, regs.start,
+			regs.end-regs.start + 1,
+			jr_dev->info.name);
+	if (unlikely(!jr_dev->res)) {
+		dev_err(jr_dev->dev, "devm_request_mem_region failed\n");
+		ret = -ENOMEM;
+		goto abort;
+	}
 
-	jr_dev->global_regs = of_iomap(jr_node, 0);
-
+	jr_dev->global_regs = devm_ioremap(&dev->dev, jr_dev->res->start,
+			jr_dev->res->end-jr_dev->res->start+1);
+	if (unlikely(jr_dev->global_regs == 0)) {
+		dev_err(jr_dev->dev, "devm_ioremap failed\n");
+		ret = -EIO;
+		goto abort;
+	}
 	jr_dev->irq = irq_of_parse_and_map(jr_node, 0);
 	dev_dbg(jr_dev->dev, "errirq: %d\n", jr_dev->irq);
 
@@ -199,7 +210,7 @@ static int fsl_jr_probe(struct platform_device *dev)
 	ret = jr_uio_init(jr_dev);
 	if (ret) {
 		dev_err(&dev->dev, "UIO init Failed\n");
-		goto abort_iounmap;
+		goto abort;
 	}
 
 	list_add_tail(&jr_dev->node, &jr_list);
@@ -209,10 +220,7 @@ static int fsl_jr_probe(struct platform_device *dev)
 
 	return 0;
 
-abort_iounmap:
-	iounmap(jr_dev->global_regs);
 abort:
-	kfree(jr_dev);
 	return ret;
 }
 
@@ -226,8 +234,6 @@ static int fsl_jr_remove(struct platform_device *dev)
 	list_del(&jr_dev->node);
 	uio_unregister_device(&jr_dev->info.uio);
 	platform_set_drvdata(dev, NULL);
-	iounmap(jr_dev->global_regs);
-	kfree(jr_dev);
 
 	return 0;
 }
