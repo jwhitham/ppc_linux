@@ -100,6 +100,8 @@ static const struct net_device_ops dpa_generic_ops = {
 	.ndo_init = dpa_ndo_init,
 	.ndo_set_features = dpa_set_features,
 	.ndo_fix_features = dpa_fix_features,
+	.ndo_init = dpa_ndo_init,
+	.ndo_change_mtu = dpa_change_mtu,
 };
 
 struct rtnl_link_stats64 *__cold
