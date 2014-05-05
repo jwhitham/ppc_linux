@@ -769,7 +769,6 @@ static int dpa_generic_netdev_init(struct device_node *dpa_node,
 
 struct dpa_fq_cbs_t generic_fq_cbs = {
 	.rx_defq = { .cb = { .dqrr = dpa_generic_rx_dqrr } },
-	/* for OH ports Rx Error queues = Tx Error queues */
 	.rx_errq = { .cb = { .dqrr = dpa_generic_rx_err_dqrr } },
 	.egress_ern = { .cb = { .ern = dpa_generic_ern } }
 };
@@ -1132,7 +1131,7 @@ static void dpa_generic_fq_setup(struct dpa_generic_priv_s *priv,
 			dpa_generic_setup_ingress(priv, fq, &fq_cbs->rx_errq);
 			break;
 		case FQ_TYPE_RX_PCD:
-			dpa_generic_setup_ingress(priv, fq, &fq_cbs->rx_errq);
+			dpa_generic_setup_ingress(priv, fq, &fq_cbs->rx_defq);
 			break;
 		case FQ_TYPE_TX:
 			dpa_generic_setup_egress(priv, fq,
@@ -1200,10 +1199,11 @@ static int dpa_generic_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 
 		if (dpa_fq->fq_type == FQ_TYPE_TX) {
 			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
-			/* CTXA[A2V] = 1 */
+			/* ContextA: A2V=1 (contextA A2 field is valid)
+			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
+			 */
 			initfq.fqd.context_a.hi = 0x10000000;
 			initfq.fqd.context_a.lo = 0x80000000;
-			/* initfq.fqd.context_b = qman_fq_fqid(confq); */
 		}
 
 		/* Initialization common to all ingress queues */
