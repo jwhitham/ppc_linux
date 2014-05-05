@@ -495,8 +495,8 @@ void netpoll_send_udp(struct netpoll *np, const char *msg, int len)
 			skb->ip_summed = CHECKSUM_PARTIAL;
 		else {
 			skb->ip_summed = CHECKSUM_NONE;
-			udph->check = csum_tcpudp_magic(np->local_ip,
-						np->remote_ip,
+			udph->check = csum_tcpudp_magic(np->local_ip.ip,
+						np->remote_ip.ip,
 						udp_len, IPPROTO_UDP,
 						csum_partial(udph, udp_len, 0));
 			if (udph->check == 0)
