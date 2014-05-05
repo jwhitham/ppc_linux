@@ -181,6 +181,7 @@ static const char * const hv_boards[] __initconst = {
 	"fsl,T2081QDS-hv",
 	"fsl,T2080RDB-hv",
 	"fsl,T4240QDS-hv",
+	"fsl,T4240RDB-hv",
 	"fsl,B4860QDS-hv",
 	"fsl,B4420QDS-hv",
 	"fsl,B4220QDS-hv",
