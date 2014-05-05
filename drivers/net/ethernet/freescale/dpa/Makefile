@@ -23,7 +23,8 @@ fsl-dpa-base-objs	:= dpaa_eth_base.o
 fsl-dpa-shared-objs	:= dpaa_eth_shared.o
 fsl-dpa-proxy-objs	:= dpaa_eth_proxy.o
 fsl-dpa-macless-objs	:= dpaa_eth_macless.o
-fsl-dpa-generic-objs	:= dpaa_eth_generic.o dpaa_eth_generic_sysfs.o
+fsl-dpa-generic-objs	:= dpaa_eth_generic.o dpaa_eth_generic_sysfs.o \
+ dpaa_generic_ethtool.o
 fsl-mac-objs	:= mac.o mac-api.o
 fsl-oh-objs	:= offline_port.o
 

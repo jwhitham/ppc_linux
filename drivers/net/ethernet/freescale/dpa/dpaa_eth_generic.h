@@ -79,4 +79,6 @@ struct dpa_generic_priv_s {
 void dpaa_eth_generic_sysfs_init(struct device *dev);
 void dpaa_eth_generic_sysfs_remove(struct device *dev);
 
+extern const struct ethtool_ops dpa_generic_ethtool_ops;
+
 #endif /* __DPA_ETH_GENERIC_H */
