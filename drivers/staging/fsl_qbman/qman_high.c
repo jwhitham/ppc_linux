@@ -4627,6 +4627,7 @@ int qman_ceetm_ccg_claim(struct qm_ceetm_ccg **ccg,
 	p->parent = channel;
 	p->cb = cscn;
 	p->cb_ctx = cb_ctx;
+	INIT_LIST_HEAD(&p->cb_node);
 
 	*ccg = p;
 	return 0;
@@ -4636,29 +4637,20 @@ EXPORT_SYMBOL(qman_ceetm_ccg_claim);
 int qman_ceetm_ccg_release(struct qm_ceetm_ccg *ccg)
 {
 	unsigned long irqflags __maybe_unused;
-	struct qm_ceetm_ccg *i;
 	struct qm_mcc_ceetm_ccgr_config config_opts;
 	int ret = 0;
 	struct qman_portal *p = get_affine_portal();
 
 	memset(&config_opts, 0, sizeof(struct qm_mcc_ceetm_ccgr_config));
 	spin_lock_irqsave(&p->ccgr_lock, irqflags);
-	list_del(&ccg->cb_node);
-	/*
-	 * If there is no other CCG objects for this CCGID, update
-	 * CSCN_TARG_UPP_CTR accordingly.
-	 */
-	list_for_each_entry(i, &p->ccgr_cbs[ccg->parent->dcp_idx], cb_node)
-		if ((i->idx == ccg->idx) && i->cb)
-			goto release_lock;
+	if (!list_empty(&ccg->cb_node))
+		list_del(&ccg->cb_node);
 	config_opts.ccgrid = CEETM_CCGR_CM_CONFIGURE |
 				(ccg->parent->idx << 4) | ccg->idx;
 	config_opts.dcpid = ccg->parent->dcp_idx;
 	config_opts.we_mask = QM_CCGR_WE_CSCN_TUPD;
 	config_opts.cm_config.cscn_tupd = PORTAL_IDX(p);
-
 	ret = qman_ceetm_configure_ccgr(&config_opts);
-release_lock:
 	spin_unlock_irqrestore(&p->ccgr_lock, irqflags);
 
 	list_del(&ccg->node);
@@ -4687,9 +4679,11 @@ int qman_ceetm_ccg_set(struct qm_ceetm_ccg *ccg, u16 we_mask,
 				(ccg->parent->idx << 4) | ccg->idx;
 	config_opts.dcpid = ccg->parent->dcp_idx;
 	config_opts.we_mask = we_mask;
-	config_opts.we_mask |= QM_CCGR_WE_CSCN_TUPD;
-	config_opts.cm_config.cscn_tupd =
+	if (we_mask & QM_CCGR_WE_CSCN_EN) {
+		config_opts.we_mask |= QM_CCGR_WE_CSCN_TUPD;
+		config_opts.cm_config.cscn_tupd =
 			QM_CGR_TARG_UDP_CTRL_WRITE_BIT | PORTAL_IDX(p);
+	}
 	config_opts.cm_config.ctl = (params->wr_en_g << 6) |
 				(params->wr_en_y << 5) |
 				(params->wr_en_r << 4) |
@@ -4710,7 +4704,10 @@ int qman_ceetm_ccg_set(struct qm_ceetm_ccg *ccg, u16 we_mask,
 		goto release_lock;
 	}
 
-	list_add(&ccg->cb_node, &p->ccgr_cbs[ccg->parent->dcp_idx]);
+	if (we_mask & QM_CCGR_WE_CSCN_EN)
+		if (list_empty(&ccg->cb_node))
+			list_add(&ccg->cb_node,
+				&p->ccgr_cbs[ccg->parent->dcp_idx]);
 release_lock:
 	spin_unlock_irqrestore(&p->ccgr_lock, irqflags);
 	put_affine_portal();
