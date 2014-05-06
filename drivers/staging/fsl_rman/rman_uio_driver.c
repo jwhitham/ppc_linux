@@ -27,6 +27,7 @@
 #include <linux/uio_driver.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/mm.h>
 
 static const char rman_uio_version[] = "RMan UIO driver v1.0";
 
@@ -70,6 +71,33 @@ static int rman_uio_open(struct uio_info *info, struct inode *inode)
 	return 0;
 }
 
+static int rman_uio_mmap(struct uio_info *info, struct vm_area_struct *vma)
+{
+	int mi;
+	struct uio_mem *mem;
+	unsigned long size;
+
+	if (vma->vm_pgoff < MAX_UIO_MAPS) {
+		if (info->mem[vma->vm_pgoff].size == 0)
+			return -EINVAL;
+		mi = (int)vma->vm_pgoff;
+	} else
+		return -EINVAL;
+
+	mem = &info->mem[mi];
+
+	size = min(vma->vm_end - vma->vm_start, mem->size);
+	size = max(size, PAGE_SIZE);
+
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	return remap_pfn_range(vma,
+			       vma->vm_start,
+			       mem->addr >> PAGE_SHIFT,
+			       size,
+			       vma->vm_page_prot);
+}
+
 static int rman_uio_release(struct uio_info *info, struct inode *inode)
 {
 	struct rman_uio_info *i = container_of(info, struct rman_uio_info, uio);
@@ -111,6 +139,7 @@ static int rman_uio_init(struct rman_dev *rmdev)
 	info->uio.handler = rman_uio_irq_handler;
 	info->uio.open = rman_uio_open;
 	info->uio.release = rman_uio_release;
+	info->uio.mmap = rman_uio_mmap;
 	info->uio.priv = rmdev;
 	ret = uio_register_device(rmdev->dev, &info->uio);
 	if (ret) {
@@ -135,6 +164,7 @@ static int rman_ib_uio_init(struct rman_inbound_block *ib)
 	info->uio.mem[0].memtype = UIO_MEM_PHYS;
 	info->uio.open = rman_uio_open;
 	info->uio.release = rman_uio_release;
+	info->uio.mmap = rman_uio_mmap;
 	info->uio.priv = ib;
 	ret = uio_register_device(ib->dev, &info->uio);
 	if (ret) {
