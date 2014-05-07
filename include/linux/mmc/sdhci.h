@@ -109,6 +109,7 @@ struct sdhci_host {
 #define SDHCI_QUIRK2_FORCE_CMD13_DETECT_CARD		(1<<28)
 /* Controller need to disable clock before reset all */
 #define SDHCI_QUIRK2_DISABLE_CLOCK_BEFORE_RESET		(1<<27)
+#define SDHCI_QUIRK2_BROKEN_TRIM			(1<<28)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */

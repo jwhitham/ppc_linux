@@ -2833,6 +2833,9 @@ int sdhci_add_host(struct sdhci_host *host)
 		host->flags &= ~SDHCI_USE_SDMA;
 	}
 
+	if (host->quirks & SDHCI_QUIRK2_BROKEN_TRIM)
+		mmc->caps2 |= MMC_CAP2_NO_TRIM;
+
 	if ((host->version >= SDHCI_SPEC_200) &&
 		(caps[0] & SDHCI_CAN_DO_ADMA2))
 		host->flags |= SDHCI_USE_ADMA;
