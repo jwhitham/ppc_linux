@@ -2033,13 +2033,16 @@ void stop_gfar(struct net_device *dev)
 {
 	struct gfar_private *priv = netdev_priv(dev);
 
-	netif_tx_stop_all_queues(dev);
-
 	smp_mb__before_clear_bit();
 	set_bit(GFAR_DOWN, &priv->state);
 	smp_mb__after_clear_bit();
 
 	disable_napi(priv);
+
+	if (test_bit(GFAR_RESETTING, &priv->state))
+		netif_device_detach(dev);
+	else
+		netif_tx_stop_all_queues(dev);
 
 	/* disable ints and gracefully shut down Rx/Tx DMA */
 	gfar_halt(priv);
@@ -2293,9 +2296,12 @@ int startup_gfar(struct net_device *ndev)
 
 	phy_start(priv->phydev);
 
-	enable_napi(priv);
+	if (test_bit(GFAR_RESETTING, &priv->state))
+		netif_device_attach(ndev);
+	else
+		netif_tx_wake_all_queues(ndev);
 
-	netif_tx_wake_all_queues(ndev);
+	enable_napi(priv);
 
 	return 0;
 }
