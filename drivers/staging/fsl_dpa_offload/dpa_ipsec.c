@@ -1055,6 +1055,7 @@ static int init_sa_manager(struct dpa_ipsec *dpa_ipsec)
 
 		/* init the inbound SA lookup table desc with an invalid value*/
 		sa[i].inbound_sa_td = DPA_OFFLD_DESC_NONE;
+		sa[i].used_sa_index = -1;
 	}
 
 	/*
