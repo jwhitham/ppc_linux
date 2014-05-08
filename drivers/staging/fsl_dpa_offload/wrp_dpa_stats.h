@@ -66,14 +66,18 @@ struct dpa_stats_event_params {
 	unsigned int		storage_area_offset;
 	unsigned int		cnts_written;
 	int			bytes_written;
-#ifdef CONFIG_COMPAT
-	compat_uptr_t		us_cnt_ids;
-#else
-	int			*us_cnt_ids;
-#endif /* CONFIG_COMPAT */
-	unsigned int		cnt_ids_len;
 	dpa_stats_request_cb	request_done;
 };
+
+#ifdef CONFIG_COMPAT
+struct compat_dpa_stats_event_params {
+	int			dpa_stats_id;
+	unsigned int		storage_area_offset;
+	unsigned int		cnts_written;
+	int			bytes_written;
+	compat_uptr_t		request_done;
+};
+#endif
 
 struct dpa_stats_event_queue {
 	struct list_head    lh;     /* Double linked list of events */
@@ -84,7 +88,9 @@ struct dpa_stats_event_queue {
 struct dpa_stats_event {
 	struct dpa_stats_event_params  params;     /* Event data */
 	struct list_head    lh;         /* Event queue list head */
+	int *us_cnt_ids; /* Request array of counter ids from user-space */
 	int *ks_cnt_ids; /* Request array of counter ids from kernel-space */
+	unsigned int cnt_ids_len; /* Number of counter ids in array */
 };
 
 struct dpa_stats_async_req_ev {
@@ -92,9 +98,7 @@ struct dpa_stats_async_req_ev {
 	unsigned int storage_area_offset; /* Storage offset for this request */
 	/* Pointers to other async requests in the current set  */
 	struct list_head node;
-#ifdef CONFIG_COMPAT
-	compat_uptr_t us_cnt_ids; /* Request array of counter ids from US */
-#endif /* CONFIG COMPAT */
+	int *us_cnt_ids; /* Request array of counter ids from US */
 	int *ks_cnt_ids; /* Request array of counter ids from KS */
 	unsigned int cnt_ids_len; /* Number of counter ids in array */
 };

@@ -43,6 +43,7 @@
 #include <linux/fdtable.h>
 #include <linux/atomic.h>
 #include <linux/export.h>
+#include <asm/thread_info.h>
 
 #include "lnxwrp_fm.h"
 #include "fm_port_ioctls.h"
@@ -99,7 +100,7 @@ static void **copy_class_members(unsigned int size, void **src);
 
 static long store_get_cnts_async_params(
 		struct ioc_dpa_stats_cnt_request_params *kprm,
-		struct dpa_stats_async_req_ev **async_request_event);
+		int *us_cnts);
 
 #ifdef CONFIG_COMPAT
 static long wrp_dpa_stats_do_compat_ioctl(struct file *filp,
@@ -251,34 +252,93 @@ long wrp_dpa_stats_ioctl(struct file *filp, unsigned int cmd,
 	return wrp_dpa_stats_do_ioctl(filp, cmd, args);
 }
 
-#ifdef CONFIG_COMPAT
-ssize_t wrp_dpa_stats_read(struct file *file,
-			   char *buf, size_t count, loff_t *off)
+ssize_t wrp_normal_read(struct file *file, char *buf, size_t count, loff_t *off)
 {
 	struct dpa_stats_event  *event;
-	struct compat_dpa_stats_event_params ev_prm;
+	struct dpa_stats_event_params ev_prm;
 	size_t c = 0;
 
 	/*
 	 * Make sure that the size of the buffer requested by the user is
 	 * at least the size of an event
 	 */
+	if (count < sizeof(struct dpa_stats_event_params))
+		return -EINVAL;
+
+	/* Dequeue first event by using a blocking call */
+	event = wrp_dpa_stats_dequeue_event(&wrp_dpa_stats.ev_queue, 0);
+	while (event) {
+		if (event->params.bytes_written > 0 && wrp_dpa_stats.k_mem) {
+			if (copy_to_user(wrp_dpa_stats.us_mem +
+					event->params.storage_area_offset,
+					wrp_dpa_stats.k_mem +
+					event->params.storage_area_offset,
+					event->params.bytes_written)) {
+				log_err("Cannot copy counter values to storage area\n");
+				return -EFAULT;
+			}
+		}
+
+		ev_prm.bytes_written = event->params.bytes_written;
+		ev_prm.cnts_written = event->params.cnts_written;
+		ev_prm.dpa_stats_id = event->params.dpa_stats_id;
+		ev_prm.storage_area_offset = event->params.storage_area_offset;
+		ev_prm.request_done = event->params.request_done;
+
+		if (copy_to_user(event->us_cnt_ids, event->ks_cnt_ids,
+				(event->cnt_ids_len * sizeof(int)))) {
+			kfree(event);
+			return -EFAULT;
+		}
+
+		if (copy_to_user(buf + c, &ev_prm, sizeof(ev_prm)) != 0) {
+			kfree(event);
+			return -EFAULT;
+		}
+
+		kfree(event->ks_cnt_ids);
+		kfree(event);
+
+		count   -= sizeof(struct dpa_stats_event_params);
+		c       += sizeof(struct dpa_stats_event_params);
+
+		if (count < sizeof(struct dpa_stats_event_params))
+			break;
+
+		/* For subsequent events, don't block */
+		event = wrp_dpa_stats_dequeue_event(
+				&wrp_dpa_stats.ev_queue, O_NONBLOCK);
+	}
+
+	return c;
+}
+
+#ifdef CONFIG_COMPAT
+ssize_t wrp_compat_read(struct file *file, char *buf, size_t count, loff_t *off)
+{
+	struct dpa_stats_event  *event;
+	struct compat_dpa_stats_event_params ev_prm;
+	size_t c = 0;
+
+	/*
+	 * Make sure that the size of the buffer requested by the user
+	 * is at least the size of an event
+	 */
 	if (count < sizeof(struct compat_dpa_stats_event_params))
 		return -EINVAL;
 
 	/* Dequeue first event by using a blocking call */
 	event = wrp_dpa_stats_dequeue_event(&wrp_dpa_stats.ev_queue, 0);
-
 	while (event) {
 		memset(&ev_prm, 0,
-		       sizeof(struct compat_dpa_stats_event_params));
+				sizeof(struct compat_dpa_stats_event_params));
 
 		if (event->params.bytes_written > 0 && wrp_dpa_stats.k_mem) {
 			if (copy_to_user(wrp_dpa_stats.us_mem +
-					 event->params.storage_area_offset,
-					 wrp_dpa_stats.k_mem +
-					 event->params.storage_area_offset,
-					 event->params.bytes_written)) {
+					event->params.storage_area_offset,
+					wrp_dpa_stats.k_mem +
+					event->params.storage_area_offset,
+					event->params.bytes_written)) {
 				log_err("Cannot copy counter values to storage area\n");
 				return -EFAULT;
 			}
@@ -289,12 +349,9 @@ ssize_t wrp_dpa_stats_read(struct file *file,
 		ev_prm.dpa_stats_id = event->params.dpa_stats_id;
 		ev_prm.storage_area_offset = event->params.storage_area_offset;
 		ev_prm.request_done = ptr_to_compat(event->params.request_done);
-		ev_prm.us_cnt_ids = event->params.us_cnt_ids;
-		ev_prm.cnt_ids_len = event->params.cnt_ids_len;
 
-		if (copy_to_user((compat_ptr)(ev_prm.us_cnt_ids),
-				event->ks_cnt_ids,
-				(event->params.cnt_ids_len * sizeof(int)))) {
+		if (copy_to_user(event->us_cnt_ids, event->ks_cnt_ids,
+				(event->cnt_ids_len * sizeof(int)))) {
 			kfree(event);
 			return -EFAULT;
 		}
@@ -320,58 +377,25 @@ ssize_t wrp_dpa_stats_read(struct file *file,
 
 	return c;
 }
-#else
+#endif /* CONFIG_COMPAT */
+
 ssize_t wrp_dpa_stats_read(struct file *file,
 			   char *buf, size_t count, loff_t *off)
 {
-	struct dpa_stats_event  *event;
-	size_t c = 0;
-
-	/*
-	 * Make sure that the size of the buffer requested by the user is
-	 * at least the size of an event
-	 */
-	if (count < sizeof(struct dpa_stats_event_params))
-		return -EINVAL;
-
-	/* Dequeue first event by using a blocking call */
-	event = wrp_dpa_stats_dequeue_event(&wrp_dpa_stats.ev_queue, 0);
-	while (event) {
-		if (event->params.bytes_written > 0 && wrp_dpa_stats.k_mem) {
-			if (copy_to_user(wrp_dpa_stats.us_mem +
-					 event->params.storage_area_offset,
-					 wrp_dpa_stats.k_mem +
-					 event->params.storage_area_offset,
-					 event->params.bytes_written)) {
-				log_err("Cannot copy counter values to storage area\n");
-				return -EFAULT;
-			}
+#ifdef CONFIG_COMPAT
+		/* compat mode is when KS is compiled for 64 bits */
+		if (is_32bit_task()) {
+			/* case US is compiled for 32 bit */
+			return wrp_compat_read(file, buf, count, off);
+		} else {
+			/* case US is compiled for 64 bit */
+			return wrp_normal_read(file, buf, count, off);
 		}
-
-		if (copy_to_user(buf + c,
-				 &event->params,
-				 sizeof(struct dpa_stats_event_params)) != 0) {
-			kfree(event);
-			return -EFAULT;
-		}
-
-		kfree(event->ks_cnt_ids);
-		kfree(event);
-
-		count   -= sizeof(struct dpa_stats_event_params);
-		c       += sizeof(struct dpa_stats_event_params);
-
-		if (count < sizeof(struct dpa_stats_event_params))
-			break;
-
-		/* For subsequent events, don't block */
-		event = wrp_dpa_stats_dequeue_event(
-				&wrp_dpa_stats.ev_queue, O_NONBLOCK);
-	}
-
-	return c;
+#else
+		/* KS compiled for 32 bit and US compiled for 32 bit too */
+		return wrp_normal_read(file, buf, count, off);
+#endif /* CONFIG_COMPAT */
 }
-#endif
 
 static void wrp_dpa_stats_event_queue_init(
 		struct dpa_stats_event_queue *event_queue)
@@ -508,15 +532,9 @@ void do_ioctl_req_done_cb(int dpa_stats_id,
 	event->params.cnts_written = cnts_written;
 	event->params.bytes_written = bytes_written;
 	event->params.request_done = async_req_ev->request_done;
-#ifdef CONFIG_COMPAT
 	event->ks_cnt_ids = async_req_ev->ks_cnt_ids;
-	event->params.us_cnt_ids = async_req_ev->us_cnt_ids;
-	event->params.cnt_ids_len = async_req_ev->cnt_ids_len;
-#else
-	event->ks_cnt_ids = NULL;
-	event->params.us_cnt_ids = NULL;
-	event->params.cnt_ids_len = 0;
-#endif /* CONFIG_COMPAT */
+	event->us_cnt_ids = async_req_ev->us_cnt_ids;
+	event->cnt_ids_len = async_req_ev->cnt_ids_len;
 
 	mutex_unlock(&wrp_dpa_stats.async_req_lock);
 
@@ -1433,28 +1451,28 @@ static int do_ioctl_stats_get_counters(void *args)
 		return -EINVAL;
 	}
 
+	/* Save the user-space array of counter ids */
+	cnts_ids = prm.req_params.cnts_ids;
+
 	/* Allocate kernel-space memory area to copy the counters ids */
-	cnts_ids = kzalloc(prm.req_params.cnts_ids_len *
-			   sizeof(int), GFP_KERNEL);
-	if (!cnts_ids) {
+	prm.req_params.cnts_ids = kzalloc(prm.req_params.cnts_ids_len *
+			sizeof(int), GFP_KERNEL);
+	if (!prm.req_params.cnts_ids) {
 		log_err("Cannot allocate memory for requested counter ids array\n");
 		return -ENOMEM;
 	}
 
 	/* Copy the user provided counter ids */
-	if (copy_from_user(cnts_ids,
-			   prm.req_params.cnts_ids,
-			   (prm.req_params.cnts_ids_len * sizeof(int)))) {
+	if (copy_from_user(prm.req_params.cnts_ids, cnts_ids,
+			(prm.req_params.cnts_ids_len * sizeof(int)))) {
 		log_err("Cannot copy from user array of requested counter ids\n");
 		kfree(prm.req_params.cnts_ids);
 		return -EINVAL;
 	}
 
-	prm.req_params.cnts_ids = cnts_ids;
-
 	/* If counters request is asynchronous */
 	if (prm.request_done) {
-		ret = store_get_cnts_async_params(&prm, NULL);
+		ret = store_get_cnts_async_params(&prm, cnts_ids);
 		if (ret < 0)
 			return ret;
 	}
@@ -1530,14 +1548,10 @@ static int do_ioctl_stats_compat_get_counters(void *args)
 
 	/* If counters request is asynchronous */
 	if (kprm.request_done) {
-		struct dpa_stats_async_req_ev *async_request_ev = NULL;
-
-		ret = store_get_cnts_async_params(&kprm, &async_request_ev);
+		ret = store_get_cnts_async_params(&kprm,
+				(compat_ptr)(uprm.req_params.cnts_ids));
 		if (ret < 0)
 			return ret;
-		/* Store user-space pointer to array of ids */
-		async_request_ev->us_cnt_ids = uprm.req_params.cnts_ids;
-		async_request_ev->cnt_ids_len = uprm.req_params.cnts_ids_len;
 	}
 
 	ret = dpa_stats_get_counters(kprm.req_params,
@@ -1840,8 +1854,7 @@ static long wrp_dpa_stats_do_compat_ioctl(struct file *filp,
 #endif
 
 static long store_get_cnts_async_params(
-		struct ioc_dpa_stats_cnt_request_params *kprm,
-		struct dpa_stats_async_req_ev **async_request_event)
+		struct ioc_dpa_stats_cnt_request_params *kprm, int *us_cnts)
 {
 	struct dpa_stats_async_req_ev *async_req_ev;
 	struct list_head *async_req_grp;
@@ -1870,15 +1883,14 @@ static long store_get_cnts_async_params(
 			kprm->req_params.storage_area_offset;
 
 	async_req_ev->ks_cnt_ids = kprm->req_params.cnts_ids;
+	async_req_ev->us_cnt_ids = us_cnts;
+	async_req_ev->cnt_ids_len = kprm->req_params.cnts_ids_len;
 	list_add_tail(&async_req_ev->node, async_req_grp);
 	mutex_unlock(&wrp_dpa_stats.async_req_lock);
 
 	/* Replace the application callback with wrapper function */
 	kprm->request_done = do_ioctl_req_done_cb;
 
-	/* If calling function requested, return the pointer to async_req_ev */
-	if (async_request_event)
-		*async_request_event = async_req_ev;
 	return 0;
 }
 
