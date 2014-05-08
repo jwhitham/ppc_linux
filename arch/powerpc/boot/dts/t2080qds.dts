@@ -68,7 +68,7 @@
 		};
 
 		fm1mac2: ethernet@e2000 { /* DTSEC2/10GEC4 */
-			phy-handle = <&phy_sgmii_s3_1d>;
+			phy-handle = <&phy_sgmii_s3_1f>;
 			phy-connection-type = "xgmii";
 		};
 
