@@ -48,13 +48,13 @@
 
 #define DEBUG 0
 
-int poll_count = POLL_COUNT;
+static int poll_count = POLL_COUNT;
 module_param(poll_count, int, 0);
 
 static struct task_struct *tdm_thread_task;
 static struct tdm_driver test_tdmdev_driver;
-struct tdm_port *tdmport;
-int tdm_thread_state;
+static struct tdm_port *tdmport;
+static int tdm_thread_state;
 
 static int tdm_check_data(unsigned short *tx_data, unsigned short *rx_data)
 {

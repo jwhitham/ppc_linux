@@ -56,8 +56,8 @@ MODULE_AUTHOR("Hemant Agrawal <hemant@freescale.com> and "
 MODULE_DESCRIPTION(DRV_DESC);
 
 static struct tdm_driver test_tdmdev_driver;
-struct tdm_port *tdmport;
-int tdm_thread_state;
+static struct tdm_port *tdmport;
+static int tdm_thread_state;
 
 static int tdm_thread(void *ptr)
 {
