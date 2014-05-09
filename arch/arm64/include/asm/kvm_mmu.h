@@ -126,6 +126,21 @@ static inline void kvm_set_s2pmd_writable(pmd_t *pmd)
 #define kvm_pud_addr_end(addr, end)	pud_addr_end(addr, end)
 #define kvm_pmd_addr_end(addr, end)	pmd_addr_end(addr, end)
 
+static inline bool kvm_page_empty(void *ptr)
+{
+	struct page *ptr_page = virt_to_page(ptr);
+	return page_count(ptr_page) == 1;
+}
+
+#define kvm_pte_table_empty(ptep) kvm_page_empty(ptep)
+#ifndef CONFIG_ARM64_64K_PAGES
+#define kvm_pmd_table_empty(pmdp) kvm_page_empty(pmdp)
+#else
+#define kvm_pmd_table_empty(pmdp) (0)
+#endif
+#define kvm_pud_table_empty(pudp) (0)
+
+
 struct kvm;
 
 static inline void coherent_icache_guest_page(struct kvm *kvm, hva_t hva,

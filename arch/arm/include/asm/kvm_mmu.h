@@ -127,6 +127,18 @@ static inline void kvm_set_s2pmd_writable(pmd_t *pmd)
 	(__boundary - 1 < (end) - 1)? __boundary: (end);		\
 })
 
+static inline bool kvm_page_empty(void *ptr)
+{
+	struct page *ptr_page = virt_to_page(ptr);
+	return page_count(ptr_page) == 1;
+}
+
+
+#define kvm_pte_table_empty(ptep) kvm_page_empty(ptep)
+#define kvm_pmd_table_empty(pmdp) kvm_page_empty(pmdp)
+#define kvm_pud_table_empty(pudp) (0)
+
+
 struct kvm;
 
 static inline void coherent_icache_guest_page(struct kvm *kvm, hva_t hva,
