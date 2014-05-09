@@ -610,6 +610,7 @@ static int do_create_sa_compat_ioctl(void *args)
 	}
 
 	/* copy SA params from userspace */
+	prm.dpa_ipsec_id = compat_prm.dpa_ipsec_id;
 	compat_copy_sa_params(&prm.sa_params, &compat_prm.sa_params);
 
 	err = do_copy_sa_params(&prm.sa_params, &compat_prm.sa_params);
