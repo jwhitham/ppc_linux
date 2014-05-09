@@ -704,6 +704,12 @@ static int gfar_parse_group(struct device_node *np,
 			/* One Q per interrupt group: Q0 to G0, Q1 to G1 */
 			grp->rx_bit_map = (DEFAULT_MAPPING >> priv->num_grps);
 			grp->tx_bit_map = (DEFAULT_MAPPING >> priv->num_grps);
+	#ifdef CONFIG_AS_FASTPATH
+			grp->rx_bit_map = rxq_mask ?
+			*rxq_mask : (DEFAULT_MAPPING >> priv->num_grps);
+			grp->tx_bit_map = txq_mask ?
+			*txq_mask : (DEFAULT_MAPPING >> priv->num_grps);
+	#endif
 		} else { /* GFAR_MQ_POLLING */
 			grp->rx_bit_map = rxq_mask ?
 			*rxq_mask : (DEFAULT_MAPPING >> priv->num_grps);
