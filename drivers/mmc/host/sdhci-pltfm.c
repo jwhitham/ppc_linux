@@ -135,6 +135,7 @@ struct sdhci_host *sdhci_pltfm_init(struct platform_device *pdev,
 {
 	struct sdhci_host *host;
 	struct device_node *np = pdev->dev.of_node;
+	struct sdhci_pltfm_host *pltfm_host;
 	struct resource *iomem;
 	int ret;
 
@@ -159,6 +160,14 @@ struct sdhci_host *sdhci_pltfm_init(struct platform_device *pdev,
 		ret = PTR_ERR(host);
 		goto err;
 	}
+
+	pltfm_host = sdhci_priv(host);
+	pltfm_host->endian_mode = BIG_ENDIAN_MODE;
+
+#ifdef CONFIG_OF
+	if (of_get_property(np, "little-endian", NULL))
+		pltfm_host->endian_mode = LITTLE_ENDIAN_MODE;
+#endif /* CONFIG_OF */
 
 	host->hw_name = dev_name(&pdev->dev);
 	if (pdata && pdata->ops)
@@ -245,7 +254,7 @@ EXPORT_SYMBOL_GPL(sdhci_pltfm_register);
 int sdhci_pltfm_unregister(struct platform_device *pdev)
 {
 	struct sdhci_host *host = platform_get_drvdata(pdev);
-	int dead = (readl(host->ioaddr + SDHCI_INT_STATUS) == 0xffffffff);
+	int dead = (sdhci_readl(host, SDHCI_INT_STATUS) == 0xffffffff);
 
 	sdhci_remove_host(host, dead);
 	sdhci_pltfm_free(pdev);
