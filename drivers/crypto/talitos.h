@@ -133,7 +133,60 @@ struct talitos_private {
 
 	/* hwrng device */
 	struct hwrng rng;
+
+#ifdef CONFIG_CRYPTO_DEV_TALITOS_RAIDXOR
+	/* XOR Device */
+	struct dma_device dma_dev_common;
+#endif
 };
+
+#ifdef CONFIG_CRYPTO_DEV_TALITOS_RAIDXOR
+#define TALITOS_MAX_DESCRIPTOR_NR	256
+#define DESC_HDR_MODE0_AESU_XOR		cpu_to_be32(0x0c600000)
+#define DESC_HDR_TYPE_RAID_XOR		cpu_to_be32(21 << 3)
+/**
+ * talitos_xor_chan - context management for the async_tx channel
+ * @completed_cookie: the last completed cookie
+ * @desc_lock: lock for tx queue
+ * @total_desc: number of descriptors allocated
+ * @submit_q: queue of submitted descriptors
+ * @pending_q: queue of pending descriptors
+ * @in_progress_q: queue of descriptors in progress
+ * @free_desc: queue of unused descriptors
+ * @dev: talitos device implementing this channel
+ * @common: the corresponding xor channel in async_tx
+ */
+struct talitos_xor_chan {
+	dma_cookie_t completed_cookie;
+	spinlock_t desc_lock; /* lock for tx queue */
+	unsigned int total_desc;
+	struct list_head submit_q;
+	struct list_head pending_q;
+	struct list_head in_progress_q;
+	struct list_head free_desc;
+	struct device *dev;
+	struct dma_chan common;
+};
+
+/**
+ * talitos_xor_desc - software xor descriptor
+ * @async_tx: the referring async_tx descriptor
+ * @node:
+ * @hwdesc: h/w descriptor
+ * @unmap_src_cnt: number of xor sources
+ * @unmap_len: transaction byte count
+ * @idx: index of xor sources
+ */
+struct talitos_xor_desc {
+	struct dma_async_tx_descriptor async_tx;
+	struct list_head tx_list;
+	struct list_head node;
+	struct talitos_desc hwdesc;
+	unsigned int unmap_src_cnt;
+	unsigned int unmap_len;
+	unsigned int idx;
+};
+#endif
 
 extern int talitos_submit(struct device *dev, int ch, struct talitos_desc *desc,
 			  void (*callback)(struct device *dev,
