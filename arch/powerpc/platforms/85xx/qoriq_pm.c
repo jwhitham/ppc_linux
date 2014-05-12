@@ -27,20 +27,54 @@ unsigned int sleep_pm_state;
 /* supported sleep modes by the present platform */
 static unsigned int sleep_modes;
 
-void qoriq_enable_wakeup_source(struct device *dev, void *data)
+/**
+ * fsl_set_power_except - set which IP block is not powerdown when sleep,
+ * such as MAC, USB, etc.
+ *
+ * @dev: a pointer to the struct device
+ * @on: if 1, do not power down; if 0, power down.
+ */
+void fsl_set_power_except(struct device *dev, int on)
 {
 	u32 value[2];
 	u32 pw_mask;
+	const phandle *phandle_prop;
+	struct device_node *mac_node;
+	int ret;
 
-	if (!device_may_wakeup(dev))
-		return;
+	ret = of_property_read_u32_array(dev->of_node, "sleep", value, 2);
+	if (ret) {
+		/* search fman mac node */
+		phandle_prop = of_get_property(dev->of_node, "fsl,fman-mac",
+					       NULL);
+		if (phandle_prop == NULL)
+			goto err;
 
-	if (of_property_read_u32_array(dev->of_node, "sleep", value, 2))
-		return;
+		mac_node = of_find_node_by_phandle(*phandle_prop);
+		ret = of_property_read_u32_array(mac_node, "sleep", value, 2);
+		of_node_put(mac_node);
+		if (ret)
+			goto err;
+	}
 
 	/* get the second value, it is a mask */
 	pw_mask = value[1];
-	qoriq_pm_ops->set_ip_power(1, pw_mask);
+	qoriq_pm_ops->set_ip_power(on, pw_mask);
+
+	return;
+
+err:
+	dev_err(dev, "Can not set wakeup sources\n");
+	return;
+}
+EXPORT_SYMBOL_GPL(fsl_set_power_except);
+
+void qoriq_set_wakeup_source(struct device *dev, void *enable)
+{
+	if (!device_may_wakeup(dev))
+		return;
+
+	fsl_set_power_except(dev, *((int *)enable));
 }
 
 static int qoriq_suspend_enter(suspend_state_t state)
@@ -93,7 +127,9 @@ static int qoriq_suspend_valid(suspend_state_t state)
 
 static int qoriq_suspend_begin(suspend_state_t state)
 {
-	dpm_for_each_dev(NULL, qoriq_enable_wakeup_source);
+	const int enable = 1;
+
+	dpm_for_each_dev((void *)&enable, qoriq_set_wakeup_source);
 
 	if (state == PM_SUSPEND_MEM)
 		return fsl_dp_iomap();
@@ -103,6 +139,10 @@ static int qoriq_suspend_begin(suspend_state_t state)
 
 static void qoriq_suspend_end(void)
 {
+	const int enable = 0;
+
+	dpm_for_each_dev((void *)&enable, qoriq_set_wakeup_source);
+
 	set_pm_suspend_state(PM_SUSPEND_ON);
 	fsl_dp_iounmap();
 }

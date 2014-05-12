@@ -61,6 +61,7 @@ unsigned long get_rcpm_version(void);
 void set_pm_suspend_state(suspend_state_t state);
 suspend_state_t pm_suspend_state(void);
 
+void fsl_set_power_except(struct device *dev, int on);
 #endif	/* __ASSEMBLY__ */
 
 #define T1040QDS_TETRA_FLAG	1
