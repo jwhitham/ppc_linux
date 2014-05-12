@@ -131,6 +131,8 @@ static void re_jr_desc_done(struct fsl_re_dma_async_tx_desc *desc)
 			chan->completed_cookie = DMA_MIN_COOKIE;
 	}
 
+	dma_descriptor_unmap(&desc->async_tx);
+
 	if (callback)
 		callback(callback_param);
 }
