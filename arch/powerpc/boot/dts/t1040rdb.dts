@@ -340,14 +340,14 @@
 			sleep = <&rcpm 0x08000008>;
 		};
 		/* enable one offline port */
-		dpa-fman0-oh@5 {
+		dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";
 			/* Define frame queues for the OH port*/
 			/* <OH Rx error, OH Rx default> */
 			fsl,qman-frame-queues-oh = <0x68 1 0x69 1>;
 			fsl,bman-buffer-pools = <&bp6>;
 			fsl,qman-frame-queues-tx = <0x90 8>;
-			fsl,fman-oh-port = <&fman0_oh5>;
+			fsl,fman-oh-port = <&fman0_oh2>;
 		};
 	};
 
