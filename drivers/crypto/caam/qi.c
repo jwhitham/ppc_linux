@@ -595,7 +595,7 @@ void caam_drv_ctx_rel(struct caam_drv_ctx *drv_ctx)
 {
 	size_t size;
 
-	if (!drv_ctx)
+	if (IS_ERR_OR_NULL(drv_ctx))
 		return;
 
 	size = sizeof(drv_ctx->sh_desc) + sizeof(drv_ctx->prehdr);

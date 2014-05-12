@@ -2149,14 +2149,9 @@ static void caam_cra_exit(struct crypto_tfm *tfm)
 {
 	struct caam_ctx *ctx = crypto_tfm_ctx(tfm);
 
-	if (ctx->drv_ctx[ENCRYPT])
-		caam_drv_ctx_rel(ctx->drv_ctx[ENCRYPT]);
-
-	if (ctx->drv_ctx[DECRYPT])
-		caam_drv_ctx_rel(ctx->drv_ctx[DECRYPT]);
-
-	if (ctx->drv_ctx[GIVENCRYPT])
-		caam_drv_ctx_rel(ctx->drv_ctx[GIVENCRYPT]);
+	caam_drv_ctx_rel(ctx->drv_ctx[ENCRYPT]);
+	caam_drv_ctx_rel(ctx->drv_ctx[DECRYPT]);
+	caam_drv_ctx_rel(ctx->drv_ctx[GIVENCRYPT]);
 
 	caam_jr_free(ctx->jrdev);
 }
