@@ -380,6 +380,8 @@ empty_fq:
 	if (ret)
 		dev_err(qidev, "OOS of FQID: %u failed\n", fq->fqid);
 
+	qman_destroy_fq(fq, 0);
+
 	return ret;
 }
 
