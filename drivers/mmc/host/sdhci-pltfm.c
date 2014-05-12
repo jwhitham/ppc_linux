@@ -101,7 +101,8 @@ void sdhci_get_of_property(struct platform_device *pdev)
 			host->quirks2 |= SDHCI_QUIRK2_BROKEN_TRIM;
 		}
 
-		if (of_device_is_compatible(np, "fsl,p5020-esdhc"))
+		if (of_device_is_compatible(np, "fsl,p5020-esdhc") ||
+		    of_device_is_compatible(np, "fsl,p5040-esdhc"))
 			host->quirks2 |= SDHCI_QUIRK2_LONG_TIME_CMD_COMPLETE_IRQ;
 
 		if (of_device_is_compatible(np, "fsl,p5040-esdhc") ||
