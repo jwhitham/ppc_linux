@@ -2123,7 +2123,6 @@ static void free_skb_resources(struct gfar_private *priv)
 		txq = netdev_get_tx_queue(tx_queue->dev, tx_queue->qindex);
 		if (tx_queue->tx_skbuff)
 			free_skb_tx_queue(tx_queue);
-		netdev_tx_reset_queue(txq);
 	}
 
 	for (i = 0; i < priv->num_rx_queues; i++) {
@@ -2350,7 +2349,7 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	int i, rq = 0;
 	int do_tstamp, do_csum, do_vlan;
 	u32 bufaddr;
-	unsigned int nr_frags, nr_txbds, bytes_sent, fcb_len = 0;
+	unsigned int nr_frags, nr_txbds, fcb_len = 0;
 
 #ifdef CONFIG_AS_FASTPATH
 	return gfar_asf_start_xmit(skb, dev);
@@ -2413,10 +2412,7 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	/* Update transmit stats */
-	bytes_sent = skb->len;
-	tx_queue->stats.tx_bytes += bytes_sent;
-	/* keep Tx bytes on wire for BQL accounting */
-	GFAR_CB(skb)->bytes_sent = bytes_sent;
+	tx_queue->stats.tx_bytes += skb->len;
 	tx_queue->stats.tx_packets++;
 
 	txbdp = txbdp_start = tx_queue->cur_tx;
@@ -2532,8 +2528,6 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	} else {
 		lstatus |= BD_LFLAG(TXBD_CRC | TXBD_READY) | skb_headlen(skb);
 	}
-
-	netdev_tx_sent_queue(txq, bytes_sent);
 
 	/* The powerpc-specific eieio() is used, as wmb() has too strong
 	 * semantics (it requires synchronization between cacheable and
@@ -2706,7 +2700,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 	int i;
 	int howmany = 0;
 	int tqi = tx_queue->qindex;
-	unsigned int bytes_sent = 0;
 	u32 lstatus;
 	size_t buflen;
 
@@ -2801,8 +2794,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 			bdp = next_txbd(bdp, base, tx_ring_size);
 		}
 
-		bytes_sent += GFAR_CB(skb)->bytes_sent;
-
 		gfar_recycle_skb(skb);
 
 		tx_queue->tx_skbuff[skb_dirtytx] = NULL;
@@ -2825,8 +2816,6 @@ static void gfar_clean_tx_ring(struct gfar_priv_tx_q *tx_queue)
 	/* Update dirty indicators */
 	tx_queue->skb_dirtytx = skb_dirtytx;
 	tx_queue->dirty_tx = bdp;
-
-	netdev_tx_completed_queue(txq, howmany, bytes_sent);
 }
 
 static struct sk_buff *gfar_alloc_skb(struct net_device *dev)
