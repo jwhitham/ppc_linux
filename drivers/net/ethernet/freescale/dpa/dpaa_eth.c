@@ -123,6 +123,15 @@ static int dpaa_suspend_noirq(struct device *dev)
 		priv = netdev_priv(net_dev);
 		mac_dev = priv->mac_dev;
 
+		if (priv->wol & DPAA_WOL_MAGIC) {
+			err = priv->mac_dev->set_wol(mac_dev->port_dev[RX],
+				priv->mac_dev->get_mac_handle(mac_dev), true);
+			if (err) {
+				netdev_err(net_dev, "set_wol() = %d\n", err);
+				goto set_wol_failed;
+			}
+		}
+
 		err = fm_port_suspend(mac_dev->port_dev[RX]);
 		if (err) {
 			netdev_err(net_dev, "fm_port_suspend(RX) = %d\n", err);
@@ -134,24 +143,18 @@ static int dpaa_suspend_noirq(struct device *dev)
 			netdev_err(net_dev, "fm_port_suspend(TX) = %d\n", err);
 			goto tx_port_suspend_failed;
 		}
-
-		if (priv->wol & DPAA_WOL_MAGIC) {
-			err = priv->mac_dev->set_wol(mac_dev->port_dev[RX],
-				priv->mac_dev->get_mac_handle(mac_dev), true);
-			if (err) {
-				netdev_err(net_dev, "set_wol() = %d\n", err);
-				goto set_wol_failed;
-			}
-		}
 	}
 
 	return 0;
 
-set_wol_failed:
-	fm_port_resume(mac_dev->port_dev[TX]);
 tx_port_suspend_failed:
 	fm_port_resume(mac_dev->port_dev[RX]);
 rx_port_suspend_failed:
+	if (priv->wol & DPAA_WOL_MAGIC) {
+		priv->mac_dev->set_wol(mac_dev->port_dev[RX],
+			priv->mac_dev->get_mac_handle(mac_dev), false);
+	}
+set_wol_failed:
 	return err;
 }
 
@@ -168,34 +171,31 @@ static int dpaa_resume_noirq(struct device *dev)
 		priv = netdev_priv(net_dev);
 		mac_dev = priv->mac_dev;
 
-		if (priv->wol & DPAA_WOL_MAGIC) {
-			err = priv->mac_dev->set_wol(mac_dev->port_dev[RX],
-				priv->mac_dev->get_mac_handle(mac_dev), false);
-			if (err) {
-				netdev_err(net_dev, "set_wol() = %d\n", err);
-				goto set_wol_failed;
-			}
-		}
-
 		err = fm_port_resume(mac_dev->port_dev[TX]);
 		if (err) {
 			netdev_err(net_dev, "fm_port_resume(TX) = %d\n", err);
-			goto tx_port_resume_failed;
+			goto resume_failed;
 		}
 
 		err = fm_port_resume(mac_dev->port_dev[RX]);
 		if (err) {
 			netdev_err(net_dev, "fm_port_resume(RX) = %d\n", err);
-			goto rx_port_resume_failed;
+			goto resume_failed;
+		}
+
+		if (priv->wol & DPAA_WOL_MAGIC) {
+			err = priv->mac_dev->set_wol(mac_dev->port_dev[RX],
+				priv->mac_dev->get_mac_handle(mac_dev), false);
+			if (err) {
+				netdev_err(net_dev, "set_wol() = %d\n", err);
+				goto resume_failed;
+			}
 		}
 	}
 
 	return 0;
 
-rx_port_resume_failed:
-	fm_port_suspend(mac_dev->port_dev[TX]);
-tx_port_resume_failed:
-set_wol_failed:
+resume_failed:
 	return err;
 }
 
