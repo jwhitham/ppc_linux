@@ -32,6 +32,17 @@ config FMAN_T4240
 endchoice
 endmenu
 
+config FMAN_V3L
+	depends on FMAN_T4240
+	bool "FMAN_V3L like T1040, T1042, T1020, T1022"
+	default n
+	---help---
+	  There are two FMAN V3 version: FMAN_V3H and FMAN_V3L.
+	  T1040, T1042, T1020, T1022 belong to FMAN_V3L, there
+	  are 4 Offline/Host Command Ports (O/H n) in FMAN_V3L.
+	  But there are 6 Offline/Host Command Ports (O/H n) in
+	  FMAN_V3H.
+	  Say "Y" if chips are T1040, T1042, T1020, T1022 family.
 
 config FMAN_DISABLE_OH_TO_REUSE_RESOURCES
 	depends on FMAN_RESOURCE_ALLOCATION_ALGORITHM

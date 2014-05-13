@@ -188,6 +188,16 @@ typedef enum
 /*****************************************************************************
  FM INTEGRATION-SPECIFIC DEFINITIONS
 ******************************************************************************/
+/* Add T1 Port constraint:T1040, T1042, T1020, T1022 (T1040RM Rev D, 04/2014) */
+#ifdef CONFIG_FMAN_V3L
+#define INTG_MAX_NUM_OF_FM	1
+
+/* Ports defines */
+#define FM_MAX_NUM_OF_1G_MACS	5
+#define FM_MAX_NUM_OF_10G_MACS	0
+#define FM_MAX_NUM_OF_MACS	(FM_MAX_NUM_OF_1G_MACS + FM_MAX_NUM_OF_10G_MACS)
+#define FM_MAX_NUM_OF_OH_PORTS	4
+#else
 #define INTG_MAX_NUM_OF_FM          2
 
 /* Ports defines */
@@ -195,6 +205,7 @@ typedef enum
 #define FM_MAX_NUM_OF_10G_MACS      2
 #define FM_MAX_NUM_OF_MACS          (FM_MAX_NUM_OF_1G_MACS + FM_MAX_NUM_OF_10G_MACS)
 #define FM_MAX_NUM_OF_OH_PORTS      6
+#endif
 
 #define FM_MAX_NUM_OF_1G_RX_PORTS   FM_MAX_NUM_OF_1G_MACS
 #define FM_MAX_NUM_OF_10G_RX_PORTS  FM_MAX_NUM_OF_10G_MACS
