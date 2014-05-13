@@ -54,6 +54,11 @@ struct dpa_generic_priv_s {
 	uint16_t tx_headroom;
 	uint16_t rx_headroom;
 
+	/* In some scenarios, when VSP are not enabled on the Tx O/H port,
+	 * the buffers will be released by other hardware modules
+	 */
+	int disable_buff_dealloc;
+
 	struct qman_fq		*egress_fqs[DPAA_ETH_TX_QUEUES];
 
 	struct fm_port		*rx_port;

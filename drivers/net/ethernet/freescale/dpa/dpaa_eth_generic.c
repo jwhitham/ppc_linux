@@ -1035,6 +1035,22 @@ int dpa_generic_tx_bp_probe(struct platform_device *_of_dev,
 	return 0;
 }
 
+int dpa_generic_buff_dealloc_probe(struct platform_device *_of_dev,
+				   int *disable_buff_dealloc)
+{
+	struct device *dev = &_of_dev->dev;
+	const phandle *disable_handle = NULL;
+	int lenp = 0;
+	int err = 0;
+
+	disable_handle = of_get_property(dev->of_node,
+			"fsl,disable_buff_dealloc", &lenp);
+	if (disable_handle != NULL)
+		*disable_buff_dealloc = 1;
+
+	return err;
+}
+
 int dpa_generic_port_probe(struct platform_device *_of_dev,
 			   struct fm_port **rx_port,
 			   struct fm_port **tx_port)
@@ -1167,7 +1183,7 @@ static void dpa_generic_fq_setup(struct dpa_generic_priv_s *priv,
 	}
 }
 
-static int dpa_generic_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
+static int dpa_generic_fq_init(struct dpa_fq *dpa_fq, int disable_buff_dealloc)
 {
 	int			 _errno;
 	struct device		*dev;
@@ -1199,7 +1215,7 @@ static int dpa_generic_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 		initfq.fqd.dest.channel	= dpa_fq->channel;
 		initfq.fqd.dest.wq = dpa_fq->wq;
 
-		if (dpa_fq->fq_type == FQ_TYPE_TX) {
+		if (dpa_fq->fq_type == FQ_TYPE_TX && !disable_buff_dealloc) {
 			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
 			/* ContextA: A2V=1 (contextA A2 field is valid)
 			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
@@ -1268,7 +1284,7 @@ static int dpa_generic_fq_create(struct net_device *netdev,
 
 	/* Add the FQs to the interface, and make them active */
 	list_for_each_entry_safe(fqs, tmp, &priv->dpa_fq_list, list) {
-		err = dpa_generic_fq_init(fqs, false);
+		err = dpa_generic_fq_init(fqs, priv->disable_buff_dealloc);
 		if (err)
 			return err;
 	}
@@ -1362,6 +1378,7 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	struct fm_port *tx_port = NULL;
 	struct dpa_percpu_priv_s *percpu_priv;
 	int rx_bp_count = 0;
+	int disable_buff_dealloc = 0;
 	struct dpa_bp *rx_bp = NULL, *draining_tx_bp = NULL;
 	struct dpa_buffer_layout_s *rx_buf_layout = NULL, *tx_buf_layout = NULL;
 	struct list_head *dpa_fq_list;
@@ -1390,6 +1407,10 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	if (IS_ERR(dpa_fq_list))
 		return PTR_ERR(dpa_fq_list);
 
+	err = dpa_generic_buff_dealloc_probe(_of_dev, &disable_buff_dealloc);
+	if (err < 0)
+		return err;
+
 	/* just one queue for now */
 	netdev = alloc_etherdev_mq(sizeof(*priv), 1);
 	if (!netdev) {
@@ -1410,6 +1431,8 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		goto bp_create_failed;
 
+	priv->disable_buff_dealloc = disable_buff_dealloc;
+
 	err = dpa_generic_fq_create(netdev, dpa_fq_list, rx_port);
 	if (err < 0)
 		goto fq_create_failed;
@@ -1419,6 +1442,7 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	priv->rx_port = rx_port;
 	priv->tx_port = tx_port;
 	priv->mac_dev = NULL;
+
 
 	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
 	if (priv->percpu_priv == NULL) {
@@ -1435,7 +1459,6 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	err = dpa_generic_napi_add(netdev);
 	if (err < 0)
 		goto napi_add_failed;
-
 
 	err = dpa_generic_netdev_init(dpa_node, netdev);
 	if (err < 0)
