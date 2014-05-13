@@ -92,7 +92,7 @@ config FSL_FM_RX_EXTRA_HEADROOM
 	int "Add extra headroom at beginning of data buffers"
 	depends on FSL_FMAN
 	range 16 384
-	default "128"
+	default "64"
 	help
 		Configure this to tell the Frame Manager to reserve some extra
 		space at the beginning of a data buffer on the receive path,
