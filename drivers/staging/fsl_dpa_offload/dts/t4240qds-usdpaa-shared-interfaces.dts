@@ -170,6 +170,7 @@
 			fsl,qman-frame-queues-rx = <7000 2>;
 			fsl,qman-frame-queues-tx = <7008 1>;
 			fsl,oh-ports = <&dpa_fman0_oh2 &dpa_fman0_oh3>;
+			fsl,disable_buff_dealloc;
 			local-mac-address = [00 11 22 33 44 88];
 		};
 
