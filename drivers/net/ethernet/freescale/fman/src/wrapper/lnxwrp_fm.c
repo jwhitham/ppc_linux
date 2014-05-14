@@ -1094,11 +1094,47 @@ static const struct of_device_id fm_match[] = {
 MODULE_DEVICE_TABLE(of, fm_match);
 #endif /* !MODULE */
 
+#ifdef CONFIG_PM
+
+#define SCFG_FMCLKDPSLPCR_ADDR 0xFFE0FC00C
+#define SCFG_FMCLKDPSLPCR_DS_VAL 0x48402000
+#define SCFG_FMCLKDPSLPCR_NORMAL_VAL 0x00402000
+
+static int fm_soc_suspend(struct device *dev)
+{
+	uint32_t *fmclk;
+	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
+	return 0;
+}
+
+static int fm_soc_resume(struct device *dev)
+{
+	uint32_t *fmclk;
+	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
+	return 0;
+}
+
+static const struct dev_pm_ops fm_pm_ops = {
+	.suspend_noirq = fm_soc_suspend,
+	.resume_noirq = fm_soc_resume,
+};
+
+#define FM_PM_OPS (&fm_pm_ops)
+
+#else /* CONFIG_PM */
+
+#define FM_PM_OPS NULL
+
+#endif /* CONFIG_PM */
+
 static struct platform_driver fm_driver = {
     .driver = {
         .name           = "fsl-fman",
         .of_match_table    = fm_match,
         .owner          = THIS_MODULE,
+	.pm		= FM_PM_OPS,
     },
     .probe          = fm_probe,
     .remove         = fm_remove
