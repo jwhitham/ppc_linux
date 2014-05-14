@@ -658,8 +658,8 @@ sysret_check:
 	/* Handle reschedules */
 	/* edx:	work, edi: workmask */
 sysret_careful:
-	testl $_TIF_NEED_RESCHED_MASK,%edx
-	jz sysret_signal
+	bt $TIF_NEED_RESCHED,%edx
+	jnc sysret_signal
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	pushq_cfi %rdi
@@ -771,8 +771,8 @@ GLOBAL(int_with_check)
 	/* First do a reschedule test. */
 	/* edx:	work, edi: workmask */
 int_careful:
-	testl $_TIF_NEED_RESCHED_MASK,%edx
-	jz  int_very_careful
+	bt $TIF_NEED_RESCHED,%edx
+	jnc  int_very_careful
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	pushq_cfi %rdi
@@ -1071,8 +1071,8 @@ bad_iret:
 	/* edi: workmask, edx: work */
 retint_careful:
 	CFI_RESTORE_STATE
-	testl $_TIF_NEED_RESCHED_MASK,%edx
-	jz   retint_signal
+	bt    $TIF_NEED_RESCHED,%edx
+	jnc   retint_signal
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	pushq_cfi %rdi
@@ -1105,15 +1105,9 @@ retint_signal:
 ENTRY(retint_kernel)
 	cmpl $0,TI_preempt_count(%rcx)
 	jnz  retint_restore_args
-	bt   $TIF_NEED_RESCHED,TI_flags(%rcx)
-	jc   1f
-
-	cmpl $0,TI_preempt_lazy_count(%rcx)
-	jnz  retint_restore_args
-	bt   $TIF_NEED_RESCHED_LAZY,TI_flags(%rcx)
+	bt  $TIF_NEED_RESCHED,TI_flags(%rcx)
 	jnc  retint_restore_args
-
-1:	bt   $9,EFLAGS-ARGOFFSET(%rsp)	/* interrupts off? */
+	bt   $9,EFLAGS-ARGOFFSET(%rsp)	/* interrupts off? */
 	jnc  retint_restore_args
 	call preempt_schedule_irq
 	jmp exit_intr
@@ -1347,7 +1341,6 @@ bad_gs:
 	jmp  2b
 	.previous
 
-#ifndef CONFIG_PREEMPT_RT_FULL
 /* Call softirq on interrupt stack. Interrupts are off. */
 ENTRY(call_softirq)
 	CFI_STARTPROC
@@ -1367,7 +1360,6 @@ ENTRY(call_softirq)
 	ret
 	CFI_ENDPROC
 END(call_softirq)
-#endif
 
 #ifdef CONFIG_XEN
 zeroentry xen_hypervisor_callback xen_do_hypervisor_callback
@@ -1537,7 +1529,7 @@ paranoid_userspace:
 	movq %rsp,%rdi			/* &pt_regs */
 	call sync_regs
 	movq %rax,%rsp			/* switch stack for scheduling */
-	testl $_TIF_NEED_RESCHED_MASK,%ebx
+	testl $_TIF_NEED_RESCHED,%ebx
 	jnz paranoid_schedule
 	movl %ebx,%edx			/* arg3: thread flags */
 	TRACE_IRQS_ON

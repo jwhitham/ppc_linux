@@ -90,7 +90,7 @@ struct tsb_config {
 #endif
 
 typedef struct {
-	raw_spinlock_t		lock;
+	spinlock_t		lock;
 	unsigned long		sparc64_ctx_val;
 	unsigned long		huge_pte_count;
 	struct page		*pgtable_page;
