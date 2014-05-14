@@ -143,6 +143,16 @@
 				reg = <0>;
 				spi-max-frequency = <10000000>; /* input clock */
 			};
+			slic@0 {
+				compatible = "zarlink,le88266";
+				reg = <1>;
+				spi-max-frequency = <8000000>;
+			};
+			slic@1 {
+				compatible = "zarlink,le88266";
+				reg = <2>;
+				spi-max-frequency = <8000000>;
+			};
 		};
 
 		fman0: fman@400000 {
