@@ -730,6 +730,9 @@ static t_Error CheckNConfigFmAdvArgs (t_LnxWrpFmDev *p_LnxWrpFmDev)
             err = FM_ConfigDmaAidMode(p_LnxWrpFmDev->h_Dev, e_FM_DMA_AID_OUT_PORT_ID);
         else if (strcmp(str_prop, "tnum") == 0)
             err = FM_ConfigDmaAidMode(p_LnxWrpFmDev->h_Dev, e_FM_DMA_AID_OUT_TNUM);
+
+        if (err != E_OK)
+            RETURN_ERROR(MINOR, err, NO_MSG);
     }
 
     uint32_prop = (uint32_t *)of_get_property(dev_node, "tnum-aging-period",
@@ -739,11 +742,11 @@ static t_Error CheckNConfigFmAdvArgs (t_LnxWrpFmDev *p_LnxWrpFmDev)
             RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
  
         err = FM_ConfigTnumAgingPeriod(p_LnxWrpFmDev->h_Dev,
-		(uint16_t)uint32_prop[0]/*tnumAgingPeriod*/);
+            (uint16_t)uint32_prop[0]/*tnumAgingPeriod*/);
+
+        if (err != E_OK)
+            RETURN_ERROR(MINOR, err, NO_MSG);
     }
-        
-    if (err != E_OK)
-        RETURN_ERROR(MINOR, err, NO_MSG);
 
     of_node_put(dev_node);
 
