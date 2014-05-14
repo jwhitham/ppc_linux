@@ -477,13 +477,6 @@ struct device_node * GetFmPortAdvArgsDevTreeNode (struct device_node *fm_node,
         }
         if (WARN_ON(lenp != sizeof(uint32_t)))
             return NULL;
-		if (unlikely(*uint32_prop >= FM_MAX_NUM_OF_OH_PORTS)) {
-			REPORT_ERROR(MAJOR, E_INVALID_VALUE,
-				     ("of_get_property(%s, cell-index) failed",
-				      port_node->full_name));
-			return NULL;
-		}
-
     	if ((portId == *uint32_prop) &&
     	    (of_device_is_compatible(port_node, portTypeString))) {
             return port_node;
