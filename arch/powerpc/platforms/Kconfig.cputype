@@ -232,6 +232,16 @@ config FSL_ERRATUM_A_006184_PERIOD
 	  since when idle we will always have just executed from the main
 	  kernel mapping, so it should not be absent from the L1 I-MMU.
 
+config FSL_ERRATUM_A_008007
+	bool "Work around erratum A-008007 (pvr value)"
+	default n
+	help
+	  This works around erratum A-008007 by not using PVR value read from
+	  PVR register as it is unreliable for e5500 core
+	  (major version:1.0, minor version: 2.0 ).
+	  Instead use expected hard-code value for PVR register for core.
+	  Say Y if and only if you using T1040 Rev1.0 Silicon
+
 config PPC_DISABLE_THREADS
 	bool "Avoid the use of hardware threads"
 	help
