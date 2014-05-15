@@ -101,8 +101,12 @@
 		};
 
 		i2c@118000 {
-			adt7481@4c {
-				compatible = "adi,adt7481";
+			/*
+			 * Should be ADT7481.
+			 * Now kernel only supports ADT7461.
+			 */
+			adt7461@4c {
+				compatible = "adi,adt7461";
 				reg = <0x4c>;
 			};
 

@@ -126,6 +126,13 @@
 		ranges = <0x00000000 0xf 0xfe000000 0x1000000>;
 		reg = <0xf 0xfe000000 0 0x00001000>;
 
+		i2c@118000 {
+			adt7461@4c {
+				compatible = "adi,adt7461";
+				reg = <0x4c>;
+			};
+		};
+
 		i2c@118100 {
 			pca9546@77 {
 				compatible = "philips,pca9546";
