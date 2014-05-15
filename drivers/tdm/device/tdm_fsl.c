@@ -50,6 +50,11 @@
 #define DRV_DESC "Freescale TDM Driver Adapter"
 #define DRV_NAME "fsl_tdm"
 
+/* TDM needs clock input of ~2.048Mhz. Input clock for TDM for T1040 is
+ * CCB/2. TODO: make TDM_CLK_DIV_VAL calculation dynamic based on clock input
+ * This can be done using dts.*/
+#define TDM_CLK_DIV_VAL		0x85
+
 int loopback;
 module_param(loopback, int, 0);
 MODULE_PARM_DESC(loopback, "Enable TDM in loopback mode."
@@ -59,6 +64,8 @@ static int tdmen = 1;
 
 module_param(tdmen, int, S_IRUSR);
 MODULE_PARM_DESC(tdmen, "Enable TDM: Enable=1, Disable=0(default)");
+
+static int tdm_internal_clk = 1;
 
 /* Initialize the Tx Transmit Control Discriptor parameters*/
 static void tx_tcd_init(struct tdm_priv *priv)
@@ -432,19 +439,33 @@ static int tdm_fsl_reg_init(struct tdm_priv *priv)
 	else
 		out_be32(&priv->tdm_regs->gir, GIR_RTS);
 
+	if (tdm_internal_clk) {
+		out_be32(&priv->tdm_regs->rir,
+		    RIR_RFWM(RIR_RFWM_VAL) | RIR_RFEN | RIR_RWEN | RIR_RDMA |
+		    RIR_RSO | RIR_RCOE | RIR_RRDO | RIR_RFSD(RIR_RFSD_VAL));
+		out_be32(&priv->tdm_regs->tir,
+		    TIR_TFWM(TIR_RFWM_VAL) | TIR_TFEN | TIR_TWEN | TIR_TDMA |
+		    TIR_TCOE | TIR_TSL | TIR_TSO | TIR_TRDO |
+		    TIR_TFSD(TIR_RFSD_VAL));
+
+		out_be32(&priv->clk_regs->tx, TDM_CLK_DIV_VAL);
+		out_be32(&priv->clk_regs->rx, TDM_CLK_DIV_VAL);
+		pr_info("TDM configured to use internal clock");
+	} else {
 	/*
 	   Rx Water mark 0,  FIFO enable,  Wide fifo, DMA enable for RX,
 	   Receive Sync out, syncwidth = ch width, Rx clk out,zero sync,
 	   falling edge , data order
 	 */
-
-	out_be32(&priv->tdm_regs->rir,
-		 RIR_RFWM(RIR_RFWM_VAL) | RIR_RFEN | RIR_RWEN | RIR_RDMA |
-		 RIR_RSL | RIR_RSO | RIR_RCOE | RIR_RRDO |
-		 RIR_RFSD(RIR_RFSD_VAL));
-	out_be32(&priv->tdm_regs->tir,
-		 TIR_TFWM(TIR_RFWM_VAL) | TIR_TFEN | TIR_TWEN | TIR_TDMA |
-		 TIR_TSL | TIR_TSO | TIR_TRDO | TIR_TFSD(TIR_RFSD_VAL));
+		out_be32(&priv->tdm_regs->rir,
+		    RIR_RFWM(RIR_RFWM_VAL) | RIR_RFEN | RIR_RWEN | RIR_RDMA |
+		    RIR_RSL | RIR_RSO | RIR_RCOE | RIR_RRDO |
+		    RIR_RFSD(RIR_RFSD_VAL));
+		out_be32(&priv->tdm_regs->tir,
+		    TIR_TFWM(TIR_RFWM_VAL) | TIR_TFEN | TIR_TWEN | TIR_TDMA |
+		    TIR_TSL | TIR_TSO | TIR_TRDO | TIR_TFSD(TIR_RFSD_VAL));
+		pr_info("TDM configured to use external clock");
+	}
 
 	/* no of channels ,Channel size-coading */
 	switch (adap->adapt_cfg.ch_size_type) {
@@ -898,6 +919,16 @@ static struct platform_driver tdm_fsl_driver = {
 static int __init tdm_fsl_init(void)
 {
 	int ret;
+	struct device_node *dev_node;
+
+	/* Few boards do not have external clock source for TDM. Check board
+	 * type using dts, select internal clock source only for those boards
+	 * which do not have external clock.
+	 */
+	dev_node = of_find_compatible_node(NULL, NULL, "fsl,T1040RDB");
+	if (!dev_node)
+		tdm_internal_clk = 0;
+
 	pr_info(DRV_NAME ": " DRV_DESC ":Init\n");
 	ret = platform_driver_register(&tdm_fsl_driver);
 	if (ret)
