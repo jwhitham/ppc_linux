@@ -364,8 +364,7 @@ static void Dtsec1588Isr(t_Handle h_Dtsec)
 
 static void FreeInitResources(t_Dtsec *p_Dtsec)
 {
-   /*TODO - need to ask why with mdioIrq != 0*/
-    if ((p_Dtsec->mdioIrq != 0) && (p_Dtsec->mdioIrq != NO_IRQ))
+    if (p_Dtsec->mdioIrq != NO_IRQ)
     {
         XX_DisableIntr(p_Dtsec->mdioIrq);
         XX_FreeIntr(p_Dtsec->mdioIrq);

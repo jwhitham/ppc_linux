@@ -160,13 +160,12 @@ static void TgecException(t_Handle h_Tgec)
 
 static void FreeInitResources(t_Tgec *p_Tgec)
 {
-    if ((p_Tgec->mdioIrq != 0) && (p_Tgec->mdioIrq != NO_IRQ))
+    if (p_Tgec->mdioIrq != NO_IRQ)
     {
         XX_DisableIntr(p_Tgec->mdioIrq);
         XX_FreeIntr(p_Tgec->mdioIrq);
     }
-    else if (p_Tgec->mdioIrq == 0)
-        REPORT_ERROR(MINOR, E_NOT_SUPPORTED, NO_MSG);
+
     FmUnregisterIntr(p_Tgec->fmMacControllerDriver.h_Fm, e_FM_MOD_10G_MAC, p_Tgec->macId, e_FM_INTR_TYPE_ERR);
 
     /* release the driver's group hash table */
@@ -867,13 +866,11 @@ static t_Error TgecInit(t_Handle h_Tgec)
                    e_FM_INTR_TYPE_ERR,
                    TgecErrException,
                    p_Tgec);
-    if ((p_Tgec->mdioIrq != 0) && (p_Tgec->mdioIrq != NO_IRQ))
+    if (p_Tgec->mdioIrq != NO_IRQ)
     {
         XX_SetIntr(p_Tgec->mdioIrq, TgecException, p_Tgec);
         XX_EnableIntr(p_Tgec->mdioIrq);
     }
-    else if (p_Tgec->mdioIrq == 0)
-        REPORT_ERROR(MINOR, E_NOT_SUPPORTED, (NO_MSG));
 
     XX_Free(p_TgecDriverParam);
     p_Tgec->p_TgecDriverParam = NULL;
