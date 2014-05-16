@@ -677,6 +677,7 @@ static bool has_erratum_a007907(void)
 	case SVR_B4420:
 	case SVR_T4240:
 	case SVR_T4160:
+	case SVR_T4080:
 		return SVR_REV(svr) <= 0x20;
 
 	case SVR_T2080:
