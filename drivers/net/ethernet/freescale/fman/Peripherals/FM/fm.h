@@ -343,7 +343,7 @@ switch (exception){                                         \
 #define DEFAULT_totalFifoSize(major, minor)     \
     (((major == 2) || (major == 5)) ?           \
      (100*KILOBYTE) : ((major == 4) ?           \
-     (46*KILOBYTE) : (122*KILOBYTE)))
+     (49*KILOBYTE) : (122*KILOBYTE)))
 #define DEFAULT_totalNumOfTasks             BMI_MAX_NUM_OF_TASKS
 
 #define DEFAULT_dmaCommQLow                 ((DMA_THRESH_MAX_COMMQ+1)/2)
