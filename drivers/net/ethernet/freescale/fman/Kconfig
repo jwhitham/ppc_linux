@@ -44,14 +44,6 @@ config FMAN_V3L
 	  FMAN_V3H.
 	  Say "Y" if chips are T1040, T1042, T1020, T1022 family.
 
-config FMAN_DISABLE_OH_TO_REUSE_RESOURCES
-	depends on FMAN_RESOURCE_ALLOCATION_ALGORITHM
-	bool "Disable offline parsing ports to reuse resources"
-	default n
-	---help---
-		Redistributes FMan OH's resources to all other ports,
-		thus enabling other configurations.
-
 config FMAN_MIB_CNT_OVF_IRQ_EN
 	bool "Enable the dTSEC MIB counters overflow interrupt"
 	default n
