@@ -498,8 +498,10 @@ done:
 		list_del(&i->list);
 		kfree(i);
 		*result = base;
+	} else {
+		spin_unlock_irq(&alloc->lock);
 	}
-	spin_unlock_irq(&alloc->lock);
+
 err:
 	DPRINT("returning %d\n", i ? num : -ENOMEM);
 	DUMP(alloc);
@@ -508,13 +510,16 @@ err:
 
 	/* Add the allocation to the used list with a refcount of 1 */
 	used_node = kmalloc(sizeof(*used_node), GFP_KERNEL);
-	if (!used_node)
+	if (!used_node) {
+		spin_unlock_irq(&alloc->lock);
 		return -ENOMEM;
+	}
 	used_node->base = *result;
 	used_node->num = num;
 	used_node->refcount = 1;
 	used_node->is_alloced = 1;
 	list_add_tail(&used_node->list, &alloc->used);
+	spin_unlock_irq(&alloc->lock);
 	return (int)num;
 }
 
