@@ -28,7 +28,6 @@ config FSL_DPAA_OFFLINE_PORTS
 
 config FSL_DPAA_ETH_JUMBO_FRAME
 	bool "Optimize for jumbo frames"
-	select FMAN_RESOURCE_ALLOCATION_ALGORITHM if (FMAN_P3040_P4080_P5020 || FMAN_P1023)
 	default n
 	---help---
 	  Optimize the DPAA Ethernet driver throughput for large frames
