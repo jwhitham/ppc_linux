@@ -94,36 +94,25 @@
 			flash@0 {
 				#address-cells = <1>;
 				#size-cells = <1>;
-				compatible = "spansion,s25sl12801";
+				compatible = "micron,n25q128a11";  /* 16MB */
 				reg = <0>;
 				spi-max-frequency = <40000000>; /* input clock */
-				partition@u-boot {
-					label = "SPI U-Boot";
-					reg = <0x00000000 0x00100000>;
-					read-only;
-				};
-				partition@kernel {
-					label = "SPI Kernel";
-					reg = <0x00100000 0x00500000>;
-					read-only;
-				};
-				partition@dtb {
-					label = "SPI DTB";
-					reg = <0x00600000 0x00100000>;
-					read-only;
-				};
-				partition@fs {
-					label = "SPI File System";
-					reg = <0x00700000 0x00900000>;
-				};
 			};
 
 			flash@1 {
 				#address-cells = <1>;
 				#size-cells = <1>;
-				compatible = "sst,sst25wf040";
+				compatible = "sst,sst25wf040";  /* 512KB */
 				reg = <1>;
-				spi-max-frequency = <40000000>; /* input clock */
+				spi-max-frequency = <35000000>; /* input clock */
+			};
+
+			flash@2 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "eon,en25s64";   /* 8MB */
+				reg = <2>;
+				spi-max-frequency = <35000000>; /* input clock */
 			};
 		};
 
@@ -140,7 +129,7 @@
 					reg = <0x0>;
 
 					eeprom@50 {
-						compatible = "at24,24c256";
+						compatible = "at24,24c512";
 						reg = <0x50>;
 					};
 
