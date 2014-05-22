@@ -374,6 +374,7 @@ BEGIN_FTR_SECTION
 	lhz	r10,PACAPACAINDEX(r13)
 	cmpdi	r15,0
 	cmpdi	cr1,r15,1	/* set cr1.eq = 0 for non-recursive */
+	addi	r10,r10,1
 	bne	3f
 	stbcx.	r10,0,r11
 	bne	2b
