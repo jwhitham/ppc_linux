@@ -1595,20 +1595,35 @@ long wrp_dpa_ipsec_do_compat_ioctl(struct file *filp, unsigned int cmd,
 	}
 
 	case DPA_IPSEC_IOC_GET_STATS: {
-		struct dpa_ipsec_stats ipsec_stats;
+		struct ioc_dpa_ipsec_instance_stats prm;
 
-		ret = dpa_ipsec_get_stats(0, &ipsec_stats);
+		if (copy_from_user(&prm,
+				   (struct ioc_dpa_ipsec_instance_stats *)args,
+				   sizeof(prm))) {
+			log_err("Could not copy from user stats params\n");
+			return -EINVAL;
+		}
+
+		if (prm.instance_id < 0) {
+			log_err("Invalid instance id\n");
+			return -EINVAL;
+		}
+
+		ret = dpa_ipsec_get_stats(prm.instance_id, &prm.stats);
 		if (ret < 0) {
-			log_err("Getting stats failed\n");
+			log_err("Failed to get statistics for instance %d\n",
+				prm.instance_id);
 			break;
 		}
 
-		if (copy_to_user((struct dpa_ipsec_stats *)args,
-				 &ipsec_stats, sizeof(ipsec_stats))) {
+		if (copy_to_user((struct ioc_dpa_ipsec_instance_stats *)args,
+				 &prm, sizeof(prm))) {
 			log_err("Could not copy stats to user\n");
 			return -EINVAL;
 		}
 		break;
+
+
 	}
 
 	case DPA_IPSEC_IOC_SA_MODIFY: {
