@@ -404,7 +404,8 @@ static t_Error AllocAndFillAdForContLookupManip(t_Handle h_CcNode)
     return E_OK;
 }
 
-static t_Error SetRequiredAction(t_Handle                            h_FmPcd,
+
+static t_Error SetRequiredAction1(t_Handle                            h_FmPcd,
                                  uint32_t                            requiredAction,
                                  t_FmPcdCcKeyAndNextEngineParams     *p_CcKeyAndNextEngineParamsTmp,
                                  t_Handle                            h_AdTmp,
@@ -440,19 +441,19 @@ static t_Error SetRequiredAction(t_Handle                            h_FmPcd,
                     if ((requiredAction & UPDATE_CC_WITH_TREE) && !(p_CcNode->shadowAction & UPDATE_CC_WITH_TREE))
                     {
 
-                        ASSERT_COND(LIST_NumOfObjs(&p_CcNode->ccTreesLst) == 0);
-                        if (p_CcNode->shadowAction & UPDATE_CC_WITH_DELETE_TREE)
-                            p_CcNode->shadowAction &= ~UPDATE_CC_WITH_DELETE_TREE;
                         memset(&ccNodeInfo, 0, sizeof(t_CcNodeInformation));
                         ccNodeInfo.h_CcNode = h_Tree;
                         EnqueueNodeInfoToRelevantLst(&p_CcNode->ccTreesLst, &ccNodeInfo, NULL);
                         p_CcKeyAndNextEngineParamsTmp[i].shadowAction |= UPDATE_CC_WITH_TREE;
                     }
-                    if ((requiredAction & UPDATE_CC_WITH_DELETE_TREE) && !(p_CcNode->shadowAction & UPDATE_CC_WITH_DELETE_TREE))
+                    if ((requiredAction & UPDATE_CC_SHADOW_CLEAR) && !(p_CcNode->shadowAction & UPDATE_CC_SHADOW_CLEAR))
                     {
-                        ASSERT_COND(LIST_NumOfObjs(&p_CcNode->ccTreesLst) == 1);
-                        if (p_CcNode->shadowAction & UPDATE_CC_WITH_TREE)
-                            p_CcNode->shadowAction &= ~UPDATE_CC_WITH_TREE;
+
+                         p_CcNode->shadowAction = 0;
+                    }
+
+                   if ((requiredAction & UPDATE_CC_WITH_DELETE_TREE) && !(p_CcNode->shadowAction & UPDATE_CC_WITH_DELETE_TREE))
+                    {
                         DequeueNodeInfoFromRelevantLst(&p_CcNode->ccTreesLst, h_Tree, NULL);
                         p_CcKeyAndNextEngineParamsTmp[i].shadowAction |= UPDATE_CC_WITH_DELETE_TREE;
                     }
@@ -460,7 +461,7 @@ static t_Error SetRequiredAction(t_Handle                            h_FmPcd,
                         tmp  = (uint8_t)(p_CcNode->numOfKeys + 1);
                     else
                         tmp = p_CcNode->numOfKeys;
-                    err = SetRequiredAction(h_FmPcd,
+                    err = SetRequiredAction1(h_FmPcd,
                                             requiredAction,
                                             p_CcNode->keyAndNextEngineParams,
                                             p_CcNode->h_AdTable,
@@ -468,7 +469,8 @@ static t_Error SetRequiredAction(t_Handle                            h_FmPcd,
                                             h_Tree);
                     if (err != E_OK)
                         return err;
-                    p_CcNode->shadowAction |= requiredAction;
+                    if(requiredAction != UPDATE_CC_SHADOW_CLEAR)
+                    	p_CcNode->shadowAction |= requiredAction;
                 }
                 break;
 
@@ -527,6 +529,21 @@ static t_Error SetRequiredAction(t_Handle                            h_FmPcd,
      return E_OK;
 }
 
+static t_Error SetRequiredAction(t_Handle                            h_FmPcd,
+                                 uint32_t                            requiredAction,
+                                 t_FmPcdCcKeyAndNextEngineParams     *p_CcKeyAndNextEngineParamsTmp,
+                                 t_Handle                            h_AdTmp,
+                                 uint16_t                            numOfEntries,
+                                 t_Handle                            h_Tree)
+{
+    t_Error err = SetRequiredAction1(h_FmPcd, requiredAction, p_CcKeyAndNextEngineParamsTmp,
+                       h_AdTmp, numOfEntries, h_Tree);
+    if (err != E_OK)
+        return err;
+    return SetRequiredAction1(h_FmPcd, UPDATE_CC_SHADOW_CLEAR, p_CcKeyAndNextEngineParamsTmp,
+                           h_AdTmp, numOfEntries, h_Tree);
+}
+
 static t_Error ReleaseModifiedDataStructure(t_Handle                            h_FmPcd,
                                             t_List                              *h_FmPcdOldPointersLst,
                                             t_List                              *h_FmPcdNewPointersLst,
@@ -538,9 +555,10 @@ static t_Error ReleaseModifiedDataStructure(t_Handle                            
     t_Error                 err = E_OK;
     t_CcNodeInformation     ccNodeInfo, *p_CcNodeInformation;
     t_Handle                h_Muram;
-    t_FmPcdCcNode           *p_FmPcdCcNextNode;
+    t_FmPcdCcNode           *p_FmPcdCcNextNode, *p_FmPcdCcWorkingOnNode;
     t_List                  *p_UpdateLst;
     uint32_t                intFlags;
+    
 
     UNUSED(numOfGoodChanges);
 
@@ -548,9 +566,7 @@ static t_Error ReleaseModifiedDataStructure(t_Handle                            
     SANITY_CHECK_RETURN_ERROR(p_AdditionalParams->h_CurrentNode,E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(h_FmPcdOldPointersLst,E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(h_FmPcdNewPointersLst,E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR((numOfGoodChanges == LIST_NumOfObjs(h_FmPcdOldPointersLst)),E_INVALID_STATE);
-    SANITY_CHECK_RETURN_ERROR((1 == LIST_NumOfObjs(h_FmPcdNewPointersLst)),E_INVALID_STATE);
-
+ 
     /* We don't update subtree of the new node with new tree because it was done in the previous stage */
     if (p_AdditionalParams->h_NodeForAdd)
     {
@@ -603,10 +619,12 @@ static t_Error ReleaseModifiedDataStructure(t_Handle                            
         if (!p_AdditionalParams->tree)
         {
             p_UpdateLst = &p_FmPcdCcNextNode->ccPrevNodesLst;
-
-            while (!LIST_IsEmpty(&p_FmPcdCcNextNode->ccTreesLst))
+			p_FmPcdCcWorkingOnNode = (t_FmPcdCcNode *)(p_AdditionalParams->h_CurrentNode);
+            
+            for (p_Pos = LIST_FIRST(&p_FmPcdCcWorkingOnNode->ccTreesLst); 
+            						p_Pos != (&p_FmPcdCcWorkingOnNode->ccTreesLst); 
+            						p_Pos = LIST_NEXT(p_Pos))
             {
-                p_Pos = LIST_NEXT(&p_FmPcdCcNextNode->ccTreesLst);
                 p_CcNodeInformation = CC_NODE_F_OBJECT(p_Pos);
 
                 ASSERT_COND(p_CcNodeInformation->h_CcNode);
@@ -694,10 +712,15 @@ static t_Error ReleaseModifiedDataStructure(t_Handle                            
              !((t_FmPcdCcNode *)(p_AdditionalParams->h_CurrentNode))->maxNumOfKeys))
         {
             /* We release new AD which was allocated and updated for copy from to actual AD */
-            p_Pos = LIST_FIRST(h_FmPcdNewPointersLst);
-            p_CcNodeInformation = CC_NODE_F_OBJECT(p_Pos);
-            ASSERT_COND(p_CcNodeInformation->h_CcNode);
-            FM_MURAM_FreeMem(h_Muram, p_CcNodeInformation->h_CcNode);
+            for (p_Pos = LIST_FIRST(h_FmPcdNewPointersLst); 
+						p_Pos != (h_FmPcdNewPointersLst); 
+						p_Pos = LIST_NEXT(p_Pos))
+            {
+   
+	            p_CcNodeInformation = CC_NODE_F_OBJECT(p_Pos);
+	            ASSERT_COND(p_CcNodeInformation->h_CcNode);
+	            FM_MURAM_FreeMem(h_Muram, p_CcNodeInformation->h_CcNode);
+            }
         }
 
         /* Free Old data structure if it has to be freed - new data structure was allocated*/
@@ -829,6 +852,8 @@ static t_Error DynamicChangeHc(t_Handle                             h_FmPcd,
 
     numOfModifiedPtr = (uint8_t)LIST_NumOfObjs(h_OldPointersLst);
 
+    if (numOfModifiedPtr) 
+    {
     p_PosNew = LIST_FIRST(h_NewPointersLst);
     p_PosOld = LIST_FIRST(h_OldPointersLst);
 
@@ -875,7 +900,7 @@ static t_Error DynamicChangeHc(t_Handle                             h_FmPcd,
 
         p_PosOld = LIST_NEXT(p_PosOld);
     }
-
+    }
     return E_OK;
 }
 
@@ -896,20 +921,21 @@ static t_Error DoDynamicChange(t_Handle                             h_FmPcd,
 
     ASSERT_COND(h_FmPcd);
 
-    SANITY_CHECK_RETURN_ERROR((LIST_NumOfObjs(h_OldPointersLst) >= 1),E_INVALID_STATE);
-    SANITY_CHECK_RETURN_ERROR((LIST_NumOfObjs(h_NewPointersLst) == 1),E_INVALID_STATE);
 
     memset(&nextEngineParams, 0, sizeof(t_FmPcdCcNextEngineParams));
 
-    numOfModifiedPtr = (uint8_t)LIST_NumOfObjs(h_OldPointersLst);
+	numOfModifiedPtr = (uint8_t)LIST_NumOfObjs(h_OldPointersLst);
 
-    p_PosNew = LIST_FIRST(h_NewPointersLst);
+   	if (numOfModifiedPtr) 
+   	{
+   		
+	    p_PosNew = LIST_FIRST(h_NewPointersLst);
 
-    /* Invoke host-command to copy from the new Ad to existing Ads */
-    err = DynamicChangeHc(h_FmPcd, h_OldPointersLst, h_NewPointersLst, p_AdditionalParams, useShadowStructs);
-    if (err)
-        RETURN_ERROR(MAJOR, err, NO_MSG);
-
+	    /* Invoke host-command to copy from the new Ad to existing Ads */
+	    err = DynamicChangeHc(h_FmPcd, h_OldPointersLst, h_NewPointersLst, p_AdditionalParams, useShadowStructs);
+	    if (err)
+	        RETURN_ERROR(MAJOR, err, NO_MSG);
+   	}
     if (useShadowStructs)
     {
         /* When the host-command above has ended, the old structures are 'free'and we can update
@@ -3232,20 +3258,8 @@ static t_FmPcdModifyCcKeyAdditionalParams * ModifyNodeCommonPart(t_Handle       
         numOfKeys = p_CcNode->numOfKeys;
 
         /* node has to be pointed by another node or tree */
-        if (!LIST_NumOfObjs(&p_CcNode->ccPrevNodesLst) &&
-            !LIST_NumOfObjs(&p_CcNode->ccTreeIdLst))
-        {
-            REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("node has to be pointed by node or tree"));
-            return NULL;
-        }
-
-        if (!LIST_NumOfObjs(&p_CcNode->ccTreesLst) ||
-            (LIST_NumOfObjs(&p_CcNode->ccTreesLst) != 1))
-        {
-            REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("node has to be belonging to some tree and only to one tree"));
-            return NULL;
-        }
-
+       
+ 
         p_KeyAndNextEngineParams = (t_FmPcdCcKeyAndNextEngineParams *)XX_Malloc(sizeof(t_FmPcdCcKeyAndNextEngineParams)*(numOfKeys+1));
         if (!p_KeyAndNextEngineParams)
         {
@@ -3360,22 +3374,23 @@ static t_Error UpdatePtrWhichPointOnCrntMdfNode(t_FmPcdCcNode                   
         UpdateAdPtrOfTreesWhichPointsOnCrntMdfNode(p_CcNode, h_OldLst, &p_NextEngineParams);
 
     /* This node must be found as next engine of one of its previous nodes or trees*/
-    ASSERT_COND(p_NextEngineParams);
+    if(p_NextEngineParams) 
+    {
+    	
+	    /* Building a new action descriptor that points to the modified node */
+	    h_NewAd = GetNewAd(p_CcNode, FALSE);
+	    if (!h_NewAd)
+	        RETURN_ERROR(MAJOR, E_NO_MEMORY, NO_MSG);
+	    IOMemSet32(h_NewAd, 0,  FM_PCD_CC_AD_ENTRY_SIZE);
 
-    /* Building a new action descriptor that points to the modified node */
-    h_NewAd = GetNewAd(p_CcNode, FALSE);
-    if (!h_NewAd)
-        RETURN_ERROR(MAJOR, E_NO_MEMORY, NO_MSG);
-    IOMemSet32(h_NewAd, 0,  FM_PCD_CC_AD_ENTRY_SIZE);
+	    BuildNewAd(h_NewAd,
+	               p_FmPcdModifyCcKeyAdditionalParams,
+	               p_CcNode,
+	               p_NextEngineParams);
 
-    BuildNewAd(h_NewAd,
-               p_FmPcdModifyCcKeyAdditionalParams,
-               p_CcNode,
-               p_NextEngineParams);
-
-    ccNodeInfo.h_CcNode = h_NewAd;
-    EnqueueNodeInfoToRelevantLst(h_NewLst, &ccNodeInfo, NULL);
-
+	    ccNodeInfo.h_CcNode = h_NewAd;
+	    EnqueueNodeInfoToRelevantLst(h_NewLst, &ccNodeInfo, NULL);
+    }
     return E_OK;
 }
 
