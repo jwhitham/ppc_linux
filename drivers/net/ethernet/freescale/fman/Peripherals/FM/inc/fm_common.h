@@ -264,7 +264,15 @@ typedef struct {
 } t_FmSetParams;
 
 typedef struct {
+    uint32_t    type;
+    uint32_t    fmqm_gs;
+    uint32_t    fm_npi;
+    uint32_t    fmfp_extc;
+} t_FmGetParams;
+
+typedef struct {
     t_FmSetParams setParams;
+    t_FmGetParams getParams;
 } t_FmGetSetParams; 
 
 t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params);
@@ -335,6 +343,11 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 /* @} */
 
 #define UPDATE_FPM_BRKC_SLP                     0x80000000
+#define UPDATE_FPM_EXTC		                0x40000000
+#define UPDATE_FPM_EXTC_CLEAR	                0x20000000
+#define GET_FMQM_GS		                0x10000000
+#define GET_FM_NPI		                0x08000000
+#define GET_FMFP_EXTC		                0x04000000
 #define FM_MAX_NUM_OF_PORTS     (FM_MAX_NUM_OF_OH_PORTS +     \
                                  FM_MAX_NUM_OF_1G_RX_PORTS +  \
                                  FM_MAX_NUM_OF_10G_RX_PORTS + \

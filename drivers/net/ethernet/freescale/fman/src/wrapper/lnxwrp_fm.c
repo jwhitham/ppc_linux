@@ -60,6 +60,7 @@
 #include <asm/errno.h>
 #include <asm/qe.h>        /* For struct qe_firmware */
 #include <sysdev/fsl_soc.h>
+#include <asm/fsl_pm.h>
 #include <linux/stat.h>	   /* For file access mask */
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
@@ -1102,20 +1103,30 @@ MODULE_DEVICE_TABLE(of, fm_match);
 #define SCFG_FMCLKDPSLPCR_ADDR 0xFFE0FC00C
 #define SCFG_FMCLKDPSLPCR_DS_VAL 0x48402000
 #define SCFG_FMCLKDPSLPCR_NORMAL_VAL 0x00402000
-
+void FM_PORT_Dsar_enter_final(void);
+static bool started_ar_enter = false;
 static int fm_soc_suspend(struct device *dev)
 {
-	uint32_t *fmclk;
-	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
+	if (started_ar_enter)
+	{
+		uint32_t *fmclk;
+		fsl_set_power_except(dev,1);
+		FM_PORT_Dsar_enter_final();
+		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
+	}
 	return 0;
 }
 
 static int fm_soc_resume(struct device *dev)
 {
-	uint32_t *fmclk;
-	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
+	if (started_ar_enter)
+	{
+		uint32_t *fmclk;
+		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
+		started_ar_enter = false;
+	}
 	return 0;
 }
 
@@ -1360,6 +1371,7 @@ int fm_port_enter_autores_for_deepsleep(struct fm_port *port,
             return -EFAULT;
 	
 	FM_PORT_EnterDsar(p_LnxWrpFmPortDev->h_Dev, (t_FmPortDsarParams*)params);
+	started_ar_enter = true;
 	return 0;
 }
 EXPORT_SYMBOL(fm_port_enter_autores_for_deepsleep);
@@ -1367,7 +1379,9 @@ EXPORT_SYMBOL(fm_port_enter_autores_for_deepsleep);
 void fm_port_exit_auto_res_for_deep_sleep(struct fm_port *port_rx,
 	struct fm_port *port_tx)
 {
-	FM_PORT_ExitDsar(port_rx, port_tx);
+	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDevRx = (t_LnxWrpFmPortDev *)port_rx;
+	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDevTx = (t_LnxWrpFmPortDev *)port_tx;
+	FM_PORT_ExitDsar(p_LnxWrpFmPortDevRx->h_Dev, p_LnxWrpFmPortDevTx->h_Dev);
 }
 EXPORT_SYMBOL(fm_port_exit_auto_res_for_deep_sleep);
 

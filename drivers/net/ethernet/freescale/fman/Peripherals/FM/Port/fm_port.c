@@ -3166,10 +3166,13 @@ t_Error FM_PORT_Disable(t_Handle h_FmPort)
     return E_OK;
 }
 
+t_FmPort* opXX;
 t_Error FM_PORT_Enable(t_Handle h_FmPort)
 {
     t_FmPort                    *p_FmPort = (t_FmPort*)h_FmPort;
     int err;
+    if (p_FmPort->portId == 0) // save HC port for DSAR disable
+	opXX = p_FmPort;
 
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
@@ -5465,6 +5468,20 @@ static int GetBERLen(uint8_t* buf)
 }
 #define TOTAL_BER_LEN(len) (len < 128) ? len + 2 : len + 3
 
+#define SCFG_FMCLKDPSLPCR_ADDR 0xFFE0FC00C
+#define SCFG_FMCLKDPSLPCR_DS_VAL 0x08402000
+#define SCFG_FMCLKDPSLPCR_NORMAL_VAL 0x00402000
+static int fm_soc_suspend(void)
+{
+	uint32_t *fmclk, tmp32;
+	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+	tmp32 = GET_UINT32(*fmclk);
+	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
+	tmp32 = GET_UINT32(*fmclk);
+	return 0;
+}
+
+t_FmPort *g_DsarFmPortRx, *g_DsarFmPortTx;
 t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
 {
     int i,j;
@@ -5481,11 +5498,13 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     t_ArCommonDesc *ArCommonDescPtr = (t_ArCommonDesc*)(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(*param_page)));
     struct arOffsets* of;
     uint8_t tmp = 0;
-    t_Handle *h_FmPcd;
     t_FmGetSetParams fmGetSetParams;
     memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
     fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
     fmGetSetParams.setParams.sleep = 1;    
+
+    g_DsarFmPortRx = p_FmPort;
+    g_DsarFmPortTx = p_FmPortTx;
 
     err = DsarCheckParams(params, p_FmPort->deepSleepVars.autoResMaxSizes);
     if (err != E_OK)
@@ -5760,7 +5779,27 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     WRITE_UINT32(ArCommonDescPtr->p_ArStats, PTR_TO_UINT(ArCommonDescPtr) + of->stats - fmMuramVirtBaseAddr);
 
     // get into Deep Sleep sequence:
-    // Stage 6: configure tx port to im
+
+	// Ensures that FMan do not enter the idle state. This is done by programing
+	// FMDPSLPCR[FM_STOP] to one.
+	fm_soc_suspend();
+
+    ARDesc = UINT_TO_PTR(XX_VirtToPhys(ArCommonDescPtr));
+    return E_OK;
+
+}
+
+void FM_PORT_Dsar_enter_final(void)
+{
+    t_Handle *h_FmPcd;
+    t_FmGetSetParams fmGetSetParams;
+
+	t_FmPort *p_FmPort = g_DsarFmPortRx;
+	t_FmPort *p_FmPortTx = g_DsarFmPortTx;
+	// Issue graceful stop to HC port
+	FM_PORT_Disable(opXX);
+
+	// config auto response	
     p_FmPort->deepSleepVars.fmbm_tcfg = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg) | BMI_PORT_CFG_IM);
     // ????
@@ -5780,20 +5819,55 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
         p_FmPort->deepSleepVars.dsarEnabledParser = FALSE;
     
     WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, 0x2E);
-    // Stage 8: We don't support magic packet for now.
-    // Stage 9: Accumulate mode
+
+    // save rcfg for restoring: accumulate mode is changed by ucode
     p_FmPort->deepSleepVars.fmbm_rcfg = GET_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg);
     WRITE_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg, p_FmPort->deepSleepVars.fmbm_rcfg | BMI_PORT_CFG_AM);
-    FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+// ***** issue external request sync command
+        memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+        fmGetSetParams.setParams.type = UPDATE_FPM_EXTC;
+        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	// get
+	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+	fmGetSetParams.getParams.type = GET_FMFP_EXTC;
+	FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	if (fmGetSetParams.getParams.fmfp_extc != 0)
+	{
+		// clear
+		XX_Print("FM: Sync did not finish 0\n");
+		memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+		fmGetSetParams.setParams.type = UPDATE_FPM_EXTC_CLEAR;
+		FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	}
 
-    ARDesc = UINT_TO_PTR(XX_VirtToPhys(ArCommonDescPtr));
-    return E_OK;
+	// get
+	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+	fmGetSetParams.getParams.type = GET_FMFP_EXTC;
+	FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	while (fmGetSetParams.getParams.fmfp_extc != 0)
+	{
+		// get
+		memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+		fmGetSetParams.getParams.type = GET_FMFP_EXTC;
+		FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	}
+
+        // check that all stoped
+	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+        fmGetSetParams.getParams.type = GET_FMQM_GS | GET_FM_NPI;
+        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	while (fmGetSetParams.getParams.fmqm_gs & 0xF0000000)
+	        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+	if (fmGetSetParams.getParams.fmqm_gs == 0 && fmGetSetParams.getParams.fm_npi == 0)
+		XX_Print("FM: Sleeping\n");
 }
+
+EXPORT_SYMBOL(FM_PORT_Dsar_enter_final);
 
 void FM_PORT_Dsar_DumpRegs()
 {
     uint32_t* hh = XX_PhysToVirt(PTR_TO_UINT(ARDesc));
-    DUMP_MEMORY(hh, 0x180);
+    DUMP_MEMORY(hh, 0x220);
 }
 
 void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
@@ -5823,6 +5897,7 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
     FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, p_FmPort->deepSleepVars.fmbm_tcmne);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, p_FmPort->deepSleepVars.fmbm_tcfg);
+    FM_PORT_Enable(opXX);
 }
 
 bool FM_PORT_IsInDsar(t_Handle h_FmPort)

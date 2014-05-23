@@ -4182,6 +4182,33 @@ UNUSED(p_Fm);
     return E_OK;
 }
 
+t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
+{
+	t_Fm* p_Fm = (t_Fm*)h_Fm;
+
+	if (p_Params->setParams.type & UPDATE_FPM_EXTC)
+		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x80000000);
+	if (p_Params->setParams.type & UPDATE_FPM_EXTC_CLEAR)
+		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x08000000);
+	if (p_Params->setParams.type & UPDATE_FPM_BRKC_SLP)
+	{	
+		if (p_Params->setParams.sleep)
+			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
+				p_Fm->p_FmFpmRegs->fmfp_brkc) | FPM_BRKC_SLP);
+		else
+			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
+				p_Fm->p_FmFpmRegs->fmfp_brkc) & ~FPM_BRKC_SLP);
+	}
+	if (p_Params->getParams.type & GET_FMQM_GS)
+		p_Params->getParams.fmqm_gs = GET_UINT32(p_Fm->p_FmQmiRegs->fmqm_gs);
+	if (p_Params->getParams.type & GET_FM_NPI)
+		p_Params->getParams.fm_npi = GET_UINT32(p_Fm->p_FmFpmRegs->fm_npi);
+	if (p_Params->getParams.type & GET_FMFP_EXTC)
+		p_Params->getParams.fmfp_extc = GET_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc);
+	return E_OK;
+}
+
+
 /****************************************************/
 /*       API Run-time Control uint functions        */
 /****************************************************/
@@ -4215,7 +4242,14 @@ void FM_EventIsr(t_Handle h_Fm)
     pending = fman_get_normal_pending(fpm_rg);
     if (!pending)
         return;
-
+    if (pending & 0x10000000) // this is a wake up from sleep interrupt
+    {
+        t_FmGetSetParams fmGetSetParams;
+        memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+        fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
+        fmGetSetParams.setParams.sleep = 0;
+        FmGetSetParams(h_Fm, &fmGetSetParams);
+    }
     if (pending & INTR_EN_QMI)
         QmiEvent(p_Fm);
     if (pending & INTR_EN_PRS)
@@ -5212,17 +5246,3 @@ t_Handle FmGetPcd(t_Handle h_Fm)
 	return ((t_Fm*)h_Fm)->h_Pcd;
 }
 
-t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
-{
-	t_Fm* p_Fm = (t_Fm*)h_Fm;
-	if (p_Params->setParams.type == UPDATE_FPM_BRKC_SLP)
-	{
-		if (p_Params->setParams.sleep)
-			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
-				p_Fm->p_FmFpmRegs->fmfp_brkc) | FPM_BRKC_SLP);
-		else
-			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
-				p_Fm->p_FmFpmRegs->fmfp_brkc) & ~FPM_BRKC_SLP);
-	}
-	return E_OK;
-}

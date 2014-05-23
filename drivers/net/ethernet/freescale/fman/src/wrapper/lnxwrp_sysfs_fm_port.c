@@ -302,10 +302,10 @@ static int fm_port_dsar_dump_mem(void *h_dev, char *buf, int nn)
 
 	/* do I need request_mem_region here? */
 	param_page = ioremap(p_FmPort->fmMuramPhysBaseAddr + ioread32be(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rgpr), 4);
-	ArCommonDescPtr = (t_ArCommonDesc*)(ioremap(p_FmPort->fmMuramPhysBaseAddr + ioread32be(param_page), sizeof(t_ArCommonDesc))); /* this should be changed*/
+	ArCommonDescPtr = (t_ArCommonDesc*)(ioremap(p_FmPort->fmMuramPhysBaseAddr + ioread32be(param_page), 300*4)); /* this should be changed*/
 	mem = (uint32_t*)ArCommonDescPtr;
-	for (i = 0; i < 100; i+=4)
-		FM_DMP_LN(buf, n, "%08x %08x %08x %08x\n", mem[i], mem[i + 1], mem[i + 2], mem[i + 3]);
+	for (i = 0; i < 300; i+=4)
+		FM_DMP_LN(buf, n, "%08x: %08x %08x %08x %08x\n", i*4, mem[i], mem[i + 1], mem[i + 2], mem[i + 3]);
 	iounmap(ArCommonDescPtr);
 	iounmap(param_page);
 	return n;

@@ -468,6 +468,7 @@ struct   auto_res_snmp_info
 	char                        *community_read_only_string;
 	struct auto_res_snmp_entry  *oid_table;
 	uint32_t                     oid_table_size;
+	uint32_t                    *statistics;
 };
 
 /* Filtering */
