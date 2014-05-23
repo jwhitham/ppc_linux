@@ -193,7 +193,14 @@ struct qm_portal_config {
 #define QMAN_REV20 0x0200
 #define QMAN_REV30 0x0300
 #define QMAN_REV31 0x0301
+/* QMan REV_2 register contains the Cfg option */
+#define QMAN_REV_CFG_0 0x0
+#define QMAN_REV_CFG_1 0x1
+#define QMAN_REV_CFG_2 0x2
+#define QMAN_REV_CFG_3 0x3
+
 extern u16 qman_ip_rev; /* 0 if uninitialised, otherwise QMAN_REVx */
+extern u8 qman_ip_cfg;
 extern u32 qman_clk;
 extern u16 qman_portal_max;
 

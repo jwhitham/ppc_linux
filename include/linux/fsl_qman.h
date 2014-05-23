@@ -47,6 +47,7 @@ extern "C" {
 #define QMAN_CHANNEL_CAAM_REV3 0x840
 #define QMAN_CHANNEL_PME_REV3 0x860
 #define QMAN_CHANNEL_DCE 0x8a0
+#define QMAN_CHANNEL_DCE_QMANREV312 0x880
 extern u16 qm_channel_pool1;
 extern u16 qm_channel_caam;
 extern u16 qm_channel_pme;

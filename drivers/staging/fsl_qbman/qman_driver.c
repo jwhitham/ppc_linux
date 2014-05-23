@@ -40,6 +40,8 @@
  * where CCSR isn't available) */
 u16 qman_ip_rev;
 EXPORT_SYMBOL(qman_ip_rev);
+u8 qman_ip_cfg;
+EXPORT_SYMBOL(qman_ip_cfg);
 u16 qm_channel_pool1 = QMAN_CHANNEL_POOL1;
 EXPORT_SYMBOL(qm_channel_pool1);
 u16 qm_channel_caam = QMAN_CHANNEL_CAAM;
@@ -291,6 +293,7 @@ static __init int fsl_ceetm_init(struct device_node *node)
 static void qman_get_ip_revision(struct device_node *dn)
 {
 	u16 ip_rev = 0;
+	u8 ip_cfg = QMAN_REV_CFG_0;
 	for_each_compatible_node(dn, NULL, "fsl,qman-portal") {
 		if (!of_device_is_available(dn))
 			continue;
@@ -318,6 +321,7 @@ static void qman_get_ip_revision(struct device_node *dn)
 						"fsl,qman-portal-3.0.1")) {
 			ip_rev = QMAN_REV30;
 			qman_portal_max = 25;
+			ip_cfg = QMAN_REV_CFG_1;
 		} else if (of_device_is_compatible(dn,
 						"fsl,qman-portal-3.1.0")) {
 			ip_rev = QMAN_REV31;
@@ -326,14 +330,17 @@ static void qman_get_ip_revision(struct device_node *dn)
 						"fsl,qman-portal-3.1.1")) {
 			ip_rev = QMAN_REV31;
 			qman_portal_max = 25;
+			ip_cfg = QMAN_REV_CFG_1;
 		} else if (of_device_is_compatible(dn,
 						"fsl,qman-portal-3.1.2")) {
 			ip_rev = QMAN_REV31;
 			qman_portal_max = 18;
+			ip_cfg = QMAN_REV_CFG_2;
 		} else if (of_device_is_compatible(dn,
 						"fsl,qman-portal-3.1.3")) {
 			ip_rev = QMAN_REV31;
 			qman_portal_max = 10;
+			ip_cfg = QMAN_REV_CFG_3;
 		} else {
 			pr_warn("unknown QMan version in portal node,"
 				"default to rev1.1\n");
@@ -344,10 +351,12 @@ static void qman_get_ip_revision(struct device_node *dn)
 		if (!qman_ip_rev) {
 			if (ip_rev) {
 				qman_ip_rev = ip_rev;
+				qman_ip_cfg = ip_cfg;
 			} else {
 				pr_warn("unknown Qman version,"
 					" default to rev1.1\n");
 				qman_ip_rev = QMAN_REV11;
+				qman_ip_cfg = QMAN_REV_CFG_0;
 			}
 		} else if (ip_rev && (qman_ip_rev != ip_rev))
 			pr_warn("Revision=0x%04x, but portal '%s' has"
@@ -760,6 +769,8 @@ __init int qman_init(void)
 		qm_channel_caam = QMAN_CHANNEL_CAAM_REV3;
 		qm_channel_pme = QMAN_CHANNEL_PME_REV3;
 	}
+	if ((qman_ip_rev == QMAN_REV31) && (qman_ip_cfg == QMAN_REV_CFG_2))
+		qm_channel_dce = QMAN_CHANNEL_DCE_QMANREV312;
 
 	/*
 	 * Parse the ceetm node to get how many ceetm instances are supported
