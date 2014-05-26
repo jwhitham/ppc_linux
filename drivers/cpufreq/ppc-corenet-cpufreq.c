@@ -149,6 +149,7 @@ static int corenet_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	struct cpufreq_frequency_table *table;
 	struct cpu_data *data;
 	unsigned int cpu = policy->cpu;
+	u64 transition_latency_hz;
 
 	np = of_get_cpu_node(cpu, NULL);
 	if (!np)
@@ -216,8 +217,9 @@ static int corenet_cpufreq_cpu_init(struct cpufreq_policy *policy)
 	for_each_cpu(i, per_cpu(cpu_mask, cpu))
 		per_cpu(cpu_data, i) = data;
 
+	transition_latency_hz = 12ULL * NSEC_PER_SEC;
 	policy->cpuinfo.transition_latency =
-				(12ULL * NSEC_PER_SEC) / fsl_get_sys_freq();
+				do_div(transition_latency_hz, fsl_get_sys_freq());
 	policy->cur = corenet_cpufreq_get_speed(policy->cpu);
 
 	cpufreq_frequency_table_get_attr(table, cpu);
