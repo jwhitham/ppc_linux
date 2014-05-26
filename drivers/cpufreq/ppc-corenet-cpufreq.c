@@ -217,7 +217,7 @@ static int corenet_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		per_cpu(cpu_data, i) = data;
 
 	policy->cpuinfo.transition_latency =
-				(12 * NSEC_PER_SEC) / fsl_get_sys_freq();
+				(12ULL * NSEC_PER_SEC) / fsl_get_sys_freq();
 	policy->cur = corenet_cpufreq_get_speed(policy->cpu);
 
 	cpufreq_frequency_table_get_attr(table, cpu);
