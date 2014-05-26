@@ -2386,7 +2386,7 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 
 int _mmc_detect_card_removed(struct mmc_host *host)
 {
-	int ret;
+	int ret = -ENOSYS;
 
 	if ((host->caps & MMC_CAP_NONREMOVABLE) || !host->bus_ops->alive)
 		return 0;
@@ -2394,7 +2394,16 @@ int _mmc_detect_card_removed(struct mmc_host *host)
 	if (!host->card || mmc_card_removed(host->card))
 		return 1;
 
-	ret = host->bus_ops->alive(host);
+	/* First, try host-controller's card detect callback */
+	if (host->ops->get_cd) {
+		ret = host->ops->get_cd(host);
+		if (ret >= 0)
+			ret = !ret;
+	}
+
+	/* If failed, back to the bus_ops alive() callback */
+	if (ret < 0)
+		ret = host->bus_ops->alive(host);
 
 	/*
 	 * Card detect status and alive check may be out of sync if card is

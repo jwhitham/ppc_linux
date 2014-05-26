@@ -1616,14 +1616,26 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 static int sdhci_do_get_cd(struct sdhci_host *host)
 {
 	int gpio_cd = mmc_gpio_get_cd(host->mmc);
+	unsigned long flags;
+	int present = -ENOSYS;
 
 	if (host->flags & SDHCI_DEVICE_DEAD)
 		return 0;
 
-	/* If polling/nonremovable, assume that the card is always present. */
-	if ((host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION) ||
-	    (host->mmc->caps & MMC_CAP_NONREMOVABLE))
+	/* If nonremovable, assume that the card is always present. */
+	if (host->mmc->caps & MMC_CAP_NONREMOVABLE)
 		return 1;
+
+	/* If polling, We firstly poll the CD pin state. */
+	if (host->quirks & SDHCI_QUIRK_BROKEN_CARD_DETECTION) {
+		if (host->ops->get_cd) {
+			spin_lock_irqsave(&host->lock, flags);
+			present = host->ops->get_cd(host);
+			spin_unlock_irqrestore(&host->lock, flags);
+			return present;
+		} else
+			return 1;
+	}
 
 	/* Try slot gpio detect */
 	if (!IS_ERR_VALUE(gpio_cd))
