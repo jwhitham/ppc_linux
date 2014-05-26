@@ -40,17 +40,6 @@
 #include "dpaa_eth.h"
 #include "lnxwrp_fsl_fman.h"
 
-/* make dpaa_eth code compile without the FMD AR code */
-#ifdef CONFIG_PM
-#ifndef fm_port_suspend
-#define fm_port_suspend(x) (0)
-#warning fm_port_suspend missing
-#endif
-#ifndef fm_port_resume
-#define fm_port_resume(x) (0)
-#endif
-#endif /* CONFIG_PM */
-
 #define dpaa_eth_init_port(type, port, param, errq_id, defq_id, buf_layout,\
 			   frag_enabled) \
 { \
