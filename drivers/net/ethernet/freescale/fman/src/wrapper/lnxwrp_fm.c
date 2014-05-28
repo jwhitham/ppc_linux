@@ -1371,7 +1371,9 @@ int fm_port_enter_autores_for_deepsleep(struct fm_port *port,
             return -EFAULT;
 	
 	FM_PORT_EnterDsar(p_LnxWrpFmPortDev->h_Dev, (t_FmPortDsarParams*)params);
+#ifdef CONFIG_PM
 	started_ar_enter = true;
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(fm_port_enter_autores_for_deepsleep);
