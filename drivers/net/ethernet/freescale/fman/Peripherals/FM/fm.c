@@ -4189,7 +4189,7 @@ t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
 	if (p_Params->setParams.type & UPDATE_FPM_EXTC)
 		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x80000000);
 	if (p_Params->setParams.type & UPDATE_FPM_EXTC_CLEAR)
-		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x08000000);
+		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x00800000);
 	if (p_Params->setParams.type & UPDATE_FPM_BRKC_SLP)
 	{	
 		if (p_Params->setParams.sleep)

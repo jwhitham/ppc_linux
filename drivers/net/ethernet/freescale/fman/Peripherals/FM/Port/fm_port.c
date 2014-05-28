@@ -5799,9 +5799,10 @@ void FM_PORT_Dsar_enter_final(void)
 	// Issue graceful stop to HC port
 	FM_PORT_Disable(opXX);
 
-	// config auto response	
+	// config tx port
     p_FmPort->deepSleepVars.fmbm_tcfg = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg);
-    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg) | BMI_PORT_CFG_IM);
+    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tfdne, 0x005000C0);
+    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg) | BMI_PORT_CFG_IM | BMI_PORT_CFG_EN);
     // ????
     p_FmPort->deepSleepVars.fmbm_tcmne = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, 0xE);
@@ -5834,23 +5835,19 @@ void FM_PORT_Dsar_enter_final(void)
 	if (fmGetSetParams.getParams.fmfp_extc != 0)
 	{
 		// clear
-		XX_Print("FM: Sync did not finish 0\n");
 		memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
 		fmGetSetParams.setParams.type = UPDATE_FPM_EXTC_CLEAR;
 		FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
 	}
 
-	// get
 	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-	fmGetSetParams.getParams.type = GET_FMFP_EXTC;
-	FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	while (fmGetSetParams.getParams.fmfp_extc != 0)
+	fmGetSetParams.getParams.type = GET_FMFP_EXTC | GET_FM_NPI;
+	do
 	{
-		// get
-		memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
-		fmGetSetParams.getParams.type = GET_FMFP_EXTC;
 		FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
-	}
+	} while (fmGetSetParams.getParams.fmfp_extc != 0 && fmGetSetParams.getParams.fm_npi == 0);
+	if (fmGetSetParams.getParams.fm_npi != 0)
+		XX_Print("FM: Sync did not finish\n");
 
         // check that all stoped
 	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
