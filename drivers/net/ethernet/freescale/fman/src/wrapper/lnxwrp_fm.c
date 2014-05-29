@@ -1110,7 +1110,9 @@ static int fm_soc_suspend(struct device *dev)
 	if (started_ar_enter)
 	{
 		uint32_t *fmclk;
+#ifdef CONFIG_FSL_QORIQ_PM
 		fsl_set_power_except(dev,1);
+#endif
 		FM_PORT_Dsar_enter_final();
 		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
 		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
