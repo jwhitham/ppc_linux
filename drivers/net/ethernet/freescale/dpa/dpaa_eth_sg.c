@@ -519,6 +519,20 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 	return skb;
 }
 
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+static inline int dpa_skb_loop(const struct dpa_priv_s *priv,
+		struct sk_buff *skb)
+{
+	if (unlikely(priv->loop_to < 0))
+		return 0; /* loop disabled by default */
+
+	skb_push(skb, ETH_HLEN); /* compensate for eth_type_trans */
+	dpa_tx(skb, dpa_loop_netdevs[priv->loop_to]);
+
+	return 1; /* Frame Tx on the selected interface */
+}
+#endif
+
 void __hot _dpa_rx(struct net_device *net_dev,
 		struct qman_portal *portal,
 		const struct dpa_priv_s *priv,
@@ -582,6 +596,14 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	}
 
 	skb_len = skb->len;
+
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	if (dpa_skb_loop(priv, skb)) {
+		percpu_stats->rx_packets++;
+		percpu_stats->rx_bytes += skb_len;
+		return;
+	}
+#endif
 
 	if (use_gro) {
 		gro_result_t gro_result;

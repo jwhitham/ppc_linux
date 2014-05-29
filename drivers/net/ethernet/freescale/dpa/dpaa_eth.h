@@ -343,6 +343,9 @@ struct dpa_priv_s {
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	struct dentry		*debugfs_file;
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	struct dentry		*debugfs_loop_file;
+#endif
 
 	uint32_t		 msg_enable;	/* net_device message level */
 #ifdef CONFIG_FSL_DPAA_1588
@@ -388,6 +391,10 @@ struct dpa_priv_s {
 #ifdef CONFIG_PM
 	u32 wol;
 #endif
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	int loop_id;
+	int loop_to;
+#endif
 };
 
 struct fm_port_fqs {
@@ -396,6 +403,11 @@ struct fm_port_fqs {
 	struct dpa_fq *rx_defq;
 	struct dpa_fq *rx_errq;
 };
+
+
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+extern struct net_device *dpa_loop_netdevs[20];
+#endif
 
 /* functions with different implementation for SG and non-SG: */
 int dpa_bp_priv_seed(struct dpa_bp *dpa_bp);

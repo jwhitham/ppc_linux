@@ -41,6 +41,12 @@
 
 static int __cold dpa_debugfs_open(struct inode *inode, struct file *file);
 
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+static int __cold dpa_debugfs_loop_open(struct inode *inode, struct file *file);
+static ssize_t dpa_loop_write(struct file *f,
+	const char __user *buf, size_t count, loff_t *off);
+#endif
+
 static struct dentry *dpa_debugfs_root;
 static const struct file_operations dpa_debugfs_fops = {
 	.open		= dpa_debugfs_open,
@@ -48,6 +54,16 @@ static const struct file_operations dpa_debugfs_fops = {
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
+
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+static const struct file_operations dpa_debugfs_lp_fops = {
+	.open		= dpa_debugfs_loop_open,
+	.write		= dpa_loop_write,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+#endif
 
 static int dpa_debugfs_show(struct seq_file *file, void *offset)
 {
@@ -200,6 +216,74 @@ static int dpa_debugfs_show(struct seq_file *file, void *offset)
 	return 0;
 }
 
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+static int dpa_debugfs_loop_show(struct seq_file *file, void *offset)
+{
+	struct dpa_priv_s *priv;
+
+	BUG_ON(offset == NULL);
+
+	priv = netdev_priv((struct net_device *)file->private);
+	seq_printf(file, "%d->%d\n", priv->loop_id, priv->loop_to);
+
+	return 0;
+}
+
+static int user_input_convert(const char __user *user_buf, size_t count,
+			      long *val)
+{
+	char buf[12];
+
+	if (count > sizeof(buf) - 1)
+		return -EINVAL;
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+	buf[count] = '\0';
+	if (kstrtol(buf, 0, val))
+		return -EINVAL;
+	return 0;
+}
+
+static ssize_t dpa_loop_write(struct file *f,
+	const char __user *buf, size_t count, loff_t *off)
+{
+	struct dpa_priv_s *priv;
+	struct net_device *netdev;
+	struct seq_file *sf;
+	int ret;
+	long val;
+
+	ret = user_input_convert(buf, count, &val);
+	if (ret)
+		return ret;
+
+	sf = (struct seq_file *)f->private_data;
+	netdev = (struct net_device *)sf->private;
+	priv = netdev_priv(netdev);
+
+	priv->loop_to = ((val < 0) || (val > 20)) ? -1 : val;
+
+	return count;
+}
+
+static int __cold dpa_debugfs_loop_open(struct inode *inode, struct file *file)
+{
+	int			 _errno;
+	const struct net_device	*net_dev;
+
+	_errno = single_open(file, dpa_debugfs_loop_show, inode->i_private);
+	if (unlikely(_errno < 0)) {
+		net_dev = (struct net_device *)inode->i_private;
+
+		if (netif_msg_drv((struct dpa_priv_s *)netdev_priv(net_dev)))
+			netdev_err(net_dev, "single_open() = %d\n",
+					_errno);
+	}
+
+	return _errno;
+}
+#endif /* CONFIG_FSL_DPAA_DBG_LOOP */
+
 static int __cold dpa_debugfs_open(struct inode *inode, struct file *file)
 {
 	int			 _errno;
@@ -219,6 +303,9 @@ static int __cold dpa_debugfs_open(struct inode *inode, struct file *file)
 int dpa_netdev_debugfs_create(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	char loop_file_name[100];
+#endif
 
 	if (unlikely(dpa_debugfs_root == NULL)) {
 		pr_err(KBUILD_MODNAME ": %s:%hu:%s(): \t%s\n",
@@ -241,6 +328,22 @@ int dpa_netdev_debugfs_create(struct net_device *net_dev)
 		return -ENOMEM;
 	}
 
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	sprintf(loop_file_name, "%s_loop", net_dev->name);
+	priv->debugfs_loop_file = debugfs_create_file(loop_file_name,
+							 S_IRUGO,
+							 dpa_debugfs_root,
+							 net_dev,
+							 &dpa_debugfs_lp_fops);
+	if (unlikely(priv->debugfs_loop_file == NULL)) {
+		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s)",
+				powerpc_debugfs_root->d_iname,
+				dpa_debugfs_root->d_iname,
+				loop_file_name);
+
+		return -ENOMEM;
+	}
+#endif
 	return 0;
 }
 
@@ -249,6 +352,9 @@ void dpa_netdev_debugfs_remove(struct net_device *net_dev)
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
 
 	debugfs_remove(priv->debugfs_file);
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	debugfs_remove(priv->debugfs_loop_file);
+#endif
 }
 
 static int __init dpa_debugfs_module_init(void)

@@ -108,6 +108,10 @@ static const char rtx[][3] = {
 
 static uint8_t dpa_priv_common_bpid;
 
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+struct net_device *dpa_loop_netdevs[20];
+#endif
+
 #ifdef CONFIG_PM
 
 static int dpaa_suspend_noirq(struct device *dev)
@@ -855,6 +859,15 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 
 static const struct of_device_id dpa_match[];
 
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+static int dpa_new_loop_id(void)
+{
+	static int if_id;
+
+	return if_id++;
+}
+#endif
+
 static int
 dpaa_eth_priv_probe(struct platform_device *_of_dev)
 {
@@ -905,6 +918,12 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	strcpy(priv->if_type, "private");
 
 	priv->msg_enable = netif_msg_init(debug, -1);
+
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	priv->loop_id = dpa_new_loop_id();
+	priv->loop_to = -1; /* disabled by default */
+	dpa_loop_netdevs[priv->loop_id] = net_dev;
+#endif
 
 	mac_dev = dpa_mac_probe(_of_dev);
 	if (IS_ERR(mac_dev) || !mac_dev) {
@@ -1118,6 +1137,10 @@ static int __init __cold dpa_load(void)
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
 	dpa_num_cpus = num_possible_cpus();
+
+#ifdef CONFIG_FSL_DPAA_DBG_LOOP
+	memset(dpa_loop_netdevs, 0, sizeof(dpa_loop_netdevs));
+#endif
 
 	_errno = platform_driver_register(&dpa_driver);
 	if (unlikely(_errno < 0)) {

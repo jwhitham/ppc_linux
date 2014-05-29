@@ -133,4 +133,20 @@ config FSL_DPAA_ETH_DEBUG
 	---help---
 	  This option compiles debug code for the DPAA Ethernet driver.
 
+config FSL_DPAA_DBG_LOOP
+	bool "DPAA Ethernet Debug loopback"
+	depends on FSL_DPAA_ETH_DEBUGFS && FSL_DPAA_ETH_USE_NDO_SELECT_QUEUE
+	default n
+	---help---
+	  This option allows to divert all received traffic on a certain interface A towards a
+	  selected interface B. This option is used to benchmark the HW + Ethernet driver in
+	  isolation from the Linux networking stack. The loops are controlled by debugfs entries,
+	  one for each interface. By default all loops are disabled (target value is -1). I.e. to
+	  change the loop setting for interface 4 and divert all received traffic to interface 5
+	  write Tx interface number in the receive interface debugfs file:
+		# cat /sys/kernel/debug/powerpc/fsl_dpa/eth4_loop
+			4->-1
+		# echo 5 > /sys/kernel/debug/powerpc/fsl_dpa/eth4_loop
+		# cat /sys/kernel/debug/powerpc/fsl_dpa/eth4_loop
+			4->5
 endif # FSL_DPAA_ETH
