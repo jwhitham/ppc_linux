@@ -736,6 +736,17 @@ static t_Error CheckNConfigFmAdvArgs (t_LnxWrpFmDev *p_LnxWrpFmDev)
             RETURN_ERROR(MINOR, err, NO_MSG);
     }
 
+	uint32_prop = (uint32_t *)of_get_property(dev_node,
+						"total-fifo-size", &lenp);
+	if (uint32_prop) {
+		if (WARN_ON(lenp != sizeof(uint32_t)))
+			RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
+
+		if (FM_ConfigTotalFifoSize(p_LnxWrpFmDev->h_Dev,
+				*uint32_prop) != E_OK)
+			RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
+	}
+
     uint32_prop = (uint32_t *)of_get_property(dev_node, "tnum-aging-period",
 	&lenp);
     if (uint32_prop) {
