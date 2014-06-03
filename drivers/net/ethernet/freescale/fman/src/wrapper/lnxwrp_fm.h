@@ -217,6 +217,9 @@ typedef struct {
     t_Handle                    h_PcdDev;
     t_Handle                    h_RtcDev;
 
+    t_Handle			h_DsarRxPort;
+    t_Handle			h_DsarTxPort;
+
     t_LnxWrpFmPortDev           hcPort;
     t_LnxWrpFmPortDev           opPorts[FM_MAX_NUM_OF_OH_PORTS-1];
     t_LnxWrpFmPortDev           rxPorts[FM_MAX_NUM_OF_RX_PORTS];

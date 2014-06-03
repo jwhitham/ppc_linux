@@ -85,6 +85,8 @@ t_Error     FmHcPcdKgCcGetSetParams(t_Handle h_FmHc, t_Handle  h_Scheme, uint32_
 t_Error     FmHcPcdPlcrCcGetSetParams(t_Handle h_FmHc,uint16_t absoluteProfileId, uint32_t requiredAction);
 
 t_Error     FmHcPcdSync(t_Handle h_FmHc);
+t_Handle    FmHcGetPort(t_Handle h_FmHc);
+
 
 
 

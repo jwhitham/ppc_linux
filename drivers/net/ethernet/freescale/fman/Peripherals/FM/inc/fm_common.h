@@ -267,6 +267,7 @@ typedef struct {
     uint32_t    type;
     uint32_t    fmqm_gs;
     uint32_t    fm_npi;
+    uint32_t    fm_cld;
     uint32_t    fmfp_extc;
 } t_FmGetParams;
 
@@ -349,6 +350,9 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 #define GET_FMQM_GS		                0x10000000
 #define GET_FM_NPI		                0x08000000
 #define GET_FMFP_EXTC		                0x04000000
+#define CLEAR_IRAM_READY	                0x02000000
+#define UPDATE_FM_CLD		                0x01000000
+#define GET_FM_CLD		                0x00800000
 #define FM_MAX_NUM_OF_PORTS     (FM_MAX_NUM_OF_OH_PORTS +     \
                                  FM_MAX_NUM_OF_1G_RX_PORTS +  \
                                  FM_MAX_NUM_OF_10G_RX_PORTS + \

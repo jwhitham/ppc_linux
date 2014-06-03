@@ -4185,7 +4185,16 @@ UNUSED(p_Fm);
 t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
 {
 	t_Fm* p_Fm = (t_Fm*)h_Fm;
-
+	if (p_Params->setParams.type & UPDATE_FM_CLD)
+	{
+		WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_cld, GET_UINT32(
+				p_Fm->p_FmFpmRegs->fm_cld) | 0x00000800);
+	}
+	if (p_Params->setParams.type & CLEAR_IRAM_READY)
+	{
+	    t_FMIramRegs *p_Iram = (t_FMIramRegs *)UINT_TO_PTR(p_Fm->baseAddr + FM_MM_IMEM);
+		WRITE_UINT32(p_Iram->iready,GET_UINT32(p_Iram->iready) & ~IRAM_READY);
+	}
 	if (p_Params->setParams.type & UPDATE_FPM_EXTC)
 		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x80000000);
 	if (p_Params->setParams.type & UPDATE_FPM_EXTC_CLEAR)
@@ -4199,6 +4208,8 @@ t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
 			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
 				p_Fm->p_FmFpmRegs->fmfp_brkc) & ~FPM_BRKC_SLP);
 	}
+	if (p_Params->getParams.type & GET_FM_CLD)
+		p_Params->getParams.fm_cld = GET_UINT32(p_Fm->p_FmFpmRegs->fm_cld);
 	if (p_Params->getParams.type & GET_FMQM_GS)
 		p_Params->getParams.fmqm_gs = GET_UINT32(p_Fm->p_FmQmiRegs->fmqm_gs);
 	if (p_Params->getParams.type & GET_FM_NPI)
@@ -4242,7 +4253,7 @@ void FM_EventIsr(t_Handle h_Fm)
     pending = fman_get_normal_pending(fpm_rg);
     if (!pending)
         return;
-    if (pending & 0x10000000) // this is a wake up from sleep interrupt
+    if (pending & INTR_EN_WAKEUP) // this is a wake up from sleep interrupt
     {
         t_FmGetSetParams fmGetSetParams;
         memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
@@ -5049,9 +5060,7 @@ t_Error FM_DumpRegs(t_Handle h_Fm)
 {
     t_Fm            *p_Fm = (t_Fm *)h_Fm;
     uint8_t         i,j = 0;
-
     DECLARE_DUMP;
-
     SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_Fm->p_FmDriverParam, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(((p_Fm->guestId == NCSW_MASTER_ID) ||
@@ -5245,4 +5254,25 @@ t_Handle FmGetPcd(t_Handle h_Fm)
 {
 	return ((t_Fm*)h_Fm)->h_Pcd;
 }
+extern void *g_MemacRegs;
+void fm_clk_down(void);
+uint32_t fman_memac_get_event(void *regs, uint32_t ev_mask);
+void FM_ChangeClock(t_Handle h_Fm, int hardwarePortId)
+{
+	int macId;
+	uint32_t    event, rcr;
+	t_Fm *p_Fm = (t_Fm*)h_Fm;
+	rcr = GET_UINT32(p_Fm->p_FmFpmRegs->fm_rcr);
+	rcr |= 0x04000000;
+	WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rcr, rcr);
 
+	HW_PORT_ID_TO_SW_PORT_ID(macId, hardwarePortId);
+	do
+	{
+		event = fman_memac_get_event(g_MemacRegs, 0xFFFFFFFF);
+	} while ((event & 0x00000020) == 0);
+	fm_clk_down();
+	rcr = GET_UINT32(p_Fm->p_FmFpmRegs->fm_rcr);
+	rcr &= ~0x04000000;
+	WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rcr, rcr);
+}
