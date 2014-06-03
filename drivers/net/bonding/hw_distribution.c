@@ -620,7 +620,7 @@ static void show_dbg_info(const struct qm_fd *fd, const char *func_name,
 	if (fd_status & FM_PORT_FRM_ERR_SIZE)
 		pr_err("FM_PORT_FRM_ERR_SIZE\n");
 	if (fd_status & FM_PORT_FRM_ERR_PRS_HDR_ERR)
-		pr_err("oh_pcd_confq FM_PORT_FRM_ERR_PRS_HDR_ERR\n");
+		pr_err("[%s]:FM_PORT_FRM_ERR_PRS_HDR_ERR\n", func_name);
 
 	pr_info("[%s]:fd->format - qm_fd_contig:%d\n", func_name,
 			fd->format - qm_fd_contig);
