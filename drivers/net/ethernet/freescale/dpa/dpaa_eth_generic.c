@@ -89,6 +89,7 @@ static void dpa_generic_ern(struct qman_portal *portal,
 			    const struct qm_mr_entry *msg);
 static int __hot dpa_generic_tx(struct sk_buff *skb,
 				struct net_device *netdev);
+static void dpa_generic_drain_bp(struct dpa_bp *bp);
 
 static const struct net_device_ops dpa_generic_ops = {
 	.ndo_open = dpa_generic_start,
@@ -361,6 +362,11 @@ dpa_generic_rx_dqrr(struct qman_portal *portal,
 	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
 	countptr = __this_cpu_ptr(priv->rx_bp->percpu_count);
 
+	/* This is needed for TCP traffic as draining only on TX is not
+	 * enough
+	 */
+	dpa_generic_drain_bp(priv->draining_tx_bp);
+
 	if (unlikely(dpaa_eth_napi_schedule(percpu_priv, portal)))
 		return qman_cb_dqrr_stop;
 
@@ -440,30 +446,26 @@ qman_consume:
 
 static void dpa_generic_drain_bp(struct dpa_bp *bp)
 {
-	int i, num;
-	struct bm_buffer bmb[8];
+	int ret;
+	struct bm_buffer bmb;
 	dma_addr_t addr;
 	int *countptr = __this_cpu_ptr(bp->percpu_count);
 	int count = *countptr;
 	struct sk_buff **skbh;
 
-	while (count >= 8) {
-		num = bman_acquire(bp->pool, bmb, 8, 0);
-		/* There may still be up to 7 buffers in the pool;
-		 * just leave them there until more arrive
-		 */
-		if (num < 0)
-			break;
-		for (i = 0; i < num; i++) {
-			addr = bm_buf_addr(&bmb[i]);
-			/* bp->free_buf_cb(phys_to_virt(addr)); */
+	do {
+		/* most likely, the bpool has only one buffer in it */
+		ret = bman_acquire(bp->pool, &bmb, 1, 0);
+		if (ret > 0) {
+			addr = bm_buf_addr(&bmb);
 			skbh = (struct sk_buff **)phys_to_virt(addr);
 			dma_unmap_single(bp->dev, addr, bp->size,
-					 DMA_TO_DEVICE);
-			dev_kfree_skb(*skbh);
+					DMA_TO_DEVICE);
+			dev_kfree_skb_any(*skbh);
+			count--;
 		}
-		count -= num;
-	}
+	} while (ret > 0);
+
 	*countptr = count;
 }
 
