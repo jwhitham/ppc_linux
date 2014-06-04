@@ -1692,6 +1692,19 @@ void add_statistics(struct bonding *bond, struct rtnl_link_stats64 *stats)
 	stats->tx_errors += bond->params.oh_stats.tx_errors;
 	stats->tx_dropped += bond->params.oh_stats.tx_dropped;
 }
+static void dump_ip_summed_type(struct sk_buff *skb)
+{
+#ifdef CONFIG_HW_LAG_DEBUG
+	if (skb->ip_summed == CHECKSUM_NONE)
+		hw_lag_dbg("skb->ip_summed == CHECKSUM_NONE.\n");
+	if (skb->ip_summed == CHECKSUM_UNNECESSARY)
+		hw_lag_dbg("skb->ip_summed == CHECKSUM_UNNECESSARY.\n");
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
+		hw_lag_dbg("skb->ip_summed == CHECKSUM_COMPLETE.\n");
+	if (skb->ip_summed == CHECKSUM_PARTIAL)
+		hw_lag_dbg("skb->ip_summed == CHECKSUM_PARTIAL.\n");
+#endif
+}
 /**
  * Copied from oNIC (removed priv)
  * Turn on HW checksum computation for this outgoing frame.
@@ -1718,117 +1731,221 @@ int oh_tx_csum_enable(struct sk_buff *skb,
 	int retval = 0, i;
 	unsigned char *p;
 
-	if (skb->ip_summed != CHECKSUM_PARTIAL)
-		return 0;
-
-	/* Fill in some fields of the Parse Results array, so the FMan
-	 * can find them as if they came from the FMan Parser.
-	 */
-	parse_result = (fm_prs_result_t *)parse_results;
-	/* If we're dealing with VLAN, get the real Ethernet type */
-	if (ethertype == ETH_P_8021Q) {
-		/* We can't always assume the MAC header is set correctly
-		 * by the stack, so reset to beginning of skb->data
+	dump_ip_summed_type(skb);
+	if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		/* Process termination path, fill in some fields of the
+		 * Parse Results array, so the FMan can find them as if
+		 * they came from the FMan Parser.
 		 */
-		skb_reset_mac_header(skb);
-		ethertype = ntohs(vlan_eth_hdr(skb)->h_vlan_encapsulated_proto);
-		/* below l2r need look up FMAN RM to verify */
-		parse_result->l2r = FM_PR_L2_VLAN | FM_PR_L2_VLAN_STACK;
-	} else {
-		parse_result->l2r = FM_PR_L2_ETHERNET;
-	}
+		int j = 0;
+		parse_result = (fm_prs_result_t *)parse_results;
+		/* If we're dealing with VLAN, get the real Ethernet type */
+		if (ethertype == ETH_P_8021Q) {
+			/* We can't always assume the MAC header is set
+			 * correctly by the stack, so reset to beginning of
+			 * skb->data
+			 */
+			__be16 etype;
+			skb_reset_mac_header(skb);
+			etype = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
+			ethertype = ntohs(etype);
+			/* below l2r need look up FMAN RM to verify */
+			parse_result->l2r = FM_PR_L2_VLAN | FM_PR_L2_VLAN_STACK;
+		} else {
+			parse_result->l2r = FM_PR_L2_ETHERNET;
+		}
 
-	/* Fill in the relevant L3 parse result fields
-	 * and read the L4 protocol type
-	 */
-	switch (ethertype) {
-	case ETH_P_IP:
-		parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
-		iph = ip_hdr(skb);
-		BUG_ON(iph == NULL);
-		l4_proto = ntohs(iph->protocol);
-		break;
-	case ETH_P_IPV6:
-		parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
-		ipv6h = ipv6_hdr(skb);
-		BUG_ON(ipv6h == NULL);
-		l4_proto = ntohs(ipv6h->nexthdr);
-		break;
-	default:
-		/* We shouldn't even be here */
-		hw_lag_dbg("Can't compute HW csum for L3 proto 0x%x\n",
-			     ntohs(skb->protocol));
-		retval = -EIO;
-		goto return_error;
-	}
-
-	hw_lag_dbg("skb->protocol(L3):0x%04x, ethertype:%x\n",
-			ntohs(skb->protocol), ethertype);
-
-	/* Fill in the relevant L4 parse result fields */
-	switch (l4_proto) {
-	case IPPROTO_UDP:
-		parse_result->l4r = FM_L4_PARSE_RESULT_UDP;
-		udph = (struct udphdr *)(skb->data + skb_transport_offset(skb));
-		hw_lag_dbg("udp org csum:0x%0x\n", udph->check);
-		skb_set_transport_header(skb, skb_checksum_start_offset(skb));
-		skb_checksum_help(skb);
-		hw_lag_dbg("udp software csum:0x%0x\n", udph->check);
-		break;
-	case IPPROTO_TCP:
-		parse_result->l4r = FM_L4_PARSE_RESULT_TCP;
-		tcph = (struct tcphdr *)(skb->data + skb_transport_offset(skb));
-		p = skb->data;
-		hw_lag_dbg("\ndmac:%02x:%02x:%02x:%02x:%02x:%02x\n"
-			"smac:%02x:%02x:%02x:%02x:%02x:%02x\n"
-			"h_proto:0x%04x\n", p[0], p[1], p[2], p[3], p[4], p[5],
-			p[6], p[7], p[8], p[9], p[10], p[11],
-			*((short *)(p + 12)));
-
-		/* dump skb data info for manual calculate L4CSUM,
-		 * jump over net header first
+		/* Fill in the relevant L3 parse result fields
+		 * and read the L4 protocol type
 		 */
-		p += skb_network_offset(skb);
-		for (i = 0; i < skb->len - skb_network_offset(skb) - 4; i += 4)
-			hw_lag_dbg("%08x\n", *((unsigned int *) (p + i)));
+		switch (ethertype) {
+		case ETH_P_IP:
+			parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
+			iph = ip_hdr(skb);
+			BUG_ON(iph == NULL);
+			l4_proto = ntohs(iph->protocol);
+			break;
+		case ETH_P_IPV6:
+			parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
+			ipv6h = ipv6_hdr(skb);
+			BUG_ON(ipv6h == NULL);
+			l4_proto = ntohs(ipv6h->nexthdr);
+			break;
+		default:
+			/* We shouldn't even be here */
+			hw_lag_dbg("Can't compute HW csum for L3 proto 0x%x\n",
+				     ntohs(skb->protocol));
+			retval = -EIO;
+			goto return_error;
+		}
 
-		for (; i < skb->len - skb_network_offset(skb); i++)
-			hw_lag_dbg("%02x\n", *(p + i));
+		hw_lag_dbg("skb->protocol(L3):0x%04x, ethertype:%x\n",
+				ntohs(skb->protocol), ethertype);
 
-		hw_lag_dbg("tcp org csum:0x%0x.\n", tcph->check);
-		skb_set_transport_header(skb, skb_checksum_start_offset(skb));
-		skb_checksum_help(skb);
-		hw_lag_dbg("tcp software csum:0x%0x,\n", tcph->check);
+		/* Fill in the relevant L4 parse result fields */
+		switch (l4_proto) {
+		case IPPROTO_UDP:
+			parse_result->l4r = FM_L4_PARSE_RESULT_UDP;
+			udph = (struct udphdr *)(skb->data +
+						 skb_transport_offset(skb));
+			hw_lag_dbg("udp org csum:0x%0x\n", udph->check);
+			skb_set_transport_header(skb,
+					skb_checksum_start_offset(skb));
 
-		break;
-	default:
-		/* This can as well be a BUG() */
-		pr_err("Can't compute HW csum for L4 proto 0x%x\n",
-				l4_proto);
-		retval = -EIO;
-		goto return_error;
-	}
+			skb_checksum_help(skb);
+			hw_lag_dbg("udp software csum:0x%0x\n", udph->check);
+			break;
+		case IPPROTO_TCP:
+			parse_result->l4r = FM_L4_PARSE_RESULT_TCP;
+			tcph = (struct tcphdr *)(skb->data +
+						 skb_transport_offset(skb));
+			p = skb->data;
+			hw_lag_dbg("\ndmac:%02x:%02x:%02x:%02x:%02x:%02x\n"
+				   "smac:%02x:%02x:%02x:%02x:%02x:%02x\n"
+				   "h_proto:0x%04x\n", p[0], p[1], p[2], p[3],
+				   p[4], p[5], p[6], p[7], p[8], p[9], p[10],
+				   p[11], *((short *)(p + 12)));
 
-	hw_lag_dbg("l4_proto:0x%04x, result->l2r:0x%04x\n",
-			l4_proto, parse_result->l2r);
-	hw_lag_dbg("result->l3r:0x%04x, result->l4r:0x%02x.\n",
-			parse_result->l3r, parse_result->l4r);
+			/* dump skb data info for manual calculate L4CSUM,
+			 * jump over net header first
+			 */
+			p += skb_network_offset(skb);
+			j = skb->len - skb_network_offset(skb) - 4;
+			for (i = 0; i < j; i += 4)
+				hw_lag_dbg("%08x\n",
+					   *((unsigned int *)(p + i)));
 
-	/* At index 0 is IPOffset_1 as defined in the Parse Results */
-	parse_result->ip_off[0] = skb_network_offset(skb);
-	parse_result->l4_off = skb_transport_offset(skb);
+			j = skb->len - skb_network_offset(skb);
+			for (; i < j; i++)
+				hw_lag_dbg("%02x\n", *(p + i));
 
-	/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
-	fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DTC;
+			hw_lag_dbg("tcp org csum:0x%0x.\n", tcph->check);
+			skb_set_transport_header(skb,
+					skb_checksum_start_offset(skb));
 
-	/* On P1023 and similar platforms fd->cmd interpretation could
-	 * be disabled by setting CONTEXT_A bit ICMD; currently this bit
-	 * is not set so we do not need to check; in the future, if/when
-	 * using context_a we need to check this bit
-	 */
+			skb_checksum_help(skb);
+			hw_lag_dbg("tcp software csum:0x%0x,\n", tcph->check);
+
+			break;
+		default:
+			/* This can as well be a BUG() */
+			pr_err("Can't compute HW csum for L4 proto 0x%x\n",
+			       l4_proto);
+			retval = -EIO;
+			goto return_error;
+		}
+
+		hw_lag_dbg("l4_proto:0x%04x, result->l2r:0x%04x\n",
+			   l4_proto, parse_result->l2r);
+		hw_lag_dbg("result->l3r:0x%04x, result->l4r:0x%02x.\n",
+			   parse_result->l3r, parse_result->l4r);
+
+		/* At index 0 is IPOffset_1 as defined in the Parse Results */
+		parse_result->ip_off[0] = skb_network_offset(skb);
+		parse_result->l4_off = skb_transport_offset(skb);
+
+		/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
+		fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DTC;
+
+		/* On P1023 and similar platforms fd->cmd interpretation could
+		 * be disabled by setting CONTEXT_A bit ICMD; currently this bit
+		 * is not set so we do not need to check; in the future, if/when
+		 * using context_a we need to check this bit
+		 */
 
 return_error:
 	return retval;
+	} else if ((skb->ip_summed == CHECKSUM_NONE) ||
+			(skb->ip_summed == CHECKSUM_UNNECESSARY)) {
+		/* Process forwarding path, fill in some fields of the
+		 * Parse Results array, so the FMan can find them as if
+		 * they came from the FMan Parser.
+		 */
+		parse_result = (fm_prs_result_t *)parse_results;
+		/* If we're dealing with VLAN, get the real Ethernet type */
+		if (ethertype == ETH_P_8021Q) {
+			/* We can't always assume the MAC header is set
+			 * correctly by the stack, so reset to beginning
+			 * of skb->data
+			 */
+			__be16 etype;
+			skb_reset_mac_header(skb);
+			etype = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
+			ethertype = ntohs(etype);
+			/* below l2r need look up FMAN RM to verify */
+			parse_result->l2r = FM_PR_L2_VLAN | FM_PR_L2_VLAN_STACK;
+		} else {
+			parse_result->l2r = FM_PR_L2_ETHERNET;
+		}
+
+		/* Fill in the relevant L3 parse result fields
+		 * and read the L4 protocol type
+		 */
+		switch (ethertype) {
+		case ETH_P_IP:
+			parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
+			iph = ip_hdr(skb);
+			BUG_ON(iph == NULL);
+			l4_proto = ntohs(iph->protocol);
+			break;
+		case ETH_P_IPV6:
+			parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
+			ipv6h = ipv6_hdr(skb);
+			BUG_ON(ipv6h == NULL);
+			l4_proto = ntohs(ipv6h->nexthdr);
+			break;
+		default:
+			/* Other L3 use default value. */
+			hw_lag_dbg("L3 proto 0x%x\n", ntohs(skb->protocol));
+			return 0;
+		}
+
+		hw_lag_dbg("skb->protocol(L3):0x%04x, ethertype:%x\n",
+			   ntohs(skb->protocol), ethertype);
+
+		/* Fill in the relevant L4 parse result fields */
+		switch (l4_proto) {
+		case IPPROTO_UDP:
+			parse_result->l4r = FM_L4_PARSE_RESULT_UDP;
+			udph = (struct udphdr *)(skb->data +
+						 skb_transport_offset(skb));
+			hw_lag_dbg("udp org csum:0x%0x\n", udph->check);
+			break;
+		case IPPROTO_TCP:
+			parse_result->l4r = FM_L4_PARSE_RESULT_TCP;
+			tcph = (struct tcphdr *)(skb->data +
+						 skb_transport_offset(skb));
+			p = skb->data;
+			hw_lag_dbg("\ndmac:%02x:%02x:%02x:%02x:%02x:%02x\n"
+				   "smac:%02x:%02x:%02x:%02x:%02x:%02x\n"
+				   "h_proto:0x%04x\n", p[0], p[1], p[2], p[3],
+				   p[4], p[5], p[6], p[7], p[8], p[9], p[10],
+				   p[11], *((short *)(p + 12)));
+
+			hw_lag_dbg("tcp org csum:0x%0x.\n", tcph->check);
+			break;
+		default:
+			/* at forwarding path, we only help TCP/UDP
+			 * to fill parser result.
+			 */
+			hw_lag_dbg("L4 proto 0x%x\n", l4_proto);
+			return 0;
+		}
+
+		hw_lag_dbg("l4_proto:0x%04x, result->l2r:0x%04x\n",
+			   l4_proto, parse_result->l2r);
+		hw_lag_dbg("result->l3r:0x%04x, result->l4r:0x%02x.\n",
+			   parse_result->l3r, parse_result->l4r);
+
+		/* At index 0 is IPOffset_1 as defined in the Parse Results */
+		parse_result->ip_off[0] = skb_network_offset(skb);
+		parse_result->l4_off = skb_transport_offset(skb);
+
+		/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
+		fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DCL4C;
+	}
+
+	return 0;
 }
 
 static int __hot dpa_oh_xmit(struct qm_fd *fd, struct qman_fq *tx_fq)
