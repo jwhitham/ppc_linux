@@ -1,7 +1,7 @@
 /*
  * P1020RDB-PD Device Tree Source stub (no addresses or top-level ranges)
  *
- * Copyright 2013 Freescale Semiconductor Inc.
+ * Copyright 2013-2014 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -48,14 +48,14 @@
 		};
 
 		partition@20000 {
-			/* 3.875 MB for Linux Kernel Image */
-			reg = <0x00020000 0x003e0000>;
+			/* 5.875 MB for Linux Kernel Image */
+			reg = <0x00020000 0x005e0000>;
 			label = "NOR Linux Kernel Image";
 		};
 
-		partition@400000 {
-			/* 57.75MB for Root file System */
-			reg = <0x00400000 0x039c0000>;
+		partition@600000 {
+			/* 55.75MB for Root file System */
+			reg = <0x00600000 0x037c0000>;
 			label = "NOR Root File System";
 		};
 
