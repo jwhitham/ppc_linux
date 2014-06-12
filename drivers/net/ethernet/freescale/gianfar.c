@@ -955,6 +955,9 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 
 	/* Find the TBI PHY.  If it's not there, we don't support SGMII */
 	priv->tbi_node = of_parse_phandle(np, "tbi-handle", 0);
+
+	priv->dma_endian_le = of_property_read_bool(np, "fsl,dma-endian-le");
+
 #if defined CONFIG_FSL_GIANFAR_1588
 	/* Handle IEEE1588 node */
 	if (!gfar_ptp_init(np, priv))
@@ -2181,6 +2184,8 @@ void gfar_start(struct gfar_private *priv)
 	/* Initialize DMACTRL to have WWR and WOP */
 	tempval = gfar_read(&regs->dmactrl);
 	tempval |= DMACTRL_INIT_SETTINGS;
+	if (priv->dma_endian_le)
+		tempval |= DMACTRL_LE;
 	gfar_write(&regs->dmactrl, tempval);
 
 	/* Make sure we aren't stopped */
