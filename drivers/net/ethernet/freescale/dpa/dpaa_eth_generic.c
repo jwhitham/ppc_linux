@@ -89,7 +89,7 @@ static void dpa_generic_ern(struct qman_portal *portal,
 			    const struct qm_mr_entry *msg);
 static int __hot dpa_generic_tx(struct sk_buff *skb,
 				struct net_device *netdev);
-static void dpa_generic_drain_bp(struct dpa_bp *bp);
+static void dpa_generic_drain_bp(struct dpa_bp *bp, u8 nbuf);
 
 static const struct net_device_ops dpa_generic_ops = {
 	.ndo_open = dpa_generic_start,
@@ -104,6 +104,17 @@ static const struct net_device_ops dpa_generic_ops = {
 	.ndo_init = dpa_ndo_init,
 	.ndo_change_mtu = dpa_change_mtu,
 };
+
+void dpa_generic_draining_timer(unsigned long arg)
+{
+	struct dpa_generic_priv_s *priv = (struct dpa_generic_priv_s *)arg;
+
+	/* drain in pairs of 4 buffers */
+	dpa_generic_drain_bp(priv->draining_tx_bp, 4);
+
+	if (atomic_read(&priv->ifup))
+		mod_timer(&(priv->timer), jiffies + 1);
+}
 
 struct rtnl_link_stats64 *__cold
 dpa_generic_get_stats64(struct net_device *netdev,
@@ -260,6 +271,9 @@ static int __cold dpa_generic_start(struct net_device *netdev)
 	dpaa_generic_napi_enable(priv);
 	netif_tx_start_all_queues(netdev);
 
+	mod_timer(&priv->timer, jiffies + 100);
+	atomic_dec(&priv->ifup);
+
 	return 0;
 }
 
@@ -269,6 +283,8 @@ static int __cold dpa_generic_stop(struct net_device *netdev)
 
 	netif_tx_stop_all_queues(netdev);
 	dpaa_generic_napi_disable(priv);
+
+	atomic_inc_not_zero(&priv->ifup);
 
 	return 0;
 }
@@ -365,7 +381,7 @@ dpa_generic_rx_dqrr(struct qman_portal *portal,
 	/* This is needed for TCP traffic as draining only on TX is not
 	 * enough
 	 */
-	dpa_generic_drain_bp(priv->draining_tx_bp);
+	dpa_generic_drain_bp(priv->draining_tx_bp, 1);
 
 	if (unlikely(dpaa_eth_napi_schedule(percpu_priv, portal)))
 		return qman_cb_dqrr_stop;
@@ -444,25 +460,27 @@ qman_consume:
 	return qman_cb_dqrr_consume;
 }
 
-static void dpa_generic_drain_bp(struct dpa_bp *bp)
+static void dpa_generic_drain_bp(struct dpa_bp *bp, u8 nbuf)
 {
-	int ret;
-	struct bm_buffer bmb;
+	int ret, i;
+	struct bm_buffer bmb[8];
 	dma_addr_t addr;
 	int *countptr = __this_cpu_ptr(bp->percpu_count);
 	int count = *countptr;
 	struct sk_buff **skbh;
 
 	do {
-		/* most likely, the bpool has only one buffer in it */
-		ret = bman_acquire(bp->pool, &bmb, 1, 0);
+		/* bman_acquire will fail if nbuf > 8 */
+		ret = bman_acquire(bp->pool, bmb, nbuf, 0);
 		if (ret > 0) {
-			addr = bm_buf_addr(&bmb);
-			skbh = (struct sk_buff **)phys_to_virt(addr);
-			dma_unmap_single(bp->dev, addr, bp->size,
-					DMA_TO_DEVICE);
-			dev_kfree_skb_any(*skbh);
-			count--;
+			for (i = 0; i < nbuf; i++) {
+				addr = bm_buf_addr(&bmb[i]);
+				skbh = (struct sk_buff **)phys_to_virt(addr);
+				dma_unmap_single(bp->dev, addr, bp->size,
+						DMA_TO_DEVICE);
+				dev_kfree_skb_any(*skbh);
+			}
+			count -= i;
 		}
 	} while (ret > 0);
 
@@ -639,12 +657,7 @@ static int __hot dpa_generic_tx(struct sk_buff *skb, struct net_device *netdev)
 	/* fd.cmd |= FM_FD_CMD_FCO; */
 	fd.bpid = bp->bpid;
 
-	/* (Partially) drain the Draining Buffer Pool pool; each core
-	 * acquires at most the number of buffers it put there; since
-	 * BMan allows for up to 8 buffers to be acquired at one time,
-	 * work in batches of 8 for efficiency reasons
-	 */
-	dpa_generic_drain_bp(bp);
+	dpa_generic_drain_bp(bp, 1);
 
 	queue_mapping = dpa_get_queue_mapping(skb);
 	egress_fq = priv->egress_fqs[queue_mapping];
@@ -1427,6 +1440,11 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	sprintf(priv->if_type, "generic%d", generic_idx++);
 	priv->msg_enable = netif_msg_init(debug, -1);
 	priv->tx_headroom = DPA_DEFAULT_TX_HEADROOM;
+
+	init_timer(&priv->timer);
+	atomic_set(&priv->ifup, 0);
+	priv->timer.data = (unsigned long)priv;
+	priv->timer.function = dpa_generic_draining_timer;
 
 	err = dpa_generic_bp_create(netdev, rx_bp_count, rx_bp, rx_buf_layout,
 			draining_tx_bp, tx_buf_layout);

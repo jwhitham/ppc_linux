@@ -78,6 +78,10 @@ struct dpa_generic_priv_s {
 
 	struct dpa_buffer_layout_s *buf_layout;
 	char if_type[30];
+
+	/* periodic drain */
+	atomic_t ifup;
+	struct timer_list timer;
 };
 
 
