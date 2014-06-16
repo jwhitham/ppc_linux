@@ -320,7 +320,6 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	struct dpa_priv_s *priv = NULL;
 	struct dpa_percpu_priv_s *percpu_priv;
 	static struct proxy_device *proxy_dev;
-	struct fm_port_fqs port_fqs;
 	struct task_struct *kth;
 	static u8 macless_idx;
 
@@ -380,8 +379,6 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	}
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
-
-	memset(&port_fqs, 0, sizeof(port_fqs));
 
 	err = dpa_fq_probe_macless(dev, &priv->dpa_fq_list, RX);
 	if (!err)
@@ -461,11 +458,8 @@ netdev_init_failed:
 		free_percpu(priv->percpu_priv);
 alloc_percpu_failed:
 fq_alloc_failed:
-	if (net_dev) {
+	if (net_dev)
 		dpa_fq_free(dev, &priv->dpa_fq_list);
-		qman_release_cgrid(priv->cgr_data.cgr.cgrid);
-		qman_delete_cgr(&priv->cgr_data.cgr);
-	}
 add_channel_failed:
 get_channel_failed:
 	if (net_dev)
