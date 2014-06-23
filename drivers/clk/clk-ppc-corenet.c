@@ -11,6 +11,7 @@
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/of.h>
 #include <linux/slab.h>
@@ -238,6 +239,7 @@ err_clks:
 
 static const struct of_device_id clk_match[] __initconst = {
 	{ .compatible = "fixed-clock", .data = of_fixed_clk_setup, },
+	{ .compatible = "fsl,sys-clock", .data = of_fixed_clk_setup, },
 	{ .compatible = "fsl,core-pll-clock", .data = core_pll_init, },
 	{ .compatible = "fsl,core-mux-clock", .data = core_mux_init, },
 	{}
@@ -278,3 +280,13 @@ static int __init ppc_corenet_clk_init(void)
 	return platform_driver_register(&ppc_corenet_clk_driver);
 }
 subsys_initcall(ppc_corenet_clk_init);
+
+static void __init ls1021a_clocks_init(struct device_node *np)
+{
+	base = of_iomap(np, 0);
+	if (!base)
+		return;
+
+	of_clk_init(clk_match);
+}
+CLK_OF_DECLARE(ls1021a, "fsl,ls1021a-clockgen", ls1021a_clocks_init);
