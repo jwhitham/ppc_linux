@@ -94,6 +94,7 @@ struct caam_drv_private {
 	struct list_head pkc_list;
 
 	int era;		/* SEC Era */
+	int virt_en;		/* Virtualization enabled in CAAM */
 
 #define	RNG4_MAX_HANDLES 2
 	/* RNG4 block */
