@@ -104,6 +104,7 @@ struct oh_port_priv {
 	int	oh_en;	/* enable or disable offline port's help at run-time */
 	unsigned char friendname[OHFRIENDNAMSIZ];
 	unsigned long cell_index;
+	bool allocated_pcd_mem;
 	t_Handle h_FmPcd;
 	t_Handle h_FmPort;
 	t_Handle h_NetEnv;

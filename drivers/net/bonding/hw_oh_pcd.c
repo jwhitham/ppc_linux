@@ -120,7 +120,7 @@ static int alloc_pcd_mem(struct fm_port *fm_port, uint8_t numOfSchemes,
 	h_NetEnv = FM_PCD_NetEnvCharacteristicsSet(h_FmPcd, netEnvParams);
 	if (!h_NetEnv) {
 		pr_err("error on FM_PCD_NetEnvCharacteristicsSet.\n");
-		return E_INVALID_VALUE;
+		goto netEnvParams_err;
 	}
 	hw_lag_dbg("FM_PCD_NetEnvCharacteristicsSet() ok.\n");
 	/* bind port to PCD properties */
@@ -128,14 +128,14 @@ static int alloc_pcd_mem(struct fm_port *fm_port, uint8_t numOfSchemes,
 	pcdParam = kzalloc(sizeof(t_FmPortPcdParams), GFP_KERNEL);
 	if (!pcdParam) {
 		pr_err("Failed to allocate pcdParam.\n");
-		return -ENOMEM;
+		goto netEnvParams_err;
 	}
 	hw_lag_dbg("pcdParam:%p\n", pcdParam);
 	/* initialize parser port parameters */
 	prsParam = kzalloc(sizeof(t_FmPortPcdPrsParams), GFP_KERNEL);
 	if (!prsParam) {
 		pr_err("Failed to allocate prsParam.\n");
-		return -ENOMEM;
+		goto pcdParam_err;
 	}
 
 	hw_lag_dbg("prsParam:%p\n", prsParam);
@@ -149,7 +149,7 @@ static int alloc_pcd_mem(struct fm_port *fm_port, uint8_t numOfSchemes,
 	kgParam = kzalloc(sizeof(t_FmPortPcdKgParams), GFP_KERNEL);
 	if (!kgParam) {
 		pr_err("Failed to allocate kgParam.\n");
-		return -ENOMEM;
+		goto prsParam_err;
 	}
 
 	hw_lag_dbg("kgParam:%p\n", kgParam);
@@ -163,7 +163,7 @@ static int alloc_pcd_mem(struct fm_port *fm_port, uint8_t numOfSchemes,
 			GFP_KERNEL);
 	if (!scheme) {
 		pr_err("Failed to allocate scheme.\n");
-		return -ENOMEM;
+		goto kgParam_err;
 	}
 
 	hw_lag_dbg("scheme:%p\n", scheme);
@@ -534,8 +534,20 @@ static int alloc_pcd_mem(struct fm_port *fm_port, uint8_t numOfSchemes,
 	bond->params.ohp->scheme = scheme;
 	bond->params.ohp->netEnvParams = netEnvParams;
 	hw_lag_dbg("alloc_pcd_mem() ok.\n");
+	bond->params.ohp->allocated_pcd_mem = true;
 
 	return BOND_OH_SUCCESS;
+
+kgParam_err:
+	kfree(kgParam);
+prsParam_err:
+	kfree(prsParam);
+pcdParam_err:
+	kfree(pcdParam);
+netEnvParams_err:
+	kfree(netEnvParams);
+
+	return BOND_OH_ERROR;
 }
 
 int release_pcd_mem(struct bonding *bond)
@@ -725,18 +737,20 @@ bool apply_pcd(struct bonding *bond, int new_xmit_policy)
 	hw_lag_dbg("fm_port:%p, numOfSchemes:%d, pcd_fqids_base:%d",
 			fm_port, numOfSchemes, pcd_fqids_base);
 	hw_lag_dbg("distNumOfQueues:%d, bond:%p\n", distNumOfQueues, bond);
-	err = alloc_pcd_mem(fm_port, numOfSchemes, pcd_fqids_base,
-			distNumOfQueues, bond);
-	if (err == BOND_OH_SUCCESS) {
-		err = replace_pcd(fm_port, numOfSchemes, pcd_fqids_base,
-				distNumOfQueues, bond);
-		if (err == BOND_OH_SUCCESS) {
-			hw_lag_dbg("applied PCD.\n");
-			return true;
-		} else {
-			pr_err("error on replace_pcd()\n");
+	if (!bond->params.ohp->allocated_pcd_mem) {
+		err = alloc_pcd_mem(fm_port, MAX_SCHEMES, pcd_fqids_base,
+				    distNumOfQueues, bond);
+		if (err != BOND_OH_SUCCESS) {
+			pr_err("error on alloc_pcd_mem().\n");
 			return false;
 		}
+	}
+
+	err = replace_pcd(fm_port, numOfSchemes, pcd_fqids_base,
+			  distNumOfQueues, bond);
+	if (err == BOND_OH_SUCCESS) {
+		hw_lag_dbg("applied PCD.\n");
+		return true;
 	} else {
 		pr_err("error on replace_pcd()\n");
 		return false;
