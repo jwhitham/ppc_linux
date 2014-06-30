@@ -610,19 +610,44 @@ static int replace_pcd(struct fm_port *fm_port, uint8_t numOfSchemes,
 	hw_lag_dbg("prsParam:%p, kgParam:%p, numberof_pre_schemes:%d\n",
 			prsParam, kgParam, numberof_pre_schemes);
 
-	for (i = 0; i < numberof_pre_schemes; i++) {
-		if (kgParam->h_Schemes[i])
-			err = FM_PCD_KgSchemeDelete(kgParam->h_Schemes[i]);
-		if (err == E_OK)
-			hw_lag_dbg("KgSchemeDelete(h_Schemes[%d]) = %p OK.\n",
-					i, kgParam->h_Schemes[i]);
-		else {
-			pr_err("KgSchemeDelete(h_Schemes[%d]) = %p Err.\n",
-				i, kgParam->h_Schemes[i]);
+	if (bond->params.ohp->applied_pcd) {
+		FM_PORT_Disable(h_FmPort);
+		err = FM_PORT_DeletePCD(h_FmPort);
+		if (err != E_OK) {
+			pr_err("FM_PORT_DeletePCD errors:0x%0x\n", err);
+			err = FM_PORT_Enable(h_FmPort);
+			if (err == E_OK)
+				hw_lag_dbg("FM_PORT_Enable() OK.\n");
+			else
+				pr_err("FM_PORT_Enable() err.\n");
+
 			return BOND_OH_ERROR;
 		}
-
+		hw_lag_dbg("FM_PORT_DeletePCD OK.\n");
+		err = FM_PORT_Enable(h_FmPort);
+		if (err == E_OK)
+			hw_lag_dbg("FM_PORT_Enable() OK.\n");
+		else
+			pr_err("FM_PORT_Enable() err.\n");
 	}
+
+	if (bond->params.ohp->applied_pcd) {
+		for (i = 0; i < numberof_pre_schemes; i++) {
+			if (kgParam->h_Schemes[i]) {
+				err = FM_PCD_KgSchemeDelete(
+						kgParam->h_Schemes[i]);
+				if (err != E_OK) {
+					pr_err("FM_PCD_KgSchemeDelete:%d", i);
+					pr_err("errors:0x%0x\n", err);
+
+					return BOND_OH_ERROR;
+				}
+				hw_lag_dbg("FM_PCD_KgSchemeDelete:%d ok\n", i);
+				kgParam->h_Schemes[i] = NULL;
+			}
+		}
+	}
+
 	for (i = 0; i < numOfSchemes; i++) {
 		scheme[i].baseFqid = pcd_fqids_base;
 		scheme[i].keyExtractAndHashParams.hashDistributionNumOfFqids =
@@ -631,9 +656,18 @@ static int replace_pcd(struct fm_port *fm_port, uint8_t numOfSchemes,
 				pcd_fqids_base);
 		hw_lag_dbg("scheme[%d]->distNumOfQueues:%d\n", i,
 				distNumOfQueues);
-		if (!kgParam->h_Schemes[i])
-			kgParam->h_Schemes[i] =
-				FM_PCD_KgSchemeSet(h_FmPcd, &scheme[i]);
+	}
+
+	for (i = 0; i < numOfSchemes; i++) {
+		kgParam->h_Schemes[i] = FM_PCD_KgSchemeSet(h_FmPcd,
+					   &scheme[numOfSchemes - i - 1]);
+
+		if (!kgParam->h_Schemes[i]) {
+			pr_err("error on FM_PCD_KgSchemeSet(%d)\n",
+			       numOfSchemes - i - 1);
+
+			return BOND_OH_ERROR;
+		}
 		hw_lag_dbg("kgParam->h_Schemes[%d]:%p.\n",
 				i, kgParam->h_Schemes[i]);
 	}
@@ -668,6 +702,8 @@ static int replace_pcd(struct fm_port *fm_port, uint8_t numOfSchemes,
 		return BOND_OH_ERROR;
 
 	bond->params.ohp->numberof_pre_schemes = numOfSchemes;
+	bond->params.ohp->applied_pcd = true;
+
 	return BOND_OH_SUCCESS;
 
 }
@@ -716,14 +752,10 @@ bool apply_pcd(struct bonding *bond, int new_xmit_policy)
 	 */
 	switch (true_policy) {
 	case BOND_XMIT_POLICY_LAYER23:
-		/* will be support in the future version
-		 * numOfSchemes = 3;
-		 */
+		numOfSchemes = 3;
 		break;
 	case BOND_XMIT_POLICY_LAYER34:
-		/* will be support in the future version
-		 * numOfSchemes = 7;
-		 */
+		numOfSchemes = 7;
 		break;
 	case BOND_XMIT_POLICY_LAYER2:
 		numOfSchemes = 1;

@@ -1534,6 +1534,7 @@ int get_oh_info(void)
 			}
 
 			poh[i].allocated_pcd_mem = false;
+			poh[i].applied_pcd = false;
 			available_num_of_oh_ports = ++i;
 		}
 	}

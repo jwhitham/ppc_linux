@@ -105,6 +105,7 @@ struct oh_port_priv {
 	unsigned char friendname[OHFRIENDNAMSIZ];
 	unsigned long cell_index;
 	bool allocated_pcd_mem;
+	bool applied_pcd;
 	t_Handle h_FmPcd;
 	t_Handle h_FmPort;
 	t_Handle h_NetEnv;
