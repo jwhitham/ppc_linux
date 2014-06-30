@@ -199,7 +199,7 @@ static int alloc_pcd_mem(struct fm_port *fm_port, uint8_t numOfSchemes,
 		ea_eth_sa;
 
        /* Extract field:ethernet.dst */
-	memset(&ea_eth_sa, 0, sizeof(t_FmPcdExtractEntry));
+	memset(&ea_eth_da, 0, sizeof(t_FmPcdExtractEntry));
 	ea_eth_da.type = e_FM_PCD_EXTRACT_BY_HDR;
 	ea_eth_da.extractByHdr.hdr = HEADER_TYPE_ETH;
 	ea_eth_da.extractByHdr.hdrIndex = e_FM_PCD_HDR_INDEX_NONE;
