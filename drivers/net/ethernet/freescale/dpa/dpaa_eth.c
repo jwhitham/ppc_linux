@@ -114,7 +114,7 @@ struct net_device *dpa_loop_netdevs[20];
 
 #ifdef CONFIG_PM
 
-static int dpaa_suspend_noirq(struct device *dev)
+static int dpaa_suspend(struct device *dev)
 {
 	struct net_device	*net_dev;
 	struct dpa_priv_s	*priv;
@@ -162,7 +162,7 @@ set_wol_failed:
 	return err;
 }
 
-static int dpaa_resume_noirq(struct device *dev)
+static int dpaa_resume(struct device *dev)
 {
 	struct net_device	*net_dev;
 	struct dpa_priv_s	*priv;
@@ -204,8 +204,8 @@ resume_failed:
 }
 
 static const struct dev_pm_ops dpaa_pm_ops = {
-	.suspend_noirq = dpaa_suspend_noirq,
-	.resume_noirq = dpaa_resume_noirq,
+	.suspend = dpaa_suspend,
+	.resume = dpaa_resume,
 };
 
 #define DPAA_PM_OPS (&dpaa_pm_ops)
