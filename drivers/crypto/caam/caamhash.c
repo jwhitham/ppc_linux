@@ -1107,6 +1107,7 @@ static int ahash_digest(struct ahash_request *req)
 	}
 	edesc->sec4_sg = (void *)edesc + sizeof(struct ahash_edesc) +
 			  DESC_JOB_IO_LEN;
+	edesc->sec4_sg_bytes = sec4_sg_bytes;
 	edesc->src_nents = src_nents;
 	edesc->chained = chained;
 
