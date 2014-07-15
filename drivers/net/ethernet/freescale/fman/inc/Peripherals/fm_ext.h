@@ -236,6 +236,8 @@ typedef uint32_t fmSpecialOperations_t;                 /**< typedef for definin
 #define  FM_SP_OP_DCL4C                     0x08000000  /**< Set the DCL4C bit */
 #define  FM_SP_OP_CHECK_SEC_ERRORS          0x04000000  /**< Check SEC errors */
 #define  FM_SP_OP_CLEAR_RPD                 0x02000000  /**< Clear the RPD bit */
+#define  FM_SP_OP_CAPWAP_DTLS_ENC           0x01000000  /**< activate features that related to CAPWAP-DTLS post Encryption */
+#define  FM_SP_OP_CAPWAP_DTLS_DEC           0x00800000  /**< activate features that related to CAPWAP-DTLS post Decryption */
 /* @} */
 
 /**************************************************************************//**
@@ -310,19 +312,19 @@ typedef enum e_FmExceptions {
  @Description   Enum for defining port DMA swap mode
 *//***************************************************************************/
 typedef enum e_FmDmaSwapOption {
-    e_FM_DMA_NO_SWP = FMAN_DMA_NO_SWP, 			/**< No swap, transfer data as is.*/
-    e_FM_DMA_SWP_PPC_LE = FMAN_DMA_SWP_PPC_LE, 	/**< The transferred data should be swapped
-                                    			in PowerPc Little Endian mode. */
-    e_FM_DMA_SWP_BE = FMAN_DMA_SWP_BE 			/**< The transferred data should be swapped
-                                    			in Big Endian mode */
+    e_FM_DMA_NO_SWP = FMAN_DMA_NO_SWP,          /**< No swap, transfer data as is.*/
+    e_FM_DMA_SWP_PPC_LE = FMAN_DMA_SWP_PPC_LE,  /**< The transferred data should be swapped
+                                                in PowerPc Little Endian mode. */
+    e_FM_DMA_SWP_BE = FMAN_DMA_SWP_BE           /**< The transferred data should be swapped
+                                                in Big Endian mode */
 } e_FmDmaSwapOption;
 
 /**************************************************************************//**
  @Description   Enum for defining port DMA cache attributes
 *//***************************************************************************/
 typedef enum e_FmDmaCacheOption {
-    e_FM_DMA_NO_STASH = FMAN_DMA_NO_STASH,     	/**< Cacheable, no Allocate (No Stashing) */
-    e_FM_DMA_STASH = FMAN_DMA_STASH         	/**< Cacheable and Allocate (Stashing on) */
+    e_FM_DMA_NO_STASH = FMAN_DMA_NO_STASH,      /**< Cacheable, no Allocate (No Stashing) */
+    e_FM_DMA_STASH = FMAN_DMA_STASH             /**< Cacheable and Allocate (Stashing on) */
 } e_FmDmaCacheOption;
 
 

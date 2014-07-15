@@ -211,21 +211,28 @@ typedef uint32_t fmPcdEngines_t; /**< options as defined below: */
 #define FM_OH_PORT_ID                               0
 
 /***********************************************************************/
-/*          SW parser IP-fragmentation labels (offsets)                */
+/*          SW parser OFFLOAD labels (offsets)                         */
 /***********************************************************************/
 #if (DPAA_VERSION == 10)
-#define IP_FRAG_SW_PATCH_IPv4_SIZE              0x025
-#define IP_FRAG_SW_PATCH_IPv4_LABEL             0x300
+#define OFFLOAD_SW_PATCH_IPv4_SIZE              0x025
+#define OFFLOAD_SW_PATCH_IPv4_LABEL             0x300
 #else
-#define IP_FRAG_SW_PATCH_IPv4_SIZE              0x046
-#define IP_FRAG_SW_PATCH_IPv4_LABEL             0x2E0
+#define OFFLOAD_SW_PATCH_IPv4_SIZE              0x046
+#define OFFLOAD_SW_PATCH_IPv4_LABEL             0x1E0
+#define OFFLOAD_CAPWAP_SW_PATCH_LABEL           0x39b
 #endif /* (DPAA_VERSION == 10) */
-#define IP_FRAG_SW_PATCH_IPv6_LABEL             \
-    (IP_FRAG_SW_PATCH_IPv4_LABEL + IP_FRAG_SW_PATCH_IPv4_SIZE)
+/* Will be used for:
+ * 1. identify fragments
+ * 2. if no fragment, will identify the fragmentable are
+ * 3. udp-lite
+ */
+#define OFFLOAD_SW_PATCH_IPv6_LABEL             \
+    (OFFLOAD_SW_PATCH_IPv4_LABEL + OFFLOAD_SW_PATCH_IPv4_SIZE)
 
-#ifdef FM_CAPWAP_SUPPORT
+#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
 #define UDP_LITE_SW_PATCH_LABEL                 0x2E0
-#endif /* FM_CAPWAP_SUPPORT */
+#endif /* ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
+
 
 /**************************************************************************//**
  @Description       Memory Mapped Registers
@@ -910,6 +917,7 @@ typedef struct {
     uint32_t                    savedBmiFene;
     uint32_t                    savedBmiFpne;
     uint32_t                    savedBmiCmne;
+    uint32_t                    savedBmiOfp;
     uint32_t                    savedNonRxQmiRegsPndn;
     uint32_t                    origNonRxQmiRegsPndn;
     int                         savedPrsStartOffset;
@@ -922,7 +930,8 @@ typedef struct {
     t_FmPortRxPoolsParams       rxPoolsParams;
 //    bool                        explicitUserSizeOfFifo;
     t_Handle                    h_IpReassemblyManip;
-    t_Handle                    h_IpReassemblyTree;
+    t_Handle                    h_CapwapReassemblyManip;
+    t_Handle                    h_ReassemblyTree;
     uint64_t                    fmMuramPhysBaseAddr;
 #if (DPAA_VERSION >= 11)
     bool                        vspe;

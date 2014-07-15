@@ -839,6 +839,16 @@ typedef protocolOpt_t   ipv6ProtocolOpt_t;      /**< IPv6 protocol options. */
                                                      environment with IPV6 header and IPV6_FRAG_1 option;
                                                      in case where fragment found, the fragment-extension offset
                                                      may be found at 'shim2' (in parser-result). */
+#if (DPAA_VERSION >= 11)
+typedef protocolOpt_t   capwapProtocolOpt_t;      /**< CAPWAP protocol options. */
+#define CAPWAP_FRAG_1               0x00000008  /**< CAPWAP reassembly option.
+                                                     CAPWAP Reassembly manipulation requires network
+                                                     environment with CAPWAP header and CAPWAP_FRAG_1 option;
+                                                     in case where fragment found, the fragment-extension offset
+                                                     may be found at 'shim2' (in parser-result). */
+#endif /* (DPAA_VERSION >= 11) */
+
+
 /* @} */
 
 #define FM_PCD_MANIP_MAX_HDR_SIZE               256
@@ -1137,11 +1147,42 @@ typedef enum e_FmPcdManipHdrInsrtSpecificL2 {
     e_FM_PCD_MANIP_HDR_INSRT_MPLS                   /**< Insert MPLS header (Unlimited MPLS labels) */
 } e_FmPcdManipHdrInsrtSpecificL2;
 
+#if (DPAA_VERSION >= 11)
+/**************************************************************************//**
+ @Description   Enumeration type for selecting QoS mapping mode
+
+                Note: In all cases except 'e_FM_PCD_MANIP_HDR_QOS_MAPPING_NONE'
+                User should instruct the port to read the parser-result
+*//***************************************************************************/
+typedef enum e_FmPcdManipHdrQosMappingMode {
+    e_FM_PCD_MANIP_HDR_QOS_MAPPING_NONE = 0,   /**< No mapping, QoS field will not be changed */
+    e_FM_PCD_MANIP_HDR_QOS_MAPPING_AS_IS, /**< QoS field will be overwritten by the last byte in the parser-result. */
+} e_FmPcdManipHdrQosMappingMode;
+
+/**************************************************************************//**
+ @Description   Enumeration type for selecting QoS source
+
+                Note: In all cases except 'e_FM_PCD_MANIP_HDR_QOS_SRC_NONE'
+                User should left room for the parser-result on input/output buffer
+                and instruct the port to read/write the parser-result to the buffer (RPD should be set)
+*//***************************************************************************/
+typedef enum e_FmPcdManipHdrQosSrc {
+    e_FM_PCD_MANIP_HDR_QOS_SRC_NONE = 0,        /**< TODO */
+    e_FM_PCD_MANIP_HDR_QOS_SRC_USER_DEFINED,    /**< QoS will be taken from the last byte in the parser-result. */
+} e_FmPcdManipHdrQosSrc;
+#endif /* (DPAA_VERSION >= 11) */
+
 /**************************************************************************//**
  @Description   Enumeration type for selecting type of header insertion
 *//***************************************************************************/
 typedef enum e_FmPcdManipHdrInsrtByHdrType {
-    e_FM_PCD_MANIP_INSRT_BY_HDR_SPECIFIC_L2         /**< Specific L2 fields insertion */
+    e_FM_PCD_MANIP_INSRT_BY_HDR_SPECIFIC_L2,        /**< Specific L2 fields insertion */
+#if (DPAA_VERSION >= 11)
+    e_FM_PCD_MANIP_INSRT_BY_HDR_IP,                 /**< IP insertion */
+    e_FM_PCD_MANIP_INSRT_BY_HDR_UDP,                /**< UDP insertion */
+    e_FM_PCD_MANIP_INSRT_BY_HDR_UDP_LITE,             /**< UDP lite insertion */
+    e_FM_PCD_MANIP_INSRT_BY_HDR_CAPWAP                 /**< CAPWAP insertion */
+#endif /* (DPAA_VERSION >= 11) */
 } e_FmPcdManipHdrInsrtByHdrType;
 
 /**************************************************************************//**
@@ -1164,9 +1205,12 @@ typedef enum e_FmPcdManipHdrCustomIpReplace {
 *//***************************************************************************/
 typedef enum e_FmPcdManipHdrRmvByHdrType {
     e_FM_PCD_MANIP_RMV_BY_HDR_SPECIFIC_L2 = 0,      /**< Specific L2 fields removal */
-#ifdef FM_CAPWAP_SUPPORT
+#if (DPAA_VERSION >= 11)
+    e_FM_PCD_MANIP_RMV_BY_HDR_CAPWAP,                  /**< CAPWAP removal */
+#endif /* (DPAA_VERSION >= 11) */
+#if (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
     e_FM_PCD_MANIP_RMV_BY_HDR_FROM_START,           /**< Locate from data that is not the header */
-#endif /* FM_CAPWAP_SUPPORT */
+#endif /* (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
 } e_FmPcdManipHdrRmvByHdrType;
 
 /**************************************************************************//**
@@ -1242,7 +1286,10 @@ typedef enum e_FmPcdManipDontFragAction {
  @Description   Enumeration type for selecting type of special offload manipulation
 *//***************************************************************************/
 typedef enum e_FmPcdManipSpecialOffloadType {
-    e_FM_PCD_MANIP_SPECIAL_OFFLOAD_IPSEC    /**< IPSec offload manipulation */
+    e_FM_PCD_MANIP_SPECIAL_OFFLOAD_IPSEC,    /**< IPSec offload manipulation */
+#if (DPAA_VERSION >= 11)
+    e_FM_PCD_MANIP_SPECIAL_OFFLOAD_CAPWAP    /**< CAPWAP offload manipulation */
+#endif /* (DPAA_VERSION >= 11) */
 } e_FmPcdManipSpecialOffloadType;
 
 
@@ -1255,6 +1302,9 @@ typedef union u_FmPcdHdrProtocolOpt {
     mplsProtocolOpt_t   mplsOpt;    /**< MPLS options */
     ipv4ProtocolOpt_t   ipv4Opt;    /**< IPv4 options */
     ipv6ProtocolOpt_t   ipv6Opt;    /**< IPv6 options */
+#if (DPAA_VERSION >= 11)
+    capwapProtocolOpt_t capwapOpt;  /**< CAPWAP options */
+#endif /* (DPAA_VERSION >= 11) */
 } u_FmPcdHdrProtocolOpt;
 
 /**************************************************************************//**
@@ -1330,7 +1380,7 @@ typedef union u_FmPcdHdrProtocolOpt {
                         NET_HEADER_FIELD_UDP_PORT_SRC
                         NET_HEADER_FIELD_UDP_PORT_DST
 
-                    HEADER_TYPE_UDP_LITE: - relevant only if FM_CAPWAP_SUPPORT define
+                    HEADER_TYPE_UDP_LITE:
                         NET_HEADER_FIELD_UDP_LITE_PORT_SRC
                         NET_HEADER_FIELD_UDP_LITE_PORT_DST
 
@@ -2177,13 +2227,16 @@ typedef struct t_FmPcdManipFragOrReasmParams {
 typedef struct t_FmPcdManipHdrRmvByHdrParams {
     e_FmPcdManipHdrRmvByHdrType         type;           /**< Selection of header removal location */
     union {
-#ifdef FM_CAPWAP_SUPPORT
+#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
         struct {
             bool                        include;        /**< If FALSE, remove until the specified header (not including the header);
                                                              If TRUE, remove also the specified header. */
             t_FmManipHdrInfo            hdrInfo;
         } fromStartByHdr;                               /**< Relevant when type = e_FM_PCD_MANIP_RMV_BY_HDR_FROM_START */
 #endif /* FM_CAPWAP_SUPPORT */
+#if (DPAA_VERSION >= 11)
+        t_FmManipHdrInfo                hdrInfo;        /**< Relevant when type = e_FM_PCD_MANIP_RMV_BY_HDR_FROM_START */
+#endif /* (DPAA_VERSION >= 11) */
         e_FmPcdManipHdrRmvSpecificL2    specificL2;     /**< Relevant when type = e_FM_PCD_MANIP_BY_HDR_SPECIFIC_L2;
                                                              Defines which L2 headers to remove. */
     } u;
@@ -2298,6 +2351,84 @@ typedef struct t_FmPcdManipSpecialOffloadIPSecParams {
                                                      corresponding SA. */
 } t_FmPcdManipSpecialOffloadIPSecParams;
 
+#if (DPAA_VERSION >= 11)
+/**************************************************************************//**
+ @Description   Parameters for configuring CAPWAP fragmentation manipulation
+
+ Restrictions:
+     - Maximum number of fragments per frame is 16.
+     - Transmit confirmation is not supported.
+     - Fragmentation nodes must be set as the last PCD action (i.e. the
+       corresponding CC node key must have next engine set to e_FM_PCD_DONE).
+     - Only BMan buffers shall be used for frames to be fragmented.
+     - NOTE: The following comment is relevant only for FMAN v3 devices: IPF
+       does not support VSP. Therefore, on the same port where we have IPF we
+       cannot support VSP.
+*//***************************************************************************/
+typedef struct t_FmPcdManipFragCapwapParams {
+    uint16_t                    sizeForFragmentation;   /**< If length of the frame is greater than this value,
+                                                             CAPWAP fragmentation will be executed.*/
+    bool                        sgBpidEn;               /**< Enable a dedicated buffer pool id for the Scatter/Gather buffer allocation;
+                                                             If disabled, the Scatter/Gather buffer will be allocated from the same pool as the
+                                                             received frame's buffer. */
+    uint8_t                     sgBpid;                 /**< Scatter/Gather buffer pool id;
+                                                             This parameters is relevant when 'sgBpidEn=TRUE';
+                                                             Same LIODN number is used for these buffers as for the received frames buffers, so buffers
+                                                             of this pool need to be allocated in the same memory area as the received buffers.
+                                                             If the received buffers arrive from different sources, the Scatter/Gather BP id should be
+                                                             mutual to all these sources. */
+    bool                        compressModeEn;         /**< CAPWAP Header Options Compress Enable mode;
+                                                             When this mode is enabled then only the first fragment include the CAPWAP header options
+                                                             field (if user provides it in the input frame) and all other fragments exclude the CAPWAP
+                                                             options field (CAPWAP header is updated accordingly).*/
+} t_FmPcdManipFragCapwapParams;
+
+/**************************************************************************//**
+ @Description   Parameters for configuring CAPWAP reassembly manipulation.
+
+ Restrictions:
+    - Application must define one scheme to catch the reassembled frames.
+    - Maximum number of fragments per frame is 16.
+
+*//***************************************************************************/
+typedef struct t_FmPcdManipReassemCapwapParams {
+    uint8_t                         relativeSchemeId;    /**< Partition relative scheme id;
+                                                                 NOTE: this id must be smaller than the user schemes id to ensure that the reassembly scheme will be first match;
+                                                                 Rest schemes, if defined, should have higher relative scheme ID. */
+    uint8_t                         dataMemId;              /**< Memory partition ID for the IPR's external tables structure */
+    uint16_t                        dataLiodnOffset;        /**< LIODN offset for access the IPR's external tables structure. */
+    uint16_t                        maxReassembledFrameLength;/**< The maximum CAPWAP reassembled frame length in bytes;
+                                                                   If maxReassembledFrameLength == 0, any successful reassembled frame length is
+                                                                   considered as a valid length;
+                                                                   if maxReassembledFrameLength > 0, a successful reassembled frame which its length
+                                                                   exceeds this value is considered as an error frame (FD status[CRE] bit is set). */
+    e_FmPcdManipReassemWaysNumber   numOfFramesPerHashEntry;
+                                                            /**< Number of frames per hash entry needed for reassembly process */
+    uint16_t                        maxNumFramesInProcess;  /**< Number of frames which can be processed by reassembly in the same time;
+                                                                 Must be power of 2;
+                                                                 In the case numOfFramesPerHashEntry == e_FM_PCD_MANIP_FOUR_WAYS_HASH,
+                                                                 maxNumFramesInProcess has to be in the range of 4 - 512;
+                                                                 In the case numOfFramesPerHashEntry == e_FM_PCD_MANIP_EIGHT_WAYS_HASH,
+                                                                 maxNumFramesInProcess has to be in the range of 8 - 2048. */
+    e_FmPcdManipReassemTimeOutMode  timeOutMode;            /**< Expiration delay initialized by Reassembly process */
+    uint32_t                        fqidForTimeOutFrames;   /**< FQID in which time out frames will enqueue during Time Out Process;
+                                                                 Recommended value for this field is 0; in this way timed-out frames will be discarded */
+    uint32_t                        timeoutThresholdForReassmProcess;
+                                                            /**< Represents the time interval in microseconds which defines
+                                                                 if opened frame (at least one fragment was processed but not all the fragments)is found as too old*/
+} t_FmPcdManipReassemCapwapParams;
+
+/**************************************************************************//**
+ @Description   structure for defining CAPWAP manipulation
+*//***************************************************************************/
+typedef struct t_FmPcdManipSpecialOffloadCapwapParams {
+    bool                    dtls;   /**< TRUE if continue to SEC DTLS encryption */
+    e_FmPcdManipHdrQosSrc   qosSrc; /**< TODO */
+} t_FmPcdManipSpecialOffloadCapwapParams;
+
+#endif /* (DPAA_VERSION >= 11) */
+
+
 /**************************************************************************//**
  @Description   Parameters for defining special offload manipulation
 *//***************************************************************************/
@@ -2307,8 +2438,21 @@ typedef struct t_FmPcdManipSpecialOffloadParams {
     {
         t_FmPcdManipSpecialOffloadIPSecParams   ipsec;      /**< Parameters for IPSec; Relevant when
                                                                  type = e_FM_PCD_MANIP_SPECIAL_OFFLOAD_IPSEC */
+#if (DPAA_VERSION >= 11)
+        t_FmPcdManipSpecialOffloadCapwapParams  capwap;     /**< Parameters for CAPWAP; Relevant when
+                                                                 type = e_FM_PCD_MANIP_SPECIAL_OFFLOAD_CAPWAP */
+#endif /* (DPAA_VERSION >= 11) */
     } u;
 } t_FmPcdManipSpecialOffloadParams;
+
+/**************************************************************************//**
+ @Description   Parameters for defining insertion manipulation
+*//***************************************************************************/
+typedef struct t_FmPcdManipHdrInsrt {
+    uint8_t size;           /**< size of inserted section */
+    uint8_t *p_Data;        /**< data to be inserted */
+} t_FmPcdManipHdrInsrt;
+
 
 /**************************************************************************//**
  @Description   Parameters for defining generic removal manipulation
@@ -2452,6 +2596,20 @@ typedef struct t_FmPcdManipHdrInsrtSpecificL2Params {
     uint8_t                         *p_Data;        /**< data to be inserted */
 } t_FmPcdManipHdrInsrtSpecificL2Params;
 
+#if (DPAA_VERSION >= 11)
+/**************************************************************************//**
+ @Description   Parameters for defining IP insertion manipulation
+*//***************************************************************************/
+typedef struct t_FmPcdManipHdrInsrtIpParams {
+    bool    calcL4Checksum; /**< Calculate L4 checksum. */
+    e_FmPcdManipHdrQosMappingMode   mappingMode; /**< TODO */
+    uint8_t lastPidOffset;     /**< the offset of the last Protocol within
+                                 the inserted header */
+    uint16_t  id;           /**< 16 bit New IP ID */
+    t_FmPcdManipHdrInsrt insrt; /**< size and data to be inserted. */
+} t_FmPcdManipHdrInsrtIpParams;
+#endif /* (DPAA_VERSION >= 11) */
+
 /**************************************************************************//**
  @Description   Parameters for defining header insertion manipulation by header type
 *//***************************************************************************/
@@ -2459,9 +2617,15 @@ typedef struct t_FmPcdManipHdrInsrtByHdrParams {
     e_FmPcdManipHdrInsrtByHdrType               type;   /**< Selects manipulation type */
     union {
 
-       t_FmPcdManipHdrInsrtSpecificL2Params     specificL2Params;
-                                                        /**< Used when type = e_FM_PCD_MANIP_INSRT_BY_HDR_SPECIFIC_L2:
-                                                             Selects which L2 headers to remove */
+        t_FmPcdManipHdrInsrtSpecificL2Params    specificL2Params;
+                                                             /**< Used when type = e_FM_PCD_MANIP_INSRT_BY_HDR_SPECIFIC_L2:
+                                                              Selects which L2 headers to insert */
+#if (DPAA_VERSION >= 11)
+        t_FmPcdManipHdrInsrtIpParams             ipParams;  /**< Used when type = e_FM_PCD_MANIP_INSRT_BY_HDR_IP */
+        t_FmPcdManipHdrInsrt                    insrt;     /**< Used when type is one of e_FM_PCD_MANIP_INSRT_BY_HDR_UDP,
+                                                                e_FM_PCD_MANIP_INSRT_BY_HDR_UDP_LITE, or
+                                                                e_FM_PCD_MANIP_INSRT_BY_HDR_CAPWAP */
+#endif /* (DPAA_VERSION >= 11) */
     } u;
 } t_FmPcdManipHdrInsrtByHdrParams;
 
@@ -2521,6 +2685,10 @@ typedef struct t_FmPcdManipHdrParams {
 typedef struct t_FmPcdManipFragParams {
     e_NetHeaderType                     hdr;          /**< Header selection */
     union {
+#if (DPAA_VERSION >= 11)
+        t_FmPcdManipFragCapwapParams    capwapFrag;   /**< Parameters for defining CAPWAP fragmentation,
+                                                           relevant if 'hdr' = HEADER_TYPE_CAPWAP */
+#endif /* (DPAA_VERSION >= 11) */
         t_FmPcdManipFragIpParams        ipFrag;       /**< Parameters for defining IP fragmentation,
                                                            relevant if 'hdr' = HEADER_TYPE_Ipv4 or HEADER_TYPE_Ipv6 */
     } u;
@@ -2532,11 +2700,15 @@ typedef struct t_FmPcdManipFragParams {
 typedef struct t_FmPcdManipReassemParams {
     e_NetHeaderType                     hdr;          /**< Header selection */
     union {
+#if (DPAA_VERSION >= 11)
+        t_FmPcdManipReassemCapwapParams capwapReassem;  /**< Parameters for defining CAPWAP reassembly,
+                                                           relevant if 'hdr' = HEADER_TYPE_CAPWAP */
+#endif /* (DPAA_VERSION >= 11) */
+
         t_FmPcdManipReassemIpParams     ipReassem;    /**< Parameters for defining IP reassembly,
                                                            relevant if 'hdr' = HEADER_TYPE_Ipv4 or HEADER_TYPE_Ipv6 */
     } u;
 } t_FmPcdManipReassemParams;
-
 
 /**************************************************************************//**
  @Description   Parameters for defining a manipulation node
@@ -2601,12 +2773,55 @@ typedef struct t_FmPcdManipFragIpStats {
     uint32_t    generatedFragments;     /**< Number of fragments that were generated */
 } t_FmPcdManipFragIpStats;
 
+#if (DPAA_VERSION >= 11)
+/**************************************************************************//**
+ @Description   Structure for retrieving CAPWAP reassembly statistics
+*//***************************************************************************/
+typedef struct t_FmPcdManipReassemCapwapStats {
+    uint32_t    timeout;                    /**< Counts the number of timeout occurrences */
+    uint32_t    rfdPoolBusy;                /**< Counts the number of failed attempts to allocate
+                                                 a Reassembly Frame Descriptor */
+    uint32_t    internalBufferBusy;         /**< Counts the number of times an internal buffer busy occurred */
+    uint32_t    externalBufferBusy;         /**< Counts the number of times external buffer busy occurred */
+    uint32_t    sgFragments;                /**< Counts the number of Scatter/Gather fragments */
+    uint32_t    dmaSemaphoreDepletion;      /**< Counts the number of failed attempts to allocate a DMA semaphore */
+    uint32_t    successfullyReassembled;    /**< Counts the number of successfully reassembled frames */
+    uint32_t    validFragments;             /**< Counts the total number of valid fragments that
+                                                 have been processed for all frames */
+    uint32_t    processedFragments;         /**< Counts the number of processed fragments
+                                                 (valid and error fragments) for all frames */
+    uint32_t    malformedFragments;         /**< Counts the number of malformed fragments processed for all frames */
+    uint32_t    autoLearnBusy;              /**< Counts the number of times a busy condition occurs when attempting
+                                                 to access an Reassembly Automatic Learning Hash set */
+    uint32_t    discardedFragments;         /**< Counts the number of fragments discarded by the reassembly process */
+    uint32_t    moreThan16Fragments;        /**< Counts the fragment occurrences in which the number of fragments-per-frame
+                                                 exceeds 16 */
+    uint32_t    exceedMaxReassemblyFrameLen;/**< ounts the number of times that a successful reassembled frame
+                                                 length exceeds MaxReassembledFrameLength value */
+} t_FmPcdManipReassemCapwapStats;
+
+/**************************************************************************//**
+ @Description   Structure for retrieving CAPWAP fragmentation statistics
+*//***************************************************************************/
+typedef struct t_FmPcdManipFragCapwapStats {
+    uint32_t    totalFrames;            /**< Number of frames that passed through the manipulation node */
+    uint32_t    fragmentedFrames;       /**< Number of frames that were fragmented */
+    uint32_t    generatedFragments;     /**< Number of fragments that were generated */
+#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
+    uint8_t     sgAllocationFailure;    /**< Number of allocation failure of s/g buffers */
+#endif /* (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0)) */
+} t_FmPcdManipFragCapwapStats;
+#endif /* (DPAA_VERSION >= 11) */
+
 /**************************************************************************//**
  @Description   Structure for retrieving reassembly statistics
 *//***************************************************************************/
 typedef struct t_FmPcdManipReassemStats {
     union {
         t_FmPcdManipReassemIpStats  ipReassem;  /**< Structure for IP reassembly statistics */
+#if (DPAA_VERSION >= 11)
+        t_FmPcdManipReassemCapwapStats  capwapReassem;  /**< Structure for CAPWAP reassembly statistics */
+#endif /* (DPAA_VERSION >= 11) */
     } u;
 } t_FmPcdManipReassemStats;
 
@@ -2616,6 +2831,9 @@ typedef struct t_FmPcdManipReassemStats {
 typedef struct t_FmPcdManipFragStats {
     union {
         t_FmPcdManipFragIpStats     ipFrag;     /**< Structure for IP fragmentation statistics */
+#if (DPAA_VERSION >= 11)
+        t_FmPcdManipFragCapwapStats capwapFrag; /**< Structure for CAPWAP fragmentation statistics */
+#endif /* (DPAA_VERSION >= 11) */
     } u;
 } t_FmPcdManipFragStats;
 
@@ -2938,7 +3156,7 @@ t_Error FM_PCD_MatchTableDelete(t_Handle h_CcNode);
                 When configuring nextEngine = e_FM_PCD_CC, note that
                 p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
                 from the currently changed table.
- 
+
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableModifyMissNextEngine(t_Handle                  h_CcNode,
                                               t_FmPcdCcNextEngineParams *p_FmPcdCcNextEngineParams);
@@ -2999,7 +3217,7 @@ t_Error FM_PCD_MatchTableAddKey(t_Handle            h_CcNode,
                 When configuring nextEngine = e_FM_PCD_CC, note that
                 p_FmPcdCcNextEngineParams->ccParams.h_CcNode must be different
                 from the currently changed table.
- 
+
 *//***************************************************************************/
 t_Error FM_PCD_MatchTableModifyNextEngine(t_Handle                  h_CcNode,
                                           uint16_t                  keyIndex,

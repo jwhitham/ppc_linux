@@ -125,10 +125,10 @@ t_Error PrsInit(t_FmPcd *p_FmPcd)
     uint32_t            *p_LoadTarget = (uint32_t *)PTR_MOVE(p_FmPcd->p_FmPcdPrs->p_SwPrsCode,
                                                              FM_PCD_SW_PRS_SIZE-FM_PCD_PRS_SW_PATCHES_SIZE);
     struct fman_prs_regs *PrsRegs = (struct fman_prs_regs *)p_FmPcd->p_FmPcdPrs->p_FmPcdPrsRegs;
-#ifdef FM_CAPWAP_SUPPORT
+#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
     uint8_t             swPrsPatch[] = SW_PRS_UDP_LITE_PATCH;
 #else
-    uint8_t             swPrsPatch[] = SW_PRS_IP_FRAG_PATCH;
+    uint8_t             swPrsPatch[] = SW_PRS_OFFLOAD_PATCH;
 #endif /* FM_CAPWAP_SUPPORT */
     uint32_t            i;
 

@@ -561,20 +561,20 @@ uint8_t FmPcdNetEnvGetUnitId(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeaderType
     return FM_PCD_MAX_NUM_OF_DISTINCTION_UNITS;
 }
 
-t_Error FmPcdUnregisterReassmPort(t_Handle h_FmPcd, t_Handle h_IpReasmCommonPramTbl)
+t_Error FmPcdUnregisterReassmPort(t_Handle h_FmPcd, t_Handle h_ReasmCommonPramTbl)
 {
     t_FmPcd                         *p_FmPcd = (t_FmPcd*)h_FmPcd;
-    t_FmPcdCcIpReassmTimeoutParams  ccIpReassmTimeoutParams = {0};
+    t_FmPcdCcReassmTimeoutParams    ccReassmTimeoutParams = {0};
     uint8_t                         result;
     t_Error                         err = E_OK;
 
     ASSERT_COND(p_FmPcd);
-    ASSERT_COND(h_IpReasmCommonPramTbl);
+    ASSERT_COND(h_ReasmCommonPramTbl);
 
-    ccIpReassmTimeoutParams.iprcpt   = (uint32_t)(XX_VirtToPhys(h_IpReasmCommonPramTbl) - p_FmPcd->physicalMuramBase);
-    ccIpReassmTimeoutParams.activate = FALSE; /*Disable Timeout Task*/
+    ccReassmTimeoutParams.iprcpt   = (uint32_t)(XX_VirtToPhys(h_ReasmCommonPramTbl) - p_FmPcd->physicalMuramBase);
+    ccReassmTimeoutParams.activate = FALSE; /*Disable Timeout Task*/
 
-    if ((err = FmHcPcdCcIpTimeoutReassm(p_FmPcd->h_Hc, &ccIpReassmTimeoutParams, &result)) != E_OK)
+    if ((err = FmHcPcdCcTimeoutReassm(p_FmPcd->h_Hc, &ccReassmTimeoutParams, &result)) != E_OK)
         RETURN_ERROR(MAJOR, err, NO_MSG);
 
     switch (result)
@@ -997,6 +997,15 @@ t_Error FM_PCD_Init(t_Handle h_FmPcd)
     }
     IOMemSet32(UINT_TO_PTR(p_FmPcd->ipv6FrameIdAddr), 0,  4);
 
+    /* CAPWAP Frame-Id used for fragmentation */
+    p_FmPcd->capwapFrameIdAddr = PTR_TO_UINT(FM_MURAM_AllocMem(p_FmPcd->h_FmMuram, 2, 4));
+    if (!p_FmPcd->capwapFrameIdAddr)
+    {
+        FM_PCD_Free(p_FmPcd);
+        RETURN_ERROR(MAJOR, E_NO_MEMORY, ("MURAM allocation for CAPWAP Frame-Id"));
+    }
+    IOMemSet32(UINT_TO_PTR(p_FmPcd->capwapFrameIdAddr), 0,  2);
+
     XX_Free(p_FmPcd->p_FmPcdDriverParam);
     p_FmPcd->p_FmPcdDriverParam = NULL;
 
@@ -1012,6 +1021,9 @@ t_Error FM_PCD_Free(t_Handle h_FmPcd)
 
     if (p_FmPcd->ipv6FrameIdAddr)
         FM_MURAM_FreeMem(p_FmPcd->h_FmMuram, UINT_TO_PTR(p_FmPcd->ipv6FrameIdAddr));
+
+    if (p_FmPcd->capwapFrameIdAddr)
+        FM_MURAM_FreeMem(p_FmPcd->h_FmMuram, UINT_TO_PTR(p_FmPcd->capwapFrameIdAddr));
 
     if (p_FmPcd->enabled)
         FM_PCD_Disable(p_FmPcd);
@@ -1351,17 +1363,16 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr = HEADER_TYPE_USER_DEFINED_SHIM1;
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt = 0;
             }
-#ifdef FM_CAPWAP_SUPPORT
+#if (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
             /* UDP_LITE  */
             if (p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr == HEADER_TYPE_UDP_LITE)
             {
-                /* IPSec UDP encapsulation is currently set to use SHIM1 */
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].hdr = HEADER_TYPE_UDP_LITE;
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits++].aliasHdr = HEADER_TYPE_UDP;
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr = HEADER_TYPE_UDP;
                 p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt = 0;
             }
-#endif /* FM_CAPWAP_SUPPORT */
+#endif /* (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
 
             /* IP FRAG  */
             if ((p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr == HEADER_TYPE_IPv4) &&
@@ -1369,7 +1380,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
             {
                 /* If IPv4+Frag, we need to set 2 units - SHIM 2 and IPv4. We first set SHIM2, and than check if
                  * IPv4 exists. If so we don't need to set an extra unit
-                 * We consider as "having IPv4" any IPv4 without interchangeable headers
+                 * We consider as "having IPv4" any IPv4 without interchangable headers
                  * but including any options.  */
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].hdr = HEADER_TYPE_IPv4;
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].opt = IPV4_FRAG_1;
@@ -1389,7 +1400,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
             {
                 /* If IPv6+Frag, we need to set 2 units - SHIM 2 and IPv6. We first set SHIM2, and than check if
                  * IPv4 exists. If so we don't need to set an extra unit
-                 * We consider as "having IPv6" any IPv6 without interchangeable headers
+                 * We consider as "having IPv6" any IPv6 without interchangable headers
                  * but including any options.  */
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].hdr = HEADER_TYPE_IPv6;
                 p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].opt = IPV6_FRAG_1;
@@ -1404,6 +1415,18 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
                     p_FmPcd->netEnvs[netEnvCurrId].units[p_NetEnvParams->numOfDistinctionUnits++].hdrs[0].opt = 0;
                 }
             }
+#if (DPAA_VERSION >= 11)
+            /* CAPWAP FRAG  */
+            if ((p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr == HEADER_TYPE_CAPWAP) &&
+                (p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt == CAPWAP_FRAG_1))
+            {
+                p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].hdr = HEADER_TYPE_CAPWAP;
+                p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits].opt = CAPWAP_FRAG_1;
+                p_FmPcd->netEnvs[netEnvCurrId].aliasHdrs[specialUnits++].aliasHdr = HEADER_TYPE_USER_DEFINED_SHIM2;
+                p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr = HEADER_TYPE_USER_DEFINED_SHIM2;
+                p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].opt = 0;
+            }
+#endif /* (DPAA_VERSION >= 11) */
         }
     }
 
@@ -1541,7 +1564,7 @@ t_Error FM_PCD_SetAdvancedOffloadSupport(t_Handle h_FmPcd)
         DBG(WARNING, ("FM in guest-mode without IPC, can't validate firmware revision."));
         revInfo.packageRev = IP_OFFLOAD_PACKAGE_NUMBER;
     }
-    if (revInfo.packageRev != IP_OFFLOAD_PACKAGE_NUMBER)
+    if (!IS_OFFLOAD_PACKAGE(revInfo.packageRev))
         RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Fman ctrl code package"));
 
     if (!p_FmPcd->h_Hc)

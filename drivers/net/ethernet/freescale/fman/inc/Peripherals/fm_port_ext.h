@@ -45,6 +45,7 @@
 #include "fm_ext.h"
 #include "net_ext.h"
 
+
 /**************************************************************************//**
 
  @Group         FM_grp Frame Manager API
@@ -100,8 +101,8 @@ typedef enum e_FmPortPcdSupport {
     , e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR     /**< Use Parser, Keygen and Policer */
     , e_FM_PORT_PCD_SUPPORT_PRS_AND_CC              /**< Use Parser and Coarse Classification */
     , e_FM_PORT_PCD_SUPPORT_PRS_AND_CC_AND_PLCR     /**< Use Parser and Coarse Classification and Policer */
-#ifdef FM_CAPWAP_SUPPORT
     , e_FM_PORT_PCD_SUPPORT_CC_ONLY                 /**< Use only Coarse Classification */
+#ifdef FM_CAPWAP_SUPPORT
     , e_FM_PORT_PCD_SUPPORT_CC_AND_KG               /**< Use Coarse Classification,and Keygen */
     , e_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR      /**< Use Coarse Classification, Keygen and Policer */
 #endif /* FM_CAPWAP_SUPPORT */
@@ -434,6 +435,7 @@ typedef struct t_FmPortPerformanceCnt {
     uint32_t    fifoCompVal;            /**< Fifo compare value (in bytes) */
 } t_FmPortPerformanceCnt;
 
+
 /**************************************************************************//**
  @Description   A structure for defining the sizes of the Deep Sleep
                 the Auto Response tables
@@ -448,7 +450,7 @@ typedef struct t_FmPortDsarTablesSizes
     uint16_t   maxNumOfSnmpIPV6Entries;
     uint16_t   maxNumOfSnmpOidEntries;
     uint16_t   maxNumOfSnmpOidChar; /* total amount of character needed for the snmp table */
-    
+
     uint16_t   maxNumOfIpProtFiltering;
     uint16_t   maxNumOfTcpPortFiltering;
     uint16_t   maxNumOfUdpPortFiltering;
@@ -1361,9 +1363,9 @@ typedef struct t_FmPortDsarNdpInfo
     t_FmPortDsarNdpEntry  *p_AutoResTableTmp;      /* This list refer to temp IP addresses.
                                                              Note that all temp IP adresses must be from the same multicast group.
                                                              This will be checked and if not operation will fail. */
-    
+
     bool                  enableConflictDetection; /* when TRUE Conflict Detection will be checked and wake the host if needed */
-    
+
 } t_FmPortDsarNdpInfo;
 
 /**************************************************************************//**
@@ -1386,7 +1388,7 @@ typedef struct t_FmPortDsarEchoIpv6Info
 
 /**************************************************************************//**
 @Description    Deep Sleep Auto Response SNMP OIDs table entry
-                 
+
 *//***************************************************************************/
 typedef struct {
 	uint16_t     oidSize;
@@ -1573,7 +1575,7 @@ typedef struct t_FmPortDsarStats
  @Description   Return statistics for Deep Sleep Auto Response
 
  @Param[in]     h_FmPortRx - FM PORT module descriptor
- @Param[out]	stats - structure containing the statistics counters
+ @Param[out]    stats - structure containing the statistics counters
 
  @Return        E_OK on success; Error code otherwise.
 *//***************************************************************************/
@@ -2229,7 +2231,10 @@ typedef struct t_FmPortPcdParams {
                                                      or if any flow uses a KG scheme were policer
                                                      profile is not generated
                                                      ('bypassPlcrProfileGeneration selected'). */
-    t_Handle                h_IpReassemblyManip;/**< IP Reassembly manipulation */
+    t_Handle                h_IpReassemblyManip;    /**< IP Reassembly manipulation */
+#if (DPAA_VERSION >= 11)
+    t_Handle                h_CapwapReassemblyManip;/**< CAPWAP Reassembly manipulation */
+#endif /* (DPAA_VERSION >= 11) */
 } t_FmPortPcdParams;
 
 /**************************************************************************//**

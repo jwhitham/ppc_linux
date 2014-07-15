@@ -371,6 +371,7 @@ typedef struct {
     t_FmPcdIdExceptionCallback  *f_FmPcdIndexedException;
     t_Handle                    h_App;
     uintptr_t                   ipv6FrameIdAddr;
+    uintptr_t                   capwapFrameIdAddr;
     bool                        advancedOffloadSupport;
 
     t_FmPcdDriverParam          *p_FmPcdDriverParam;
@@ -396,6 +397,8 @@ uint8_t     FmPcdNetEnvGetUnitId(t_FmPcd *p_FmPcd, uint8_t netEnvId, e_NetHeader
 
 t_Error     FmPcdManipBuildIpReassmScheme(t_FmPcd *p_FmPcd, t_Handle h_NetEnv, t_Handle h_CcTree, t_Handle h_Manip, bool isIpv4, uint8_t groupId);
 t_Error     FmPcdManipDeleteIpReassmSchemes(t_Handle h_Manip);
+t_Error     FmPcdManipBuildCapwapReassmScheme(t_FmPcd *p_FmPcd, t_Handle h_NetEnv, t_Handle h_CcTree, t_Handle h_Manip, uint8_t groupId);
+t_Error     FmPcdManipDeleteCapwapReassmSchemes(t_Handle h_Manip);
 bool        FmPcdManipIpReassmIsIpv6Hdr(t_Handle h_Manip);
 
 t_Handle    KgConfig( t_FmPcd *p_FmPcd, t_FmPcdParams *p_FmPcdParams);
