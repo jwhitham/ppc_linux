@@ -81,6 +81,7 @@ static int usdpaa_irq_release(struct inode *inode, struct file *filp)
 	if (ctx->irq_set) {
 		/* Inhibit the IRQ */
 		out_be32(ctx->inhibit_addr, 0x1);
+		irq_set_affinity_hint(ctx->irq_num, NULL);
 		free_irq(ctx->irq_num, ctx);
 		ctx->irq_set = 0;
 		fput(ctx->usdpaa_filp);
@@ -139,6 +140,14 @@ static int map_irq(struct file *fp, struct usdpaa_ioctl_irq_map *irq_map)
 		fput(ctx->usdpaa_filp);
 		return ret;
 	}
+	ret = irq_set_affinity(ctx->irq_num, tsk_cpus_allowed(current));
+	if (ret)
+		pr_err("USDPAA irq_set_affinity() failed, ret= %d\n", ret);
+
+	ret = irq_set_affinity_hint(ctx->irq_num, tsk_cpus_allowed(current));
+	if (ret)
+		pr_err("USDPAA irq_set_affinity_hint() failed, ret= %d\n", ret);
+
 	return 0;
 }
 
