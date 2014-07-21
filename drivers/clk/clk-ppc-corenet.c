@@ -239,7 +239,6 @@ err_clks:
 
 static const struct of_device_id clk_match[] __initconst = {
 	{ .compatible = "fixed-clock", .data = of_fixed_clk_setup, },
-	{ .compatible = "fsl,sys-clock", .data = of_fixed_clk_setup, },
 	{ .compatible = "fsl,core-pll-clock", .data = core_pll_init, },
 	{ .compatible = "fsl,core-mux-clock", .data = core_mux_init, },
 	{}
