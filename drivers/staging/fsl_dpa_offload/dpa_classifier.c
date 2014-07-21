@@ -7975,9 +7975,16 @@ int dpa_classif_mcast_remove_member(int grpd, int md)
 	mutex_lock(&pgroup->access);
 	release_desc_table(&mcast_grp_array);
 
-	if ((md <= 0) || (md > pgroup->group_params.max_members)) {
+	if (pgroup->num_members <= 1) {
 		mutex_unlock(&pgroup->access);
-		log_err("Invalid member descriptor (grpd=%d).\n", md);
+		log_err("Last member in group cannot be removed (md=%d).\n",
+			md);
+		return -EINVAL;
+	}
+
+	if ((md < 0) || (md > pgroup->group_params.max_members)) {
+		mutex_unlock(&pgroup->access);
+		log_err("Invalid member descriptor (md=%d).\n", md);
 		return -EINVAL;
 	}
 
