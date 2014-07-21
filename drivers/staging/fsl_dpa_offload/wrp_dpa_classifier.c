@@ -2637,9 +2637,10 @@ int dpa_cls_hm_remove_params_compatcpy(
 	memcpy(&kparam->rm_params.custom, &uparam->rm_params.custom,
 		sizeof(struct dpa_cls_hm_custom_rm_params));
 
-	kparam->rm_params.fm_pcd = compat_ptr(uparam->rm_params.fm_pcd);
-	kparam->next_hmd	= uparam->next_hmd;
-	kparam->hmd		= uparam->hmd;
+	kparam->rm_params.fm_pcd	= compat_ptr(uparam->rm_params.fm_pcd);
+	kparam->rm_params.reparse	= uparam->rm_params.reparse;
+	kparam->next_hmd		= uparam->next_hmd;
+	kparam->hmd			= uparam->hmd;
 
 	if (uparam->res.remove_node)
 		kparam->res.remove_node	= compat_get_id2ptr(
@@ -2687,9 +2688,10 @@ int dpa_cls_hm_insert_params_compatcpy(
 		break;
 	}
 
-	kparam->ins_params.fm_pcd = compat_ptr(uparam->ins_params.fm_pcd);
-	kparam->next_hmd	= uparam->next_hmd;
-	kparam->hmd		= uparam->hmd;
+	kparam->ins_params.fm_pcd	= compat_ptr(uparam->ins_params.fm_pcd);
+	kparam->ins_params.reparse	= uparam->ins_params.reparse;
+	kparam->next_hmd		= uparam->next_hmd;
+	kparam->hmd			= uparam->hmd;
 	if (uparam->res.insert_node)
 		kparam->res.insert_node	= compat_get_id2ptr(
 							uparam->res.insert_node,
@@ -2727,6 +2729,7 @@ int dpa_cls_hm_vlan_params_compatcpy(
 	}
 
 	kparam->vlan_params.fm_pcd = compat_ptr(uparam->vlan_params.fm_pcd);
+	kparam->vlan_params.reparse = uparam->vlan_params.reparse;
 	kparam->next_hmd	= uparam->next_hmd;
 	kparam->hmd		= uparam->hmd;
 
@@ -2778,11 +2781,12 @@ int dpa_cls_hm_nat_params_compatcpy(
 			memcpy(&kparam->nat_params.nat, &uparam->nat_params.nat,
 			      sizeof(struct dpa_cls_hm_traditional_nat_params));
 
-	kparam->nat_params.fm_pcd = compat_ptr(uparam->nat_params.fm_pcd);
-	kparam->nat_params.sport = uparam->nat_params.sport;
-	kparam->nat_params.dport = uparam->nat_params.dport;
-	kparam->next_hmd	= uparam->next_hmd;
-	kparam->hmd		= uparam->hmd;
+	kparam->nat_params.fm_pcd	= compat_ptr(uparam->nat_params.fm_pcd);
+	kparam->nat_params.reparse	= uparam->nat_params.reparse;
+	kparam->nat_params.sport	= uparam->nat_params.sport;
+	kparam->nat_params.dport	= uparam->nat_params.dport;
+	kparam->next_hmd		= uparam->next_hmd;
+	kparam->hmd			= uparam->hmd;
 
 	if (uparam->res.l3_update_node)
 		kparam->res.l3_update_node = compat_get_id2ptr(
@@ -2840,6 +2844,7 @@ int dpa_cls_hm_update_params_compatcpy(
 
 
 	kparam->update_params.fm_pcd = compat_ptr(uparam->update_params.fm_pcd);
+	kparam->update_params.reparse = uparam->update_params.reparse;
 	kparam->next_hmd	= uparam->next_hmd;
 	kparam->hmd		= uparam->hmd;
 
@@ -2869,8 +2874,9 @@ int dpa_cls_hm_fwd_params_compatcpy(
 {
 	int type;
 
-	kparam->fwd_params.out_if_type = uparam->fwd_params.out_if_type;
-	kparam->fwd_params.fm_pcd = compat_ptr(uparam->fwd_params.fm_pcd);
+	kparam->fwd_params.out_if_type	= uparam->fwd_params.out_if_type;
+	kparam->fwd_params.fm_pcd	= compat_ptr(uparam->fwd_params.fm_pcd);
+	kparam->fwd_params.reparse	= uparam->fwd_params.reparse;
 
 	type = kparam->fwd_params.out_if_type;
 	switch (type) {
@@ -2932,6 +2938,7 @@ int dpa_cls_hm_mpls_params_compatcpy(
 		sizeof(struct mpls_header) * DPA_CLS_HM_MAX_MPLS_LABELS);
 	kparam->mpls_params.num_labels = uparam->mpls_params.num_labels;
 	kparam->mpls_params.fm_pcd = compat_ptr(uparam->mpls_params.fm_pcd);
+	kparam->mpls_params.reparse = uparam->mpls_params.reparse;
 	kparam->next_hmd	= uparam->next_hmd;
 	kparam->hmd		= uparam->hmd;
 

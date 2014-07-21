@@ -3742,7 +3742,6 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 	BUG_ON(!node_array);
 	BUG_ON(!hm);
 
-	/* This HM operation is linked to another HM op */
 	for (i = num_nodes - 1; i >= 0; i--) {
 		/*
 		 * If the node is empty, save an empty space and skip
@@ -3787,6 +3786,9 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 			/* Fill in the node */
 			hm->hm_node[i]->node = node_array[i];
 			INIT_LIST_HEAD(&hm->hm_node[i]->list_node);
+
+			/* Initialize dontParseAfterManip to TRUE */
+			hm->hm_node[i]->params.u.hdr.dontParseAfterManip = TRUE;
 
 			/* Add this new node to the HM chain: */
 			list_add(&hm->hm_node[i]->list_node,
@@ -4478,6 +4480,10 @@ static int nat_hm_prepare_nodes(struct dpa_cls_hm *pnat_hm,
 	}
 
 	INIT_LIST_HEAD(&hm_node->list_node);
+
+	/* Initialize dontParseAfterManip to TRUE */
+	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
 	pnat_hm->hm_node[0] = hm_node;
 
 	if (pnat_hm->nat_params.flags &
@@ -4491,6 +4497,10 @@ static int nat_hm_prepare_nodes(struct dpa_cls_hm *pnat_hm,
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
 		pnat_hm->hm_node[1] = hm_node;
 	}
 
@@ -4518,7 +4528,12 @@ static int nat_hm_update_params(struct dpa_cls_hm *pnat_hm)
 		hm_node = pnat_hm->hm_node[0];
 
 		hm_node->params.type = e_FM_PCD_MANIP_HDR;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+		if (pnat_hm->hm_node[1])
+			hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+		else
+			hm_node->params.u.hdr.dontParseAfterManip &=
+					(pnat_hm->nat_params.reparse) ? FALSE :
+						TRUE;
 
 		if (pnat_hm->nat_params.type ==
 					DPA_CLS_HM_NAT_TYPE_TRADITIONAL) {
@@ -4633,9 +4648,11 @@ static int nat_hm_update_params(struct dpa_cls_hm *pnat_hm)
 
 		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 		hm_node->params.u.hdr.fieldUpdate	= TRUE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 		hm_node->params.u.hdr.fieldUpdateParams.type =
 				e_FM_PCD_MANIP_HDR_FIELD_UPDATE_TCP_UDP;
+
+		hm_node->params.u.hdr.dontParseAfterManip &=
+				(pnat_hm->nat_params.reparse) ? FALSE : TRUE;
 
 		if (pnat_hm->nat_params.flags & DPA_CLS_HM_NAT_UPDATE_SPORT) {
 			hm_node->params.u.hdr.fieldUpdateParams.u.tcpUdp.
@@ -4969,6 +4986,10 @@ static int fwd_hm_prepare_nodes(struct dpa_cls_hm *pfwd_hm,
 	}
 
 	INIT_LIST_HEAD(&hm_node->list_node);
+
+	/* Initialize dontParseAfterManip to TRUE */
+	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
 	pfwd_hm->hm_node[0] = hm_node;
 
 	if (pfwd_hm->update_params.ip_frag_params.mtu) {
@@ -5007,8 +5028,10 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 
 	hm_node = pfwd_hm->hm_node[0];
 
-	hm_node->params.type			= e_FM_PCD_MANIP_HDR;
-	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pfwd_hm->fwd_params.reparse) ? FALSE : TRUE;
+
 	switch (pfwd_hm->fwd_params.out_if_type) {
 	case DPA_CLS_HM_IF_TYPE_ETHERNET:
 		/* Update Ethernet MACS */
@@ -5016,7 +5039,6 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 		hm_node->params.u.hdr.insrtParams.type	=
 						e_FM_PCD_MANIP_INSRT_GENERIC;
 		hm_node->params.u.hdr.insrtParams.u.generic.replace = TRUE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 		size = (uint8_t)(sizeof(struct ethhdr) - ETHERTYPE_SIZE);
 		pdata = kzalloc(size, GFP_KERNEL);
@@ -5402,6 +5424,9 @@ static int remove_hm_prepare_nodes(struct dpa_cls_hm *premove_hm,
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
 
 	premove_hm->hm_node[0] = hm_node;
@@ -5427,9 +5452,11 @@ static int remove_hm_update_params(struct dpa_cls_hm *premove_hm)
 
 	hm_node = premove_hm->hm_node[0];
 
-	hm_node->params.type			= e_FM_PCD_MANIP_HDR;
-	hm_node->params.u.hdr.rmv		= TRUE;
-	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+	hm_node->params.type		= e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.rmv	= TRUE;
+
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(premove_hm->remove_params.reparse) ? FALSE : TRUE;
 
 	switch (premove_hm->remove_params.type) {
 	case DPA_CLS_HM_REMOVE_ETHERNET:
@@ -5695,6 +5722,9 @@ static int insert_hm_prepare_nodes(struct dpa_cls_hm *pinsert_hm,
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
 
 	pinsert_hm->hm_node[0] = hm_node;
@@ -5726,7 +5756,9 @@ static int insert_hm_update_params(struct dpa_cls_hm *pinsert_hm)
 	hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 	hm_node->params.u.hdr.insrt		= TRUE;
 	hm_node->params.u.hdr.insrtParams.type	= e_FM_PCD_MANIP_INSRT_GENERIC;
-	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pinsert_hm->insert_params.reparse) ? FALSE : TRUE;
 
 	switch (pinsert_hm->insert_params.type) {
 	case DPA_CLS_HM_INSERT_ETHERNET:
@@ -6108,6 +6140,9 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
 
 	pupdate_hm->hm_node[0] = hm_node;
@@ -6153,10 +6188,10 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 
 	hm_node = pupdate_hm->hm_node[0];
 
+	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+
 	if (pupdate_hm->update_params.op_flags & update_ops) {
-		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 		hm_node->params.u.hdr.fieldUpdate	= TRUE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 		if (pupdate_hm->update_params.op_flags &
 				DPA_CLS_HM_UPDATE_IPv4_UPDATE) {
@@ -6296,11 +6331,9 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 	}
 
 	if (pupdate_hm->update_params.op_flags & replace_ops) {
-		hm_node->params.type		= e_FM_PCD_MANIP_HDR;
-		hm_node->params.u.hdr.custom	= TRUE;
+		hm_node->params.u.hdr.custom = TRUE;
 		hm_node->params.u.hdr.customParams.type =
 				e_FM_PCD_MANIP_HDR_CUSTOM_IP_REPLACE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 		if (pupdate_hm->update_params.op_flags &
 				DPA_CLS_HM_REPLACE_IPv4_BY_IPv6) {
@@ -6338,6 +6371,9 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 	}
 		}
 	}
+
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pupdate_hm->update_params.reparse) ? FALSE : TRUE;
 
 	hm_node = pupdate_hm->hm_node[1];
 
@@ -6728,6 +6764,9 @@ static int vlan_hm_prepare_nodes(struct dpa_cls_hm *pvlan_hm,
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
 
 	pvlan_hm->hm_node[0] = hm_node;
@@ -6756,6 +6795,8 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 	hm_node = pvlan_hm->hm_node[0];
 
 	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pvlan_hm->vlan_params.reparse) ? FALSE : TRUE;
 
 	switch (pvlan_hm->vlan_params.type) {
 	case DPA_CLS_HM_VLAN_INGRESS:
@@ -6766,7 +6807,6 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 					e_FM_PCD_MANIP_RMV_BY_HDR_SPECIFIC_L2;
 		hm_node->params.u.hdr.rmvParams.u.byHdr.u.specificL2 =
 					e_FM_PCD_MANIP_HDR_RMV_STACKED_QTAGS;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 		break;
 	case DPA_CLS_HM_VLAN_EGRESS:
@@ -6808,7 +6848,6 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 			hm_node->params.u.hdr.fieldUpdate = TRUE;
 			hm_node->params.u.hdr.fieldUpdateParams.type =
 					e_FM_PCD_MANIP_HDR_FIELD_UPDATE_VLAN;
-			hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 			switch (pvlan_hm->vlan_params.egress.update_op) {
 			case DPA_CLS_HM_VLAN_UPDATE_VPri:
@@ -7123,6 +7162,9 @@ static int mpls_hm_prepare_nodes(struct dpa_cls_hm *pmpls_hm,
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
 
 	pmpls_hm->hm_node[0] = hm_node;
@@ -7151,6 +7193,8 @@ static int mpls_hm_update_params(struct dpa_cls_hm *pmpls_hm)
 	hm_node = pmpls_hm->hm_node[0];
 
 	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pmpls_hm->mpls_params.reparse) ? FALSE : TRUE;
 
 	switch (pmpls_hm->mpls_params.type) {
 	case DPA_CLS_HM_MPLS_REMOVE_ALL_LABELS:
