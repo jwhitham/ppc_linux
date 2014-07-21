@@ -508,14 +508,6 @@ static inline void key_apply_mask(const struct dpa_offload_lookup_key *key,
 	uint8_t *new_key);
 
 /*
- * Finds in a chain of low level header manipulation nodes a node which is
- * compatible with a specific operation, so that the node can be reused.
- */
-static struct dpa_cls_hm_node
-	*find_compatible_hm_node(enum dpa_cls_hm_node_type type,
-							struct list_head *list);
-
-/*
  * Import a set of low level header manipulation nodes into an existing
  * low level header manipulation nodes list (associated with a classifier
  * header manipulation op).
