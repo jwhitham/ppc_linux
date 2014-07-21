@@ -13,6 +13,14 @@
 / {
 	model = "LS1021A QDS Board";
 
+	aliases {
+		enet0_rgmii_phy = &rgmii_phy1;
+		enet1_rgmii_phy = &rgmii_phy2;
+		enet2_rgmii_phy = &rgmii_phy3;
+		enet0_sgmii_phy = &sgmii_phy1c;
+		enet1_sgmii_phy = &sgmii_phy1d;
+	};
+
 	soc {
 		leds {
 			compatible = "pwm-leds";
@@ -85,21 +93,21 @@
 
 &enet0 {
 	tbi-handle = <&tbi0>;
-	phy-handle = <&physgmii1c>;
+	phy-handle = <&sgmii_phy1c>;
 	phy-connection-type = "sgmii";
 	status = "okay";
 };
 
 &enet1 {
 	tbi-handle = <&tbi0>;
-	phy-handle = <&physgmii1d>;
+	phy-handle = <&sgmii_phy1d>;
 	phy-connection-type = "sgmii";
 	status = "okay";
 };
 
 &enet2 {
-	phy-handle = <&phyrgmii3>;
-	phy-connection-type = "rgmii";
+	phy-handle = <&rgmii_phy3>;
+	phy-connection-type = "rgmii-id";
 	status = "okay";
 };
 
@@ -243,7 +251,7 @@
 					reg = <0>;
 					#address-cells = <1>;
 					#size-cells = <0>;
-					phyrgmii1: ethernet-phy@1 {
+					rgmii_phy1: ethernet-phy@1 {
 						reg = <0x1>;
 					};
 				};
@@ -251,7 +259,7 @@
 					reg = <0x20>;
 					#address-cells = <1>;
 					#size-cells = <0>;
-					phyrgmii2: ethernet-phy@2 {
+					rgmii_phy2: ethernet-phy@2 {
 						reg = <0x2>;
 					};
 				};
@@ -259,7 +267,7 @@
 					reg = <0x40>;
 					#address-cells = <1>;
 					#size-cells = <0>;
-					phyrgmii3: ethernet-phy@3 {
+					rgmii_phy3: ethernet-phy@3 {
 						reg = <0x3>;
 					};
 				};
@@ -267,7 +275,7 @@
 					reg = <0x60>;
 					#address-cells = <1>;
 					#size-cells = <0>;
-					physgmii1c: ethernet-phy@1c {
+					sgmii_phy1c: ethernet-phy@1c {
 						reg = <0x1c>;
 					};
 				};
@@ -275,7 +283,7 @@
 					reg = <0x80>;
 					#address-cells = <1>;
 					#size-cells = <0>;
-					physgmii1d: ethernet-phy@1d {
+					sgmii_phy1d: ethernet-phy@1d {
 						reg = <0x1d>;
 					};
 				};
@@ -287,6 +295,13 @@
 
 &lpuart0 {
 	status = "okay";
+};
+
+&mdio0 {
+	tbi0: tbi-phy@8 {
+		reg = <0x8>;
+		device_type = "tbi-phy";
+	};
 };
 
 &pwm3 {
