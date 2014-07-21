@@ -460,10 +460,6 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2d24000 0x0 0x4000>;
-			tbi0: tbi-phy@8 {
-				reg = <0x8>;
-				device_type = "tbi-phy";
-			};
 		};
 
 		enet0: ethernet@2d10000 {
