@@ -6665,6 +6665,12 @@ int dpa_classif_modify_update_hm(int hmd,
 		}
 	}
 
+	if (modify_flags & DPA_CLS_HM_UPDATE_MOD_IP_FRAG_MTU) {
+		pupdate_hm->update_params.ip_frag_params.mtu =
+				new_update_params->ip_frag_params.mtu;
+		update[1] = true;
+	}
+
 	if (update[0]) {
 		ret = update_hm_update_params(pupdate_hm);
 		if (ret == 0) {
@@ -6693,7 +6699,34 @@ int dpa_classif_modify_update_hm(int hmd,
 		}
 	}
 
-	/* update[1] not supported at this time */
+	if (update[1]) {
+		ret = update_hm_update_params(pupdate_hm);
+		if (ret == 0) {
+			t_FmPcdManipParams new_hm_node_params;
+
+			hm_node = pupdate_hm->hm_node[1];
+
+			/*
+			 * Have to make a copy of the manip node params because
+			 * ManipNodeReplace does not accept h_NextManip != NULL.
+			 */
+			memcpy(&new_hm_node_params, &hm_node->params,
+						sizeof(new_hm_node_params));
+			new_hm_node_params.h_NextManip = NULL;
+			error = FM_PCD_ManipNodeReplace(hm_node->node,
+							&new_hm_node_params);
+			if (error != E_OK) {
+				release_desc_table(&hm_array);
+				mutex_unlock(&pupdate_hm->access);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
+				return -EBUSY;
+			}
+		}
+
+	}
 
 	release_desc_table(&hm_array);
 	mutex_unlock(&pupdate_hm->access);
