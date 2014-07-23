@@ -225,7 +225,7 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 	 * adjust_link is triggered by a forced renegotiation of sym/asym PAUSE
 	 * settings.
 	 */
-	mac_dev->autoneg_pause = epause->autoneg;
+	mac_dev->autoneg_pause = !!epause->autoneg;
 
 	/* Determine the sym/asym advertised PAUSE capabilities from the desired
 	 * rx/tx pause settings.

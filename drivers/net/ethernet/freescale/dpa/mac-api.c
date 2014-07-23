@@ -381,8 +381,8 @@ static void get_pause_cfg(struct mac_device *mac_dev,
 	 * are those set by ethtool.
 	 */
 	if (!mac_dev->autoneg_pause) {
-		*rx_pause = !!mac_dev->rx_pause;
-		*tx_pause = !!mac_dev->tx_pause;
+		*rx_pause = mac_dev->rx_pause;
+		*tx_pause = mac_dev->tx_pause;
 		return;
 	}
 

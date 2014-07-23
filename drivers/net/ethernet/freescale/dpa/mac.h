@@ -67,9 +67,9 @@ struct mac_device {
 	/* List of multicast addresses */
 	struct list_head	 mc_addr_list;
 
-	u32	autoneg_pause;
-	u32	rx_pause;
-	u32	tx_pause;
+	bool autoneg_pause;
+	bool rx_pause;
+	bool tx_pause;
 
 	struct fm_mac_dev *(*get_mac_handle)(struct mac_device *mac_dev);
 	int (*init_phy)(struct net_device *net_dev, struct mac_device *mac_dev);
