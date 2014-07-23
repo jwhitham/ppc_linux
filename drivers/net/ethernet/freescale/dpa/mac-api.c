@@ -330,33 +330,24 @@ static int __cold set_multi(struct net_device *net_dev,
 }
 
 /* Avoid redundant calls to FMD, if the MAC driver already contains the desired
- * settings. Otherwise, the new MAC settings should be reflected in FMan.
+ * active PAUSE settings. Otherwise, the new active settings should be reflected
+ * in FMan.
  */
-int set_mac_rx_pause(struct mac_device *mac_dev, bool en)
+int set_mac_active_pause(struct mac_device *mac_dev, bool rx, bool tx)
 {
-	struct fm_mac_dev *fm_mac_dev;
+	struct fm_mac_dev *fm_mac_dev = mac_dev->get_mac_handle(mac_dev);
 	int _errno = 0;
 
-	if (unlikely(en != mac_dev->rx_pause)) {
-		fm_mac_dev = mac_dev->get_mac_handle(mac_dev);
-		_errno = fm_mac_set_rx_pause_frames(fm_mac_dev, en);
+	if (unlikely(rx != mac_dev->rx_pause_active)) {
+		_errno = fm_mac_set_rx_pause_frames(fm_mac_dev, rx);
 		if (likely(_errno == 0))
-			mac_dev->rx_pause = en;
+			mac_dev->rx_pause_active = rx;
 	}
 
-	return _errno;
-}
-
-int set_mac_tx_pause(struct mac_device *mac_dev, bool en)
-{
-	int _errno = 0;
-	struct fm_mac_dev *fm_mac_dev;
-
-	if (unlikely(en != mac_dev->tx_pause)) {
-		fm_mac_dev = mac_dev->get_mac_handle(mac_dev);
-		_errno = fm_mac_set_tx_pause_frames(fm_mac_dev, en);
+	if (unlikely(tx != mac_dev->tx_pause_active)) {
+		_errno = fm_mac_set_tx_pause_frames(fm_mac_dev, tx);
 		if (likely(_errno == 0))
-			mac_dev->tx_pause = en;
+			mac_dev->tx_pause_active = tx;
 	}
 
 	return _errno;
@@ -365,8 +356,7 @@ int set_mac_tx_pause(struct mac_device *mac_dev, bool en)
 /* Determine the MAC RX/TX PAUSE frames settings based on PHY
  * autonegotiation or values set by eththool.
  */
-static void get_pause_cfg(struct mac_device *mac_dev,
-		bool *rx_pause, bool *tx_pause)
+void get_pause_cfg(struct mac_device *mac_dev, bool *rx_pause, bool *tx_pause)
 {
 	struct phy_device *phy_dev = mac_dev->phy_dev;
 	u16 lcl_adv, rmt_adv;
@@ -381,8 +371,8 @@ static void get_pause_cfg(struct mac_device *mac_dev,
 	 * are those set by ethtool.
 	 */
 	if (!mac_dev->autoneg_pause) {
-		*rx_pause = mac_dev->rx_pause;
-		*tx_pause = mac_dev->tx_pause;
+		*rx_pause = mac_dev->rx_pause_req;
+		*tx_pause = mac_dev->tx_pause_req;
 		return;
 	}
 
@@ -428,13 +418,9 @@ static void adjust_link(struct net_device *net_dev)
 			phy_dev->duplex);
 
 	get_pause_cfg(mac_dev, &rx_pause, &tx_pause);
-
-	_errno = set_mac_rx_pause(mac_dev, rx_pause);
+	_errno = set_mac_active_pause(mac_dev, rx_pause, tx_pause);
 	if (unlikely(_errno < 0))
-		netdev_err(net_dev, "set_rx_pause() = %d\n", _errno);
-	_errno = set_mac_tx_pause(mac_dev, tx_pause);
-	if (unlikely(_errno < 0))
-		netdev_err(net_dev, "set_tx_pause() = %d\n", _errno);
+		netdev_err(net_dev, "set_mac_active_pause() = %d\n", _errno);
 }
 
 /* Initializes driver's PHY state, and attaches to the PHY.

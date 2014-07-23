@@ -68,8 +68,10 @@ struct mac_device {
 	struct list_head	 mc_addr_list;
 
 	bool autoneg_pause;
-	bool rx_pause;
-	bool tx_pause;
+	bool rx_pause_req;
+	bool tx_pause_req;
+	bool rx_pause_active;
+	bool tx_pause_active;
 
 	struct fm_mac_dev *(*get_mac_handle)(struct mac_device *mac_dev);
 	int (*init_phy)(struct net_device *net_dev, struct mac_device *mac_dev);
@@ -121,7 +123,7 @@ extern const char	*mac_driver_description;
 extern const size_t	 mac_sizeof_priv[];
 extern void (*const mac_setup[])(struct mac_device *mac_dev);
 
-int set_mac_rx_pause(struct mac_device *mac_dev, bool en);
-int set_mac_tx_pause(struct mac_device *mac_dev, bool en);
+int set_mac_active_pause(struct mac_device *mac_dev, bool rx, bool tx);
+void get_pause_cfg(struct mac_device *mac_dev, bool *rx_pause, bool *tx_pause);
 
 #endif	/* __MAC_H */

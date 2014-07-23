@@ -364,19 +364,11 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	/* by intializing the values to false, force FMD to enable PAUSE frames
 	 * on RX and TX
 	 */
-	mac_dev->rx_pause = mac_dev->tx_pause = false;
-	/* does not ignore PAUSE frames */
-	_errno = set_mac_rx_pause(mac_dev, true);
-	if (unlikely(_errno < 0)) {
-		dev_err(dev, "set_mac_rx_pause() = %d\n", _errno);
-		return _errno;
-	}
-	/* transmits PAUSE frames when congested */
-	_errno = set_mac_tx_pause(mac_dev, true);
-	if (unlikely(_errno < 0)) {
-		dev_err(dev, "set_mac_tx_pause() = %d\n", _errno);
-		return _errno;
-	}
+	mac_dev->rx_pause_req = mac_dev->tx_pause_req = true;
+	mac_dev->rx_pause_active = mac_dev->tx_pause_active = false;
+	_errno = set_mac_active_pause(mac_dev, true, true);
+	if (unlikely(_errno < 0))
+		dev_err(dev, "set_mac_active_pause() = %d\n", _errno);
 
 	dev_info(dev,
 		"FMan MAC address: %02hx:%02hx:%02hx:%02hx:%02hx:%02hx\n",
