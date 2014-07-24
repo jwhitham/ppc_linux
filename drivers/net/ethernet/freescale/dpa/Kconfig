@@ -62,14 +62,14 @@ config FSL_DPAA_ETH_JUMBO_FRAME
 	  the system memory.
 
 config FSL_DPAA_TS
-	tristate "Linux compliant timestamping"
+	bool "Linux compliant timestamping"
 	depends on FSL_DPAA_ETH
 	default n
 	---help---
 	  Enable Linux API compliant timestamping support.
 
 config FSL_DPAA_1588
-        tristate "IEEE 1588-compliant timestamping"
+        bool "IEEE 1588-compliant timestamping"
         depends on FSL_DPAA_ETH
         select FSL_DPAA_TS
         default n
@@ -143,7 +143,7 @@ config FSL_DPAA_INGRESS_CS_THRESHOLD
 	  Traffic piling up above this value will be rejected by QMan and discarded by FMan.
 
 config FSL_DPAA_ETH_DEBUGFS
-	tristate "DPAA Ethernet debugfs interface"
+	bool "DPAA Ethernet debugfs interface"
 	depends on DEBUG_FS && FSL_DPAA_ETH
 	default y
 	---help---
