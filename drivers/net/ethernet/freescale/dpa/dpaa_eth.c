@@ -373,6 +373,7 @@ int dpaa_eth_poll(struct napi_struct *napi, int budget)
 
 	return cleaned;
 }
+EXPORT_SYMBOL(dpaa_eth_poll);
 
 static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 			  const struct dpa_priv_s	*priv,
@@ -718,6 +719,7 @@ void dpa_private_napi_del(struct net_device *net_dev)
 		}
 	}
 }
+EXPORT_SYMBOL(dpa_private_napi_del);
 
 static int dpa_private_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev)

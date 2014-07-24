@@ -182,6 +182,7 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(dpa_bp_priv_seed);
 
 /* Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
@@ -211,6 +212,7 @@ int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp, int *countptr)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpaa_eth_refill_bpools);
 
 /* Cleanup function for outgoing frame descriptors that were built on Tx path,
  * either contiguous frames or scatter/gather ones.
