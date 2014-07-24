@@ -578,14 +578,3 @@ void dpa_ptp_cleanup(struct dpa_priv_s *priv)
 	kfree(tsu);
 }
 EXPORT_SYMBOL(dpa_ptp_cleanup);
-
-static int __init __cold dpa_ptp_load(void)
-{
-	return 0;
-}
-module_init(dpa_ptp_load);
-
-static void __exit __cold dpa_ptp_unload(void)
-{
-}
-module_exit(dpa_ptp_unload);
