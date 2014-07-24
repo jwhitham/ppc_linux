@@ -1135,6 +1135,10 @@ static int __init __cold dpa_load(void)
 
 	pr_info(DPA_DESCRIPTION " (" VERSION ")\n");
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_debugfs_module_init();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
@@ -1164,6 +1168,10 @@ static void __exit __cold dpa_unload(void)
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_driver);
+
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_debugfs_module_exit();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
