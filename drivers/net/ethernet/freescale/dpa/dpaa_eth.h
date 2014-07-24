@@ -36,9 +36,6 @@
 #include <linux/fsl_qman.h>	/* struct qman_fq */
 
 #include "fm_ext.h"
-#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
-#include "dpaa_debugfs.h"
-#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 #include "dpaa_eth_trace.h"
 
 extern int dpa_rx_extra_headroom;
