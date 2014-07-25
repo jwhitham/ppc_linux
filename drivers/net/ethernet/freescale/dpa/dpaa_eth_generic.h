@@ -84,10 +84,11 @@ struct dpa_generic_priv_s {
 	struct timer_list timer;
 };
 
+extern const struct ethtool_ops dpa_generic_ethtool_ops;
 
 void dpaa_eth_generic_sysfs_init(struct device *dev);
 void dpaa_eth_generic_sysfs_remove(struct device *dev);
-
-extern const struct ethtool_ops dpa_generic_ethtool_ops;
+int __init dpa_generic_debugfs_module_init(void);
+void __exit dpa_generic_debugfs_module_exit(void);
 
 #endif /* __DPA_ETH_GENERIC_H */

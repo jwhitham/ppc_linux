@@ -66,9 +66,9 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION(DPA_GENERIC_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
+static uint8_t generic_debug = -1;
+module_param(generic_debug, byte, S_IRUGO);
+MODULE_PARM_DESC(generic_debug, "Module/Driver verbosity level");
 
 /* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
 static uint16_t tx_timeout = 1000;
@@ -1439,7 +1439,7 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	priv = netdev_priv(netdev);
 	priv->net_dev = netdev;
 	sprintf(priv->if_type, "generic%d", generic_idx++);
-	priv->msg_enable = netif_msg_init(debug, -1);
+	priv->msg_enable = netif_msg_init(generic_debug, -1);
 	priv->tx_headroom = DPA_DEFAULT_TX_HEADROOM;
 
 	init_timer(&priv->timer);
@@ -1530,6 +1530,10 @@ static int __init __cold dpa_generic_load(void)
 			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
 	}
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_generic_debugfs_module_init();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 
@@ -1547,6 +1551,10 @@ static void __exit __cold dpa_generic_unload(void)
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_generic_driver);
+
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_generic_debugfs_module_exit();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);

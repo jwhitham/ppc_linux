@@ -254,7 +254,7 @@ void dpa_generic_debugfs_remove(struct net_device *net_dev)
 	debugfs_remove(priv->debugfs_file);
 }
 
-static int __init dpa_generic_debugfs_module_init(void)
+int __init dpa_generic_debugfs_module_init(void)
 {
 	int	 _errno = 0;
 
@@ -273,11 +273,7 @@ static int __init dpa_generic_debugfs_module_init(void)
 	return _errno;
 }
 
-static void __exit dpa_generic_debugfs_module_exit(void)
+void __exit dpa_generic_debugfs_module_exit(void)
 {
 	debugfs_remove(dpa_debugfs_root);
 }
-
-module_init(dpa_generic_debugfs_module_init);
-module_exit(dpa_generic_debugfs_module_exit);
-MODULE_LICENSE("Dual BSD/GPL");
