@@ -8,15 +8,19 @@ include $(srctree)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 
 ccflags-y += -I$(NET_DPA)
 
-obj-$(CONFIG_FSL_DPAA_1588) += dpaa_1588.o
-# dpaa_debugfs needs to be initialized before dpaa_eth
-obj-$(CONFIG_FSL_DPAA_ETH_DEBUGFS) += dpaa_debugfs.o
-obj-$(CONFIG_FSL_DPAA_ETH) += fsl-mac.o fsl-dpa.o fsl-dpa-common.o
+obj-$(CONFIG_FSL_DPAA_ETH) += fsl_mac.o fsl_dpa.o
 obj-$(CONFIG_PTP_1588_CLOCK_DPAA) += dpaa_ptp.o
 
-fsl-dpa-objs	:= dpaa_ethtool.o dpaa_eth_sysfs.o \
-  dpaa_eth.o dpaa_eth_sg.o
-fsl-dpa-common-objs	:= dpaa_eth_common.o
+fsl_dpa-objs += dpaa_ethtool.o dpaa_eth_sysfs.o dpaa_eth.o dpaa_eth_sg.o dpaa_eth_common.o
+ifeq ($(CONFIG_FSL_DPAA_ETH_DEBUGFS),y)
+fsl_dpa-objs += dpaa_debugfs.o
+endif
+ifeq ($(CONFIG_FSL_DPAA_1588),y)
+fsl_dpa-objs += dpaa_1588.o
+endif
+
+fsl_mac-objs += mac.o mac-api.o
+
 # Advanced drivers
 ifeq ($(CONFIG_FSL_DPAA_ADVANCED_DRIVERS),y)
 obj-$(CONFIG_FSL_DPAA_ETH) += fsl_advanced.o
@@ -40,7 +44,6 @@ fsl_generic-objs += dpaa_generic_debugfs.o
 endif
 endif
 
-fsl-mac-objs	:= mac.o mac-api.o
 obj-$(CONFIG_FSL_CAPWAP) += capwap/
 
 # Needed by the tracing framework
