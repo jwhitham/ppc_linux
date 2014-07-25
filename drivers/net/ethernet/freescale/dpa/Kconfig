@@ -49,6 +49,18 @@ config FSL_CAPWAP_BRIDGE_ZMC
 
 endif # FSL_CAPWAP
 
+config FSL_DPAA_ADVANCED_DRIVERS
+        bool "Advanced DPAA Ethernet drivers"
+        depends on FSL_DPAA_ETH
+        default y
+        ---help---
+	  Besides the standard DPAA Ethernet driver there are available other flavours
+	  of DPAA drivers that support advanced scenarios:
+	  - DPAA Shared MAC driver
+	  - DPAA MAC-less driver
+	  - DPAA Proxy initialization driver (for USDPAA)
+	  Select this to also build the advanced drivers.
+
 config FSL_DPAA_ETH_JUMBO_FRAME
 	bool "Optimize for jumbo frames"
 	default n
