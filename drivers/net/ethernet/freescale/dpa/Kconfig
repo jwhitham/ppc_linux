@@ -61,6 +61,13 @@ config FSL_DPAA_ADVANCED_DRIVERS
 	  - DPAA Proxy initialization driver (for USDPAA)
 	  Select this to also build the advanced drivers.
 
+config FSL_DPAA_GENERIC_DRIVER
+	bool "Generic DPAA Ethernet driver"
+	depends on FSL_DPAA_ETH
+	default y
+	---help---
+	  This enables the DPAA Generic driver (oNIC).
+
 config FSL_DPAA_ETH_JUMBO_FRAME
 	bool "Optimize for jumbo frames"
 	default n
