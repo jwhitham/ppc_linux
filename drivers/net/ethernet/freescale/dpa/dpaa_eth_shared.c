@@ -75,14 +75,10 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
 /* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
-static uint16_t tx_timeout = 1000;
-module_param(tx_timeout, ushort, S_IRUGO);
-MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
+static uint16_t shared_tx_timeout = 1000;
+module_param(shared_tx_timeout, ushort, S_IRUGO);
+MODULE_PARM_DESC(shared_tx_timeout, "The Tx timeout in ms");
 
 static const struct of_device_id dpa_shared_match[];
 
@@ -600,7 +596,7 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 		NETIF_F_LLTX);
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
+	return dpa_netdev_init(dpa_node, net_dev, mac_addr, shared_tx_timeout);
 }
 
 #ifdef CONFIG_PM
@@ -717,7 +713,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	priv->net_dev = net_dev;
 	strcpy(priv->if_type, "shared");
 
-	priv->msg_enable = netif_msg_init(debug, -1);
+	priv->msg_enable = netif_msg_init(advanced_debug, -1);
 
 	mac_dev = dpa_mac_probe(_of_dev);
 	if (IS_ERR(mac_dev) || !mac_dev) {
@@ -866,7 +862,7 @@ MODULE_DEVICE_TABLE(of, dpa_shared_match);
 
 static struct platform_driver dpa_shared_driver = {
 	.driver = {
-		.name		= KBUILD_MODNAME,
+		.name		= KBUILD_MODNAME "-shared",
 		.of_match_table	= dpa_shared_match,
 		.owner		= THIS_MODULE,
 		.pm		= SHARED_PM_OPS,
@@ -875,7 +871,7 @@ static struct platform_driver dpa_shared_driver = {
 	.remove		= dpa_remove
 };
 
-static int __init __cold dpa_shared_load(void)
+int __init __cold dpa_shared_load(void)
 {
 	int	 _errno;
 
@@ -897,13 +893,11 @@ static int __init __cold dpa_shared_load(void)
 
 	return _errno;
 }
-module_init(dpa_shared_load);
 
-static void __exit __cold dpa_shared_unload(void)
+void __exit __cold dpa_shared_unload(void)
 {
 	pr_debug(KBUILD_MODNAME ": -> %s:%s()\n",
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_shared_driver);
 }
-module_exit(dpa_shared_unload);

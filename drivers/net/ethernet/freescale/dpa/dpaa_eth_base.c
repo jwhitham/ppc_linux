@@ -29,6 +29,15 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUG
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": %s:%hu:%s() " fmt, \
+	KBUILD_BASENAME".c", __LINE__, __func__
+#else
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": " fmt
+#endif
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
@@ -42,6 +51,12 @@
 #include "dpaa_eth.h"
 #include "dpaa_eth_common.h"
 #include "dpaa_eth_base.h"
+
+#define DPA_DESCRIPTION "FSL DPAA Advanced drivers:"
+
+uint8_t advanced_debug = -1;
+module_param(advanced_debug, byte, S_IRUGO);
+MODULE_PARM_DESC(advanced_debug, "Module/Driver verbosity level");
 
 static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 {
@@ -219,3 +234,31 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	return 0;
 }
 
+static int __init __cold dpa_advanced_load(void)
+{
+	int      _errno;
+
+	pr_info(DPA_DESCRIPTION " (" VERSION ")\n");
+
+	_errno = dpa_proxy_load();
+
+	if (_errno == 0)
+		_errno = dpa_shared_load();
+
+	if (_errno == 0)
+		_errno = dpa_macless_load(); /* must be after proxy */
+
+	return _errno;
+}
+module_init(dpa_advanced_load);
+
+static void __exit __cold dpa_advanced_unload(void)
+{
+	pr_debug(KBUILD_MODNAME ": -> %s:%s()\n",
+		 KBUILD_BASENAME".c", __func__);
+
+	dpa_macless_unload();
+	dpa_shared_unload();
+	dpa_proxy_unload();
+}
+module_exit(dpa_advanced_unload);

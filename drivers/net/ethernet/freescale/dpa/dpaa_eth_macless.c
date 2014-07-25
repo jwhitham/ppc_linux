@@ -65,14 +65,10 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
 /* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
-static uint16_t tx_timeout = 1000;
-module_param(tx_timeout, ushort, S_IRUGO);
-MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
+static uint16_t macless_tx_timeout = 1000;
+module_param(macless_tx_timeout, ushort, S_IRUGO);
+MODULE_PARM_DESC(macless_tx_timeout, "The MACless Tx timeout in ms");
 
 /* reused from the shared driver */
 extern const struct dpa_fq_cbs_t shared_fq_cbs;
@@ -119,7 +115,7 @@ MODULE_DEVICE_TABLE(of, dpa_macless_match);
 
 static struct platform_driver dpa_macless_driver = {
 	.driver = {
-		.name		= KBUILD_MODNAME,
+		.name		= KBUILD_MODNAME "-macless",
 		.of_match_table	= dpa_macless_match,
 		.owner		= THIS_MODULE,
 	},
@@ -228,7 +224,7 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 		net_dev->mem_end = mac_dev->res->end;
 
 		return dpa_netdev_init(dpa_node, net_dev, mac_dev->addr,
-				tx_timeout);
+				macless_tx_timeout);
 	} else {
 		/* Get the MAC address from device tree */
 		mac_addr = of_get_mac_address(dpa_node);
@@ -240,7 +236,7 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 		}
 
 		return dpa_netdev_init(dpa_node, net_dev, mac_addr,
-				tx_timeout);
+				macless_tx_timeout);
 	}
 }
 
@@ -358,7 +354,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	priv->net_dev = net_dev;
 	sprintf(priv->if_type, "macless%d", macless_idx++);
 
-	priv->msg_enable = netif_msg_init(debug, -1);
+	priv->msg_enable = netif_msg_init(advanced_debug, -1);
 
 	priv->peer = NULL;
 	priv->mac_dev = NULL;
@@ -475,7 +471,7 @@ fq_probe_failed:
 	return err;
 }
 
-static int __init __cold dpa_macless_load(void)
+int __init __cold dpa_macless_load(void)
 {
 	int	 _errno;
 
@@ -497,16 +493,11 @@ static int __init __cold dpa_macless_load(void)
 
 	return _errno;
 }
-/* waits for proxy to initialize first, in case MAC device reference
- * is needed
- */
-late_initcall(dpa_macless_load);
 
-static void __exit __cold dpa_macless_unload(void)
+void __exit __cold dpa_macless_unload(void)
 {
 	platform_driver_unregister(&dpa_macless_driver);
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 }
-module_exit(dpa_macless_unload);

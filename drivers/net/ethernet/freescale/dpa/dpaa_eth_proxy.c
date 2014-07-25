@@ -53,10 +53,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev);
 #ifdef CONFIG_PM
 
@@ -329,7 +325,7 @@ MODULE_DEVICE_TABLE(of, dpa_proxy_match);
 
 static struct platform_driver dpa_proxy_driver = {
 	.driver = {
-		.name		= KBUILD_MODNAME"-proxy",
+		.name		= KBUILD_MODNAME "-proxy",
 		.of_match_table	= dpa_proxy_match,
 		.owner		= THIS_MODULE,
 		.pm		= PROXY_PM_OPS,
@@ -338,7 +334,7 @@ static struct platform_driver dpa_proxy_driver = {
 	.remove		= dpa_eth_proxy_remove
 };
 
-static int __init __cold dpa_proxy_load(void)
+int __init __cold dpa_proxy_load(void)
 {
 	int	 _errno;
 
@@ -360,13 +356,11 @@ static int __init __cold dpa_proxy_load(void)
 
 	return _errno;
 }
-module_init(dpa_proxy_load);
 
-static void __exit __cold dpa_proxy_unload(void)
+void __exit __cold dpa_proxy_unload(void)
 {
 	platform_driver_unregister(&dpa_proxy_driver);
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 }
-module_exit(dpa_proxy_unload);
