@@ -1,5 +1,5 @@
 menuconfig FSL_DPAA_ETH
-	bool "DPAA Ethernet"
+	tristate "DPAA Ethernet"
 	depends on FSL_SOC && FSL_BMAN && FSL_QMAN && FSL_FMAN
 	select PHYLIB
 	---help---
