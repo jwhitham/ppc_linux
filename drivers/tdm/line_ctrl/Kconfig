@@ -15,4 +15,10 @@ config FSL_PQ_MDS_T1
 		---help---
 		  This module initializes and configures the pq-mds-t1 card
 		  in T1 or E1 mode.
+config SLIC_MAXIM
+	tristate "SLIC MAXIM CARD SUPPORT"
+		default n
+		---help---
+		  This module initializes and configures the slic maxim card
+		  in T1 or E1 mode.
 endmenu
