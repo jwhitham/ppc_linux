@@ -70,7 +70,11 @@ static struct ucc_tdm_info utdm_primary_info = {
 	},
 
 	.si_info = {
+#ifdef CONFIG_FSL_PQ_MDS_T1
 		.simr_rfsd = 1,		/* pq_mds_t1 card need 1 bit delay */
+#else
+		.simr_rfsd = 0,
+#endif
 		.simr_tfsd = 0,
 		.simr_crt = 0,
 		.simr_sl = 0,
