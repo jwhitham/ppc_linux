@@ -5728,11 +5728,11 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     // filtering
     if (params->p_AutoResFilteringInfo)
     {
-        if (params->p_AutoResFilteringInfo->ipProtDropOnHit)
+        if (params->p_AutoResFilteringInfo->ipProtPassOnHit)
             tmp |= IP_PROT_TBL_PASS_MASK;
-        if (params->p_AutoResFilteringInfo->udpPortDropOnHit)
+        if (params->p_AutoResFilteringInfo->udpPortPassOnHit)
             tmp |= UDP_PORT_TBL_PASS_MASK;
-        if (params->p_AutoResFilteringInfo->tcpPortDropOnHit)
+        if (params->p_AutoResFilteringInfo->tcpPortPassOnHit)
             tmp |= TCP_PORT_TBL_PASS_MASK;
         WRITE_UINT8(ArCommonDescPtr->filterControl, tmp);
         WRITE_UINT16(ArCommonDescPtr->tcpControlPass, params->p_AutoResFilteringInfo->tcpFlagsMask);

@@ -1456,16 +1456,16 @@ typedef struct t_FmPortDsarFilteringInfo
     /* IP protocol filtering parameters */
     uint8_t     ipProtTableSize;
     uint8_t     *p_IpProtTablePtr;
-    bool        ipProtDropOnHit;  /* when TRUE, hit in the table will cause the packet to be droped,
-                                         miss will pass the packet to UDP/TCP filters if needed and if not
+    bool        ipProtPassOnHit;  /* when TRUE, miss in the table will cause the packet to be droped,
+                                         hit will pass the packet to UDP/TCP filters if needed and if not
                                          to the classification tree. If the classification tree will pass
                                          the packet to a queue it will cause a wake interupt.
                                          When FALSE it the other way around. */
     /* UDP port filtering parameters */
     uint8_t     udpPortsTableSize;
     t_FmPortDsarFilteringEntry *p_UdpPortsTablePtr;
-    bool        udpPortDropOnHit; /* when TRUE, hit in the table will cause the packet to be droped,
-                                         miss will pass the packet to classification tree.
+    bool        udpPortPassOnHit; /* when TRUE, miss in the table will cause the packet to be droped,
+                                         hit will pass the packet to classification tree.
                                          If the classification tree will pass the packet to a queue it
                                          will cause a wake interupt.
                                          When FALSE it the other way around. */
@@ -1473,8 +1473,8 @@ typedef struct t_FmPortDsarFilteringInfo
     uint16_t    tcpFlagsMask;
     uint8_t     tcpPortsTableSize;
     t_FmPortDsarFilteringEntry *p_TcpPortsTablePtr;
-    bool        tcpPortDropOnHit; /* when TRUE, hit in the table will cause the packet to be droped,
-                                         miss will pass the packet to classification tree.
+    bool        tcpPortPassOnHit; /* when TRUE, miss in the table will cause the packet to be droped,
+                                         hit will pass the packet to classification tree.
                                          If the classification tree will pass the packet to a queue it
                                          will cause a wake interupt.
                                          When FALSE it the other way around. */
