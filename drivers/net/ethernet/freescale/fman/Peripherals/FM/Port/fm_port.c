@@ -5735,6 +5735,7 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
         if (params->p_AutoResFilteringInfo->tcpPortDropOnHit)
             tmp |= TCP_PORT_TBL_PASS_MASK;
         WRITE_UINT8(ArCommonDescPtr->filterControl, tmp);
+        WRITE_UINT16(ArCommonDescPtr->tcpControlPass, params->p_AutoResFilteringInfo->tcpFlagsMask);
 
         // ip filtering
         if (params->p_AutoResFilteringInfo->ipProtTableSize)
