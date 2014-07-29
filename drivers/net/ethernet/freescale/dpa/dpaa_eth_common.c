@@ -69,7 +69,11 @@ struct ptp_priv_s ptp_priv;
 static struct dpa_bp *dpa_bp_array[64];
 
 int dpa_max_frm;
+EXPORT_SYMBOL(dpa_max_frm);
+
 int dpa_rx_extra_headroom;
+EXPORT_SYMBOL(dpa_rx_extra_headroom);
+
 int dpa_num_cpus = NR_CPUS;
 
 static const struct fqid_cell tx_confirm_fqids[] = {
@@ -142,6 +146,7 @@ int dpa_netdev_init(struct device_node *dpa_node,
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_netdev_init);
 
 int __cold dpa_start(struct net_device *net_dev)
 {
@@ -182,6 +187,7 @@ mac_start_failed:
 
 	return err;
 }
+EXPORT_SYMBOL(dpa_start);
 
 int __cold dpa_stop(struct net_device *net_dev)
 {
@@ -215,6 +221,7 @@ int __cold dpa_stop(struct net_device *net_dev)
 
 	return _errno;
 }
+EXPORT_SYMBOL(dpa_stop);
 
 void __cold dpa_timeout(struct net_device *net_dev)
 {
@@ -230,6 +237,7 @@ void __cold dpa_timeout(struct net_device *net_dev)
 
 	percpu_priv->stats.tx_errors++;
 }
+EXPORT_SYMBOL(dpa_timeout);
 
 /* net_device */
 
@@ -263,6 +271,7 @@ dpa_get_stats64(struct net_device *net_dev,
 
 	return stats;
 }
+EXPORT_SYMBOL(dpa_get_stats64);
 
 int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 {
@@ -278,6 +287,7 @@ int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_change_mtu);
 
 /* .ndo_init callback */
 int dpa_ndo_init(struct net_device *net_dev)
@@ -296,6 +306,7 @@ int dpa_ndo_init(struct net_device *net_dev)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_ndo_init);
 
 int dpa_set_features(struct net_device *dev, netdev_features_t features)
 {
@@ -303,6 +314,7 @@ int dpa_set_features(struct net_device *dev, netdev_features_t features)
 	dev->features = features;
 	return 0;
 }
+EXPORT_SYMBOL(dpa_set_features);
 
 netdev_features_t dpa_fix_features(struct net_device *dev,
 		netdev_features_t features)
@@ -320,6 +332,7 @@ netdev_features_t dpa_fix_features(struct net_device *dev,
 
 	return features;
 }
+EXPORT_SYMBOL(dpa_fix_features);
 
 #ifdef CONFIG_FSL_DPAA_TS
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
@@ -481,6 +494,7 @@ int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	return ret;
 }
+EXPORT_SYMBOL(dpa_ioctl);
 
 int __cold dpa_remove(struct platform_device *of_dev)
 {
@@ -524,6 +538,7 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	return err;
 }
+EXPORT_SYMBOL(dpa_remove);
 
 struct mac_device * __cold __must_check
 __attribute__((nonnull))
@@ -611,6 +626,7 @@ dpa_mac_probe(struct platform_device *_of_dev)
 #endif
 	return mac_dev;
 }
+EXPORT_SYMBOL(dpa_mac_probe);
 
 int dpa_set_mac_address(struct net_device *net_dev, void *addr)
 {
@@ -643,6 +659,7 @@ int dpa_set_mac_address(struct net_device *net_dev, void *addr)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_set_mac_address);
 
 void dpa_set_rx_mode(struct net_device *net_dev)
 {
@@ -666,6 +683,7 @@ void dpa_set_rx_mode(struct net_device *net_dev)
 	if (unlikely(_errno < 0) && netif_msg_drv(priv))
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }
+EXPORT_SYMBOL(dpa_set_rx_mode);
 
 void dpa_set_buffers_layout(struct mac_device *mac_dev,
 		struct dpa_buffer_layout_s *layout)
@@ -697,6 +715,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 	layout[TX].manip_extra_space = params.manip_extra_space;
 	layout[TX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 }
+EXPORT_SYMBOL(dpa_set_buffers_layout);
 
 int __attribute__((nonnull))
 dpa_bp_alloc(struct dpa_bp *dpa_bp)
@@ -767,6 +786,7 @@ pdev_register_failed:
 
 	return err;
 }
+EXPORT_SYMBOL(dpa_bp_alloc);
 
 void dpa_bp_drain(struct dpa_bp *bp)
 {
@@ -835,11 +855,13 @@ dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp)
 	for (i = 0; i < priv->bp_count; i++)
 		_dpa_bp_free(&priv->dpa_bp[i]);
 }
+EXPORT_SYMBOL(dpa_bp_free);
 
 struct dpa_bp *dpa_bpid2pool(int bpid)
 {
 	return dpa_bp_array[bpid];
 }
+EXPORT_SYMBOL(dpa_bpid2pool);
 
 void dpa_bpid2pool_map(int bpid, struct dpa_bp *dpa_bp)
 {
@@ -862,6 +884,7 @@ u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
 {
 	return dpa_get_queue_mapping(skb);
 }
+EXPORT_SYMBOL(dpa_select_queue);
 #endif
 
 struct dpa_fq *dpa_fq_alloc(struct device *dev,
@@ -894,6 +917,7 @@ struct dpa_fq *dpa_fq_alloc(struct device *dev,
 
 	return dpa_fq;
 }
+EXPORT_SYMBOL(dpa_fq_alloc);
 
 /* Probing of FQs for MACful ports */
 int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
@@ -978,6 +1002,7 @@ invalid_error_queue:
 	dev_err(dev, "Too many default or error queues\n");
 	return -EINVAL;
 }
+EXPORT_SYMBOL(dpa_fq_probe_mac);
 
 static u32 rx_pool_channel;
 static DEFINE_SPINLOCK(rx_pool_channel_init);
@@ -996,6 +1021,7 @@ int dpa_get_channel(void)
 		return -ENOMEM;
 	return rx_pool_channel;
 }
+EXPORT_SYMBOL(dpa_get_channel);
 
 int dpaa_eth_add_channel(void *__arg)
 {
@@ -1010,6 +1036,7 @@ int dpaa_eth_add_channel(void *__arg)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(dpaa_eth_add_channel);
 
 /**
  * Congestion group state change notification callback.
@@ -1018,6 +1045,7 @@ int dpaa_eth_add_channel(void *__arg)
  * Also updates some CGR-related stats.
  */
 static void dpaa_eth_cgscn(struct qman_portal *qm, struct qman_cgr *cgr,
+
 	int congested)
 {
 	struct dpa_priv_s *priv = (struct dpa_priv_s *)container_of(cgr,
@@ -1080,6 +1108,7 @@ int dpaa_eth_cgr_init(struct dpa_priv_s *priv)
 out_error:
 	return err;
 }
+EXPORT_SYMBOL(dpaa_eth_cgr_init);
 
 static inline void dpa_setup_ingress(const struct dpa_priv_s *priv,
 				     struct dpa_fq *fq,
@@ -1335,6 +1364,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_fq_init);
 
 static int __cold __attribute__((nonnull))
 _dpa_fq_free(struct device *dev, struct qman_fq *fq)
@@ -1384,6 +1414,7 @@ dpa_fq_free(struct device *dev, struct list_head *list)
 
 	return _errno;
 }
+EXPORT_SYMBOL(dpa_fq_free);
 
 static void
 dpaa_eth_init_tx_port(struct fm_port *port, struct dpa_fq *errq,
@@ -1470,6 +1501,7 @@ void dpaa_eth_init_ports(struct mac_device *mac_dev,
 	rx_port_pcd_param.dev = dev;
 	fm_port_pcd_bind(rxport, &rx_port_pcd_param);
 }
+EXPORT_SYMBOL(dpaa_eth_init_ports);
 
 void dpa_release_sgt(struct qm_sg_entry *sgt)
 {
@@ -1497,6 +1529,7 @@ void dpa_release_sgt(struct qm_sg_entry *sgt)
 			cpu_relax();
 	} while (!sgt[i-1].final);
 }
+EXPORT_SYMBOL(dpa_release_sgt);
 
 void __attribute__((nonnull))
 dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
@@ -1551,7 +1584,7 @@ void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 		break;
 	}
 }
-
+EXPORT_SYMBOL(count_ern);
 
 /**
  * Turn on HW checksum computation for this outgoing frame.
@@ -1655,3 +1688,4 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 return_error:
 	return retval;
 }
+EXPORT_SYMBOL(dpa_enable_tx_csum);
