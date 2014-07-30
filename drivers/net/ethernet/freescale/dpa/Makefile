@@ -27,6 +27,7 @@ fsl-dpa-generic-objs	:= dpaa_eth_generic.o dpaa_eth_generic_sysfs.o \
  dpaa_generic_ethtool.o
 fsl-mac-objs	:= mac.o mac-api.o
 fsl-oh-objs	:= offline_port.o
+obj-$(CONFIG_FSL_CAPWAP) += capwap/
 
 # Needed by the tracing framework
 CFLAGS_dpaa_eth.o := -I$(src)
