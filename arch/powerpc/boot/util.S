@@ -42,7 +42,6 @@ timebase_period_ns:
  */
 	.globl	udelay
 udelay:
-#ifndef CONFIG_FSL_ERRATUM_A_008007 /*PVR value for e5501 is unreliable*/
 	mfspr	r4,SPRN_PVR
 	srwi	r4,r4,16
 	cmpwi	0,r4,1		/* 601 ? */
@@ -54,7 +53,6 @@ udelay:
 	subic.	r3,r3,1
 	bne	00b
 	blr
-#endif
 
 .udelay_not_601:
 	mulli	r4,r3,1000	/* nanoseconds */

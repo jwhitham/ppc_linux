@@ -57,7 +57,6 @@ _GLOBAL(has_pw20_altivec_idle)
 	/* 0 false, 1 true */
 	li	r3, 0
 
-#ifndef CONFIG_FSL_ERRATUM_A_008007 /*PVR value for e5501 is unreliable*/
 	/* PW20 & AltiVec idle feature only exists for E6500 */
 	mfspr	r0, SPRN_PVR
 	rlwinm	r11, r0, 16, 16, 31
@@ -71,7 +70,6 @@ _GLOBAL(has_pw20_altivec_idle)
 	cmpwi	r11, 0x20
 	blt	2f
 	li	r3, 1
-#endif
 2:
 	blr
 

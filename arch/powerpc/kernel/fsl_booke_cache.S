@@ -75,9 +75,7 @@ _GLOBAL(__flush_disable_L1)
 	lis	r5, 0
 	ori	r5, r5, PVR_E6500@l
 	cmpw	r4, r5
-#ifndef CONFIG_FSL_ERRATUM_A_008007 /*PVR value for e5501 is unreliable*/
 	beq	2f
-#endif
 	mflr	r10
 	bl	flush_dcache_L1	/* Flush L1 d-cache */
 	mtlr	r10

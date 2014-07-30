@@ -1059,7 +1059,6 @@ _ENTRY(switch_mmu_context)
  */
 clear_bats:
 	li	r10,0
-#ifndef CONFIG_FSL_ERRATUM_A_008007 /*PVR value for e5501 is unreliable*/
 	mfspr	r9,SPRN_PVR
 	rlwinm	r9,r9,16,16,31		/* r9 = 1 for 601, 4 for 604 */
 	cmpwi	r9, 1
@@ -1082,7 +1081,6 @@ clear_bats:
 	mtspr	SPRN_IBAT2L,r10
 	mtspr	SPRN_IBAT3U,r10
 	mtspr	SPRN_IBAT3L,r10
-#endif
 BEGIN_MMU_FTR_SECTION
 	/* Here's a tweak: at this point, CPU setup have
 	 * not been called yet, so HIGH_BAT_EN may not be
@@ -1134,7 +1132,6 @@ mmu_off:
  */
 initial_bats:
 	lis	r11,PAGE_OFFSET@h
-#ifndef CONFIG_FSL_ERRATUM_A_008007 /*PVR value for e5501 is unreliable*/
 	mfspr	r9,SPRN_PVR
 	rlwinm	r9,r9,16,16,31		/* r9 = 1 for 601, 4 for 604 */
 	cmpwi	0,r9,1
@@ -1153,7 +1150,6 @@ initial_bats:
 	mtspr	SPRN_IBAT2L,r8
 	isync
 	blr
-#endif
 
 4:	tophys(r8,r11)
 #ifdef CONFIG_SMP

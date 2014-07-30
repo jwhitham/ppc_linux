@@ -1070,8 +1070,6 @@
 #define PVR_VER_E500V1	0x8020
 #define PVR_VER_E500V2	0x8021
 #define PVR_VER_E6500	0x8040
-#define PVR_VER_E5500	0x8024
-#define PVR_VER_E5500_REV_1020	0x1020
 
 /*
  * For the 8xx processors, all of them report the same PVR family for
@@ -1129,21 +1127,9 @@
 				     : "memory")
 #endif
 
-#ifdef CONFIG_FSL_ERRATUM_A_008007 /*PVR value for e5501 is unreliable*/
-#define mfspr(rn)	({unsigned long rval; \
-			  if (rn == SPRN_PVR) {\
-				rval = (PVR_VER_E5500 << 16) | \
-					PVR_VER_E5500_REV_1020; \
-			  } else {\
-				asm volatile("mfspr %0," __stringify(rn) \
-					: "=r" (rval)); \
-			  } \
-			  rval; })
-#else
 #define mfspr(rn)	({unsigned long rval; \
 			asm volatile("mfspr %0," __stringify(rn) \
 				: "=r" (rval)); rval;})
-#endif
 #define mtspr(rn, v)	asm volatile("mtspr " __stringify(rn) ",%0" : \
 				     : "r" ((unsigned long)(v)) \
 				     : "memory")
