@@ -85,7 +85,6 @@ static struct ucc_tdm_info utdm_primary_info = {
 };
 
 static struct ucc_tdm_info utdm_info[MAX_TDM_NUM];
-static int siram_init_flag;
 
 #ifdef DEBUG
 static void dump_siram(struct ucc_tdm_private *priv)

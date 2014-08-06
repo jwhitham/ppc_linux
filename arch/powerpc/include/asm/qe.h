@@ -32,6 +32,8 @@
 #define MEM_PART_SECONDARY	1
 #define MEM_PART_MURAM		2
 
+extern int siram_init_flag;
+
 /* Clocks and BRGs */
 enum qe_clock {
 	QE_CLK_NONE = 0,

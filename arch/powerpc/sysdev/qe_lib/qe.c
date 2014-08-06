@@ -41,6 +41,8 @@
 static void qe_snums_init(void);
 static int qe_sdma_init(void);
 
+int siram_init_flag;
+
 static DEFINE_SPINLOCK(qe_lock);
 DEFINE_SPINLOCK(cmxgcr_lock);
 EXPORT_SYMBOL(cmxgcr_lock);

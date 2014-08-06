@@ -76,7 +76,6 @@ static struct ucc_hdlc_info uhdlc_primary_info = {
 };
 
 static struct ucc_hdlc_info uhdlc_info[MAX_HDLC_NUM];
-static int siram_init_flag;
 
 
 #ifdef DEBUG
