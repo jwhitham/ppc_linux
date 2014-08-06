@@ -6188,26 +6188,28 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 					pupdate_hm);
 	}
 
-	hm_node = try_compatible_node(pupdate_hm);
-	if ((pupdate_hm->update_params.ip_frag_params.mtu) ||
-			(hm_node == NULL)) {
-		/* Create a header manip node for this update: */
-		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+	if (pupdate_hm->update_params.op_flags != DPA_CLS_HM_UPDATE_NONE) {
+		hm_node = try_compatible_node(pupdate_hm);
+		if ((pupdate_hm->update_params.ip_frag_params.mtu) ||
+				(hm_node == NULL)) {
+			/* Create a header manip node for this update: */
+			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 
-		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n",
-			__func__, __LINE__, hm_node));
-		if (!hm_node) {
-			log_err("No more memory for header manip nodes.\n");
-			return -ENOMEM;
+			dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n",
+				__func__, __LINE__, hm_node));
+			if (!hm_node) {
+				log_err("No more memory for header manip nodes.\n");
+				return -ENOMEM;
+			}
+
+			INIT_LIST_HEAD(&hm_node->list_node);
+
+			/* Initialize dontParseAfterManip to TRUE */
+			hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 		}
 
-		INIT_LIST_HEAD(&hm_node->list_node);
-
-		/* Initialize dontParseAfterManip to TRUE */
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+		pupdate_hm->hm_node[0] = hm_node;
 	}
-
-	pupdate_hm->hm_node[0] = hm_node;
 
 	if (pupdate_hm->update_params.ip_frag_params.mtu) {
 		/* IP fragmentation option is enabled */
@@ -6252,10 +6254,12 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 
 	hm_node = pupdate_hm->hm_node[0];
 
-	hm_node->params.type = e_FM_PCD_MANIP_HDR;
-
 	if (pupdate_hm->update_params.op_flags & update_ops) {
+		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 		hm_node->params.u.hdr.fieldUpdate	= TRUE;
+
+		hm_node->params.u.hdr.dontParseAfterManip &=
+			(pupdate_hm->update_params.reparse) ? FALSE : TRUE;
 
 		if (pupdate_hm->update_params.op_flags &
 				DPA_CLS_HM_UPDATE_IPv4_UPDATE) {
@@ -6395,9 +6399,13 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 	}
 
 	if (pupdate_hm->update_params.op_flags & replace_ops) {
-		hm_node->params.u.hdr.custom = TRUE;
-		hm_node->params.u.hdr.customParams.type =
+		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
+		hm_node->params.u.hdr.custom		= TRUE;
+		hm_node->params.u.hdr.customParams.type	=
 				e_FM_PCD_MANIP_HDR_CUSTOM_IP_REPLACE;
+
+		hm_node->params.u.hdr.dontParseAfterManip &=
+			(pupdate_hm->update_params.reparse) ? FALSE : TRUE;
 
 		if (pupdate_hm->update_params.op_flags &
 				DPA_CLS_HM_REPLACE_IPv4_BY_IPv6) {
@@ -6435,9 +6443,6 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 	}
 		}
 	}
-
-	hm_node->params.u.hdr.dontParseAfterManip &=
-			(pupdate_hm->update_params.reparse) ? FALSE : TRUE;
 
 	hm_node = pupdate_hm->hm_node[1];
 
