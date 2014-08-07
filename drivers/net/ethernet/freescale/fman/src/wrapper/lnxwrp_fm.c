@@ -79,7 +79,8 @@
 #include "lnxwrp_sysfs_fm.h"
 #include "lnxwrp_sysfs_fm_port.h"
 #include "lnxwrp_exp_sym.h"
-
+#include "fm_common.h"
+#include "../../fman/Peripherals/FM/fm.h"
 #define __ERR_MODULE__  MODULE_FM
 
 extern struct device_node *GetFmPortAdvArgsDevTreeNode (struct device_node *fm_node,
@@ -236,12 +237,17 @@ early_param(FSL_FM_RX_EXTRA_HEADROOM_BOOTARG, fm_set_rx_extra_headroom);
 static irqreturn_t fm_irq(int irq, void *_dev)
 {
     t_LnxWrpFmDev       *p_LnxWrpFmDev = (t_LnxWrpFmDev *)_dev;
-
+    t_Fm               *p_Fm = (t_Fm*)p_LnxWrpFmDev->h_Dev;
     if (!p_LnxWrpFmDev || !p_LnxWrpFmDev->h_Dev)
         return IRQ_NONE;
 
+#ifdef CONFIG_PM_SLEEP
+    if (fman_get_normal_pending(p_Fm->p_FmFpmRegs) & INTR_EN_WAKEUP)
+    {
+        pm_wakeup_event(p_LnxWrpFmDev->dev, 200);        
+    }
+#endif
     FM_EventIsr(p_LnxWrpFmDev->h_Dev);
-
     return IRQ_HANDLED;
 }
 
@@ -1067,6 +1073,11 @@ static int /*__devinit*/ fm_probe(struct platform_device *of_dev)
         return -EIO;
     }
 
+#ifdef CONFIG_PM
+    device_set_wakeup_capable(p_LnxWrpFmDev->dev, true);
+    device_set_wakeup_enable(p_LnxWrpFmDev->dev, 1);
+#endif
+
     DBG(TRACE, ("FM%d probed", p_LnxWrpFmDev->id));
 
     return 0;
@@ -1114,38 +1125,45 @@ MODULE_DEVICE_TABLE(of, fm_match);
 #define SCFG_FMCLKDPSLPCR_ADDR 0xFFE0FC00C
 #define SCFG_FMCLKDPSLPCR_DS_VAL 0x48402000
 #define SCFG_FMCLKDPSLPCR_NORMAL_VAL 0x00402000
-void FM_PORT_Dsar_enter_final(void);
-static bool started_ar_enter = false;
+
+struct device *g_fm_dev;
+
 static int fm_soc_suspend(struct device *dev)
 {
-	if (started_ar_enter)
+	int err = 0;
+	t_LnxWrpFmDev *p_LnxWrpFmDev = dev_get_drvdata(get_device(dev));
+	g_fm_dev = dev;
+	if (p_LnxWrpFmDev->h_DsarRxPort)
 	{
 		uint32_t *fmclk;
 #ifdef CONFIG_FSL_QORIQ_PM
 		fsl_set_power_except(dev,1);
 #endif
-		FM_PORT_Dsar_enter_final();
+		err = FM_PORT_EnterDsarFinal(p_LnxWrpFmDev->h_DsarRxPort,
+			p_LnxWrpFmDev->h_DsarTxPort);
 		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
 		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
 	}
-	return 0;
+	return err;
 }
 
 static int fm_soc_resume(struct device *dev)
 {
-	if (started_ar_enter)
+	t_LnxWrpFmDev *p_LnxWrpFmDev = dev_get_drvdata(get_device(dev));
+	if (p_LnxWrpFmDev->h_DsarRxPort)
 	{
 		uint32_t *fmclk;
 		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
 		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
-		started_ar_enter = false;
+		p_LnxWrpFmDev->h_DsarRxPort = 0;
+		p_LnxWrpFmDev->h_DsarTxPort = 0;
 	}
 	return 0;
 }
 
 static const struct dev_pm_ops fm_pm_ops = {
-	.suspend_noirq = fm_soc_suspend,
-	.resume_noirq = fm_soc_resume,
+	.suspend = fm_soc_suspend,
+	.resume = fm_soc_resume,
 };
 
 #define FM_PM_OPS (&fm_pm_ops)
@@ -1379,14 +1397,15 @@ int fm_port_enter_autores_for_deepsleep(struct fm_port *port,
 	struct auto_res_port_params *params)
 {
 	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
+	t_LnxWrpFmDev* p_LnxWrpFmDev = (t_LnxWrpFmDev*)p_LnxWrpFmPortDev->h_LnxWrpFmDev;
+	p_LnxWrpFmDev->h_DsarRxPort = p_LnxWrpFmPortDev->h_Dev;
+	p_LnxWrpFmDev->h_DsarTxPort = params->h_FmPortTx;
+
 		/*Register other under /proc/autoresponse */
     	if (WARN_ON(sizeof(t_FmPortDsarParams) != sizeof(struct auto_res_port_params)))
             return -EFAULT;
 	
 	FM_PORT_EnterDsar(p_LnxWrpFmPortDev->h_Dev, (t_FmPortDsarParams*)params);
-#ifdef CONFIG_PM
-	started_ar_enter = true;
-#endif
 	return 0;
 }
 EXPORT_SYMBOL(fm_port_enter_autores_for_deepsleep);
@@ -1413,6 +1432,8 @@ EXPORT_SYMBOL(fm_port_get_autores_stats);
 int fm_port_suspend(struct fm_port *port)
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
+	if (p_LnxWrpFmPortDev->id == 3)
+		return 0;
 	if (!FM_PORT_IsInDsar(p_LnxWrpFmPortDev->h_Dev))
 		return FM_PORT_Disable(p_LnxWrpFmPortDev->h_Dev);
 	else

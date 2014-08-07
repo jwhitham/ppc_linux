@@ -425,6 +425,7 @@ switch (exception){                                         \
 
 #define INTR_EN_QMI             0x40000000
 #define INTR_EN_PRS             0x20000000
+#define INTR_EN_WAKEUP          0x10000000
 #define INTR_EN_PLCR            0x08000000
 #define INTR_EN_1G_MAC0         0x00080000
 #define INTR_EN_1G_MAC1         0x00040000

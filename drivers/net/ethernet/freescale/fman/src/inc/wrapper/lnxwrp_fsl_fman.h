@@ -484,8 +484,8 @@ struct   auto_res_filtering_info
 	/* IP protocol filtering parameters */
 	uint8_t     ip_prot_table_size;
 	uint8_t     *ip_prot_table_ptr;
-	bool        ip_prot_drop_on_hit;  /* when TRUE, hit in the table will
-		cause the packet to be droped, miss will pass the packet to
+	bool        ip_prot_pass_on_hit;  /* when TRUE, miss in the table will
+		cause the packet to be droped, hit will pass the packet to
 		UDP/TCP filters if needed and if not to the classification
 		tree. If the classification tree will pass the packet to a
 		queue it will cause a wake interupt. When FALSE it the other
@@ -493,8 +493,8 @@ struct   auto_res_filtering_info
 	/* UDP port filtering parameters */
 	uint8_t     udp_ports_table_size;
 	struct auto_res_port_filtering_entry *udp_ports_table_ptr;
-	bool        udp_port_drop_on_hit; /* when TRUE, hit in the table will
-		cause the packet to be droped, miss will pass the packet to
+	bool        udp_port_pass_on_hit; /* when TRUE, miss in the table will
+		cause the packet to be droped, hit will pass the packet to
 		classification tree. If the classification tree will pass the
 		packet to a queue it will cause a wake interupt. When FALSE it
 		the other way around. */
@@ -502,8 +502,8 @@ struct   auto_res_filtering_info
 	uint16_t    tcp_flags_mask;
 	uint8_t     tcp_ports_table_size;
 	struct auto_res_port_filtering_entry *tcp_ports_table_ptr;
-	bool        tcp_port_drop_on_hit; /* when TRUE, hit in the table will
-		cause the packet to be droped, miss will pass the packet to
+	bool        tcp_port_pass_on_hit; /* when TRUE, miss in the table will
+		cause the packet to be droped, hit will pass the packet to
 		classification tree. If the classification tree will pass the
 		packet to a queue it will cause a wake interupt. When FALSE it
 		the other way around. */

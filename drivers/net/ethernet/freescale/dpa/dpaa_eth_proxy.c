@@ -60,7 +60,7 @@ MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev);
 #ifdef CONFIG_PM
 
-static int proxy_suspend_noirq(struct device *dev)
+static int proxy_suspend(struct device *dev)
 {
 	struct proxy_device *proxy_dev = dev_get_drvdata(dev);
 	struct mac_device *mac_dev = proxy_dev->mac_dev;
@@ -78,7 +78,7 @@ port_suspend_failed:
 	return err;
 }
 
-static int proxy_resume_noirq(struct device *dev)
+static int proxy_resume(struct device *dev)
 {
 	struct proxy_device *proxy_dev = dev_get_drvdata(dev);
 	struct mac_device	*mac_dev = proxy_dev->mac_dev;
@@ -97,8 +97,8 @@ port_resume_failed:
 }
 
 static const struct dev_pm_ops proxy_pm_ops = {
-	.suspend_noirq = proxy_suspend_noirq,
-	.resume_noirq = proxy_resume_noirq,
+	.suspend = proxy_suspend,
+	.resume = proxy_resume,
 };
 
 #define PROXY_PM_OPS (&proxy_pm_ops)

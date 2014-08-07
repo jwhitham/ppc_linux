@@ -604,7 +604,7 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 
 #ifdef CONFIG_PM
 
-static int dpa_shared_suspend_noirq(struct device *dev)
+static int dpa_shared_suspend(struct device *dev)
 {
 	struct net_device	*net_dev;
 	struct dpa_priv_s	*priv;
@@ -629,7 +629,7 @@ port_suspend_failed:
 	return err;
 }
 
-static int dpa_shared_resume_noirq(struct device *dev)
+static int dpa_shared_resume(struct device *dev)
 {
 	struct net_device	*net_dev;
 	struct dpa_priv_s	*priv;
@@ -655,8 +655,8 @@ port_resume_failed:
 }
 
 static const struct dev_pm_ops shared_pm_ops = {
-	.suspend_noirq = dpa_shared_suspend_noirq,
-	.resume_noirq = dpa_shared_resume_noirq,
+	.suspend = dpa_shared_suspend,
+	.resume = dpa_shared_resume,
 };
 
 #define SHARED_PM_OPS (&shared_pm_ops)

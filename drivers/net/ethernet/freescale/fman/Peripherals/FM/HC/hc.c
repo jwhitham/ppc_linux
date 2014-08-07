@@ -1223,3 +1223,8 @@ t_Error FmHcPcdSync(t_Handle h_FmHc)
     return E_OK;
 }
 
+t_Handle    FmHcGetPort(t_Handle h_FmHc)
+{
+    t_FmHc *p_FmHc = (t_FmHc*)h_FmHc;
+    return p_FmHc->h_HcPortDev;
+}

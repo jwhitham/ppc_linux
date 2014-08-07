@@ -3143,7 +3143,6 @@ t_Error FM_PORT_Disable(t_Handle h_FmPort)
 {
     t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
     int err;
-
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
 
@@ -3166,13 +3165,10 @@ t_Error FM_PORT_Disable(t_Handle h_FmPort)
     return E_OK;
 }
 
-t_FmPort* opXX;
 t_Error FM_PORT_Enable(t_Handle h_FmPort)
 {
     t_FmPort                    *p_FmPort = (t_FmPort*)h_FmPort;
     int err;
-    if (p_FmPort->portId == 0) // save HC port for DSAR disable
-	opXX = p_FmPort;
 
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
@@ -5354,6 +5350,7 @@ uint32_t* ARDesc;
 void PrsEnable(t_Handle p_FmPcd);
 void PrsDisable(t_Handle p_FmPcd);
 int PrsIsEnabled(t_Handle p_FmPcd);
+t_Handle FM_PCD_GetHcPort(t_Handle h_FmPcd);
 
 static t_Error DsarCheckParams(t_FmPortDsarParams *params, t_FmPortDsarTablesSizes *sizes)
 {
@@ -5478,10 +5475,20 @@ static int fm_soc_suspend(void)
 	tmp32 = GET_UINT32(*fmclk);
 	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
 	tmp32 = GET_UINT32(*fmclk);
+	iounmap(fmclk);
 	return 0;
 }
 
-t_FmPort *g_DsarFmPortRx, *g_DsarFmPortTx;
+void fm_clk_down(void)
+{
+	uint32_t *fmclk, tmp32;
+	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+	tmp32 = GET_UINT32(*fmclk);
+	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL | 0x40000000);
+	tmp32 = GET_UINT32(*fmclk);
+	iounmap(fmclk);
+}
+
 t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
 {
     int i,j;
@@ -5493,6 +5500,7 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     t_DsarIcmpV4Descriptor* ICMPV4Descriptor;
     t_DsarIcmpV6Descriptor* ICMPV6Descriptor;
     t_DsarNdDescriptor* NDDescriptor;
+
     uint64_t fmMuramVirtBaseAddr = (uint64_t)PTR_TO_UINT(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr));
     uint32_t *param_page = XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rgpr));
     t_ArCommonDesc *ArCommonDescPtr = (t_ArCommonDesc*)(XX_PhysToVirt(p_FmPort->fmMuramPhysBaseAddr + GET_UINT32(*param_page)));
@@ -5502,9 +5510,6 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
     fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
     fmGetSetParams.setParams.sleep = 1;    
-
-    g_DsarFmPortRx = p_FmPort;
-    g_DsarFmPortTx = p_FmPortTx;
 
     err = DsarCheckParams(params, p_FmPort->deepSleepVars.autoResMaxSizes);
     if (err != E_OK)
@@ -5723,13 +5728,14 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     // filtering
     if (params->p_AutoResFilteringInfo)
     {
-        if (params->p_AutoResFilteringInfo->ipProtDropOnHit)
+        if (params->p_AutoResFilteringInfo->ipProtPassOnHit)
             tmp |= IP_PROT_TBL_PASS_MASK;
-        if (params->p_AutoResFilteringInfo->udpPortDropOnHit)
+        if (params->p_AutoResFilteringInfo->udpPortPassOnHit)
             tmp |= UDP_PORT_TBL_PASS_MASK;
-        if (params->p_AutoResFilteringInfo->tcpPortDropOnHit)
+        if (params->p_AutoResFilteringInfo->tcpPortPassOnHit)
             tmp |= TCP_PORT_TBL_PASS_MASK;
         WRITE_UINT8(ArCommonDescPtr->filterControl, tmp);
+        WRITE_UINT16(ArCommonDescPtr->tcpControlPass, params->p_AutoResFilteringInfo->tcpFlagsMask);
 
         // ip filtering
         if (params->p_AutoResFilteringInfo->ipProtTableSize)
@@ -5789,28 +5795,31 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
 
 }
 
-void FM_PORT_Dsar_enter_final(void)
+void FM_ChangeClock(t_Handle h_Fm, int hardwarePortId);
+t_Error FM_PORT_EnterDsarFinal(t_Handle h_DsarRxPort, t_Handle h_DsarTxPort)
 {
-    t_Handle *h_FmPcd;
-    t_FmGetSetParams fmGetSetParams;
+	t_FmGetSetParams fmGetSetParams;
+	t_FmPort *p_FmPort = (t_FmPort *)h_DsarRxPort;
+	t_FmPort *p_FmPortTx = (t_FmPort *)h_DsarTxPort;
+	t_Handle *h_FmPcd = FmGetPcd(p_FmPort->h_Fm);
+	t_FmPort *p_FmPortHc = FM_PCD_GetHcPort(h_FmPcd);
+	memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+        fmGetSetParams.setParams.type = UPDATE_FM_CLD;
+        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
 
-	t_FmPort *p_FmPort = g_DsarFmPortRx;
-	t_FmPort *p_FmPortTx = g_DsarFmPortTx;
-	// Issue graceful stop to HC port
-	FM_PORT_Disable(opXX);
+	// Issue graceful stop to HC and DSAR Tx ports
+	FM_PORT_Disable(p_FmPortTx);
+	FM_PORT_Disable(p_FmPortHc);
 
 	// config tx port
     p_FmPort->deepSleepVars.fmbm_tcfg = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg);
-    WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tfdne, 0x005000C0);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg) | BMI_PORT_CFG_IM | BMI_PORT_CFG_EN);
     // ????
     p_FmPort->deepSleepVars.fmbm_tcmne = GET_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, 0xE);
     // Stage 7:echo
-    p_FmPort->deepSleepVars.fmbm_rfne = GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne);
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne, 0x440000);
     p_FmPort->deepSleepVars.fmbm_rfpne = GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne);
-    h_FmPcd = FmGetPcd(p_FmPort->h_Fm);
+    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, 0x2E);
     if (!PrsIsEnabled(h_FmPcd))
     {
         p_FmPort->deepSleepVars.dsarEnabledParser = TRUE;
@@ -5818,12 +5827,18 @@ void FM_PORT_Dsar_enter_final(void)
     }
     else
         p_FmPort->deepSleepVars.dsarEnabledParser = FALSE;
-    
-    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfpne, 0x2E);
+
+    p_FmPort->deepSleepVars.fmbm_rfne = GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne);
+    WRITE_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfne, 0x440000);
 
     // save rcfg for restoring: accumulate mode is changed by ucode
     p_FmPort->deepSleepVars.fmbm_rcfg = GET_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg);
     WRITE_UINT32(p_FmPort->port.bmi_regs->rx.fmbm_rcfg, p_FmPort->deepSleepVars.fmbm_rcfg | BMI_PORT_CFG_AM);
+        memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
+        fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
+        fmGetSetParams.setParams.sleep = 1;
+        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
+
 // ***** issue external request sync command
         memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
         fmGetSetParams.setParams.type = UPDATE_FPM_EXTC;
@@ -5857,9 +5872,12 @@ void FM_PORT_Dsar_enter_final(void)
 	        FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
 	if (fmGetSetParams.getParams.fmqm_gs == 0 && fmGetSetParams.getParams.fm_npi == 0)
 		XX_Print("FM: Sleeping\n");
+//	FM_ChangeClock(p_FmPort->h_Fm, p_FmPort->hardwarePortId);
+
+	return E_OK;
 }
 
-EXPORT_SYMBOL(FM_PORT_Dsar_enter_final);
+EXPORT_SYMBOL(FM_PORT_EnterDsarFinal);
 
 void FM_PORT_Dsar_DumpRegs()
 {
@@ -5871,6 +5889,8 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
 {
     t_FmPort *p_FmPort = (t_FmPort *)h_FmPortRx;
     t_FmPort *p_FmPortTx = (t_FmPort *)h_FmPortTx;
+    t_Handle *h_FmPcd = FmGetPcd(p_FmPort->h_Fm);
+    t_FmPort *p_FmPortHc = FM_PCD_GetHcPort(h_FmPcd);
     t_FmGetSetParams fmGetSetParams;
     memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
     fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
@@ -5879,11 +5899,6 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
     {
         XX_Free(p_FmPort->deepSleepVars.autoResOffsets);
         p_FmPort->deepSleepVars.autoResOffsets = 0;
-    }
-    if (p_FmPort->deepSleepVars.autoResMaxSizes)
-    {
-        XX_Free(p_FmPort->deepSleepVars.autoResMaxSizes);
-        p_FmPort->deepSleepVars.autoResMaxSizes = 0;
     }
     
     if (p_FmPort->deepSleepVars.dsarEnabledParser)
@@ -5894,7 +5909,8 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
     FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, p_FmPort->deepSleepVars.fmbm_tcmne);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, p_FmPort->deepSleepVars.fmbm_tcfg);
-    FM_PORT_Enable(opXX);
+    FM_PORT_Enable(p_FmPortTx);
+    FM_PORT_Enable(p_FmPortHc);
 }
 
 bool FM_PORT_IsInDsar(t_Handle h_FmPort)

@@ -76,7 +76,7 @@ MODULE_DEVICE_TABLE(of, oh_port_match_table);
 
 #ifdef CONFIG_PM
 
-static int oh_suspend_noirq(struct device *dev)
+static int oh_suspend(struct device *dev)
 {
 	struct dpa_oh_config_s	*oh_config;
 
@@ -84,7 +84,7 @@ static int oh_suspend_noirq(struct device *dev)
 	return fm_port_suspend(oh_config->oh_port);
 }
 
-static int oh_resume_noirq(struct device *dev)
+static int oh_resume(struct device *dev)
 {
 	struct dpa_oh_config_s	*oh_config;
 
@@ -93,8 +93,8 @@ static int oh_resume_noirq(struct device *dev)
 }
 
 static const struct dev_pm_ops oh_pm_ops = {
-	.suspend_noirq = oh_suspend_noirq,
-	.resume_noirq = oh_resume_noirq,
+	.suspend = oh_suspend,
+	.resume = oh_resume,
 };
 
 #define OH_PM_OPS (&oh_pm_ops)

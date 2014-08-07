@@ -2114,4 +2114,9 @@ t_Error FM_PCD_ModifyCounter(t_Handle h_FmPcd, e_FmPcdCounters counter, uint32_t
 return E_OK;
 }
 
+t_Handle FM_PCD_GetHcPort(t_Handle h_FmPcd)
+{
+    t_FmPcd *p_FmPcd = (t_FmPcd*)h_FmPcd;
+    return FmHcGetPort(p_FmPcd->h_Hc);
+}
 

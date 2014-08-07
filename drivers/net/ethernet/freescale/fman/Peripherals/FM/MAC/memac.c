@@ -857,7 +857,7 @@ static t_Error MemacDumpRegs(t_Handle h_Memac)
 /*****************************************************************************/
 
 /* ......................................................................... */
-
+void *g_MemacRegs;
 static t_Error MemacInit(t_Handle h_Memac)
 {
     t_Memac                 *p_Memac = (t_Memac *)h_Memac;
@@ -868,6 +868,9 @@ static t_Error MemacInit(t_Handle h_Memac)
     t_EnetAddr              ethAddr;
     e_FmMacType             portType;
     t_Error                 err;
+
+    if (p_Memac->macId == 3) /* This is a quick WA */
+		g_MemacRegs = p_Memac->p_MemMap;
 
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(p_Memac->p_MemacDriverParam, E_INVALID_STATE);
