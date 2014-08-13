@@ -21,5 +21,6 @@ ifeq ($(CONFIG_GIANFAR),y)
 	obj-$(CONFIG_AS_FASTPATH) += asf_gianfar.o
 endif
 gianfar_driver-$(CONFIG_FSL_GIANFAR_1588) += gianfar_1588.o
+gianfar_driver-$(CONFIG_GFAR_DBG_LOOP) += gianfar_debugfs.o
 obj-$(CONFIG_UCC_GETH) += ucc_geth_driver.o
 ucc_geth_driver-objs := ucc_geth.o ucc_geth_ethtool.o

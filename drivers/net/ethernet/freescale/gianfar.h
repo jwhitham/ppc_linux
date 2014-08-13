@@ -1363,6 +1363,11 @@ struct gfar_private {
 	/*Filer table*/
 	unsigned int ftp_rqfpr[MAX_FILER_IDX + 1];
 	unsigned int ftp_rqfcr[MAX_FILER_IDX + 1];
+#ifdef CONFIG_GFAR_DBG_LOOP
+	struct dentry *dbg_ndev_dir;
+	struct list_head dbg_ndev_node;
+	struct net_device *dbg_ndev_loopbk_tgt;
+#endif
 };
 
 #define BD_RING_REG_SZ(priv) ( \
@@ -1494,6 +1499,18 @@ void gfar_phy_test(struct mii_bus *bus, struct phy_device *phydev, int enable,
 		   u32 regnum, u32 read);
 void gfar_configure_coalescing_all(struct gfar_private *priv);
 int gfar_set_features(struct net_device *dev, netdev_features_t features);
+
+#ifdef CONFIG_GFAR_DBG_LOOP
+void gfar_dbg_init(void);
+void gfar_dbg_exit(void);
+void gfar_dbg_ndev_init(struct gfar_private *priv);
+void gfar_dbg_ndev_exit(struct gfar_private *priv);
+#else
+static inline void gfar_dbg_init(void) {}
+static inline void gfar_dbg_exit(void) {}
+static inline void gfar_dbg_ndev_init(struct gfar_private *priv) {}
+static inline void gfar_dbg_ndev_exit(struct gfar_private *priv) {}
+#endif
 
 extern const struct ethtool_ops gfar_ethtool_ops;
 

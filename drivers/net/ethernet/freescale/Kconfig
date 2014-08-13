@@ -105,6 +105,25 @@ config FSL_GIANFAR_1588
 	  The user space application should be IXXAT IEEE 1588 stack v1.04 or above.
 	  Say Y here if you want to use IXXAT 1588 stack.
 
+config GFAR_DBG_LOOP
+	bool "Gianfar IP forwarding debug loop"
+	depends on GIANFAR && DEBUG_FS
+	---help---
+	  Enable this only to do packet forwarding benchmark tests for
+	  the Gianfar driver in isolation from the Linux protocol stack.
+	  A debugfs loopback target config file, named "lo", is created
+	  for each Gianfar ethernet interface.  To configure a packet
+	  forwarding loop for a given Gianfar interface, one must write
+	  to the coresponding "lo" file the name of the desired Gianfar
+	  ethernet target interface.
+	  Example - given the "eth1" interface, to forward incoming traffic
+	  to "eth2":
+	  #echo "eth2" > ./eth1/lo
+	  In this example, a uni-directional loop from "eth1" to "eth2" is
+	  created.  Packets received by "eth1" will be forwarded directly
+	  to "eth2" to be transmitted without further processing.
+	  To delete an exiting loop, write 0 or "off" to the "lo" file.
+
 source "drivers/net/ethernet/freescale/fman/Kconfig"
 source "drivers/net/ethernet/freescale/dpa/Kconfig"
 

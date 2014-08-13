@@ -1493,6 +1493,8 @@ static int gfar_probe(struct platform_device *ofdev)
 		netdev_info(dev, "TX BD ring size for Q[%d]: %d\n",
 			    i, priv->tx_queue[i]->tx_ring_size);
 
+	gfar_dbg_ndev_init(priv);
+
 	return 0;
 
 register_fail:
@@ -1513,6 +1515,8 @@ register_fail:
 static int gfar_remove(struct platform_device *ofdev)
 {
 	struct gfar_private *priv = platform_get_drvdata(ofdev);
+
+	gfar_dbg_ndev_exit(priv);
 
 	if (priv->phy_node)
 		of_node_put(priv->phy_node);
@@ -3023,6 +3027,15 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 				       be16_to_cpu(fcb->vlctl));
 
 	/* Send the packet up the stack */
+#ifdef CONFIG_GFAR_DBG_LOOP
+	if (likely(priv->dbg_ndev_loopbk_tgt)) {
+		skb->dev = priv->dbg_ndev_loopbk_tgt;
+		skb->queue_mapping = 0;
+		skb_push(skb, ETH_HLEN);
+		gfar_start_xmit(skb, priv->dbg_ndev_loopbk_tgt);
+		return;
+	}
+#endif
 	napi_gro_receive(napi, skb);
 
 }
@@ -3726,6 +3739,8 @@ static int __init gfar_init(void)
 {
 	int i;
 
+	gfar_dbg_init();
+
 	for_each_possible_cpu(i) {
 		struct sk_buff_head *h = &per_cpu(skb_recycle_list, i);
 		skb_queue_head_init(h);
@@ -3737,6 +3752,8 @@ static int __init gfar_init(void)
 static void __exit gfar_exit(void)
 {
 	int i;
+
+	gfar_dbg_exit();
 
 	for_each_possible_cpu(i) {
 		struct sk_buff_head *h = &per_cpu(skb_recycle_list, i);
