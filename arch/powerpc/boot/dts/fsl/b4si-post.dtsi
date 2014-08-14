@@ -204,7 +204,7 @@
 		};
 	};
 
-/include/ "qoriq-qman1.dtsi"
+/include/ "qoriq-qman3.dtsi"
 
 	qman: qman@318000 {
 		interrupts = <16 2 1 28>;

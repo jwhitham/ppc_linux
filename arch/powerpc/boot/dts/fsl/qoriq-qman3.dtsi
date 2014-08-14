@@ -1,7 +1,7 @@
 /*
- * QorIQ QMan device tree stub [ controller @ offset 0x318000 ]
+ * QorIQ QMan rev3 device tree stub [ controller @ offset 0x318000 ]
  *
- * Copyright 2011 Freescale Semiconductor Inc.
+ * Copyright 2014 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -34,6 +34,7 @@
 
 qman: qman@318000 {
 	compatible = "fsl,qman";
-	reg = <0x318000 0x1000>;
+	/* QMan rev3 has 8KB CCSR space */
+	reg = <0x318000 0x2000>;
 	interrupts = <16 2 1 3>;
 };
