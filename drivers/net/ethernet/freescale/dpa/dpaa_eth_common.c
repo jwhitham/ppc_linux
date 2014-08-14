@@ -69,12 +69,6 @@ static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
 
-#ifdef CONFIG_FMAN_T4240
-static const struct fqid_cell tx_recycle_fqids[] = {
-	{0, DPAA_ETH_TX_QUEUES}
-};
-#endif
-
 static const struct fqid_cell default_fqids[][3] = {
 	[RX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_RX_QUEUES} },
 	[TX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_TX_QUEUES} }
@@ -892,13 +886,6 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 		if (!dpa_fq_alloc(dev, tx_confirm_fqids, list,
 				  FQ_TYPE_TX_CONF_MQ))
 			goto fq_alloc_failed;
-
-#ifdef CONFIG_FMAN_T4240
-		/* per-core Tx queues for recyclable frames (FManv3 only) */
-		if (!dpa_fq_alloc(dev, tx_recycle_fqids, list,
-				  FQ_TYPE_TX_RECYCLE))
-			goto fq_alloc_failed;
-#endif
 	}
 
 	fqids = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
@@ -1105,9 +1092,6 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 	uint32_t pcd_fqid;
 	const cpumask_t *affine_cpus = qman_affine_cpus();
 	int egress_cnt = 0, conf_cnt = 0;
-#ifdef CONFIG_FMAN_T4240
-	int recycle_cnt = 0;
-#endif
 
 	/* Prepare for PCD FQs init */
 	for_each_cpu(cpu, affine_cpus)
@@ -1161,14 +1145,6 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 			BUG_ON(!priv->mac_dev);
 			dpa_setup_ingress(priv, fq, &fq_cbs->tx_errq);
 			break;
-#ifdef CONFIG_FMAN_T4240
-		case FQ_TYPE_TX_RECYCLE:
-			BUG_ON(!priv->mac_dev);
-			dpa_setup_egress(priv, fq, tx_port,
-					 &fq_cbs->egress_ern);
-			priv->recycle_fqs[recycle_cnt++] = &fq->fq_base;
-			break;
-#endif
 		default:
 			dev_warn(priv->net_dev->dev.parent,
 				 "Unknown FQ type detected!\n");
@@ -1190,18 +1166,6 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 				break;
 		}
 	}
-}
-
-static struct qman_fq *_dpa_get_tx_conf_queue(const struct dpa_priv_s *priv,
-					       struct qman_fq *tx_fq)
-{
-	int i;
-
-	for (i = 0; i < DPAA_ETH_TX_QUEUES; i++)
-		if (priv->egress_fqs[i] == tx_fq)
-			return priv->conf_fqs[i];
-
-	return NULL;
 }
 
 int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
@@ -1286,34 +1250,16 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 		if (dpa_fq->fq_type == FQ_TYPE_TX) {
 			confq = _dpa_get_tx_conf_queue(priv, &dpa_fq->fq_base);
 			if (confq) {
-				initfq.we_mask |= QM_INITFQ_WE_CONTEXTA |
-						  QM_INITFQ_WE_CONTEXTB;
-				/* CTXA[OVFQ] = 1 */
-				initfq.fqd.context_a.hi = 0x80000000;
-				initfq.fqd.context_a.lo = 0x0;
-				initfq.fqd.context_b = qman_fq_fqid(confq);
+				initfq.we_mask |= QM_INITFQ_WE_CONTEXTA;
+			/* ContextA: OVOM=1 (use contextA2 bits instead of ICAD)
+			 *	     A2V=1 (contextA A2 field is valid)
+			 *           A0V=1 (contextA A0 field is valid)
+			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
+			 */
+				initfq.fqd.context_a.hi = 0x1a000000;
+				initfq.fqd.context_a.lo = 0x80000000;
 			}
 		}
-
-#ifdef CONFIG_FMAN_T4240
-		/* Configure the Tx queues for recycled frames, such that the
-		 * buffers are released by FMan and no confirmation is sent
-		 */
-		if (dpa_fq->fq_type == FQ_TYPE_TX_RECYCLE) {
-			initfq.we_mask |= QM_INITFQ_WE_CONTEXTA |
-					  QM_INITFQ_WE_CONTEXTB;
-			/* ContextA: OVFQ=1 (use ContextB FQID for confirmation)
-			 *           OVOM=1 (use contextA2 bits instead of ICAD)
-			 *           A2V=1 (contextA A2 field is valid)
-			 *           B0V=1 (contextB field is valid)
-			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
-			 * ContextB: Confirmation FQID = 0
-			 */
-			initfq.fqd.context_a.hi = 0x96000000;
-			initfq.fqd.context_a.lo = 0x80000000;
-			initfq.fqd.context_b = 0;
-		}
-#endif
 
 		/* Put all *private* ingress queues in our "ingress CGR". */
 		if (priv->use_ingress_cgr &&

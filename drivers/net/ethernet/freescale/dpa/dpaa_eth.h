@@ -215,9 +215,6 @@ enum dpa_fq_type {
 	FQ_TYPE_TX_CONFIRM,     /* Tx default Conf FQ (actually an Rx FQ) */
 	FQ_TYPE_TX_CONF_MQ,     /* Tx conf FQs (one for each Tx FQ) */
 	FQ_TYPE_TX_ERROR,       /* Tx Error FQs (these are actually Rx FQs) */
-#ifdef CONFIG_FMAN_T4240
-	FQ_TYPE_TX_RECYCLE,	/* Tx FQs for recycleable frames only */
-#endif
 };
 
 struct dpa_fq {
@@ -336,9 +333,6 @@ struct dpa_priv_s {
 
 	uint16_t		 channel;	/* "fsl,qman-channel-id" */
 	struct list_head	 dpa_fq_list;
-#ifdef CONFIG_FMAN_T4240
-	struct qman_fq		*recycle_fqs[DPAA_ETH_TX_QUEUES];
-#endif
 
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	struct dentry		*debugfs_file;
@@ -526,6 +520,19 @@ static inline void clear_fd(struct qm_fd *fd)
 	fd->cmd = 0;
 }
 
+static inline struct qman_fq *_dpa_get_tx_conf_queue(
+		const struct dpa_priv_s *priv,
+		struct qman_fq *tx_fq)
+{
+	int i;
+
+	for (i = 0; i < DPAA_ETH_TX_QUEUES; i++)
+		if (priv->egress_fqs[i] == tx_fq)
+			return priv->conf_fqs[i];
+
+	return NULL;
+}
+
 static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 			struct rtnl_link_stats64 *percpu_stats, int queue,
 			struct qm_fd *fd)
@@ -533,17 +540,11 @@ static inline int __hot dpa_xmit(struct dpa_priv_s *priv,
 	int err, i;
 	struct qman_fq *egress_fq;
 
-#ifdef CONFIG_FMAN_T4240
-	/* Choose egress fq based on whether we want
-	 * to recycle the frame or not
-	 */
-	if (fd->cmd & FM_FD_CMD_FCO)
-		egress_fq = priv->recycle_fqs[queue];
-	else
-		egress_fq = priv->egress_fqs[queue];
-#else
 	egress_fq = priv->egress_fqs[queue];
-#endif
+	if (fd->bpid == 0xff)
+		fd->cmd |= qman_fq_fqid(
+				_dpa_get_tx_conf_queue(priv, egress_fq)
+				);
 
 	/* Trace this Tx fd */
 	trace_dpa_tx_fd(priv->net_dev, egress_fq, fd);
@@ -587,9 +588,6 @@ static inline void _dpa_assign_wq(struct dpa_fq *fq)
 		break;
 	case FQ_TYPE_RX_DEFAULT:
 	case FQ_TYPE_TX:
-#ifdef CONFIG_FMAN_T4240
-	case FQ_TYPE_TX_RECYCLE:
-#endif
 	case FQ_TYPE_RX_PCD:
 		fq->wq = 3;
 		break;

@@ -234,7 +234,6 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	const enum dma_data_direction dma_dir = DMA_TO_DEVICE;
 	int nr_frags;
 
-	DPA_BUG_ON(fd->cmd & FM_FD_CMD_FCO);
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, dma_dir);
 
 	/* retrieve skb back pointer */
@@ -664,7 +663,6 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 		/* Buffer is recyclable; use the new start address
 		 * and set fd parameters and DMA mapping direction
 		 */
-		fd->cmd |= FM_FD_CMD_FCO;
 		fd->bpid = dpa_bp->bpid;
 		DPA_BUG_ON(skb->data - buffer_start > DPA_MAX_FD_OFFSET);
 		fd->offset = (uint16_t)(skb->data - buffer_start);
@@ -679,6 +677,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 		 * We are guaranteed to have at least tx_headroom bytes
 		 * available, so just use that for offset.
 		 */
+		fd->bpid = 0xff;
 		buffer_start = skb->data - priv->tx_headroom;
 		fd->offset = priv->tx_headroom;
 		dma_dir = DMA_TO_DEVICE;
@@ -706,6 +705,7 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 	/* Fill in the rest of the FD fields */
 	fd->format = qm_fd_contig;
 	fd->length20 = skb->len;
+	fd->cmd |= FM_FD_CMD_FCO;
 
 	/* Map the entire buffer size that may be seen by FMan, but no more */
 	addr = dma_map_single(dpa_bp->dev, skbh,
@@ -762,7 +762,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	}
 
 	sgt = (struct qm_sg_entry *)(sgt_buf + priv->tx_headroom);
-	sgt[0].bpid = dpa_bp->bpid;
+	sgt[0].bpid = 0xff;
 	sgt[0].offset = 0;
 	sgt[0].length = skb_headlen(skb);
 	sgt[0].extension = 0;
@@ -780,8 +780,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	/* populate the rest of SGT entries */
 	for (i = 1; i <= nr_frags; i++) {
 		frag = &skb_shinfo(skb)->frags[i - 1];
-		sgt[i].bpid = dpa_bp->bpid;
-
+		sgt[i].bpid = 0xff;
 		sgt[i].offset = 0;
 		sgt[i].length = frag->size;
 		sgt[i].extension = 0;
@@ -819,6 +818,9 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		err = -EINVAL;
 		goto sgt_map_failed;
 	}
+
+	fd->bpid = 0xff;
+	fd->cmd |= FM_FD_CMD_FCO;
 	fd->addr_hi = upper_32_bits(addr);
 	fd->addr_lo = lower_32_bits(addr);
 
@@ -927,7 +929,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	if (unlikely(err < 0))
 		goto skb_to_fd_failed;
 
-	if (fd.cmd & FM_FD_CMD_FCO) {
+	if (fd.bpid != 0xff) {
 		skb_recycle(skb);
 		/* skb_recycle() reserves NET_SKB_PAD as skb headroom,
 		 * but we need the skb to look as if returned by build_skb().
