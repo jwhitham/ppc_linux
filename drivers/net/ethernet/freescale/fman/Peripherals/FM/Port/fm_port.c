@@ -5708,14 +5708,14 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
         {
             WRITE_UINT16(snmpOid->oidSize, snmpSrc->p_OidsTbl[i].oidSize);
             WRITE_UINT16(snmpOid->resSize, snmpSrc->p_OidsTbl[i].resSize);
-            Mem2IOCpy32(charPointer, snmpSrc->p_OidsTbl[i].p_Oid, snmpSrc->p_OidsTbl[i].oidSize);
+            Mem2IOCpy32(charPointer, snmpSrc->p_OidsTbl[i].oidVal, snmpSrc->p_OidsTbl[i].oidSize);
             WRITE_UINT32(snmpOid->p_Oid, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
             charPointer += snmpSrc->p_OidsTbl[i].oidSize;
             if (snmpSrc->p_OidsTbl[i].resSize <= 4)
-                WRITE_UINT32(snmpOid->resValOrPtr, snmpSrc->p_OidsTbl[i].resValOrPtr);
+                WRITE_UINT32(snmpOid->resValOrPtr, *snmpSrc->p_OidsTbl[i].resVal);
             else
             {
-                Mem2IOCpy32(charPointer, UINT_TO_PTR(snmpSrc->p_OidsTbl[i].resValOrPtr), snmpSrc->p_OidsTbl[i].resSize);
+                Mem2IOCpy32(charPointer, snmpSrc->p_OidsTbl[i].resVal, snmpSrc->p_OidsTbl[i].resSize);
                 WRITE_UINT32(snmpOid->resValOrPtr, PTR_TO_UINT(charPointer) - fmMuramVirtBaseAddr);
                 charPointer += snmpSrc->p_OidsTbl[i].resSize;
             }

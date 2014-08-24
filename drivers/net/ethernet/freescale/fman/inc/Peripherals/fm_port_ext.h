@@ -1389,10 +1389,11 @@ typedef struct t_FmPortDsarEchoIpv6Info
                  
 *//***************************************************************************/
 typedef struct {
-    uint16_t oidSize;     /**< Size in octets of the OID. */
-    uint16_t resSize;     /**< Size in octets of the value that is attached to the OID. */
-    uint8_t *p_Oid;       /**< Pointer to the OID. OID is encoded in BER but type and length are excluded. */
-    uint64_t resValOrPtr; /**< Value (for up to 4 octets) or pointer to the Value. Encoded in BER. */
+	uint16_t     oidSize;
+	uint8_t      *oidVal; /* only the oid string */
+	uint16_t     resSize;
+	uint8_t      *resVal; /* resVal will be the entire reply,
+				i.e. "Type|Length|Value" */
 } t_FmPortDsarOidsEntry;
 
 /**************************************************************************//**
