@@ -5535,7 +5535,10 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
         ArpDescriptor = (t_DsarArpDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->arp);
         WRITE_UINT32(ArCommonDescPtr->p_ArpDescriptor, PTR_TO_UINT(ArpDescriptor) - fmMuramVirtBaseAddr);
         arp_bindings = (t_DsarArpBindingEntry*)(PTR_TO_UINT(ArpDescriptor) + sizeof(t_DsarArpDescriptor));
-        WRITE_UINT16(ArpDescriptor->control, 0);
+	if (params->p_AutoResArpInfo->enableConflictDetection)
+	        WRITE_UINT16(ArpDescriptor->control, 1);
+	else
+	        WRITE_UINT16(ArpDescriptor->control, 0);
         if (params->p_AutoResArpInfo->tableSize)
         {
             t_FmPortDsarArpEntry* arp_entry = params->p_AutoResArpInfo->p_AutoResTable;
@@ -5617,7 +5620,10 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
         NDDescriptor = (t_DsarNdDescriptor*)(PTR_TO_UINT(ArCommonDescPtr) + of->nd);
         WRITE_UINT32(ArCommonDescPtr->p_NdDescriptor, PTR_TO_UINT(NDDescriptor) - fmMuramVirtBaseAddr);
         icmpv6_bindings = (t_DsarIcmpV6BindingEntry*)(PTR_TO_UINT(NDDescriptor) + sizeof(t_DsarNdDescriptor));
-        WRITE_UINT16(NDDescriptor->control, 0);
+	if (params->p_AutoResNdpInfo->enableConflictDetection)
+	        WRITE_UINT16(NDDescriptor->control, 1);
+	else
+	        WRITE_UINT16(NDDescriptor->control, 0);
         if (params->p_AutoResNdpInfo->tableSizeAssigned + params->p_AutoResNdpInfo->tableSizeTmp)
         {
             t_FmPortDsarNdpEntry* ndp_entry = params->p_AutoResNdpInfo->p_AutoResTableAssigned;
