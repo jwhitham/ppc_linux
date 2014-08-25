@@ -135,16 +135,21 @@ static int dpa_debugfs_show(struct seq_file *file, void *offset)
 	seq_printf(file, "Device has been congested for %d ms.\n",
 		jiffies_to_msecs(priv->cgr_data.congested_jiffies));
 
-	qman_query_cgr(&priv->cgr_data.cgr, &query_cgr);
-	seq_printf(file, "CGR id %d avg count: %llu\n",
-		priv->cgr_data.cgr.cgrid, qm_mcr_querycgr_a_get64(&query_cgr));
-	seq_printf(file, "Device entered congestion %u times. ",
-			priv->cgr_data.cgr_congested_count);
-	seq_printf(file, "Current congestion state is: %s.\n",
-		query_cgr.cgr.cs ? "congested" : "not congested");
-	/* Reset congestion stats (like QMan CGR API does) */
-	priv->cgr_data.congested_jiffies = 0;
-	priv->cgr_data.cgr_congested_count = 0;
+	if (qman_query_cgr(&priv->cgr_data.cgr, &query_cgr) != 0) {
+		seq_printf(file, "CGR id %d - failed to query values\n",
+			   priv->cgr_data.cgr.cgrid);
+	} else {
+		seq_printf(file, "CGR id %d avg count: %llu\n",
+			   priv->cgr_data.cgr.cgrid,
+			   qm_mcr_querycgr_a_get64(&query_cgr));
+		seq_printf(file, "Device entered congestion %u times. ",
+			   priv->cgr_data.cgr_congested_count);
+		seq_printf(file, "Current congestion state is: %s.\n",
+			   query_cgr.cgr.cs ? "congested" : "not congested");
+		/* Reset congestion stats (like QMan CGR API does) */
+		priv->cgr_data.congested_jiffies = 0;
+		priv->cgr_data.cgr_congested_count = 0;
+	}
 
 	/* Rx Errors demultiplexing */
 	seq_puts(file, "\nDPA RX Errors:\nCPU        dma err  phys err");
