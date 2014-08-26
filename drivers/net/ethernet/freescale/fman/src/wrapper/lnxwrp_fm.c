@@ -1131,18 +1131,18 @@ struct device *g_fm_dev;
 static int fm_soc_suspend(struct device *dev)
 {
 	int err = 0;
+	uint32_t *fmclk;
 	t_LnxWrpFmDev *p_LnxWrpFmDev = dev_get_drvdata(get_device(dev));
 	g_fm_dev = dev;
+	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
 	if (p_LnxWrpFmDev->h_DsarRxPort)
 	{
-		uint32_t *fmclk;
 #ifdef CONFIG_FSL_QORIQ_PM
 		fsl_set_power_except(dev,1);
 #endif
 		err = FM_PORT_EnterDsarFinal(p_LnxWrpFmDev->h_DsarRxPort,
 			p_LnxWrpFmDev->h_DsarTxPort);
-		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_DS_VAL);
 	}
 	return err;
 }
@@ -1150,11 +1150,11 @@ static int fm_soc_suspend(struct device *dev)
 static int fm_soc_resume(struct device *dev)
 {
 	t_LnxWrpFmDev *p_LnxWrpFmDev = dev_get_drvdata(get_device(dev));
+	uint32_t *fmclk;
+	fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
+	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
 	if (p_LnxWrpFmDev->h_DsarRxPort)
 	{
-		uint32_t *fmclk;
-		fmclk = ioremap(SCFG_FMCLKDPSLPCR_ADDR, 4);
-		WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
 		p_LnxWrpFmDev->h_DsarRxPort = 0;
 		p_LnxWrpFmDev->h_DsarTxPort = 0;
 	}
