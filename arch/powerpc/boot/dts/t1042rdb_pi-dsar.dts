@@ -170,6 +170,11 @@
 			};
 		};
 
+               qman: qman@318000 {
+               };
+               bman: bman@31a000 {
+               };
+
 		fman0: fman@400000 {
 			sleep = <&rcpm 0x00000008>;
 
