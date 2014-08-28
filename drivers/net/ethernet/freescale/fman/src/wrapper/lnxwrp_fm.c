@@ -1075,7 +1075,6 @@ static int /*__devinit*/ fm_probe(struct platform_device *of_dev)
 
 #ifdef CONFIG_PM
     device_set_wakeup_capable(p_LnxWrpFmDev->dev, true);
-    device_set_wakeup_enable(p_LnxWrpFmDev->dev, 1);
 #endif
 
     DBG(TRACE, ("FM%d probed", p_LnxWrpFmDev->id));
@@ -1139,6 +1138,7 @@ static int fm_soc_suspend(struct device *dev)
 	if (p_LnxWrpFmDev->h_DsarRxPort)
 	{
 #ifdef CONFIG_FSL_QORIQ_PM
+		device_set_wakeup_enable(p_LnxWrpFmDev->dev, 1);
 		fsl_set_power_except(dev,1);
 #endif
 		err = FM_PORT_EnterDsarFinal(p_LnxWrpFmDev->h_DsarRxPort,
@@ -1155,6 +1155,10 @@ static int fm_soc_resume(struct device *dev)
 	WRITE_UINT32(*fmclk, SCFG_FMCLKDPSLPCR_NORMAL_VAL);
 	if (p_LnxWrpFmDev->h_DsarRxPort)
 	{
+#ifdef CONFIG_FSL_QORIQ_PM
+		fsl_set_power_except(dev,0);
+		device_set_wakeup_enable(p_LnxWrpFmDev->dev, 0);
+#endif
 		p_LnxWrpFmDev->h_DsarRxPort = 0;
 		p_LnxWrpFmDev->h_DsarTxPort = 0;
 	}
