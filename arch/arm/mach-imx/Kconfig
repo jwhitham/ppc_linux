@@ -846,9 +846,6 @@ config SOC_VF610
 	help
 	  This enable support for Freescale Vybrid VF610 processor.
 
-config FSL_SOC
-	bool
-
 config SOC_LS1021A
 	bool "Freescale LS1021A support"
 	select CPU_V7
@@ -856,7 +853,6 @@ config SOC_LS1021A
 	select CLKSRC_OF
 	select HAVE_ARM_ARCH_TIMER
 	select HAVE_SMP
-	select FSL_SOC
 	select MIGHT_HAVE_PCI
 	select PCI_DOMAINS if PCI
 	select ZONE_DMA if ARM_LPAE
