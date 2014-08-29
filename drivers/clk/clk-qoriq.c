@@ -244,7 +244,7 @@ static const struct of_device_id clk_match[] __initconst = {
 	{}
 };
 
-static int __init ppc_corenet_clk_probe(struct platform_device *pdev)
+static int __init qoriq_corenet_clk_probe(struct platform_device *pdev)
 {
 	struct device_node *np;
 
@@ -259,26 +259,26 @@ static int __init ppc_corenet_clk_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id ppc_clk_ids[] __initconst = {
+static const struct of_device_id qoriq_clk_ids[] __initconst = {
 	{ .compatible = "fsl,qoriq-clockgen-1.0", },
 	{ .compatible = "fsl,qoriq-clockgen-2.0", },
 	{}
 };
 
-static struct platform_driver ppc_corenet_clk_driver __initdata = {
+static struct platform_driver qoriq_corenet_clk_driver __initdata = {
 	.driver = {
-		.name = "ppc_corenet_clock",
+		.name = "qoriq_corenet_clock",
 		.owner = THIS_MODULE,
-		.of_match_table = ppc_clk_ids,
+		.of_match_table = qoriq_clk_ids,
 	},
-	.probe = ppc_corenet_clk_probe,
+	.probe = qoriq_corenet_clk_probe,
 };
 
-static int __init ppc_corenet_clk_init(void)
+static int __init qoriq_corenet_clk_init(void)
 {
-	return platform_driver_register(&ppc_corenet_clk_driver);
+	return platform_driver_register(&qoriq_corenet_clk_driver);
 }
-subsys_initcall(ppc_corenet_clk_init);
+subsys_initcall(qoriq_corenet_clk_init);
 
 static void __init ls1021a_clocks_init(struct device_node *np)
 {
