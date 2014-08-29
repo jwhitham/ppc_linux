@@ -4121,6 +4121,23 @@ static t_Error CapwapReassemblyStats(t_FmPcdManip *p_Manip,
     return E_OK;
 }
 
+static t_Error CapwapFragmentationStats(t_FmPcdManip *p_Manip,
+		t_FmPcdManipFragCapwapStats *p_Stats)
+{
+	t_AdOfTypeContLookup *p_Ad;
+
+	ASSERT_COND(p_Manip);
+	ASSERT_COND(p_Stats);
+	ASSERT_COND(p_Manip->h_Ad);
+	ASSERT_COND(p_Manip->fragParams.p_Frag);
+
+	p_Ad = (t_AdOfTypeContLookup *)p_Manip->h_Ad;
+
+	p_Stats->totalFrames = GET_UINT32(p_Ad->gmask);
+
+	return E_OK;
+}
+
 static t_Error CapwapReassembly(t_FmPcdManipReassemParams *p_ManipReassmParams,
                                 t_FmPcdManip *p_Manip)
 {
@@ -5411,6 +5428,9 @@ t_Error FM_PCD_ManipGetStatistics(t_Handle h_ManipNode,
         case (HMAN_OC_CAPWAP_REASSEMBLY):
             return CapwapReassemblyStats(
                     p_Manip, &p_FmPcdManipStats->u.reassem.u.capwapReassem);
+	case (HMAN_OC_CAPWAP_FRAGMENTATION):
+		return CapwapFragmentationStats(
+			p_Manip, &p_FmPcdManipStats->u.frag.u.capwapFrag);
 #endif /* (DPAA_VERSION >= 11) */
         default:
             RETURN_ERROR(MAJOR, E_NOT_SUPPORTED,
