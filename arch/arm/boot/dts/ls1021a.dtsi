@@ -173,7 +173,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			sysclk: sysclk {
-				compatible = "fsl,sys-clock";
+				compatible = "fixed-clock";
 				#clock-cells = <0>;
 				clock-frequency = <100000000>;
 				clock-output-names = "sysclk";
