@@ -1132,10 +1132,16 @@ int add_out_tunnel(struct dpaa_capwap_domain *capwap_domain,
 			e_FM_PCD_ACTION_EXACT_MATCH;
 		cc_node_param->extractCcParams.extractNonHdr.offset = 0;
 		cc_node_param->extractCcParams.extractNonHdr.size = 1;
-		cc_node_param->keysParams.numOfKeys = 0;
+		cc_node_param->keysParams.numOfKeys = 1;
 		cc_node_param->keysParams.keySize = 1;
 		cc_node_param->keysParams.maxNumOfKeys = 0;
 
+		cc_node_param->keysParams.keyParams[0].p_Key =
+			&cc_node_param->keysParams.keySize;
+		memcpy(&cc_node_param->keysParams.keyParams[0].
+				ccNextEngineParams,
+				fm_pcd_cc_next_engine_params,
+				sizeof(t_FmPcdCcNextEngineParams));
 		memcpy(&cc_node_param->keysParams.ccNextEngineParamsForMiss,
 				fm_pcd_cc_next_engine_params,
 				sizeof(t_FmPcdCcNextEngineParams));
