@@ -98,7 +98,7 @@
 		cpld@3,0 {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			compatible = "fsl,t104xrdb-cpld";
+			compatible = "fsl,t104xrdb-cpld", "fsl,deepsleep-cpld";
 			reg = <3 0 0x20>;
 			ranges = <0 3 0 0x20>;
 			bank-width = <1>;
