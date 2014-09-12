@@ -170,6 +170,11 @@ struct dpaa_capwap_domain_tunnel_out_params {
 					 * required and will be build by
 					 * the driver
 					 */
+	bool frag_bp_enable;	/* If set, Framentation will use a seperate
+				 * Buffer Pool. otherwise, fragmentation will
+				 * use the same buffer pool as input frame
+				 */
+	uint8_t	frag_bp_id;	/* Buffer Pool ID used by fragmentation */
 	bool dtls;		/* DTLS tunnel */
 	bool is_control;	/* true: control tunnel, false: data tunnel */
 

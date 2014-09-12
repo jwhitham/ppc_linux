@@ -1084,6 +1084,12 @@ int add_out_tunnel(struct dpaa_capwap_domain *capwap_domain,
 		fm_pcd_manip_params->u.frag.hdr = HEADER_TYPE_CAPWAP;
 		fm_pcd_manip_params->u.frag.u.capwapFrag.sizeForFragmentation =
 			out_tunnel_params->size_for_fragment;
+		if (out_tunnel_params->frag_bp_enable) {
+			fm_pcd_manip_params->u.frag.u.capwapFrag.sgBpidEn =
+				TRUE;
+			fm_pcd_manip_params->u.frag.u.capwapFrag.sgBpid =
+				out_tunnel_params->frag_bp_id;
+		}
 		p_tunnel->h_capwap_frag =
 			FM_PCD_ManipNodeSet(capwap_domain->h_fm_pcd,
 					fm_pcd_manip_params);
