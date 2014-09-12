@@ -639,7 +639,7 @@ int add_in_tunnel(struct dpaa_capwap_domain *capwap_domain,
 		context_b = capwap_domain->fqs->inbound_sec_to_op_fqs.fqid_base
 			+ flow_index;
 		err = capwap_fq_tx_init(&fq[flow_index], channel, context_a,
-				context_b);
+				context_b, 3);
 		if (err)
 			goto error;
 
@@ -1043,7 +1043,7 @@ int add_out_tunnel(struct dpaa_capwap_domain *capwap_domain,
 			capwap_domain->fqs->outbound_sec_to_op_fqs.fqid_base +
 			flow_index;
 		err = capwap_fq_tx_init(&fq[flow_index], channel, context_a,
-				context_b);
+				context_b, 3);
 		if (err)
 			goto error_dma;
 

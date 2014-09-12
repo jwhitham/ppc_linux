@@ -37,7 +37,7 @@ int capwap_fq_rx_init(struct qman_fq *fq, u32 fqid,
 
 
 int capwap_fq_tx_init(struct qman_fq *fq, u16 channel,
-			u64 context_a, u32 context_b);
+			u64 context_a, u32 context_b, u8 wq);
 
 void teardown_fq(struct qman_fq *fq);
 

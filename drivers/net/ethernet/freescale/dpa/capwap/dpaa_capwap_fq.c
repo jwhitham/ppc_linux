@@ -177,7 +177,7 @@ int capwap_fq_rx_init(struct qman_fq *fq, u32 fqid,
 }
 
 int capwap_fq_tx_init(struct qman_fq *fq, u16 channel,
-			u64 context_a, u32 context_b)
+			u64 context_a, u32 context_b, u8 wq)
 {
 	struct qm_mcc_initfq opts;
 	int ret;
@@ -197,7 +197,7 @@ int capwap_fq_tx_init(struct qman_fq *fq, u16 channel,
 	if (context_b)
 		opts.we_mask |= QM_INITFQ_WE_CONTEXTB;
 	opts.fqd.dest.channel = channel;
-	opts.fqd.dest.wq = 3;
+	opts.fqd.dest.wq = wq;
 
 	opts.fqd.context_b = context_b;
 	qm_fqd_context_a_set64(&opts.fqd, context_a);
@@ -409,7 +409,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 		context_b =
 			capwap_domain->fqs->inbound_core_rx_fqs.fqid_base + i;
 		ret = capwap_fq_tx_init(&q_fq[i], channel, context_a,
-				context_b);
+				context_b, 3);
 		if (ret) {
 			for (j = 0; j < i; j++)
 				qman_destroy_fq(&q_fq[j], 0);
@@ -439,7 +439,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 		context_b =
 			capwap_domain->fqs->inbound_core_rx_fqs.fqid_base + i;
 		ret = capwap_fq_tx_init(&q_fq[i], channel, context_a,
-				context_b);
+				context_b, 3);
 		if (ret) {
 			for (j = 0; j < i; j++)
 				qman_destroy_fq(&q_fq[j], 0);
@@ -478,7 +478,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 #endif
 		context_b = 0;
 		ret = capwap_fq_tx_init(&q_fq[i], channel, context_a,
-				context_b);
+				context_b, 3);
 		if (ret) {
 			for (j = CAPWAP_FLOW_COUNT; j < i; j++)
 				qman_destroy_fq(&q_fq[j], 0);
@@ -504,7 +504,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 		context_b = capwap_domain->fqs->outbound_op_tx_fqs.fqid_base +
 			i + CAPWAP_FLOW_COUNT;
 		ret = capwap_fq_tx_init(&q_fq[i], channel, context_a,
-				context_b);
+				context_b, 1);
 		if (ret) {
 			for (j = CAPWAP_FLOW_COUNT / 2; j < i; j++)
 				qman_destroy_fq(&q_fq[j], 0);
@@ -536,7 +536,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 		context_b = capwap_domain->fqs->outbound_op_tx_fqs.fqid_base +
 			i + CAPWAP_FLOW_COUNT;
 		ret = capwap_fq_tx_init(&q_fq[i], channel, context_a,
-				context_b);
+				context_b, 1);
 		if (ret) {
 			for (j = 0; j < i; j++)
 				qman_destroy_fq(&q_fq[j], 0);
@@ -561,7 +561,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 		context_a |= (u64)i << (32 + 4);
 		context_b = 0;
 		ret = capwap_fq_tx_init(&q_fq[i], channel, context_a,
-				context_b);
+				context_b, 3);
 		if (ret) {
 			for (j = 0; j < i; j++)
 				qman_destroy_fq(&q_fq[j], 0);
