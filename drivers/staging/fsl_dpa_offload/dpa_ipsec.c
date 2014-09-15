@@ -5856,7 +5856,7 @@ int dpa_ipsec_sa_get_seq_number(int sa_id, uint64_t *seq)
 out:
 	put_instance(dpa_ipsec);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_get_seq_number);
 
