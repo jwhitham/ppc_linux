@@ -2342,7 +2342,8 @@ static int set_cls_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 {
 	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
 	uint32_t cnt_sel = params->plcr_params.cnt_sel;
-	uint32_t i, j, stats, stats_idx, stats_base_idx;
+	uint32_t i, j, stats_idx, stats_base_idx;
+	uint64_t stats;
 	int err;
 
 	if (!dpa_stats) {
