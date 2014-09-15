@@ -3657,6 +3657,7 @@ int dpa_ipsec_free(int dpa_ipsec_id)
 		sa_id = instance->used_sa_ids[i];
 		if (sa_id != DPA_OFFLD_INVALID_OBJECT_ID) {
 			sa = get_sa_from_sa_id(instance, sa_id);
+			BUG_ON(!sa);
 			if (sa_is_inbound(sa)) {
 				if (sa_is_child(sa))
 					remove_inbound_sa(sa->parent_sa);
