@@ -1348,8 +1348,6 @@ static int do_ioctl_stats_modify_class_counter(void *args)
 			}
 			kfree(prm.params.pair);
 			/* Restore user-provided key */
-			prm.params.pair->first_key = us_pair->first_key;
-			prm.params.pair->second_key = us_pair->second_key;
 			prm.params.pair = us_pair;
 		}
 		break;
