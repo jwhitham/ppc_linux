@@ -143,7 +143,7 @@ static uint32_t oh_fq_create(struct qman_fq *fq,
 	return 0;
 }
 
-void dump_fq(struct device *dev, int fqid, int channel)
+static void dump_fq(struct device *dev, int fqid, uint16_t channel)
 {
 	if (channel) {
 		/* display fqs with a valid (!= 0) destination channel */
@@ -151,15 +151,15 @@ void dump_fq(struct device *dev, int fqid, int channel)
 	}
 }
 
-void dump_fq_duple(struct device *dev, struct qman_fq *fqs, int fqs_count,
-		int channel_id)
+static void dump_fq_duple(struct device *dev, struct qman_fq *fqs,
+		int fqs_count, uint16_t channel_id)
 {
 	int i;
 	for (i = 0; i < fqs_count; i++)
 		dump_fq(dev, (fqs + i)->fqid, channel_id);
 }
 
-void dump_oh_config(struct device *dev, struct dpa_oh_config_s *conf)
+static void dump_oh_config(struct device *dev, struct dpa_oh_config_s *conf)
 {
 	struct list_head *fq_list;
 	struct fq_duple *fqd;
@@ -423,7 +423,7 @@ oh_port_probe(struct platform_device *_of_dev)
 		for (j = 0; j < crt_fq_count; j++)
 			(fqd->fqs + j)->fqid = crt_fqid_base + j;
 		fqd->fqs_count = crt_fq_count;
-		fqd->channel_id = *channel_id;
+		fqd->channel_id = (uint16_t)*channel_id;
 		list_add(&fqd->fq_list, &oh_config->fqs_ingress_list);
 	}
 
@@ -515,7 +515,7 @@ oh_port_probe(struct platform_device *_of_dev)
 		if (channel_idx + 1 > channel_ids_count)
 			break;
 		fqd = list_entry(fq_list, struct fq_duple, fq_list);
-		fqd->channel_id = channel_ids[channel_idx++];
+		fqd->channel_id = (uint16_t)channel_ids[channel_idx++];
 	}
 
 	/* create egress queues */
@@ -649,7 +649,7 @@ oh_port_probe(struct platform_device *_of_dev)
 	/* Create TX queues */
 	for (i = 0; i < crt_fq_count; i++) {
 		ret = oh_fq_create(oh_config->egress_fqs + i,
-			crt_fqid_base + i, *channel_id, 3);
+			crt_fqid_base + i, (uint16_t)*channel_id, 3);
 		if (ret != 0) {
 			dev_err(dpa_oh_dev,
 				"Unable to create TX frame queue %d for OH node %s referenced from node %s!\n",

@@ -39,7 +39,7 @@ struct qman_fq;
 struct fq_duple {
 	struct qman_fq *fqs;
 	int fqs_count;
-	int channel_id;
+	uint16_t channel_id;
 	struct list_head fq_list;
 };
 
