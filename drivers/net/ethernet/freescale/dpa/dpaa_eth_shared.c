@@ -580,6 +580,7 @@ buf_acquire_failed:
 	/* We're done with the skb */
 	dev_kfree_skb(skb);
 
+	/* err remains unused, NETDEV_TX_OK must be returned here */
 	return NETDEV_TX_OK;
 }
 
