@@ -1276,16 +1276,16 @@ static int dpa_generic_fq_create(struct net_device *netdev,
 	struct dpa_fq *fqs = NULL, *tmp = NULL;
 	struct task_struct *kth;
 	int err = 0;
+	int channel;
 
 	INIT_LIST_HEAD(&priv->dpa_fq_list);
 
 	list_replace_init(dpa_fq_list, &priv->dpa_fq_list);
 
-	priv->channel = dpa_get_channel();
-	if (priv->channel < 0) {
-		err = priv->channel;
-		return err;
-	}
+	channel = dpa_get_channel();
+	if (channel < 0)
+		return channel;
+	priv->channel = (uint16_t)channel;
 
 	/* Start a thread that will walk the cpus with affine portals
 	 * and add this pool channel to each's dequeue mask.
