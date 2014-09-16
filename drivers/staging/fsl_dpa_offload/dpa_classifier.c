@@ -7787,23 +7787,22 @@ int dpa_classif_mcast_create_group(
 		sizeof(struct dpa_cls_mcast_group_params));
 
 	/*
+	 * initialize the array of indexes of used members
+	 */
+	pgroup->member_ids = kzalloc(sizeof(int) * max_members, GFP_KERNEL);
+	if (!pgroup->member_ids) {
+		log_err("No more memory for DPA multicast index members array.\n");
+		err = -ENOMEM;
+		goto dpa_classif_mcast_create_group_error;
+	}
+
+	/*
 	 * initialize the array of used members
 	 */
 	pgroup->entries = kzalloc(sizeof(struct members) * max_members,
 				  GFP_KERNEL);
 	if (!pgroup->entries) {
 		log_err("No more memory for DPA multicast member entries.\n");
-		err = -ENOMEM;
-		goto dpa_classif_mcast_create_group_error;
-	}
-
-	/*
-	 * initialize the array of indexes of used members
-	 */
-	pgroup->member_ids = kzalloc(sizeof(int) * max_members, GFP_KERNEL);
-	if (!pgroup->member_ids) {
-		log_err("No more memory for DPA multicast index members "
-			"array.\n");
 		err = -ENOMEM;
 		goto dpa_classif_mcast_create_group_error;
 	}
@@ -7956,8 +7955,10 @@ int dpa_classif_mcast_create_group(
 
 dpa_classif_mcast_create_group_error:
 	if (pgroup) {
-		dpa_classif_hm_release_chain(pgroup->entries[0].hmd);
-		kfree(pgroup->entries);
+		if (pgroup->entries) {
+			dpa_classif_hm_release_chain(pgroup->entries[0].hmd);
+			kfree(pgroup->entries);
+		}
 		kfree(pgroup->member_ids);
 		mutex_destroy(&pgroup->access);
 		if (*grpd != DPA_OFFLD_DESC_NONE) {
