@@ -698,7 +698,7 @@ config_port:
 	dev_dbg(dpa_oh_dev, "OH port number of pools = %u\n",
 			crt_ext_pools_count);
 
-	oh_port_tx_params.num_pools = crt_ext_pools_count;
+	oh_port_tx_params.num_pools = (uint8_t)crt_ext_pools_count;
 
 	for (i = 0; i < crt_ext_pools_count; i++) {
 		bpool_node = of_find_node_by_phandle(bpool_handle[i]);

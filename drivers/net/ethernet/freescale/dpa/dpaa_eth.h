@@ -495,11 +495,11 @@ static inline uint16_t dpa_get_headroom(struct dpa_buffer_layout_s *bl)
 	 *
 	 * Also make sure the headroom is a multiple of data_align bytes
 	 */
-	headroom = bl->priv_data_size +
+	headroom = (uint16_t)(bl->priv_data_size +
 		   (bl->parse_results ? DPA_PARSE_RESULTS_SIZE : 0) +
 		   (bl->hash_results || bl->time_stamp ?
 		    DPA_TIME_STAMP_SIZE + DPA_HASH_RESULTS_SIZE : 0) +
-		   bl->manip_extra_space;
+		   bl->manip_extra_space);
 
 	return bl->data_align ? ALIGN(headroom, bl->data_align) : headroom;
 }

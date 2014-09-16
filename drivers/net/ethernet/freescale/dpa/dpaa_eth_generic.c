@@ -433,7 +433,8 @@ dpa_generic_rx_dqrr(struct qman_portal *portal,
 	/* The skb is currently pointed at head + headroom. The packet
 	 * starts at skb->head + pad + fd offset.
 	 */
-	data_start = pad + dpa_fd_offset(fd) - skb_headroom(skb);
+	data_start = (unsigned int)(pad + dpa_fd_offset(fd) -
+				    skb_headroom(skb));
 	skb_put(skb, dpa_fd_length(fd) + data_start);
 	skb_pull(skb, data_start);
 	skb->protocol = eth_type_trans(skb, netdev);
@@ -576,7 +577,7 @@ int dpa_generic_tx_csum(struct dpa_generic_priv_s *priv,
 	}
 
 	/* At index 0 is IPOffset_1 as defined in the Parse Results */
-	parse_result->ip_off[0] = skb_network_offset(skb);
+	parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
 	parse_result->l4_off = skb_transport_offset(skb);
 
 	/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
@@ -652,7 +653,7 @@ static int __hot dpa_generic_tx(struct sk_buff *skb, struct net_device *netdev)
 	fd.format = qm_fd_contig;
 	fd.length20 = skb->len;
 	fd.offset = priv->tx_headroom;
-	fd.addr_hi = upper_32_bits(addr);
+	fd.addr_hi = (uint8_t)upper_32_bits(addr);
 	fd.addr_lo = lower_32_bits(addr);
 	/* fd.cmd |= FM_FD_CMD_FCO; */
 	fd.bpid = bp->bpid;
@@ -959,7 +960,7 @@ static int dpa_generic_rx_bp_probe(struct platform_device *_of_dev,
 			goto _return_of_node_put;
 		}
 
-		bp[i].bpid = *bpid;
+		bp[i].bpid = (uint8_t)*bpid;
 
 		bpool_cfg = of_get_property(dev_node, "fsl,bpool-ethernet-cfg",
 				&lenp);

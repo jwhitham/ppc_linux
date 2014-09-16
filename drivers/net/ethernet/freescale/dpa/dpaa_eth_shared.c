@@ -488,7 +488,7 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	fd.bpid = dpa_bp->bpid;
 
 	fd.length20 = skb_headlen(skb);
-	fd.addr_hi = bmb.hi;
+	fd.addr_hi = (uint8_t)bmb.hi;
 	fd.addr_lo = bmb.lo;
 	fd.offset = priv->tx_headroom;
 

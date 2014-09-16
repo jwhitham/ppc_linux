@@ -258,7 +258,7 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 		goto _return_dev_set_drvdata;
 	}
 	BUG_ON(lenp != sizeof(uint32_t));
-	mac_dev->cell_index = *uint32_prop;
+	mac_dev->cell_index = (uint8_t)*uint32_prop;
 
 	/* Get the MAC address */
 	mac_addr = of_get_mac_address(mac_node);
