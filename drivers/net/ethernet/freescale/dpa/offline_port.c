@@ -728,7 +728,7 @@ config_port:
 
 		of_read_number(bpool_cfg, n_size);
 		ext_pool_size = of_read_number(bpool_cfg + n_size, n_size);
-		oh_port_tx_params.pool_param[i].size = ext_pool_size;
+		oh_port_tx_params.pool_param[i].size = (uint16_t)ext_pool_size;
 		dev_dbg(dpa_oh_dev, "OH port bpool size = %u\n",
 			ext_pool_size);
 		of_node_put(bpool_node);
