@@ -51,6 +51,16 @@
 /* Maximum number of class counter members */
 #define DPA_STATS_MAX_NUM_OF_CLASS_MEMBERS 256
 
+/* Number of bytes occupied by one counter selection */
+#define DPA_STATS_CNT_SEL_LEN		   4
+
+/* Maximum size occupied by storage area: 10 MB */
+#define DPA_STATS_MAX_STORAGE_AREA_SIZE	(10 * (1 << 20))
+
+/* Maximum number of counters that can be processed in a request. Each counter
+ * can be repeated a maximum of two times in a request */
+#define DPA_STATS_REQ_CNTS_IDS_LEN	(2 * DPA_STATS_MAX_NUM_OF_COUNTERS)
+
 /* DPA Stats instance parameters */
 struct dpa_stats_params {
 
@@ -61,7 +71,8 @@ struct dpa_stats_params {
 	 * will be written by the DPA Stats instance */
 	void *storage_area;
 
-	/* Length in bytes of the storage memory area */
+	/* Length in bytes of the storage memory area (must be between
+	 * DPA_STATS_CNT_SEL_LEN and DPA_STATS_MAX_STORAGE_AREA_SIZE) */
 	unsigned int storage_area_len;
 };
 
@@ -83,7 +94,8 @@ struct dpa_stats_cnt_request_params {
 	/* Array of counter IDs to retrieve values for */
 	int *cnts_ids;
 
-	/* Size of array of counters to retrieve values for */
+	/* Size of array of counters to retrieve values for (must be between
+	 * 1 and DPA_STATS_REQ_CNTS_IDS_LEN) */
 	unsigned int cnts_ids_len;
 
 	/* Reset counters after the retrieve operation */
