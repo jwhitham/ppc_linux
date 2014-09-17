@@ -807,7 +807,7 @@ static int do_sa_get_policies_ioctl(void *args)
 	}
 
 	num_pol = prm.num_pol;
-	if (num_pol <= 0) {
+	if (num_pol <= 0 || num_pol > DPA_IPSEC_MAX_POL_PER_SA) {
 		log_err("Invalid number of policies for SA ID# %d\n", sa_id);
 		return -EINVAL;
 	}
@@ -927,7 +927,7 @@ static int do_sa_get_policies_compat_ioctl(void *args)
 	}
 
 	num_pol = prm.num_pol;
-	if (num_pol <= 0) {
+	if (num_pol <= 0 || num_pol > DPA_IPSEC_MAX_POL_PER_SA) {
 		log_err("Invalid number of policies for SA ID# %d\n", sa_id);
 		return -EINVAL;
 	}

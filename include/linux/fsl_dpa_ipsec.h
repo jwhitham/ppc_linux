@@ -72,8 +72,9 @@
 		IP_PROTO_FIELD_LEN + \
 		2 * PORT_FIELD_LEN)
 
-#define DPA_IPSEC_MAX_IN_POL_PER_SA  255  /* Maximum supported number of
-					   * inbound policies per SA	      */
+
+#define DPA_IPSEC_MAX_POL_PER_SA     255  /* Maximum supported number of
+					   * policies per  SA              */
 
 /*
  * IPSec Special Operations
@@ -497,6 +498,7 @@ int dpa_ipsec_sa_remove_policy(int sa_id,
  * to determine the size of the policy_params array, the function
  * must first be called with policy_params = NULL. In this case it
  * will only return the number of policy entries linked to the SA.
+ * num_pol must not be greater than DPA_IPSEC_MAX_POL_PER_SA
  */
 int dpa_ipsec_sa_get_policies(int sa_id,
 			      struct dpa_ipsec_policy_params *policy_params,

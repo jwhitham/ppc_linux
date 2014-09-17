@@ -518,7 +518,7 @@ static int create_inpol_cls_tbl(struct dpa_ipsec *dpa_ipsec,
 	memset(&params, 0, sizeof(params));
 	params.entry_mgmt = DPA_CLS_TBL_MANAGE_BY_REF;
 	params.type = DPA_CLS_TBL_EXACT_MATCH;
-	params.exact_match_params.entries_cnt = DPA_IPSEC_MAX_IN_POL_PER_SA;
+	params.exact_match_params.entries_cnt = DPA_IPSEC_MAX_POL_PER_SA;
 	params.exact_match_params.key_size = dpa_ipsec->sa_mng.inpol_key_size;
 	params.exact_match_params.use_priorities = true;
 	params.cc_node = cc_node;
