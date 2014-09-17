@@ -1159,6 +1159,8 @@ static int fm_soc_resume(struct device *dev)
 		fsl_set_power_except(dev,0);
 		device_set_wakeup_enable(p_LnxWrpFmDev->dev, 0);
 #endif
+		FM_PORT_ExitDsar(p_LnxWrpFmDev->h_DsarRxPort,
+			p_LnxWrpFmDev->h_DsarTxPort);
 		p_LnxWrpFmDev->h_DsarRxPort = 0;
 		p_LnxWrpFmDev->h_DsarTxPort = 0;
 	}
@@ -1417,9 +1419,6 @@ EXPORT_SYMBOL(fm_port_enter_autores_for_deepsleep);
 void fm_port_exit_auto_res_for_deep_sleep(struct fm_port *port_rx,
 	struct fm_port *port_tx)
 {
-	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDevRx = (t_LnxWrpFmPortDev *)port_rx;
-	t_LnxWrpFmPortDev   *p_LnxWrpFmPortDevTx = (t_LnxWrpFmPortDev *)port_tx;
-	FM_PORT_ExitDsar(p_LnxWrpFmPortDevRx->h_Dev, p_LnxWrpFmPortDevTx->h_Dev);
 }
 EXPORT_SYMBOL(fm_port_exit_auto_res_for_deep_sleep);
 
@@ -1436,8 +1435,6 @@ EXPORT_SYMBOL(fm_port_get_autores_stats);
 int fm_port_suspend(struct fm_port *port)
 {
 	t_LnxWrpFmPortDev *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev *)port;
-	if (p_LnxWrpFmPortDev->id == 3)
-		return 0;
 	if (!FM_PORT_IsInDsar(p_LnxWrpFmPortDev->h_Dev))
 		return FM_PORT_Disable(p_LnxWrpFmPortDev->h_Dev);
 	else

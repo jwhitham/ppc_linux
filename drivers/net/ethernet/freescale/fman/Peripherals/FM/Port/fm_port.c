@@ -5813,8 +5813,7 @@ t_Error FM_PORT_EnterDsarFinal(t_Handle h_DsarRxPort, t_Handle h_DsarTxPort)
         fmGetSetParams.setParams.type = UPDATE_FM_CLD;
         FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
 
-	// Issue graceful stop to HC and DSAR Tx ports
-	FM_PORT_Disable(p_FmPortTx);
+	/* Issue graceful stop to HC port */
 	FM_PORT_Disable(p_FmPortHc);
 
 	// config tx port
@@ -5915,7 +5914,6 @@ void FM_PORT_ExitDsar(t_Handle h_FmPortRx, t_Handle h_FmPortTx)
     FmGetSetParams(p_FmPort->h_Fm, &fmGetSetParams);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcmne, p_FmPort->deepSleepVars.fmbm_tcmne);
     WRITE_UINT32(p_FmPortTx->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tcfg, p_FmPort->deepSleepVars.fmbm_tcfg);
-    FM_PORT_Enable(p_FmPortTx);
     FM_PORT_Enable(p_FmPortHc);
 }
 
