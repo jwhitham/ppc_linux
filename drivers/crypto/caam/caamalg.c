@@ -690,19 +690,7 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	/* skip key loading if they are loaded due to sharing */
 	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
 				   JUMP_COND_SHRD);
-	if (keys_fit_inline) {
-		append_key_as_imm(desc, ctx->key, ctx->split_key_pad_len,
-				  ctx->split_key_len, CLASS_2 |
-				  KEY_DEST_MDHA_SPLIT | KEY_ENC);
-		append_key_as_imm(desc, (void *)ctx->key +
-				  ctx->split_key_pad_len, ctx->enckeylen,
-				  ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
-	} else {
-		append_key(desc, ctx->key_dma, ctx->split_key_len, CLASS_2 |
-			   KEY_DEST_MDHA_SPLIT | KEY_ENC);
-		append_key(desc, ctx->key_dma + ctx->split_key_pad_len,
-			   ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
-	}
+	append_key_aead(desc, ctx, keys_fit_inline);
 	set_jump_tgt_here(desc, key_jump_cmd);
 
 	/* class 2 operation */
