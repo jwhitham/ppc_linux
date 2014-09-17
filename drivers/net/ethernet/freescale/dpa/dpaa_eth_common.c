@@ -759,6 +759,7 @@ void dpa_bp_drain(struct dpa_bp *bp)
 				 * drain them one by one
 				 */
 				num = 1;
+				ret = 1;
 				continue;
 			} else {
 				/* Pool is fully drained */
