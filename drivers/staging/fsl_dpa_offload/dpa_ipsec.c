@@ -3240,6 +3240,13 @@ static int check_sa_params(struct dpa_ipsec_sa_params *sa_params)
 		return -EINVAL;
 	}
 
+	if (sa_params->crypto_params.alg_suite <
+	     DPA_IPSEC_CIPHER_ALG_3DES_CBC_HMAC_96_MD5_128 ||
+	    sa_params->crypto_params.alg_suite >
+	     DPA_IPSEC_CIPHER_ALG_AES_CTR_HMAC_SHA_512_256) {
+		log_err("Invalid alg_suite value\n");
+		return -EINVAL;
+	}
 	/*
 	 * check crypto params:
 	 * - an authentication key must always be provided
