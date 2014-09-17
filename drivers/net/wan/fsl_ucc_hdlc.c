@@ -35,6 +35,7 @@
 #define DRV_NAME "ucc_hdlc"
 
 #undef DEBUG
+/* #define QE_HDLC_TEST */
 
 static struct ucc_hdlc_info uhdlc_primary_info = {
 	.uf_info = {
@@ -60,7 +61,11 @@ static struct ucc_hdlc_info uhdlc_primary_info = {
 	},
 
 	.si_info = {
+#ifdef CONFIG_FSL_PQ_MDS_T1
 		.simr_rfsd = 1,		/* TDM card need 1 bit delay */
+#else
+		.simr_rfsd = 0,
+#endif
 		.simr_tfsd = 0,
 		.simr_crt = 0,
 		.simr_sl = 0,
@@ -417,7 +422,7 @@ static int uhdlc_init(struct ucc_hdlc_private *priv)
 		goto riptr_alloc_error;
 	}
 
-	tiptr = qe_muram_alloc(32, 32);
+	tiptr = qe_muram_alloc(64, 32);
 	if (IS_ERR_VALUE(tiptr)) {
 		dev_err(priv->dev, "Cannot allocate MURAM mem for transmit internal temp data pointer\n");
 		ret = -ENOMEM;
@@ -535,11 +540,11 @@ static netdev_tx_t ucc_hdlc_tx(struct sk_buff *skb, struct net_device *dev)
 
 	send_buf = (u8 *)skb->data;
 
-	if (priv->loopback) {
-		pr_info("\nTransmitted data:\n");
-		for (i = 0; (i < 16); i++)
-			pr_info("%x ", send_buf[i]);
-	}
+#ifdef QE_HDLC_TEST
+	pr_info("\nTransmitted data:\n");
+	for (i = 0; (i < 16); i++)
+		pr_info("%x ", send_buf[i]);
+#endif
 
 	/* Start from the next BD that should be filled */
 	bd = priv->curtx_bd;
@@ -640,11 +645,11 @@ static int hdlc_rx_done(struct ucc_hdlc_private *priv, int rx_work_limit)
 			(priv->currx_bdnum * MAX_RX_BUF_LENGTH);
 		length = (u16) (bd_status & BD_LENGTH_MASK);
 
-		if (priv->loopback) {
-			pr_info("\nReceived data:\n");
-			for (i = 0; (i < 16); i++)
-				pr_info("%x ", bdbuffer[i]);
-		}
+#ifdef QE_HDLC_TEST
+		pr_info("\nReceived data:\n");
+		for (i = 0; (i < 16); i++)
+			pr_info("%x ", bdbuffer[i]);
+#endif
 
 		bdbuffer += HDLC_HEAD_LEN;
 		length -= (HDLC_HEAD_LEN + HDLC_CRC_SIZE);
