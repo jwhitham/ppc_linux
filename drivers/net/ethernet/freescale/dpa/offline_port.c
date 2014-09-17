@@ -715,7 +715,7 @@ config_port:
 			goto return_kfree;
 		}
 
-		oh_port_tx_params.pool_param[i].id = *bpid;
+		oh_port_tx_params.pool_param[i].id = (uint8_t)*bpid;
 		dev_dbg(dpa_oh_dev, "OH port bpool id = %u\n", *bpid);
 
 		bpool_cfg = of_get_property(bpool_node,

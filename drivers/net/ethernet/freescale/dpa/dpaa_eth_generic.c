@@ -578,7 +578,7 @@ int dpa_generic_tx_csum(struct dpa_generic_priv_s *priv,
 
 	/* At index 0 is IPOffset_1 as defined in the Parse Results */
 	parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
-	parse_result->l4_off = skb_transport_offset(skb);
+	parse_result->l4_off = (uint8_t)skb_transport_offset(skb);
 
 	/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
 	fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DTC;
