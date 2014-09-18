@@ -26,6 +26,7 @@
 		ethernet0 = &enet0;
 		ethernet1 = &enet1;
 		ethernet2 = &enet2;
+		sysclk = &sysclk;
 	};
 
 	memory@80000000 {
