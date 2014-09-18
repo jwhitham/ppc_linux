@@ -947,8 +947,7 @@ static int hash_table_modify_entry(
 	hash_set_index = crc64_ecma(key->byte,
 			ptable->params.hash_params.key_size,
 			hash_set_index);
-	hash_set_index =
-			(u64)(hash_set_index & ptable->hash_mask) >>
+	hash_set_index = (u64)(hash_set_index & ptable->hash_mask) >>
 			(8 * (6 - ptable->params.hash_params.hash_offs) + 4);
 
 	/*
@@ -965,12 +964,10 @@ static int hash_table_modify_entry(
 
 	memset(&key_params, 0, sizeof(t_FmPcdCcKeyParams));
 
-	cc_node_index =
-			ptable->entry[entry_id].int_cc_node_index;
+	cc_node_index = ptable->entry[entry_id].int_cc_node_index;
 	entry_index = ptable->entry[entry_id].entry_index;
 
-	cc_node =
-			(t_Handle)ptable->int_cc_node[cc_node_index].cc_node;
+	cc_node = (t_Handle)ptable->int_cc_node[cc_node_index].cc_node;
 
 	if (!action) {
 		/* Save action to next engine params */
@@ -998,8 +995,6 @@ static int hash_table_modify_entry(
 					&key_params.ccNextEngineParams);
 			if (err)
 				return -err;
-
-			hmd = ptable->entry[entry_id].hmd;
 		}
 	} else {
 		/*
