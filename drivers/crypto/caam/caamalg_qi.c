@@ -1185,15 +1185,15 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 		fd_sgt[1].extension = 1;
 		fd_sgt[1].addr = qm_sg_dma;
 
-		sg_to_qm_sg(req->assoc, (assoc_nents ? : 1), sg_table, 0);
-		qm_sg_index += assoc_nents ? : 1;
+		sg_to_qm_sg(req->assoc, assoc_nents, sg_table, 0);
+		qm_sg_index += assoc_nents;
 
 		dma_to_qm_sg_one(sg_table + qm_sg_index, iv_dma, ivsize, 0);
 		qm_sg_index += 1;
 
-		sg_to_qm_sg_last(req->src, (src_nents ? : 1),
+		sg_to_qm_sg_last(req->src, src_nents,
 				 sg_table + qm_sg_index, 0);
-		qm_sg_index += src_nents ? : 1;
+		qm_sg_index += src_nents;
 
 	} else {
 		fd_sgt[1].extension = 0;
