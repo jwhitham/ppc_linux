@@ -1560,7 +1560,6 @@ static int table_delete_entry_by_ref(struct dpa_cls_table *ptable, int entry_id)
 {
 	t_Error err;
 	struct dpa_cls_tbl_shadow_entry *shadow_entry;
-	struct dpa_cls_tbl_shadow_entry_indexed *shadow_entry_indexed;
 	uint8_t entry_index;
 	unsigned int cc_node_index;
 	t_Handle cc_node;
@@ -1630,30 +1629,16 @@ static int table_delete_entry_by_ref(struct dpa_cls_table *ptable, int entry_id)
 	int_cc_node->used--;
 
 	if (ptable->shadow_table) {
-		if (ptable->params.type == DPA_CLS_TBL_INDEXED) {
-			shadow_list_entry = ptable->shadow_table[0].
-					shadow_entry[entry_index].next;
-			shadow_entry_indexed = list_entry(shadow_list_entry,
-					struct dpa_cls_tbl_shadow_entry_indexed,
-					list_node);
-
-			list_del(&shadow_entry_indexed->list_node);
-
-			kfree(shadow_entry_indexed);
-		} else {
-			shadow_list_entry =
-					ptable->entry[entry_id].shadow_entry;
-			shadow_entry = list_entry(shadow_list_entry,
+		shadow_list_entry = ptable->entry[entry_id].shadow_entry;
+		shadow_entry = list_entry(shadow_list_entry,
 						struct dpa_cls_tbl_shadow_entry,
 						list_node);
 
-			list_del(&shadow_entry->list_node);
+		list_del(&shadow_entry->list_node);
 
-			kfree(shadow_entry->key.byte);
-			kfree(shadow_entry->key.mask);
-			kfree(shadow_entry);
-		}
-
+		kfree(shadow_entry->key.byte);
+		kfree(shadow_entry->key.mask);
+		kfree(shadow_entry);
 	}
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
