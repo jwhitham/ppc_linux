@@ -73,6 +73,7 @@
 		2 * PORT_FIELD_LEN)
 
 
+#define DPA_IPSEC_MAX_IV_LEN         16   /* Maximum length of IV(in bytes) */
 #define DPA_IPSEC_MAX_POL_PER_SA     255  /* Maximum supported number of
 					   * policies per  SA              */
 

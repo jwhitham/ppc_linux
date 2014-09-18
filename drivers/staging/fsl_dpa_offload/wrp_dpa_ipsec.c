@@ -411,6 +411,15 @@ static int do_copy_sa_params(struct dpa_ipsec_sa_params *prm, void *args)
 				kfree(sa_out_iv);
 				return err;
 			}
+
+			if (sa_out_iv->length > DPA_IPSEC_MAX_IV_LEN) {
+				err = -EINVAL;
+				log_err("Error - IV length greater than %d\n",
+					DPA_IPSEC_MAX_IV_LEN);
+				kfree(sa_out_iv);
+				return err;
+			}
+
 			sa_out_prm->init_vector = sa_out_iv;
 
 			/* if the IV array is NULL, don't bother to copy it */
