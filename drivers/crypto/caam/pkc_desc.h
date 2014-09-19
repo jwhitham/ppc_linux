@@ -20,7 +20,6 @@
 #include "desc_constr.h"
 #include "jr.h"
 #include "error.h"
-#include "sg_sw_sec4.h"
 #include <linux/crypto.h>
 #include "pdb.h"
 
