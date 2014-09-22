@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Freescale Semiconductor Inc.
+ * Copyright 2008-2015 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,27 +30,30 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/******************************************************************************
+ @File          fm_macsec.c
 
-/**************************************************************************//**
- @File          debug_ext.h
-
- @Description   Debug mode definitions.
+ @Description   FM MACSEC driver routines implementation.
 *//***************************************************************************/
 
-#ifndef __XX_COMMON_H
-#define __XX_COMMON_H
+#include "std_ext.h"
+#include "error_ext.h"
+#include "xx_ext.h"
+#include "string_ext.h"
+#include "sprint_ext.h"
+#include "debug_ext.h"
+#include "fm_macsec.h"
 
-/*****************************************************************************
- *  UNIFIED MODULE CODES
- *****************************************************************************/
-#define MODULE_UNKNOWN          0x00000000
-#define MODULE_FM               0x00010000
-#define MODULE_FM_MURAM         0x00020000
-#define MODULE_FM_PCD           0x00030000
-#define MODULE_FM_RTC           0x00040000
-#define MODULE_FM_MAC           0x00050000
-#define MODULE_FM_PORT          0x00060000
-#define MODULE_MM               0x00070000
-#define MODULE_FM_SP            0x00080000
-#define MODULE_FM_MACSEC        0x00090000
-#endif /* __XX_COMMON_H */
+
+/****************************************/
+/*       static functions               */
+/****************************************/
+
+/****************************************/
+/*       API Init unit functions        */
+/****************************************/
+t_Handle FM_MACSEC_GUEST_Config(t_FmMacsecParams *p_FmMacsecParam)
+{
+    UNUSED(p_FmMacsecParam);
+    return NULL;
+}
