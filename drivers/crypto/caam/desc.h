@@ -15,6 +15,7 @@ struct sec4_sg_entry {
 	u32 len;
 	u8 reserved;
 	u8 buf_pool_id;
+#define SEC4_SG_OFFSET_MASK 0x1FFF
 	u16 offset;
 };
 

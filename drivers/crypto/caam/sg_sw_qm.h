@@ -35,7 +35,7 @@
 #include "linux/fsl_qman.h"
 
 static inline void dma_to_qm_sg_one(struct qm_sg_entry *qm_sg_ptr,
-				      dma_addr_t dma, u32 len, u32 offset)
+				      dma_addr_t dma, u32 len, u16 offset)
 {
 	qm_sg_ptr->addr = dma;
 	qm_sg_ptr->extension = 0;
@@ -44,7 +44,7 @@ static inline void dma_to_qm_sg_one(struct qm_sg_entry *qm_sg_ptr,
 	qm_sg_ptr->__reserved2 = 0;
 	qm_sg_ptr->bpid = 0;
 	qm_sg_ptr->__reserved3 = 0;
-	qm_sg_ptr->offset = offset;
+	qm_sg_ptr->offset = offset & QM_SG_OFFSET_MASK;
 }
 
 /*
@@ -53,7 +53,7 @@ static inline void dma_to_qm_sg_one(struct qm_sg_entry *qm_sg_ptr,
  */
 static inline struct qm_sg_entry *
 sg_to_qm_sg(struct scatterlist *sg, int sg_count,
-	    struct qm_sg_entry *qm_sg_ptr, u32 offset)
+	    struct qm_sg_entry *qm_sg_ptr, u16 offset)
 {
 	while (sg_count) {
 		dma_to_qm_sg_one(qm_sg_ptr, sg_dma_address(sg),
@@ -72,7 +72,7 @@ sg_to_qm_sg(struct scatterlist *sg, int sg_count,
  */
 static inline void sg_to_qm_sg_last(struct scatterlist *sg, int sg_count,
 				      struct qm_sg_entry *qm_sg_ptr,
-				      u32 offset)
+				      u16 offset)
 {
 	qm_sg_ptr = sg_to_qm_sg(sg, sg_count, qm_sg_ptr, offset);
 	qm_sg_ptr->final = 1;

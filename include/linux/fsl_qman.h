@@ -230,6 +230,7 @@ static inline dma_addr_t qm_fd_addr(const struct qm_fd *fd)
 	{ cmd } }
 
 /* See 2.2.1.3 Multi-Core Datapath Acceleration Architecture */
+#define QM_SG_OFFSET_MASK 0x1FFF
 struct qm_sg_entry {
 	union {
 		struct {
