@@ -1765,6 +1765,7 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 					 HASH_MSG_LEN + 64,
 					 HASH_MSG_LEN + SHA512_DIGEST_SIZE };
 	int ret = 0;
+	u8 op_id;
 
 	/*
 	 * Get a Job ring from Job Ring driver to ensure in-order
@@ -1779,14 +1780,23 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 	ctx->alg_type = OP_TYPE_CLASS2_ALG | caam_hash->alg_type;
 	ctx->alg_op = OP_TYPE_CLASS2_ALG | caam_hash->alg_op;
 
-	ctx->ctx_len = runninglen[(ctx->alg_op & OP_ALG_ALGSEL_SUBMASK) >>
-				  OP_ALG_ALGSEL_SHIFT];
+	op_id = (ctx->alg_op & OP_ALG_ALGSEL_SUBMASK) >> OP_ALG_ALGSEL_SHIFT;
+	if (op_id >= ARRAY_SIZE(runninglen)) {
+		dev_err(ctx->jrdev, "incorrect op_id %d; must be less than %d\n",
+				op_id, ARRAY_SIZE(runninglen));
+		ret = -EINVAL;
+		goto out_err;
+	}
+	ctx->ctx_len = runninglen[op_id];
 
 	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm),
 				 sizeof(struct caam_hash_state));
 
 	ret = ahash_set_sh_desc(ahash);
+	return ret;
 
+out_err:
+	caam_jr_free(ctx->jrdev);
 	return ret;
 }
 

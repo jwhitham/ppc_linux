@@ -3445,6 +3445,7 @@ static int caam_cra_init(struct crypto_tfm *tfm)
 		SHA384_DIGEST_SIZE,
 		SHA512_DIGEST_SIZE
 	};
+	u8 op_id;
 
 	ctx->jrdev = caam_jr_alloc();
 	if (IS_ERR(ctx->jrdev)) {
@@ -3461,11 +3462,20 @@ static int caam_cra_init(struct crypto_tfm *tfm)
 	 * Need authsize, in case setauthsize callback not called
 	 * by upper layer (e.g. TLS).
 	 */
-	if (caam_alg->alg_op)
-		ctx->authsize = digest_size[(ctx->alg_op &
-				OP_ALG_ALGSEL_SUBMASK) >> OP_ALG_ALGSEL_SHIFT];
-	else
+	if (caam_alg->alg_op) {
+		op_id = (ctx->alg_op & OP_ALG_ALGSEL_SUBMASK)
+				>> OP_ALG_ALGSEL_SHIFT;
+		if (op_id < ARRAY_SIZE(digest_size)) {
+			ctx->authsize = digest_size[op_id];
+		} else {
+			dev_err(ctx->jrdev, "incorrect op_id %d; must be less than %d\n",
+					op_id, ARRAY_SIZE(digest_size));
+			caam_jr_free(ctx->jrdev);
+			return -EINVAL;
+		}
+	} else {
 		ctx->authsize = 0;
+	}
 
 	return 0;
 }
