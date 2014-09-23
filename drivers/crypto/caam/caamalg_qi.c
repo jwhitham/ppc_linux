@@ -1249,6 +1249,9 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 static struct caam_drv_ctx *get_drv_ctx(struct caam_ctx *ctx,
 					enum optype type)
 {
+	/* This function is called on the fast path with values of 'type'
+	 * known at compile time. Invalid arguments are not expected and
+	 * thus no checks are made */
 	struct caam_drv_ctx *drv_ctx = ctx->drv_ctx[type];
 	u32 *desc;
 
@@ -1264,10 +1267,8 @@ static struct caam_drv_ctx *get_drv_ctx(struct caam_ctx *ctx,
 				desc = ctx->sh_desc_enc;
 			else if (DECRYPT == type)
 				desc = ctx->sh_desc_dec;
-			else if (GIVENCRYPT == type)
+			else /* (GIVENCRYPT == type) */
 				desc = ctx->sh_desc_givenc;
-			else
-				return ERR_PTR(-EINVAL);
 
 			cpu = smp_processor_id();
 			drv_ctx = caam_drv_ctx_init(ctx->qidev, &cpu, desc);
