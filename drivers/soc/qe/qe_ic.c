@@ -34,6 +34,7 @@
 #include <linux/fsl/qe_ic.h>
 
 #include "qe_ic.h"
+#include "../../irqchip/irqchip.h"
 
 static DEFINE_RAW_SPINLOCK(qe_ic_lock);
 
@@ -500,5 +501,19 @@ static int __init init_qe_ic_sysfs(void)
 	}
 	return 0;
 }
+
+static int __init qeic_of_init(void)
+{
+	struct device_node *np;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,qe-ic");
+	if (np) {
+		qe_ic_init(np, 0, qe_ic_cascade_low_mpic,
+			   qe_ic_cascade_high_mpic);
+		of_node_put(np);
+	}
+	return 0;
+}
+subsys_initcall(qeic_of_init);
 
 subsys_initcall(init_qe_ic_sysfs);
