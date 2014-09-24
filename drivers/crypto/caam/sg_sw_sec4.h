@@ -33,7 +33,10 @@ static inline struct sec4_sg_entry *
 sg_to_sec4_sg(struct scatterlist *sg, int sg_count,
 	      struct sec4_sg_entry *sec4_sg_ptr, u16 offset)
 {
-	while (sg_count) {
+	if (!sg)
+		return NULL;
+
+	while (sg_count && sg) {
 		dma_to_sec4_sg_one(sec4_sg_ptr, sg_dma_address(sg),
 				   sg_dma_len(sg), offset);
 		sec4_sg_ptr++;
@@ -51,6 +54,8 @@ static inline void sg_to_sec4_sg_last(struct scatterlist *sg, int sg_count,
 				      struct sec4_sg_entry *sec4_sg_ptr,
 				      u16 offset)
 {
+	if (!sg)
+		return;
 	sec4_sg_ptr = sg_to_sec4_sg(sg, sg_count, sec4_sg_ptr, offset);
 	sec4_sg_ptr->len |= SEC4_SG_LEN_FIN;
 }
@@ -89,9 +94,12 @@ static int dma_map_sg_chained(struct device *dev, struct scatterlist *sg,
 			      unsigned int nents, enum dma_data_direction dir,
 			      bool chained)
 {
+	if (!sg || !nents)
+		return 0;
+
 	if (unlikely(chained)) {
 		int i;
-		for (i = 0; i < nents; i++) {
+		for (i = 0; i < nents && sg; i++) {
 			dma_map_sg(dev, sg, 1, dir);
 			sg = scatterwalk_sg_next(sg);
 		}
@@ -105,9 +113,12 @@ static int dma_unmap_sg_chained(struct device *dev, struct scatterlist *sg,
 				unsigned int nents, enum dma_data_direction dir,
 				bool chained)
 {
+	if (!sg || !nents)
+		return;
+
 	if (unlikely(chained)) {
 		int i;
-		for (i = 0; i < nents; i++) {
+		for (i = 0; i < nents && sg; i++) {
 			dma_unmap_sg(dev, sg, 1, dir);
 			sg = scatterwalk_sg_next(sg);
 		}

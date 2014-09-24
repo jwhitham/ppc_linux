@@ -55,7 +55,7 @@ static inline struct qm_sg_entry *
 sg_to_qm_sg(struct scatterlist *sg, int sg_count,
 	    struct qm_sg_entry *qm_sg_ptr, u16 offset)
 {
-	while (sg_count) {
+	while (sg_count && sg) {
 		dma_to_qm_sg_one(qm_sg_ptr, sg_dma_address(sg),
 				 sg_dma_len(sg), offset);
 		qm_sg_ptr++;
