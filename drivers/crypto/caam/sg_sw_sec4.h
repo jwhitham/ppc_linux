@@ -109,7 +109,7 @@ static int dma_map_sg_chained(struct device *dev, struct scatterlist *sg,
 	return nents;
 }
 
-static int dma_unmap_sg_chained(struct device *dev, struct scatterlist *sg,
+static void dma_unmap_sg_chained(struct device *dev, struct scatterlist *sg,
 				unsigned int nents, enum dma_data_direction dir,
 				bool chained)
 {
@@ -125,5 +125,4 @@ static int dma_unmap_sg_chained(struct device *dev, struct scatterlist *sg,
 	} else {
 		dma_unmap_sg(dev, sg, nents, dir);
 	}
-	return nents;
 }
