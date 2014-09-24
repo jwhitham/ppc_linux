@@ -486,6 +486,11 @@ int dpa_classif_table_get_entry_stats_by_ref(int		td,
 				int				entry_id,
 				struct dpa_cls_tbl_entry_stats	*stats);
 
+/* Returns the miss statistics for the specified table. */
+int dpa_classif_table_get_miss_stats(int			td,
+				struct dpa_cls_tbl_entry_stats	*stats);
+
+
 /* Returns the parameters of a classifier table. */
 int dpa_classif_table_get_params(int td, struct dpa_cls_tbl_params *params);
 

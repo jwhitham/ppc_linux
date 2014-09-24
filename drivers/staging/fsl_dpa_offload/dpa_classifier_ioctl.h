@@ -1,4 +1,3 @@
-
 /* Copyright 2008-2012 Freescale Semiconductor, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -107,6 +106,11 @@ struct ioc_dpa_cls_tbl_entry_stats_by_key {
 struct ioc_dpa_cls_tbl_entry_stats_by_ref {
 	int td;
 	int entry_id;
+	struct dpa_cls_tbl_entry_stats stats;
+};
+
+struct ioc_dpa_cls_tbl_miss_stats {
+	int td;
 	struct dpa_cls_tbl_entry_stats stats;
 };
 
@@ -697,6 +701,9 @@ int dpa_cls_mcast_member_params_compatcpy(
 
 #define DPA_CLS_IOC_TBL_GET_STATS_BY_REF		\
 	_IOR(DPA_CLS_IOC_MAGIC, 12, struct ioc_dpa_cls_tbl_entry_stats_by_ref)
+
+#define DPA_CLS_IOC_TBL_GET_MISS_STATS			\
+	_IOR(DPA_CLS_IOC_MAGIC, 13, struct ioc_dpa_cls_tbl_miss_stats)
 
 #define DPA_CLS_IOC_TBL_GET_PARAMS			\
 	_IOWR(DPA_CLS_IOC_MAGIC, 15, struct ioc_dpa_cls_tbl_params)

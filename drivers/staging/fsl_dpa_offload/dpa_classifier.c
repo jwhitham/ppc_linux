@@ -2061,6 +2061,51 @@ static int table_get_entry_stats_by_ref(struct dpa_cls_table	*ptable,
 	return ret;
 }
 
+int dpa_classif_table_get_miss_stats(int			td,
+				struct dpa_cls_tbl_entry_stats	*stats)
+{
+	struct dpa_cls_table *ptable;
+	t_FmPcdCcKeyStatistics key_stats;
+	t_Error err;
+	int i, ret = 0;
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) -->\n",
+			__func__, __LINE__));
+
+	/* Parameters sanity check. */
+	if (!stats) {
+		log_err("\"stats\" cannot be NULL.\n");
+		return -EINVAL;
+	}
+
+	LOCK_OBJECT(table_array, td, ptable, -EINVAL);
+	memset(stats, 0, sizeof(*stats));
+	for (i = 0; i < ptable->int_cc_nodes_count; i++) {
+		memset(&key_stats, 0, sizeof(key_stats));
+		err = FM_PCD_MatchTableGetMissStatistics(
+				(t_Handle)ptable->int_cc_node[i].cc_node,
+				&key_stats);
+		if (err != E_OK) {
+			log_warn("FMan driver call failed - FM_PCD_MatchTableGetMissStatistics. Failed to acquire key statistics.\n");
+			memset(stats, 0, sizeof(*stats));
+			ret = -EPERM;
+			break;
+		}
+		stats->pkts += key_stats.frameCount;
+		stats->bytes += key_stats.byteCount;
+	}
+	RELEASE_OBJECT(ptable);
+
+	if (ret < 0)
+		log_err("Failed to get miss stats in table td=%d.\n", td);
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n",
+			__func__, __LINE__));
+
+	return ret;
+}
+EXPORT_SYMBOL(dpa_classif_table_get_miss_stats);
+
 int dpa_classif_table_get_params(int td, struct dpa_cls_tbl_params *params)
 {
 	struct dpa_cls_table *ptable;

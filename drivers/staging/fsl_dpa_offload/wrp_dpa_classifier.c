@@ -452,6 +452,34 @@ long wrp_dpa_classif_do_ioctl(
 		break;
 	}
 
+	case DPA_CLS_IOC_TBL_GET_MISS_STATS:
+	{
+		struct ioc_dpa_cls_tbl_miss_stats param;
+
+		dpa_cls_wrp_dbg((
+			"DEBUG: classifier_wrp %s (%d): get_miss_stats\n",
+			__func__, __LINE__));
+
+		/* Prepare arguments */
+		if (copy_from_user(&param, (void *) args, sizeof(param))) {
+			log_err("Read failed: dpa_classif_table_get_miss_stats user space args.\n");
+			return -EBUSY;
+		}
+
+		/* Call function */
+		ret = dpa_classif_table_get_miss_stats(param.td, &param.stats);
+		if (ret < 0)
+			return ret;
+
+		/* Return results to user space */
+		if (copy_to_user((void *) args, &param, sizeof(param))) {
+			log_err("Write failed: dpa_classif_table_get_miss_stats result.\n");
+			return -EBUSY;
+		}
+
+		break;
+	}
+
 #ifdef CONFIG_COMPAT
 	case DPA_CLS_IOC_COMPAT_TBL_GET_PARAMS:
 #endif /* CONFIG_COMPAT */
