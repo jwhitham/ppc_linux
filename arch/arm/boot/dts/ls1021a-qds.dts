@@ -111,6 +111,10 @@
 	status = "okay";
 };
 
+&ftm0 {
+	status = "okay";
+};
+
 &i2c0 {
 	status = "okay";
 	pca9547@77 {
