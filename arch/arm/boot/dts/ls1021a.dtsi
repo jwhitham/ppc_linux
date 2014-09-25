@@ -548,19 +548,11 @@
 			phy_type = "ulpi";
 		};
 
-		usb@3100000 {
-			compatible = "fsl,fsl-dwc3";
-			#address-cells = <2>;
-			#size-cells = <2>;
-			ranges;
-
-			dwc3 {
-				compatible = "snps,dwc3";
-				reg = <0x0 0x3100000 0x0 0x10000>;
-				interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>;
-				dr_mode = "host";
-				maximum-speed = "high-speed";
-			};
+		usb3@3100000 {
+			compatible = "snps,dwc3";
+			reg = <0x0 0x3100000 0x0 0x10000>;
+			interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>;
+			dr_mode = "host";
 		};
 	};
 
