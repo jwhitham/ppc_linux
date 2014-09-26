@@ -30,7 +30,6 @@
 #include <linux/mtd/cfi.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
-#include <linux/of_address.h>
 #include <linux/of_platform.h>
 
 #include <linux/spi/spi.h>
@@ -741,17 +740,19 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "at45db081d", INFO(0x1f2500, 0, 64 * 1024, 16, SECT_4K) },
 
 	/* EON -- en25xxx */
-	{ "en25f32", INFO(0x1c3116, 0, 64 * 1024,  64, SECT_4K) },
-	{ "en25p32", INFO(0x1c2016, 0, 64 * 1024,  64, 0) },
-	{ "en25q32b", INFO(0x1c3016, 0, 64 * 1024,  64, 0) },
-	{ "en25p64", INFO(0x1c2017, 0, 64 * 1024, 128, 0) },
-	{ "en25q64", INFO(0x1c3017, 0, 64 * 1024, 128, SECT_4K) },
-	{ "en25s64", INFO(0x1c3817, 0, 64 * 1024, 128, 0) },
-	{ "en25qh256", INFO(0x1c7019, 0, 64 * 1024, 512, 0) },
+	{ "en25f32",    INFO(0x1c3116, 0, 64 * 1024,   64, SECT_4K) },
+	{ "en25p32",    INFO(0x1c2016, 0, 64 * 1024,   64, 0) },
+	{ "en25q32b",   INFO(0x1c3016, 0, 64 * 1024,   64, 0) },
+	{ "en25p64",    INFO(0x1c2017, 0, 64 * 1024,  128, 0) },
+	{ "en25q64",    INFO(0x1c3017, 0, 64 * 1024,  128, SECT_4K) },
+	{ "en25qh256",  INFO(0x1c7019, 0, 64 * 1024,  512, 0) },
+
+	/* ESMT */
+	{ "f25l32pa", INFO(0x8c2016, 0, 64 * 1024, 64, SECT_4K) },
 
 	/* Everspin */
-	{ "mr25h256", CAT25_INFO(  32 * 1024, 1, 256, 2, M25P_NO_ERASE | M25P_NO_FR) },
-	{ "mr25h10", CAT25_INFO(128 * 1024, 1, 256, 3, M25P_NO_ERASE | M25P_NO_FR) },
+	{ "mr25h256", CAT25_INFO( 32 * 1024, 1, 256, 2, M25P_NO_ERASE | M25P_NO_FR) },
+	{ "mr25h10",  CAT25_INFO(128 * 1024, 1, 256, 3, M25P_NO_ERASE | M25P_NO_FR) },
 
 	/* GigaDevice */
 	{ "gd25q32", INFO(0xc84016, 0, 64 * 1024,  64, SECT_4K) },
@@ -781,12 +782,11 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "n25q128a13",  INFO(0x20ba18, 0, 64 * 1024,  256, 0) },
 	{ "n25q256a",    INFO(0x20ba19, 0, 64 * 1024,  512, SECT_4K) },
 	{ "n25q512a",    INFO(0x20bb20, 0, 64 * 1024, 1024, SECT_4K) },
-	{ "n25q512a",    INFO(0x20ba20, 0, 64 * 1024, 1024, SECT_4K) },
 
 	/* PMC */
-	{ "pm25lv512", INFO(0, 0, 32 * 1024, 2, SECT_4K_PMC) },
-	{ "pm25lv010", INFO(0, 0, 32 * 1024, 4, SECT_4K_PMC) },
-	{ "pm25lq032", INFO(0x7f9d46, 0, 64 * 1024,  64, SECT_4K) },
+	{ "pm25lv512",   INFO(0,        0, 32 * 1024,    2, SECT_4K_PMC) },
+	{ "pm25lv010",   INFO(0,        0, 32 * 1024,    4, SECT_4K_PMC) },
+	{ "pm25lq032",   INFO(0x7f9d46, 0, 64 * 1024,   64, SECT_4K) },
 
 	/* Spansion -- single (large) sector size only, at least
 	 * for the chips listed here (without boot sectors).
@@ -933,11 +933,9 @@ static int m25p_probe(struct spi_device *spi)
 	struct flash_platform_data	*data;
 	struct m25p			*flash;
 	struct flash_info		*info;
-	unsigned			i, ret;
+	unsigned			i;
 	struct mtd_part_parser_data	ppdata;
 	struct device_node __maybe_unused *np = spi->dev.of_node;
-	struct resource res;
-	struct device_node *mnp = spi->master->dev.of_node;
 
 #ifdef CONFIG_MTD_OF_PARTS
 	if (!of_device_is_available(np))
@@ -1015,17 +1013,8 @@ static int m25p_probe(struct spi_device *spi)
 
 	if (data && data->name)
 		flash->mtd.name = data->name;
-	else {
-		ret = of_address_to_resource(mnp, 0, &res);
-		if (ret) {
-			dev_err(&spi->dev, "failed to get spi master resource\n");
-			return ret;
-		}
-		flash->mtd.name = kasprintf(GFP_KERNEL, "spi%x.%d",
-				(unsigned)res.start, spi->chip_select);
-		if (!flash->mtd.name)
-			return -ENOMEM;
-	}
+	else
+		flash->mtd.name = dev_name(&spi->dev);
 
 	flash->mtd.type = MTD_NORFLASH;
 	flash->mtd.writesize = 1;
