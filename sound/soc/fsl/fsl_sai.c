@@ -334,6 +334,9 @@ static int fsl_sai_startup(struct snd_pcm_substream *substream,
 	struct fsl_sai *sai = snd_soc_dai_get_drvdata(cpu_dai);
 	u32 reg;
 
+	if (sai->big_endian_regs)
+		substream->data_swapped = 1;
+
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 		reg = FSL_SAI_TCR3;
 	else
@@ -549,8 +552,14 @@ static int fsl_sai_probe(struct platform_device *pdev)
 		return PTR_ERR(sai->regmap);
 	}
 
-	sai->dma_params_rx.addr = res->start + FSL_SAI_RDR;
-	sai->dma_params_tx.addr = res->start + FSL_SAI_TDR;
+	if (sai->big_endian_regs) {
+		sai->dma_params_rx.addr = res->start + FSL_SAI_RDR + 2;
+		sai->dma_params_tx.addr = res->start + FSL_SAI_TDR + 2;
+	} else {
+		sai->dma_params_rx.addr = res->start + FSL_SAI_RDR;
+		sai->dma_params_tx.addr = res->start + FSL_SAI_TDR;
+	}
+
 	sai->dma_params_rx.maxburst = FSL_SAI_MAXBURST_RX;
 	sai->dma_params_tx.maxburst = FSL_SAI_MAXBURST_TX;
 
