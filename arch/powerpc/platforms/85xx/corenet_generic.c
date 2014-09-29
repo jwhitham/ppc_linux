@@ -54,7 +54,8 @@ void __init corenet_gen_pic_init(void)
 	 * to enable the mixed mode of MPIC.
 	 */
 	if ((SVR_SOC_VER(svr) == SVR_T1040) ||
-	    (SVR_SOC_VER(svr) == SVR_T1042)) {
+	    (SVR_SOC_VER(svr) == SVR_T1042) ||
+	    (SVR_SOC_VER(svr) == SVR_T1024)) {
 		ppc_md.get_irq = mpic_get_irq;
 	}
 

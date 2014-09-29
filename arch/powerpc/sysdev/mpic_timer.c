@@ -447,7 +447,8 @@ static int need_to_switch_freq(void)
 
 	svr = mfspr(SPRN_SVR);
 	if (SVR_SOC_VER(svr) == SVR_T1040 ||
-	    SVR_SOC_VER(svr) == SVR_T1042)
+	    SVR_SOC_VER(svr) == SVR_T1042 ||
+	    SVR_SOC_VER(svr) == SVR_T1024)
 		return 1;
 
 	return 0;

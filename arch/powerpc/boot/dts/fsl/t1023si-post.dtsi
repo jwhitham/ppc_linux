@@ -472,6 +472,7 @@
 		fsl,iommu-parent = <&pamu0>;
 		fsl,liodn-reg = <&guts 0x530>; /* eSDHCLIODNR */
 		sdhci,auto-cmd12;
+		no-1-8-v;
 		sleep = <&rcpm 0x00000080>;
 	};
 /include/ "qoriq-i2c-0.dtsi"
