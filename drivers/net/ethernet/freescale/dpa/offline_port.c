@@ -491,7 +491,7 @@ oh_port_probe(struct platform_device *_of_dev)
 		fqd->fqs_count = crt_fq_count;
 		/* channel ID is specified in another attribute */
 		fqd->channel_id = 0;
-		list_add(&fqd->fq_list, &oh_config->fqs_egress_list);
+		list_add_tail(&fqd->fq_list, &oh_config->fqs_egress_list);
 
 		/* allocate the queue */
 
