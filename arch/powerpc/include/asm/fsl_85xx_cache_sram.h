@@ -26,7 +26,7 @@
 #ifndef __ASM_POWERPC_FSL_85XX_CACHE_SRAM_H__
 #define __ASM_POWERPC_FSL_85XX_CACHE_SRAM_H__
 
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <linux/spinlock.h>
 
 /*
@@ -37,7 +37,7 @@ struct mpc85xx_cache_sram {
 	phys_addr_t base_phys;
 	void *base_virt;
 	unsigned int size;
-	rh_info_t *rh;
+	struct _rh_info *rh;
 	spinlock_t lock;
 };
 

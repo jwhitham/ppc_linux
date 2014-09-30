@@ -41,7 +41,7 @@
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/cpm2.h>
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <asm/fs_pd.h>
 
 #include <sysdev/fsl_soc.h>

@@ -12,7 +12,7 @@
 #ifndef __BESTCOMM_SRAM_H__
 #define __BESTCOMM_SRAM_H__
 
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <asm/mmu.h>
 #include <linux/spinlock.h>
 
@@ -25,7 +25,7 @@ struct bcom_sram {
 	phys_addr_t		 base_phys;
 	void 			*base_virt;
 	unsigned int		 size;
-	rh_info_t		*rh;
+	struct _rh_info		*rh;
 	spinlock_t		 lock;
 };
 

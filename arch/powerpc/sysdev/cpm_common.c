@@ -26,7 +26,7 @@
 
 #include <asm/udbg.h>
 #include <asm/io.h>
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <asm/cpm.h>
 
 #include <mm/mmu_decl.h>
@@ -65,8 +65,8 @@ void __init udbg_init_cpm(void)
 #endif
 
 static spinlock_t cpm_muram_lock;
-static rh_block_t cpm_boot_muram_rh_block[16];
-static rh_info_t cpm_muram_info;
+static struct _rh_block cpm_boot_muram_rh_block[16];
+static struct _rh_info cpm_muram_info;
 static u8 __iomem *muram_vbase;
 static phys_addr_t muram_pbase;
 

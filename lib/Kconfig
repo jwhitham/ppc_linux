@@ -365,6 +365,9 @@ config CPU_RMAP
 	bool
 	depends on SMP
 
+config LIB_RHEAP
+	bool
+
 config DQL
 	bool
 

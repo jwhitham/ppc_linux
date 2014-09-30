@@ -26,12 +26,12 @@
 #include <linux/slab.h>
 
 #include <linux/io.h>
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <linux/fsl/qe.h>
 
 static spinlock_t qe_muram_lock;
-static rh_block_t qe_boot_muram_rh_block[16];
-static rh_info_t qe_muram_info;
+static struct _rh_block qe_boot_muram_rh_block[16];
+static struct _rh_info qe_muram_info;
 static u8 __iomem *muram_vbase;
 static phys_addr_t muram_pbase;
 

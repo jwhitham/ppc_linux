@@ -1972,7 +1972,7 @@ config FB_FSL_DIU
 	select FB_CFB_FILLRECT
 	select FB_CFB_COPYAREA
 	select FB_CFB_IMAGEBLIT
-	select PPC_LIB_RHEAP
+	select LIB_RHEAP
 	---help---
 	  Framebuffer driver for the Freescale SoC DIU
 

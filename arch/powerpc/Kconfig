@@ -1046,7 +1046,4 @@ config PPC_CLOCK
 	default n
 	select HAVE_CLK
 
-config PPC_LIB_RHEAP
-	bool
-
 source "arch/powerpc/kvm/Kconfig"

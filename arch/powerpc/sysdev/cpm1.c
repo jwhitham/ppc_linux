@@ -38,7 +38,7 @@
 #include <asm/cpm1.h>
 #include <asm/io.h>
 #include <asm/tlbflush.h>
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 #include <asm/prom.h>
 #include <asm/cpm.h>
 

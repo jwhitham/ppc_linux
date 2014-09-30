@@ -36,7 +36,7 @@
 #include <linux/fsl/immap_qe.h>
 #include <linux/fsl/qe.h>
 #include <asm/prom.h>
-#include <asm/rheap.h>
+#include <linux/fsl/rheap.h>
 
 static void qe_snums_init(void);
 static int qe_sdma_init(void);
