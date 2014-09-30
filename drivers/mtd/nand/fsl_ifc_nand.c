@@ -29,7 +29,8 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/nand_ecc.h>
-#include <asm/fsl_ifc.h>
+#include <linux/of_address.h>
+#include <linux/fsl_ifc.h>
 
 #define FSL_IFC_V1_1_0	0x01010000
 #define ERR_BYTE		0xFF /* Value returned for read
@@ -591,7 +592,8 @@ static void fsl_ifc_cmdfunc(struct mtd_info *mtd, unsigned int command,
 		 * The chip always seems to report that it is
 		 * write-protected, even when it is not.
 		 */
-		setbits8(ifc_nand_ctrl->addr, NAND_STATUS_WP);
+		iowrite8((ioread8(ifc_nand_ctrl->addr) | (NAND_STATUS_WP)),
+				ifc_nand_ctrl->addr);
 		return;
 
 	case NAND_CMD_RESET:
@@ -654,7 +656,7 @@ static uint8_t fsl_ifc_read_byte(struct mtd_info *mtd)
 	 * next byte.
 	 */
 	if (ifc_nand_ctrl->index < ifc_nand_ctrl->read_bytes)
-		return in_8(&ifc_nand_ctrl->addr[ifc_nand_ctrl->index++]);
+		return ioread8(&ifc_nand_ctrl->addr[ifc_nand_ctrl->index++]);
 
 	dev_err(priv->dev, "%s: beyond end of buffer\n", __func__);
 	return ERR_BYTE;
@@ -675,7 +677,7 @@ static uint8_t fsl_ifc_read_byte16(struct mtd_info *mtd)
 	 * next byte.
 	 */
 	if (ifc_nand_ctrl->index < ifc_nand_ctrl->read_bytes) {
-		data = in_be16((uint16_t __iomem *)&ifc_nand_ctrl->
+		data = ioread16be((uint16_t __iomem *)&ifc_nand_ctrl->
 			       addr[ifc_nand_ctrl->index]);
 		ifc_nand_ctrl->index += 2;
 		return (uint8_t) data;
