@@ -90,8 +90,10 @@
 #endif
 
 #include <asm/io.h>
+#ifdef CONFIG_PPC
 #include <asm/reg.h>
 #include <asm/mpc85xx.h>
+#endif
 #include <asm/irq.h>
 #include <asm/uaccess.h>
 #include <linux/module.h>
@@ -1097,6 +1099,7 @@ static void gfar_init_filer_table(struct gfar_private *priv)
 	}
 }
 
+#ifdef CONFIG_PPC
 static void __gfar_detect_errata_83xx(struct gfar_private *priv)
 {
 	unsigned int pvr = mfspr(SPRN_PVR);
@@ -1129,6 +1132,7 @@ static void __gfar_detect_errata_85xx(struct gfar_private *priv)
 	    ((SVR_SOC_VER(svr) == SVR_P2010) && (SVR_REV(svr) < 0x20)))
 		priv->errata |= GFAR_ERRATA_76; /* aka eTSEC 20 */
 }
+#endif
 
 static void gfar_detect_errata(struct gfar_private *priv)
 {
@@ -1137,10 +1141,12 @@ static void gfar_detect_errata(struct gfar_private *priv)
 	/* no plans to fix */
 	priv->errata |= GFAR_ERRATA_A002;
 
+#ifdef CONFIG_PPC
 	if (pvr_version_is(PVR_VER_E500V1) || pvr_version_is(PVR_VER_E500V2))
 		__gfar_detect_errata_85xx(priv);
 	else /* non-mpc85xx parts, i.e. e300 core based */
 		__gfar_detect_errata_83xx(priv);
+#endif
 
 	if (priv->errata)
 		dev_info(dev, "enabled errata workarounds, flags: 0x%x\n",
