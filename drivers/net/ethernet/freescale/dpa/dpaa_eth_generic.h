@@ -38,7 +38,7 @@
 struct dpa_generic_priv_s {
 	struct net_device *net_dev;
 	/* use the same percpu_priv as other DPAA Ethernet drivers */
-	struct dpa_percpu_priv_s *percpu_priv;
+	struct dpa_percpu_priv_s __percpu *percpu_priv;
 
 	/* up to 4 bps supported for RX */
 	int rx_bp_count;
