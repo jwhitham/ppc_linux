@@ -529,13 +529,13 @@ static int dpa_generic_tx_csum(struct dpa_generic_priv_s *priv,
 		parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
 		iph = ip_hdr(skb);
 		BUG_ON(iph == NULL);
-		l4_proto = ntohs(iph->protocol);
+		l4_proto = iph->protocol;
 		break;
 	case ETH_P_IPV6:
 		parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
 		ipv6h = ipv6_hdr(skb);
 		BUG_ON(ipv6h == NULL);
-		l4_proto = ntohs(ipv6h->nexthdr);
+		l4_proto = ipv6h->nexthdr;
 		break;
 	default:
 		/* We shouldn't even be here */
