@@ -140,7 +140,7 @@ MODULE_DEVICE_TABLE(of, mac_match);
 
 static int __cold mac_probe(struct platform_device *_of_dev)
 {
-	int			 _errno, i, lenp;
+	int			 _errno, i;
 	struct device		*dev;
 	struct device_node	*mac_node, *dev_node;
 	struct mac_device	*mac_dev;
@@ -148,8 +148,8 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	struct resource		 res;
 	const uint8_t		*mac_addr;
 	const char		*char_prop;
-	const phandle		*phandle_prop;
-	const uint32_t		*uint32_prop;
+	int			nph;
+	u32			cell_index;
 	const struct of_device_id *match;
 
 	dev = &_of_dev->dev;
@@ -232,11 +232,15 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	mac_dev->tbi_node = of_parse_phandle(mac_node, "tbi-handle", 0);
 	if (mac_dev->tbi_node) {
 		u32 tbiaddr = TBIPA_DEFAULT_ADDR;
+		const __be32 *tbi_reg;
+		void __iomem *addr;
 
-		uint32_prop = of_get_property(mac_dev->tbi_node, "reg", NULL);
-		if (uint32_prop)
-			tbiaddr = *uint32_prop;
-		out_be32(mac_dev->vaddr + TBIPA_OFFSET, tbiaddr);
+		tbi_reg = of_get_property(mac_dev->tbi_node, "reg", NULL);
+		if (tbi_reg)
+			tbiaddr = be32_to_cpup(tbi_reg);
+		addr = mac_dev->vaddr + TBIPA_OFFSET;
+		/* TODO: out_be32 does not exist on ARM */
+		out_be32(addr, tbiaddr);
 	}
 
 	if (!of_device_is_available(mac_node)) {
@@ -250,15 +254,13 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	}
 
 	/* Get the cell-index */
-	uint32_prop = of_get_property(mac_node, "cell-index", &lenp);
-	if (unlikely(uint32_prop == NULL)) {
-		dev_err(dev, "of_get_property(%s, cell-index) failed\n",
+	_errno = of_property_read_u32(mac_node, "cell-index", &cell_index);
+	if (unlikely(_errno)) {
+		dev_err(dev, "Cannot read cell-index of mac node %s from device tree\n",
 				mac_node->full_name);
-		_errno = -EINVAL;
 		goto _return_dev_set_drvdata;
 	}
-	BUG_ON(lenp != sizeof(uint32_t));
-	mac_dev->cell_index = (uint8_t)*uint32_prop;
+	mac_dev->cell_index = (uint8_t)cell_index;
 
 	/* Get the MAC address */
 	mac_addr = of_get_mac_address(mac_node);
@@ -270,21 +272,27 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	}
 	memcpy(mac_dev->addr, mac_addr, sizeof(mac_dev->addr));
 
-	/* Get the port handles */
-	phandle_prop = of_get_property(mac_node, "fsl,port-handles", &lenp);
-	if (unlikely(phandle_prop == NULL)) {
-		dev_err(dev, "of_get_property(%s, port-handles) failed\n",
+	/* Verify the number of port handles */
+	nph = of_count_phandle_with_args(mac_node, "fsl,port-handles", NULL);
+	if (unlikely(nph < 0)) {
+		dev_err(dev, "Cannot read port handles of mac node %s from device tree\n",
+				mac_node->full_name);
+		_errno = nph;
+		goto _return_dev_set_drvdata;
+	}
+
+	if (nph != ARRAY_SIZE(mac_dev->port_dev)) {
+		dev_err(dev, "Not supported number of port handles of mac node %s from device tree\n",
 				mac_node->full_name);
 		_errno = -EINVAL;
 		goto _return_dev_set_drvdata;
 	}
-	BUG_ON(lenp != sizeof(phandle) * ARRAY_SIZE(mac_dev->port_dev));
 
 	for_each_port_device(i, mac_dev->port_dev) {
-		/* Find the port node */
-		dev_node = of_find_node_by_phandle(phandle_prop[i]);
+		dev_node = of_parse_phandle(mac_node, "fsl,port-handles", i);
 		if (unlikely(dev_node == NULL)) {
-			dev_err(dev, "of_find_node_by_phandle() failed\n");
+			dev_err(dev, "Cannot find port node referenced by mac node %s from device tree\n",
+					mac_node->full_name);
 			_errno = -EINVAL;
 			goto _return_of_node_put;
 		}
@@ -308,11 +316,11 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	}
 
 	/* Get the PHY connection type */
-	char_prop = (const char *)of_get_property(mac_node,
-						"phy-connection-type", NULL);
-	if (unlikely(char_prop == NULL)) {
+	_errno = of_property_read_string(mac_node, "phy-connection-type",
+			&char_prop);
+	if (unlikely(_errno)) {
 		dev_warn(dev,
-			 "of_get_property(%s, phy-connection-type) failed. Defaulting to MII\n",
+			 "Cannot read PHY connection type of mac node %s from device tree. Defaulting to MII\n",
 			 mac_node->full_name);
 		mac_dev->phy_if = PHY_INTERFACE_MODE_MII;
 	} else
@@ -339,17 +347,17 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 	/* Get the rest of the PHY information */
 	mac_dev->phy_node = of_parse_phandle(mac_node, "phy-handle", 0);
 	if (mac_dev->phy_node == NULL) {
-		int sz;
-		const u32 *phy_id = of_get_property(mac_node, "fixed-link",
-							&sz);
-		if (!phy_id || sz < sizeof(*phy_id)) {
+		u32 phy_id;
+
+		_errno = of_property_read_u32(mac_node, "fixed-link", &phy_id);
+		if (_errno) {
 			dev_err(dev, "No PHY (or fixed link) found\n");
 			_errno = -EINVAL;
 			goto _return_dev_set_drvdata;
 		}
 
 		sprintf(mac_dev->fixed_bus_id, PHY_ID_FMT, "fixed-0",
-			phy_id[0]);
+			phy_id);
 	}
 
 	_errno = mac_dev->init(mac_dev);
