@@ -52,6 +52,11 @@
 
 #define DPA_STATS_US_CNT 0x80000000
 
+#define CHECK_INSTANCE_ZERO \
+		if (dpa_stats_id != 0) { \
+			log_err("DPA Stats supports only instance zero\n"); \
+			return -ENOSYS; \
+		}
 
 /* Global dpa_stats component */
 struct dpa_stats *gbl_dpa_stats;
@@ -3747,14 +3752,17 @@ int dpa_stats_init(const struct dpa_stats_params *params, int *dpa_stats_id)
 	struct dpa_stats *dpa_stats = NULL;
 	int err = 0;
 
-	/* Multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
-
 	/* Sanity checks */
 	if (gbl_dpa_stats) {
 		log_err("DPA Stats component already initialized. Multiple DPA Stats instances are not supported.\n");
 		return -EPERM;
 	}
+
+	/*
+	 * Multiple DPA Stats instances are not currently supported. The only
+	 * supported instance instance is zero.
+	 */
+	*dpa_stats_id = 0;
 
 	/* Check user-provided parameters */
 	err = check_dpa_stats_params(params);
@@ -3825,7 +3833,7 @@ int dpa_stats_create_counter(int dpa_stats_id,
 	int err = 0, err_rb = 0;
 
 	/* multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
+	CHECK_INSTANCE_ZERO;
 
 	if (!gbl_dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
@@ -3984,7 +3992,7 @@ int dpa_stats_create_class_counter(int dpa_stats_id,
 	int err = 0, err_rb = 0;
 
 	/* multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
+	CHECK_INSTANCE_ZERO;
 
 	if (!gbl_dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
@@ -4539,7 +4547,7 @@ EXPORT_SYMBOL(dpa_stats_reset_counters);
 int dpa_stats_free(int dpa_stats_id)
 {
 	/* multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
+	CHECK_INSTANCE_ZERO;
 
 	return free_resources();
 }
