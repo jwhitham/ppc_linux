@@ -70,10 +70,6 @@ static uint16_t macless_tx_timeout = 1000;
 module_param(macless_tx_timeout, ushort, S_IRUGO);
 MODULE_PARM_DESC(macless_tx_timeout, "The MACless Tx timeout in ms");
 
-/* reused from the shared driver */
-extern const struct dpa_fq_cbs_t shared_fq_cbs;
-int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
-
 /* forward declarations */
 static int __cold dpa_macless_start(struct net_device *net_dev);
 static int __cold dpa_macless_stop(struct net_device *net_dev);

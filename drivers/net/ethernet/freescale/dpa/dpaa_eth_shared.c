@@ -67,7 +67,6 @@ shared_tx_error_dqrr(struct qman_portal                *portal,
 static void shared_ern(struct qman_portal	*portal,
 		       struct qman_fq		*fq,
 		       const struct qm_mr_entry	*msg);
-int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
 
 #define DPA_DESCRIPTION "FSL DPAA Shared Ethernet driver"
 
