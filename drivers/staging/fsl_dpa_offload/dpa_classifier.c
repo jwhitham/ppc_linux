@@ -942,6 +942,8 @@ static int hash_table_modify_entry(
 
 	struct dpa_cls_tbl_shadow_entry *shadow_entry;
 	struct dpa_cls_tbl_action *local_action;
+	struct list_head *list_current;
+	struct dpa_cls_tbl_entry *index_entry;
 
 	hash_set_index = crc64_ecma_seed();
 	hash_set_index = crc64_ecma(key->byte,
@@ -1026,6 +1028,29 @@ static int hash_table_modify_entry(
 		}
 	ptable->int_cc_node[ptable->entry[entry_id].int_cc_node_index].used--;
 
+		/* Update position in used entries list */
+		list_del(&ptable->entry[entry_id].list_node);
+		/* Calculate the new position in the index management list where
+		 * this entry should go */
+		if ((list_empty(&ptable->entry_list)) ||
+			(hash_set_index >= ptable->int_cc_nodes_count - 1))
+			/* Just add to the tail of the list. */
+			list_current = &ptable->entry_list;
+		else {
+			/* Sort the index management list based on
+			 * [cc_node_index] and [entry_index]. In other words,
+			 * add the current entry before the first entry of the
+			 * next cc node */
+			list_for_each(list_current, &ptable->entry_list) {
+				index_entry = list_entry(list_current,
+						struct dpa_cls_tbl_entry,
+						list_node);
+				if (index_entry->int_cc_node_index >
+								hash_set_index)
+					break;
+			}
+		}
+
 		/* Insert the new key */
 		ptable->entry[entry_id].int_cc_node_index =
 				(unsigned int)hash_set_index;
@@ -1045,6 +1070,9 @@ static int hash_table_modify_entry(
 				ptable->entry[entry_id].entry_index);
 			return -EBUSY;
 		}
+
+		/* Add the index entry back to the index management list */
+		list_add_tail(&ptable->entry[entry_id].list_node, list_current);
 
 		ptable->int_cc_node[hash_set_index].used++;
 	} else {
