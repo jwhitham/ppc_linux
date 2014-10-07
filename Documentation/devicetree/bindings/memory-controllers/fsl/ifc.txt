@@ -18,6 +18,8 @@ Properties:
               interrupt (NAND_EVTER_STAT).  If there is only one,
               that interrupt reports both types of event.
 
+- little-endian : If this property is absent, the big-endian mode will
+                  be in use as default for registers.
 
 - ranges : Each range corresponds to a single chipselect, and covers
            the entire access window as configured.

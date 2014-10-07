@@ -70,7 +70,8 @@ int fsl_ifc_find(phys_addr_t addr_base)
 		return -ENODEV;
 
 	for (i = 0; i < ARRAY_SIZE(fsl_ifc_ctrl_dev->regs->cspr_cs); i++) {
-		u32 cspr = ioread32be(&fsl_ifc_ctrl_dev->regs->cspr_cs[i].cspr);
+		u32 cspr = ifc_in32(
+				&fsl_ifc_ctrl_dev->regs->cspr_cs[i].cspr);
 		if (cspr & CSPR_V && (cspr & CSPR_BA) ==
 				convert_ifc_address(addr_base))
 			return i;
@@ -87,16 +88,16 @@ static int fsl_ifc_ctrl_init(struct fsl_ifc_ctrl *ctrl)
 	/*
 	 * Clear all the common status and event registers
 	 */
-	if (ioread32be(&ifc->cm_evter_stat) & IFC_CM_EVTER_STAT_CSER)
-		iowrite32be(IFC_CM_EVTER_STAT_CSER, &ifc->cm_evter_stat);
+	if (ifc_in32(&ifc->cm_evter_stat) & IFC_CM_EVTER_STAT_CSER)
+		ifc_out32(IFC_CM_EVTER_STAT_CSER, &ifc->cm_evter_stat);
 
 	/* enable all error and events */
-	iowrite32be(IFC_CM_EVTER_EN_CSEREN, &ifc->cm_evter_en);
+	ifc_out32(IFC_CM_EVTER_EN_CSEREN, &ifc->cm_evter_en);
 
 	/* enable all error and event interrupts */
-	iowrite32be(IFC_CM_EVTER_INTR_EN_CSERIREN, &ifc->cm_evter_intr_en);
-	iowrite32be(0x0, &ifc->cm_erattr0);
-	iowrite32be(0x0, &ifc->cm_erattr1);
+	ifc_out32(IFC_CM_EVTER_INTR_EN_CSERIREN, &ifc->cm_evter_intr_en);
+	ifc_out32(0x0, &ifc->cm_erattr0);
+	ifc_out32(0x0, &ifc->cm_erattr1);
 
 	return 0;
 }
@@ -135,9 +136,9 @@ static u32 check_nand_stat(struct fsl_ifc_ctrl *ctrl)
 
 	spin_lock_irqsave(&nand_irq_lock, flags);
 
-	stat = ioread32be(&ifc->ifc_nand.nand_evter_stat);
+	stat = ifc_in32(&ifc->ifc_nand.nand_evter_stat);
 	if (stat) {
-		iowrite32be(stat, &ifc->ifc_nand.nand_evter_stat);
+		ifc_out32(stat, &ifc->ifc_nand.nand_evter_stat);
 		ctrl->nand_stat = stat;
 		wake_up(&ctrl->nand_wait);
 	}
@@ -169,17 +170,17 @@ static irqreturn_t fsl_ifc_ctrl_irq(int irqno, void *data)
 	irqreturn_t ret = IRQ_NONE;
 
 	/* read for chip select error */
-	cs_err = ioread32be(&ifc->cm_evter_stat);
+	cs_err = ifc_in32(&ifc->cm_evter_stat);
 	if (cs_err) {
 		dev_err(ctrl->dev, "transaction sent to IFC is not mapped to");
 		dev_err(ctrl->dev, " any memory bank 0x%08X\n", cs_err);
 
 		/* clear the chip select error */
-		iowrite32be(IFC_CM_EVTER_STAT_CSER, &ifc->cm_evter_stat);
+		ifc_out32(IFC_CM_EVTER_STAT_CSER, &ifc->cm_evter_stat);
 
 		/* read error attribute registers print the error information */
-		status = ioread32be(&ifc->cm_erattr0);
-		err_addr = ioread32be(&ifc->cm_erattr1);
+		status = ifc_in32(&ifc->cm_erattr0);
+		err_addr = ifc_in32(&ifc->cm_erattr1);
 
 		if (status & IFC_CM_ERATTR0_ERTYP_READ) {
 			dev_err(ctrl->dev, "Read transaction error");
@@ -240,6 +241,13 @@ static int fsl_ifc_ctrl_probe(struct platform_device *dev)
 		goto err;
 	}
 
+	if (of_property_read_bool(dev->dev.of_node, "little-endian"))
+		fsl_ifc_ctrl_dev->little_endian = true;
+	else
+		fsl_ifc_ctrl_dev->little_endian = false;
+
+	dev_dbg(&dev->dev, "IFC REGISTERS are %s endian\n",
+			fsl_ifc_ctrl_dev->little_endian ? "LITTLE" : "BIG");
 	/* get the Controller level irq */
 	fsl_ifc_ctrl_dev->irq = irq_of_parse_and_map(dev->dev.of_node, 0);
 	if (fsl_ifc_ctrl_dev->irq == NO_IRQ) {
@@ -322,15 +330,15 @@ static int fsl_ifc_resume(struct device *dev)
 		ctrl->saved_regs = NULL;
 	}
 
-	ver = ioread32be(&ctrl->regs->ifc_rev);
-	ncfgr = ioread32be(&ifc->ifc_nand.ncfgr);
+	ver = ifc_in32(&ctrl->regs->ifc_rev);
+	ncfgr = ifc_in32(&ifc->ifc_nand.ncfgr);
 	if (ver >= FSL_IFC_V1_3_0) {
-		iowrite32be(&ifc->ifc_nand.ncfgr,
+		ifc_out32(&ifc->ifc_nand.ncfgr,
 					ncfgr | IFC_NAND_SRAM_INIT_EN);
 
 		/* wait for  SRAM_INIT bit to be clear or timeout */
 		status = spin_event_timeout(
-					!(ioread32be(&ifc->ifc_nand.ncfgr)
+					!(ifc_in32(&ifc->ifc_nand.ncfgr)
 					& IFC_NAND_SRAM_INIT_EN),
 					IFC_TIMEOUT_MSECS, 0);
 

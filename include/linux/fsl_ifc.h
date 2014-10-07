@@ -832,6 +832,7 @@ struct fsl_ifc_ctrl {
 
 	u32 nand_stat;
 	wait_queue_head_t nand_wait;
+	bool little_endian;
 #ifdef CONFIG_PM_SLEEP
 	/* save regs when system go to deep-sleep */
 	struct fsl_ifc_regs		*saved_regs;
@@ -840,5 +841,46 @@ struct fsl_ifc_ctrl {
 
 extern struct fsl_ifc_ctrl *fsl_ifc_ctrl_dev;
 
+static inline u32 ifc_in32(void __iomem *addr)
+{
+	if (fsl_ifc_ctrl_dev->little_endian)
+		return ioread32(addr);
+	else
+		return ioread32be(addr);
+}
+
+static inline u16 ifc_in16(void __iomem *addr)
+{
+	if (fsl_ifc_ctrl_dev->little_endian)
+		return ioread16(addr);
+	else
+		return ioread16be(addr);
+}
+
+static inline u8 ifc_in8(void __iomem *addr)
+{
+	return ioread8(addr);
+}
+
+static inline void ifc_out32(u32 val, void __iomem *addr)
+{
+	if (fsl_ifc_ctrl_dev->little_endian)
+		return iowrite32(val, addr);
+	else
+		return iowrite32be(val, addr);
+}
+
+static inline void ifc_out16(u16 val, void __iomem *addr)
+{
+	if (fsl_ifc_ctrl_dev->little_endian)
+		return iowrite16(val, addr);
+	else
+		return iowrite16be(val, addr);
+}
+
+static inline void ifc_out8(u8 val, void __iomem *addr)
+{
+	return iowrite8(val, addr);
+}
 
 #endif /* __ASM_FSL_IFC_H */
