@@ -468,7 +468,8 @@ dpa_fd_offset(const struct qm_fd *fd)
 static inline int dpa_check_rx_mtu(struct sk_buff *skb, int mtu)
 {
 	if (unlikely(skb->len > mtu))
-		if ((skb->protocol != ETH_P_8021Q) || (skb->len > mtu + 4))
+		if ((skb->protocol != htons(ETH_P_8021Q))
+				|| (skb->len > mtu + 4))
 			return -1;
 
 	return 0;
