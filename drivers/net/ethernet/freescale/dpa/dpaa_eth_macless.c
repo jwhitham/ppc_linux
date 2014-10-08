@@ -80,8 +80,6 @@ static void __cold dpa_macless_set_rx_mode(struct net_device *net_dev);
 static int dpaa_eth_macless_probe(struct platform_device *_of_dev);
 static netdev_features_t
 dpa_macless_fix_features(struct net_device *dev, netdev_features_t features);
-static int dpa_macless_netdev_init(struct device_node *dpa_node,
-				struct net_device *net_dev);
 
 static const struct net_device_ops dpa_macless_ops = {
 	.ndo_open = dpa_macless_start,
@@ -265,7 +263,8 @@ static int dpa_fq_probe_macless(struct device *dev, struct list_head *list,
 	return 0;
 }
 
-struct proxy_device *dpa_macless_proxy_probe(struct platform_device *_of_dev)
+	static struct proxy_device *
+dpa_macless_proxy_probe(struct platform_device *_of_dev)
 {
 	struct device		*dev;
 	const phandle		*proxy_prop;
