@@ -2,8 +2,8 @@
  * Copyright (C) 2006-2010, 2012 Freescale Semiconductor, Inc.
  * All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  * Based on cpm2_common.c from Dan Malek (dmalek@jlc.net)
  *
  * Description:
@@ -33,8 +33,8 @@
 #include <asm/irq.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
 #include <asm/prom.h>
 #include <asm/rheap.h>
 
@@ -65,7 +65,8 @@ struct qe_snum {
 struct qe_immap __iomem *qe_immr;
 EXPORT_SYMBOL(qe_immr);
 
-static struct qe_snum snums[QE_NUM_OF_SNUM];	/* Dynamically allocated SNUMs */
+/* Dynamically allocated SNUMs */
+static struct qe_snum snums[QE_NUM_OF_SNUM];
 static unsigned int qe_num_of_snum;
 
 static phys_addr_t qebase = -1;
@@ -93,7 +94,6 @@ phys_addr_t get_qe_base(void)
 
 	return qebase;
 }
-
 EXPORT_SYMBOL(get_qe_base);
 
 void qe_reset(void)
@@ -165,7 +165,7 @@ EXPORT_SYMBOL(qe_issue_cmd);
  * Baud rate clocks are zero-based in the driver code (as that maps
  * to port numbers). Documentation uses 1-based numbering.
  */
-static unsigned int brg_clk = 0;
+static unsigned int brg_clk;
 
 unsigned int qe_get_brg_clk(void)
 {
@@ -238,7 +238,8 @@ EXPORT_SYMBOL(qe_setbrg);
 */
 enum qe_clock qe_clock_source(const char *source)
 {
-	unsigned int i;
+	unsigned int ret;
+	unsigned long val;
 
 	if (strcasecmp(source, "none") == 0)
 		return QE_CLK_NONE;
@@ -250,17 +251,22 @@ enum qe_clock qe_clock_source(const char *source)
 		return QE_RSYNC_PIN;
 
 	if (strncasecmp(source, "brg", 3) == 0) {
-		i = simple_strtoul(source + 3, NULL, 10);
-		if ((i >= 1) && (i <= 16))
-			return (QE_BRG1 - 1) + i;
+		ret = kstrtoul(source + 3, 10, &val);
+		if (ret)
+			return ret;
+
+		if ((val >= 1) && (val <= 16))
+			return (QE_BRG1 - 1) + val;
 		else
 			return QE_CLK_DUMMY;
 	}
 
 	if (strncasecmp(source, "clk", 3) == 0) {
-		i = simple_strtoul(source + 3, NULL, 10);
-		if ((i >= 1) && (i <= 24))
-			return (QE_CLK1 - 1) + i;
+		ret = kstrtoul(source + 3, 10, &val);
+		if (ret)
+			return ret;
+		if ((val >= 1) && (val <= 24))
+			return (QE_CLK1 - 1) + val;
 		else
 			return QE_CLK_DUMMY;
 	}
@@ -360,8 +366,8 @@ static int qe_sdma_init(void)
 	}
 
 	out_be32(&sdma->sdebcr, (u32) sdma_buf_offset & QE_SDEBCR_BA_MASK);
- 	out_be32(&sdma->sdmr, (QE_SDMR_GLB_1_MSK |
- 					(0x1 << QE_SDMR_CEN_SHIFT)));
+	out_be32(&sdma->sdmr, (QE_SDMR_GLB_1_MSK |
+			       (0x1 << QE_SDMR_CEN_SHIFT)));
 
 	return 0;
 }
@@ -391,12 +397,10 @@ static void qe_upload_microcode(const void *base,
 	unsigned int i;
 
 	if (ucode->major || ucode->minor || ucode->revision)
-		printk(KERN_INFO "qe-firmware: "
-			"uploading microcode '%s' version %u.%u.%u\n",
+		pr_info("qe-FM: uploading microcode '%s' version %u.%u.%u\n",
 			ucode->id, ucode->major, ucode->minor, ucode->revision);
 	else
-		printk(KERN_INFO "qe-firmware: "
-			"uploading microcode '%s'\n", ucode->id);
+		pr_info("qe-FM: uploading microcode '%s'\n", ucode->id);
 
 	/* Use auto-increment */
 	out_be32(&qe_immr->iram.iadd, be32_to_cpu(ucode->iram_offset) |
@@ -404,7 +408,7 @@ static void qe_upload_microcode(const void *base,
 
 	for (i = 0; i < be32_to_cpu(ucode->count); i++)
 		out_be32(&qe_immr->iram.idata, be32_to_cpu(code[i]));
-	
+
 	/* Set I-RAM Ready Register */
 	out_be32(&qe_immr->iram.iready, be32_to_cpu(QE_IRAM_READY));
 }
@@ -436,7 +440,7 @@ int qe_upload_firmware(const struct qe_firmware *firmware)
 	const struct qe_header *hdr;
 
 	if (!firmware) {
-		printk(KERN_ERR "qe-firmware: invalid pointer\n");
+		pr_info("qe-firmware: invalid pointer\n");
 		return -EINVAL;
 	}
 
@@ -446,19 +450,19 @@ int qe_upload_firmware(const struct qe_firmware *firmware)
 	/* Check the magic */
 	if ((hdr->magic[0] != 'Q') || (hdr->magic[1] != 'E') ||
 	    (hdr->magic[2] != 'F')) {
-		printk(KERN_ERR "qe-firmware: not a microcode\n");
+		pr_info("qe-firmware: not a microcode\n");
 		return -EPERM;
 	}
 
 	/* Check the version */
 	if (hdr->version != 1) {
-		printk(KERN_ERR "qe-firmware: unsupported version\n");
+		pr_info("qe-firmware: unsupported version\n");
 		return -EPERM;
 	}
 
 	/* Validate some of the fields */
 	if ((firmware->count < 1) || (firmware->count > MAX_QE_RISC)) {
-		printk(KERN_ERR "qe-firmware: invalid data\n");
+		pr_info("qe-firmware: invalid data\n");
 		return -EINVAL;
 	}
 
@@ -476,14 +480,14 @@ int qe_upload_firmware(const struct qe_firmware *firmware)
 
 	/* Validate the length */
 	if (length != calc_size + sizeof(__be32)) {
-		printk(KERN_ERR "qe-firmware: invalid length\n");
+		pr_info("qe-firmware: invalid length\n");
 		return -EPERM;
 	}
 
 	/* Validate the CRC */
 	crc = be32_to_cpu(*(__be32 *)((void *)firmware + calc_size));
 	if (crc != crc32(0, firmware, calc_size)) {
-		printk(KERN_ERR "qe-firmware: firmware CRC is invalid\n");
+		pr_info("qe-firmware: firmware CRC is invalid\n");
 		return -EIO;
 	}
 
@@ -494,12 +498,11 @@ int qe_upload_firmware(const struct qe_firmware *firmware)
 		setbits16(&qe_immr->cp.cercr, QE_CP_CERCR_CIR);
 
 	if (firmware->soc.model)
-		printk(KERN_INFO
-			"qe-firmware: firmware '%s' for %u V%u.%u\n",
+		pr_info("qe-firmware: firmware '%s' for %u V%u.%u\n",
 			firmware->id, be16_to_cpu(firmware->soc.model),
 			firmware->soc.major, firmware->soc.minor);
 	else
-		printk(KERN_INFO "qe-firmware: firmware '%s'\n",
+		pr_info("qe-firmware: firmware '%s'\n",
 			firmware->id);
 
 	/*

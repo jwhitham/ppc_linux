@@ -17,8 +17,8 @@
 #include <linux/errno.h>
 #include <linux/export.h>
 #include <linux/io.h>
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
 
 int qe_usb_clock_set(enum qe_clock clk, int rate)
 {
@@ -27,16 +27,36 @@ int qe_usb_clock_set(enum qe_clock clk, int rate)
 	u32 val;
 
 	switch (clk) {
-	case QE_CLK3:  val = QE_CMXGCR_USBCS_CLK3;  break;
-	case QE_CLK5:  val = QE_CMXGCR_USBCS_CLK5;  break;
-	case QE_CLK7:  val = QE_CMXGCR_USBCS_CLK7;  break;
-	case QE_CLK9:  val = QE_CMXGCR_USBCS_CLK9;  break;
-	case QE_CLK13: val = QE_CMXGCR_USBCS_CLK13; break;
-	case QE_CLK17: val = QE_CMXGCR_USBCS_CLK17; break;
-	case QE_CLK19: val = QE_CMXGCR_USBCS_CLK19; break;
-	case QE_CLK21: val = QE_CMXGCR_USBCS_CLK21; break;
-	case QE_BRG9:  val = QE_CMXGCR_USBCS_BRG9;  break;
-	case QE_BRG10: val = QE_CMXGCR_USBCS_BRG10; break;
+	case QE_CLK3:
+		val = QE_CMXGCR_USBCS_CLK3;
+		break;
+	case QE_CLK5:
+		val = QE_CMXGCR_USBCS_CLK5;
+		break;
+	case QE_CLK7:
+		val = QE_CMXGCR_USBCS_CLK7;
+		break;
+	case QE_CLK9:
+		val = QE_CMXGCR_USBCS_CLK9;
+		break;
+	case QE_CLK13:
+		val = QE_CMXGCR_USBCS_CLK13;
+		break;
+	case QE_CLK17:
+		val = QE_CMXGCR_USBCS_CLK17;
+		break;
+	case QE_CLK19:
+		val = QE_CMXGCR_USBCS_CLK19;
+		break;
+	case QE_CLK21:
+		val = QE_CMXGCR_USBCS_CLK21;
+		break;
+	case QE_BRG9:
+		val = QE_CMXGCR_USBCS_BRG9;
+		break;
+	case QE_BRG10:
+		val = QE_CMXGCR_USBCS_BRG10;
+		break;
 	default:
 		pr_err("%s: requested unknown clock %d\n", __func__, clk);
 		return -EINVAL;

@@ -1,8 +1,8 @@
 /*
  * Copyright (C) 2006 Freescale Semiconductor, Inc. All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  *
  * Description:
  * Internal header file for UCC SLOW unit routines.
@@ -17,10 +17,10 @@
 
 #include <linux/kernel.h>
 
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
 
-#include <asm/ucc.h>
+#include <linux/fsl/ucc.h>
 
 /* transmit BD's status */
 #define T_R	0x80000000	/* ready bit */
@@ -224,14 +224,15 @@ struct ucc_slow_private {
  * us_info  - (In) pointer to the slow UCC info structure.
  * uccs_ret - (Out) pointer to the slow UCC structure.
  */
-int ucc_slow_init(struct ucc_slow_info * us_info, struct ucc_slow_private ** uccs_ret);
+int ucc_slow_init(struct ucc_slow_info *us_info,
+		  struct ucc_slow_private **uccs_ret);
 
 /* ucc_slow_free
  * Frees all resources for slow UCC.
  *
  * uccs - (In) pointer to the slow UCC structure.
  */
-void ucc_slow_free(struct ucc_slow_private * uccs);
+void ucc_slow_free(struct ucc_slow_private *uccs);
 
 /* ucc_slow_enable
  * Enables a fast UCC port.
@@ -240,7 +241,7 @@ void ucc_slow_free(struct ucc_slow_private * uccs);
  * uccs - (In) pointer to the slow UCC structure.
  * mode - (In) TX, RX, or both.
  */
-void ucc_slow_enable(struct ucc_slow_private * uccs, enum comm_dir mode);
+void ucc_slow_enable(struct ucc_slow_private *uccs, enum comm_dir mode);
 
 /* ucc_slow_disable
  * Disables a fast UCC port.
@@ -249,7 +250,7 @@ void ucc_slow_enable(struct ucc_slow_private * uccs, enum comm_dir mode);
  * uccs - (In) pointer to the slow UCC structure.
  * mode - (In) TX, RX, or both.
  */
-void ucc_slow_disable(struct ucc_slow_private * uccs, enum comm_dir mode);
+void ucc_slow_disable(struct ucc_slow_private *uccs, enum comm_dir mode);
 
 /* ucc_slow_poll_transmitter_now
  * Immediately forces a poll of the transmitter for data to be sent.
@@ -262,21 +263,21 @@ void ucc_slow_disable(struct ucc_slow_private * uccs, enum comm_dir mode);
  *
  * uccs - (In) pointer to the slow UCC structure.
  */
-void ucc_slow_poll_transmitter_now(struct ucc_slow_private * uccs);
+void ucc_slow_poll_transmitter_now(struct ucc_slow_private *uccs);
 
 /* ucc_slow_graceful_stop_tx
  * Smoothly stops transmission on a specified slow UCC.
  *
  * uccs - (In) pointer to the slow UCC structure.
  */
-void ucc_slow_graceful_stop_tx(struct ucc_slow_private * uccs);
+void ucc_slow_graceful_stop_tx(struct ucc_slow_private *uccs);
 
 /* ucc_slow_stop_tx
  * Stops transmission on a specified slow UCC.
  *
  * uccs - (In) pointer to the slow UCC structure.
  */
-void ucc_slow_stop_tx(struct ucc_slow_private * uccs);
+void ucc_slow_stop_tx(struct ucc_slow_private *uccs);
 
 /* ucc_slow_restart_tx
  * Restarts transmitting on a specified slow UCC.

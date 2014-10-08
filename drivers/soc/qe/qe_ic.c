@@ -26,9 +26,9 @@
 #include <linux/bootmem.h>
 #include <linux/spinlock.h>
 #include <asm/irq.h>
-#include <asm/io.h>
+#include <linux/io.h>
 #include <asm/prom.h>
-#include <asm/qe_ic.h>
+#include <linux/fsl/qe_ic.h>
 
 #include "qe_ic.h"
 
@@ -175,12 +175,12 @@ static struct qe_ic_info qe_ic_info[] = {
 		},
 };
 
-static inline u32 qe_ic_read(volatile __be32  __iomem * base, unsigned int reg)
+static inline u32 qe_ic_read(__be32  __iomem *base, unsigned int reg)
 {
 	return in_be32(base + (reg >> 2));
 }
 
-static inline void qe_ic_write(volatile __be32  __iomem * base, unsigned int reg,
+static inline void qe_ic_write(__be32  __iomem *base, unsigned int reg,
 			       u32 value)
 {
 	out_be32(base + (reg >> 2), value);
@@ -258,7 +258,7 @@ static int qe_ic_host_map(struct irq_domain *h, unsigned int virq,
 	struct irq_chip *chip;
 
 	if (qe_ic_info[hw].mask == 0) {
-		printk(KERN_ERR "Can't map reserved IRQ\n");
+		pr_err("Can't map reserved IRQ\n");
 		return -EINVAL;
 	}
 	/* Default chip */
@@ -341,7 +341,7 @@ void __init qe_ic_init(struct device_node *node, unsigned int flags,
 	qe_ic->virq_low = irq_of_parse_and_map(node, 1);
 
 	if (qe_ic->virq_low == NO_IRQ) {
-		printk(KERN_ERR "Failed to map QE_IC low IRQ\n");
+		pr_err("Failed to map QE_IC low IRQ\n");
 		kfree(qe_ic);
 		return;
 	}
@@ -483,16 +483,16 @@ static int __init init_qe_ic_sysfs(void)
 {
 	int rc;
 
-	printk(KERN_DEBUG "Registering qe_ic with sysfs...\n");
+	pr_debug("Registering qe_ic with sysfs...\n");
 
 	rc = subsys_system_register(&qe_ic_subsys, NULL);
 	if (rc) {
-		printk(KERN_ERR "Failed registering qe_ic sys class\n");
+		pr_err("Failed registering qe_ic sys class\n");
 		return -ENODEV;
 	}
 	rc = device_register(&device_qe_ic);
 	if (rc) {
-		printk(KERN_ERR "Failed registering qe_ic sys device\n");
+		pr_err("Failed registering qe_ic sys device\n");
 		return -ENODEV;
 	}
 	return 0;

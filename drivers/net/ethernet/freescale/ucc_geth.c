@@ -38,10 +38,10 @@
 #include <asm/uaccess.h>
 #include <asm/irq.h>
 #include <asm/io.h>
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
-#include <asm/ucc.h>
-#include <asm/ucc_fast.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
+#include <linux/fsl/ucc.h>
+#include <linux/fsl/ucc_fast.h>
 #include <asm/machdep.h>
 
 #include "ucc_geth.h"

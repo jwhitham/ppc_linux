@@ -1,8 +1,8 @@
 /*
  * Copyright (C) 2006, 2012 Freescale Semiconductor, Inc. All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  *
  * Description:
  * Internal header file for UCC unit routines.
@@ -15,8 +15,8 @@
 #ifndef __UCC_H__
 #define __UCC_H__
 
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
 
 #define STATISTICS
 

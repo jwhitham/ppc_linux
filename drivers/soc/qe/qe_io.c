@@ -21,15 +21,15 @@
 #include <linux/module.h>
 #include <linux/ioport.h>
 
-#include <asm/io.h>
-#include <asm/qe.h>
+#include <linux/io.h>
+#include <linux/fsl/qe.h>
 #include <asm/prom.h>
 #include <sysdev/fsl_soc.h>
 
 #undef DEBUG
 
 static struct qe_pio_regs __iomem *par_io;
-static int num_par_io_ports = 0;
+static int num_par_io_ports;
 
 int par_io_init(struct device_node *np)
 {
@@ -157,13 +157,13 @@ int par_io_of_config(struct device_node *np)
 	const unsigned int *pio_map;
 
 	if (par_io == NULL) {
-		printk(KERN_ERR "par_io not initialized\n");
+		pr_info("par_io not initialized\n");
 		return -1;
 	}
 
 	ph = of_get_property(np, "pio-handle", NULL);
 	if (ph == NULL) {
-		printk(KERN_ERR "pio-handle not available\n");
+		pr_info("pio-handle not available\n");
 		return -1;
 	}
 
@@ -171,12 +171,12 @@ int par_io_of_config(struct device_node *np)
 
 	pio_map = of_get_property(pio, "pio-map", &pio_map_len);
 	if (pio_map == NULL) {
-		printk(KERN_ERR "pio-map is not set!\n");
+		pr_info("pio-map is not set!\n");
 		return -1;
 	}
 	pio_map_len /= sizeof(unsigned int);
 	if ((pio_map_len % 6) != 0) {
-		printk(KERN_ERR "pio-map format wrong!\n");
+		pr_info("pio-map format wrong!\n");
 		return -1;
 	}
 
@@ -197,22 +197,21 @@ static void dump_par_io(void)
 {
 	unsigned int i;
 
-	printk(KERN_INFO "%s: par_io=%p\n", __func__, par_io);
+	pr_info("%s: par_io=%p\n", __func__, par_io);
 	for (i = 0; i < num_par_io_ports; i++) {
-		printk(KERN_INFO "	cpodr[%u]=%08x\n", i,
+		pr_info("	cpodr[%u]=%08x\n", i,
 			in_be32(&par_io[i].cpodr));
-		printk(KERN_INFO "	cpdata[%u]=%08x\n", i,
+		pr_info("	cpdata[%u]=%08x\n", i,
 			in_be32(&par_io[i].cpdata));
-		printk(KERN_INFO "	cpdir1[%u]=%08x\n", i,
+		pr_info("	cpdir1[%u]=%08x\n", i,
 			in_be32(&par_io[i].cpdir1));
-		printk(KERN_INFO "	cpdir2[%u]=%08x\n", i,
+		pr_info("	cpdir2[%u]=%08x\n", i,
 			in_be32(&par_io[i].cpdir2));
-		printk(KERN_INFO "	cppar1[%u]=%08x\n", i,
+		pr_info("	cppar1[%u]=%08x\n", i,
 			in_be32(&par_io[i].cppar1));
-		printk(KERN_INFO "	cppar2[%u]=%08x\n", i,
+		pr_info("	cppar2[%u]=%08x\n", i,
 			in_be32(&par_io[i].cppar2));
 	}
-
 }
 EXPORT_SYMBOL(dump_par_io);
 #endif /* DEBUG */

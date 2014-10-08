@@ -13,4 +13,6 @@ if FSL_SOC_DRIVERS
 	source "drivers/soc/fsl/Kconfig"
 endif
 
+source drivers/soc/qe/Kconfig
+
 endmenu

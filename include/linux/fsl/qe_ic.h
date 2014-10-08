@@ -1,8 +1,8 @@
 /*
  * Copyright (C) 2006 Freescale Semiconductor, Inc. All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  *
  * Description:
  * QE IC external definitions and structure.

@@ -58,7 +58,7 @@
 #include <linux/of_irq.h>
 #include <asm/uaccess.h>
 #include <asm/errno.h>
-#include <asm/qe.h>        /* For struct qe_firmware */
+#include <linux/fsl/qe.h>        /* For struct qe_firmware */
 #include <sysdev/fsl_soc.h>
 #include <asm/fsl_pm.h>
 #include <linux/stat.h>	   /* For file access mask */

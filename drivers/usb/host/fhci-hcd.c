@@ -29,7 +29,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
 #include <linux/slab.h>
-#include <asm/qe.h>
+#include <linux/fsl/qe.h>
 #include <asm/fsl_gtm.h>
 #include "fhci.h"
 

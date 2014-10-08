@@ -3,8 +3,8 @@
  *
  * Copyright (C) 2006, 2012 Freescale Semiconductor, Inc. All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -16,10 +16,10 @@
 
 #include <linux/kernel.h>
 
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
 
-#include <asm/ucc.h>
+#include <linux/fsl/ucc.h>
 
 /* Receive BD's status */
 #define R_E	0x80000000	/* buffer empty */
@@ -195,14 +195,15 @@ struct ucc_fast_private {
  * uf_info  - (In) pointer to the fast UCC info structure.
  * uccf_ret - (Out) pointer to the fast UCC structure.
  */
-int ucc_fast_init(struct ucc_fast_info * uf_info, struct ucc_fast_private ** uccf_ret);
+int ucc_fast_init(struct ucc_fast_info *uf_info,
+		  struct ucc_fast_private **uccf_ret);
 
 /* ucc_fast_free
  * Frees all resources for fast UCC.
  *
  * uccf - (In) pointer to the fast UCC structure.
  */
-void ucc_fast_free(struct ucc_fast_private * uccf);
+void ucc_fast_free(struct ucc_fast_private *uccf);
 
 /* ucc_fast_enable
  * Enables a fast UCC port.
@@ -211,7 +212,7 @@ void ucc_fast_free(struct ucc_fast_private * uccf);
  * uccf - (In) pointer to the fast UCC structure.
  * mode - (In) TX, RX, or both.
  */
-void ucc_fast_enable(struct ucc_fast_private * uccf, enum comm_dir mode);
+void ucc_fast_enable(struct ucc_fast_private *uccf, enum comm_dir mode);
 
 /* ucc_fast_disable
  * Disables a fast UCC port.
@@ -220,7 +221,7 @@ void ucc_fast_enable(struct ucc_fast_private * uccf, enum comm_dir mode);
  * uccf - (In) pointer to the fast UCC structure.
  * mode - (In) TX, RX, or both.
  */
-void ucc_fast_disable(struct ucc_fast_private * uccf, enum comm_dir mode);
+void ucc_fast_disable(struct ucc_fast_private *uccf, enum comm_dir mode);
 
 /* ucc_fast_irq
  * Handles interrupts on fast UCC.
@@ -228,7 +229,7 @@ void ucc_fast_disable(struct ucc_fast_private * uccf, enum comm_dir mode);
  *
  * uccf - (In) pointer to the fast UCC structure.
  */
-void ucc_fast_irq(struct ucc_fast_private * uccf);
+void ucc_fast_irq(struct ucc_fast_private *uccf);
 
 /* ucc_fast_transmit_on_demand
  * Immediately forces a poll of the transmitter for data to be sent.
@@ -241,10 +242,10 @@ void ucc_fast_irq(struct ucc_fast_private * uccf);
  *
  * uccf - (In) pointer to the fast UCC structure.
  */
-void ucc_fast_transmit_on_demand(struct ucc_fast_private * uccf);
+void ucc_fast_transmit_on_demand(struct ucc_fast_private *uccf);
 
 u32 ucc_fast_get_qe_cr_subblock(int uccf_num);
 
-void ucc_fast_dump_regs(struct ucc_fast_private * uccf);
+void ucc_fast_dump_regs(struct ucc_fast_private *uccf);
 
 #endif				/* __UCC_FAST_H__ */

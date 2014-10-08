@@ -3,3 +3,5 @@
 #
 
 obj-$(CONFIG_FSL_SOC_DRIVERS) += fsl/
+
+obj-$(CONFIG_QUICC_ENGINE)     += qe/

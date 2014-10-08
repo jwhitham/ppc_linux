@@ -29,7 +29,7 @@
 #include <linux/dma-mapping.h>
 
 #include <linux/fs_uart_pd.h>
-#include <asm/ucc_slow.h>
+#include <linux/fsl/ucc_slow.h>
 
 #include <linux/firmware.h>
 #include <asm/reg.h>

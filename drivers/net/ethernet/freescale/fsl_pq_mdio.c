@@ -29,7 +29,7 @@
 #include <linux/of_device.h>
 
 #include <asm/io.h>
-#include <asm/ucc.h>	/* for ucc_set_qe_mux_mii_mng() */
+#include <linux/fsl/ucc.h>	/* for ucc_set_qe_mux_mii_mng() */
 
 #include "gianfar.h"
 

@@ -1,8 +1,8 @@
 /*
  * Copyright (C) 2006, 2012 Freescale Semiconductor, Inc. All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  *
  * Description:
  * QUICC Engine (QE) external definitions and structure.
@@ -20,7 +20,7 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <asm/cpm.h>
-#include <asm/immap_qe.h>
+#include <linux/fsl/immap_qe.h>
 
 #define QE_NUM_OF_SNUM	256	/* There are 256 serial number in QE */
 #define QE_NUM_OF_BRGS	16
@@ -213,30 +213,30 @@ struct qe_firmware {
 	u8 split;	/* 0 = shared I-RAM, 1 = split I-RAM */
 	u8 count;       /* Number of microcode[] structures */
 	struct {
-		__be16 model;   	/* The SOC model  */
-		u8 major;       	/* The SOC revision major */
-		u8 minor;       	/* The SOC revision minor */
-	} __attribute__ ((packed)) soc;
+		__be16 model;		/* The SOC model  */
+		u8 major;		/* The SOC revision major */
+		u8 minor;		/* The SOC revision minor */
+	} __packed soc;
 	u8 padding[4];			/* Reserved, for alignment */
 	__be64 extended_modes;		/* Extended modes */
 	__be32 vtraps[8];		/* Virtual trap addresses */
 	u8 reserved[4];			/* Reserved, for future expansion */
 	struct qe_microcode {
-		u8 id[32];      	/* Null-terminated identifier */
+		u8 id[32];		/* Null-terminated identifier */
 		__be32 traps[16];       /* Trap addresses, 0 == ignore */
-		__be32 eccr;    	/* The value for the ECCR register */
+		__be32 eccr;		/* The value for the ECCR register */
 		__be32 iram_offset;     /* Offset into I-RAM for the code */
-		__be32 count;   	/* Number of 32-bit words of the code */
+		__be32 count;		/* Number of 32-bit words of the code */
 		__be32 code_offset;     /* Offset of the actual microcode */
-		u8 major;       	/* The microcode version major */
-		u8 minor;       	/* The microcode version minor */
+		u8 major;		/* The microcode version major */
+		u8 minor;		/* The microcode version minor */
 		u8 revision;		/* The microcode version revision */
 		u8 padding;		/* Reserved, for alignment */
 		u8 reserved[4];		/* Reserved, for future expansion */
-	} __attribute__ ((packed)) microcode[1];
+	} __packed microcode[1];
 	/* All microcode binaries should be located here */
 	/* CRC32 should be located here, after the microcode binaries */
-} __attribute__ ((packed));
+} __packed;
 
 struct qe_firmware_info {
 	char id[64];		/* Firmware name */
@@ -265,7 +265,7 @@ struct qe_bd {
 	__be16 status;
 	__be16 length;
 	__be32 buf;
-} __attribute__ ((packed));
+} __packed;
 
 #define BD_STATUS_MASK	0xffff0000
 #define BD_LENGTH_MASK	0x0000ffff
@@ -315,14 +315,14 @@ struct qe_timer_tables {
 	u16 r_tmv;		/* QE timer valid register */
 	u32 tm_cmd;		/* QE timer cmd register */
 	u32 tm_cnt;		/* QE timer internal cnt */
-} __attribute__ ((packed));
+} __packed;
 
 #define QE_FLTR_TAD_SIZE	8
 
 /* QE extended filtering Termination Action Descriptor (TAD) */
 struct qe_fltr_tad {
 	u8 serialized[QE_FLTR_TAD_SIZE];
-} __attribute__ ((packed));
+} __packed;
 
 /* Communication Direction */
 enum comm_dir {
@@ -542,7 +542,7 @@ struct ucc_slow_pram {
 	__be32 ttemp;		/* Tx temp */
 	__be32 rcrc;		/* temp receive CRC */
 	__be32 tcrc;		/* temp transmit CRC */
-} __attribute__ ((packed));
+} __packed;
 
 /* General UCC SLOW Mode Register (GUMRH & GUMRL) */
 #define UCC_SLOW_GUMR_H_SAM_QMC		0x00000000

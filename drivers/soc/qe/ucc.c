@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2006, 2012 Freescale Semiconductor, Inc. All rights reserved.
  *
- * Authors: 	Shlomi Gridish <gridish@freescale.com>
- * 		Li Yang <leoli@freescale.com>
+ * Authors:	Shlomi Gridish <gridish@freescale.com>
+ *		Li Yang <leoli@freescale.com>
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
@@ -21,10 +21,10 @@
 #include <linux/export.h>
 
 #include <asm/irq.h>
-#include <asm/io.h>
-#include <asm/immap_qe.h>
-#include <asm/qe.h>
-#include <asm/ucc.h>
+#include <linux/io.h>
+#include <linux/fsl/immap_qe.h>
+#include <linux/fsl/qe.h>
+#include <linux/fsl/ucc.h>
 
 int ucc_set_qe_mux_mii_mng(unsigned int ucc_num)
 {
@@ -59,21 +59,29 @@ int ucc_set_type(unsigned int ucc_num, enum ucc_speed_type speed)
 	/* The GUEMR register is at the same location for both slow and fast
 	   devices, so we just use uccX.slow.guemr. */
 	switch (ucc_num) {
-	case 0: guemr = &qe_immr->ucc1.slow.guemr;
+	case 0:
+		guemr = &qe_immr->ucc1.slow.guemr;
 		break;
-	case 1: guemr = &qe_immr->ucc2.slow.guemr;
+	case 1:
+		guemr = &qe_immr->ucc2.slow.guemr;
 		break;
-	case 2: guemr = &qe_immr->ucc3.slow.guemr;
+	case 2:
+		guemr = &qe_immr->ucc3.slow.guemr;
 		break;
-	case 3: guemr = &qe_immr->ucc4.slow.guemr;
+	case 3:
+		guemr = &qe_immr->ucc4.slow.guemr;
 		break;
-	case 4: guemr = &qe_immr->ucc5.slow.guemr;
+	case 4:
+		guemr = &qe_immr->ucc5.slow.guemr;
 		break;
-	case 5: guemr = &qe_immr->ucc6.slow.guemr;
+	case 5:
+		guemr = &qe_immr->ucc6.slow.guemr;
 		break;
-	case 6: guemr = &qe_immr->ucc7.slow.guemr;
+	case 6:
+		guemr = &qe_immr->ucc7.slow.guemr;
 		break;
-	case 7: guemr = &qe_immr->ucc8.slow.guemr;
+	case 7:
+		guemr = &qe_immr->ucc8.slow.guemr;
 		break;
 	default:
 		return -EINVAL;
@@ -136,67 +144,156 @@ int ucc_set_qe_mux_rxtx(unsigned int ucc_num, enum qe_clock clock,
 	switch (reg_num) {
 	case 1:
 		switch (clock) {
-		case QE_BRG1:	clock_bits = 1; break;
-		case QE_BRG2:	clock_bits = 2; break;
-		case QE_BRG7:	clock_bits = 3; break;
-		case QE_BRG8:	clock_bits = 4; break;
-		case QE_CLK9:	clock_bits = 5; break;
-		case QE_CLK10:	clock_bits = 6; break;
-		case QE_CLK11:	clock_bits = 7; break;
-		case QE_CLK12:	clock_bits = 8; break;
-		case QE_CLK15:	clock_bits = 9; break;
-		case QE_CLK16:	clock_bits = 10; break;
-		default: break;
+		case QE_BRG1:
+			clock_bits = 1;
+			break;
+		case QE_BRG2:
+			clock_bits = 2;
+			break;
+		case QE_BRG7:
+			clock_bits = 3;
+			break;
+		case QE_BRG8:
+			clock_bits = 4;
+			break;
+		case QE_CLK9:
+			clock_bits = 5;
+			break;
+		case QE_CLK10:
+			clock_bits = 6;
+			break;
+		case QE_CLK11:
+			clock_bits = 7;
+			break;
+		case QE_CLK12:
+			clock_bits = 8;
+			break;
+		case QE_CLK15:
+			clock_bits = 9;
+			break;
+		case QE_CLK16:
+			clock_bits = 10;
+			break;
+		default:
+			break;
 		}
 		break;
 	case 2:
 		switch (clock) {
-		case QE_BRG5:	clock_bits = 1; break;
-		case QE_BRG6:	clock_bits = 2; break;
-		case QE_BRG7:	clock_bits = 3; break;
-		case QE_BRG8:	clock_bits = 4; break;
-		case QE_CLK13:	clock_bits = 5; break;
-		case QE_CLK14:	clock_bits = 6; break;
-		case QE_CLK19:	clock_bits = 7; break;
-		case QE_CLK20:	clock_bits = 8; break;
-		case QE_CLK15:	clock_bits = 9; break;
-		case QE_CLK16:	clock_bits = 10; break;
-		default: break;
+		case QE_BRG5:
+			clock_bits = 1;
+			break;
+		case QE_BRG6:
+			clock_bits = 2;
+			break;
+		case QE_BRG7:
+			clock_bits = 3;
+			break;
+		case QE_BRG8:
+			clock_bits = 4;
+			break;
+		case QE_CLK13:
+			clock_bits = 5;
+			break;
+		case QE_CLK14:
+			clock_bits = 6;
+			break;
+		case QE_CLK19:
+			clock_bits = 7;
+			break;
+		case QE_CLK20:
+			clock_bits = 8;
+			break;
+		case QE_CLK15:
+			clock_bits = 9;
+			break;
+		case QE_CLK16:
+			clock_bits = 10;
+			break;
+		default:
+			break;
 		}
 		break;
 	case 3:
 		switch (clock) {
-		case QE_BRG9:	clock_bits = 1; break;
-		case QE_BRG10:	clock_bits = 2; break;
-		case QE_BRG15:	clock_bits = 3; break;
-		case QE_BRG16:	clock_bits = 4; break;
-		case QE_CLK3:	clock_bits = 5; break;
-		case QE_CLK4:	clock_bits = 6; break;
-		case QE_CLK17:	clock_bits = 7; break;
-		case QE_CLK18:	clock_bits = 8; break;
-		case QE_CLK7:	clock_bits = 9; break;
-		case QE_CLK8:	clock_bits = 10; break;
-		case QE_CLK16:	clock_bits = 11; break;
-		default: break;
+		case QE_BRG9:
+			clock_bits = 1;
+			break;
+		case QE_BRG10:
+			clock_bits = 2;
+			break;
+		case QE_BRG15:
+			clock_bits = 3;
+			break;
+		case QE_BRG16:
+			clock_bits = 4;
+			break;
+		case QE_CLK3:
+			clock_bits = 5;
+			break;
+		case QE_CLK4:
+			clock_bits = 6;
+			break;
+		case QE_CLK17:
+			clock_bits = 7;
+			break;
+		case QE_CLK18:
+			clock_bits = 8;
+			break;
+		case QE_CLK7:
+			clock_bits = 9;
+			break;
+		case QE_CLK8:
+			clock_bits = 10;
+			break;
+		case QE_CLK16:
+			clock_bits = 11;
+			break;
+		default:
+			break;
 		}
 		break;
 	case 4:
 		switch (clock) {
-		case QE_BRG13:	clock_bits = 1; break;
-		case QE_BRG14:	clock_bits = 2; break;
-		case QE_BRG15:	clock_bits = 3; break;
-		case QE_BRG16:	clock_bits = 4; break;
-		case QE_CLK5:	clock_bits = 5; break;
-		case QE_CLK6:	clock_bits = 6; break;
-		case QE_CLK21:	clock_bits = 7; break;
-		case QE_CLK22:	clock_bits = 8; break;
-		case QE_CLK7:	clock_bits = 9; break;
-		case QE_CLK8:	clock_bits = 10; break;
-		case QE_CLK16:	clock_bits = 11; break;
-		default: break;
+		case QE_BRG13:
+			clock_bits = 1;
+			break;
+		case QE_BRG14:
+			clock_bits = 2;
+			break;
+		case QE_BRG15:
+			clock_bits = 3;
+			break;
+		case QE_BRG16:
+			clock_bits = 4;
+			break;
+		case QE_CLK5:
+			clock_bits = 5;
+			break;
+		case QE_CLK6:
+			clock_bits = 6;
+			break;
+		case QE_CLK21:
+			clock_bits = 7;
+			break;
+		case QE_CLK22:
+			clock_bits = 8;
+			break;
+		case QE_CLK7:
+			clock_bits = 9;
+			break;
+		case QE_CLK8:
+			clock_bits = 10;
+			break;
+		case QE_CLK16:
+			clock_bits = 11;
+			break;
+		default:
+			break;
 		}
 		break;
-	default: break;
+	default:
+		break;
 	}
 
 	/* Check for invalid combination of clock and UCC number */

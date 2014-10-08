@@ -21,7 +21,7 @@
 #include <linux/fsl_devices.h>
 #include <linux/dma-mapping.h>
 #include <asm/cpm.h>
-#include <asm/qe.h>
+#include <linux/fsl/qe.h>
 
 #include "spi-fsl-lib.h"
 #include "spi-fsl-cpm.h"
