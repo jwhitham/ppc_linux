@@ -1611,8 +1611,8 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	fm_prs_result_t *parse_result;
 	struct iphdr *iph;
 	struct ipv6hdr *ipv6h = NULL;
-	int l4_proto;
-	int ethertype = ntohs(skb->protocol);
+	u8 l4_proto;
+	u16 ethertype = ntohs(skb->protocol);
 	int retval = 0;
 
 	if (skb->ip_summed != CHECKSUM_PARTIAL)
@@ -1644,13 +1644,13 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 		parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
 		iph = ip_hdr(skb);
 		DPA_BUG_ON(iph == NULL);
-		l4_proto = ntohs(iph->protocol);
+		l4_proto = iph->protocol;
 		break;
 	case ETH_P_IPV6:
 		parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
 		ipv6h = ipv6_hdr(skb);
 		DPA_BUG_ON(ipv6h == NULL);
-		l4_proto = ntohs(ipv6h->nexthdr);
+		l4_proto = ipv6h->nexthdr;
 		break;
 	default:
 		/* We shouldn't even be here */
