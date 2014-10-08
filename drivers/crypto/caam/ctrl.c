@@ -728,7 +728,7 @@ static int caam_probe(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-static int caam_stop_qi(struct caam_qi __iomem *qi)
+static int caam_stop_qi(struct caam_queue_if __iomem *qi)
 {
 	int qi_stopped, loop = 0;
 
@@ -760,7 +760,7 @@ static int caam_suspend(struct device *dev)
 {
 	struct caam_drv_private *caam_priv;
 	struct caam_ctrl __iomem *ctrl;
-	struct caam_qi __iomem *qi;
+	struct caam_queue_if __iomem *qi;
 	int ret = 0;
 
 	caam_priv = dev_get_drvdata(dev);
@@ -785,10 +785,12 @@ static int caam_resume(struct device *dev)
 {
 	struct caam_drv_private *caam_priv;
 	struct caam_ctrl __iomem *ctrl;
+	struct caam_queue_if __iomem *qi;
 	int ret;
 
 	caam_priv = dev_get_drvdata(dev);
 	ctrl = caam_priv->ctrl;
+	qi = caam_priv->qi;
 	/*
 	 * Enable DECO watchdogs and, if this is a PHYS_ADDR_T_64BIT kernel,
 	 * long pointers in master configuration register
