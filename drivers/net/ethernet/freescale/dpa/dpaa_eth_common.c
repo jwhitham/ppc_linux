@@ -80,7 +80,7 @@ static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
 
-static const struct fqid_cell default_fqids[][3] = {
+static struct fqid_cell default_fqids[][3] = {
 	[RX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_RX_QUEUES} },
 	[TX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_TX_QUEUES} }
 };
@@ -927,8 +927,9 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 			    bool alloc_tx_conf_fqs,
 			    enum port_type ptype)
 {
-	const struct fqid_cell *fqids;
-	struct dpa_fq *dpa_fq;
+	struct fqid_cell *fqids = NULL;
+	const void *fqids_off = NULL;
+	struct dpa_fq *dpa_fq = NULL;
 	struct device_node *np = dev->of_node;
 	int num_ranges;
 	int i, lenp;
@@ -939,13 +940,26 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 			goto fq_alloc_failed;
 	}
 
-	fqids = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
-	if (fqids == NULL) {
+	fqids_off = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
+	if (fqids_off == NULL) {
 		/* No dts definition, so use the defaults. */
 		fqids = default_fqids[ptype];
 		num_ranges = 3;
 	} else {
 		num_ranges = lenp / sizeof(*fqids);
+
+		fqids = devm_kzalloc(dev, sizeof(*fqids) * num_ranges,
+				GFP_KERNEL);
+		if (fqids == NULL)
+			goto fqids_alloc_failed;
+
+		/* convert to CPU endianess */
+		for (i = 0; i < num_ranges; i++) {
+			fqids[i].start = be32_to_cpup(fqids_off +
+					i * sizeof(*fqids));
+			fqids[i].count = be32_to_cpup(fqids_off +
+					i * sizeof(*fqids) + sizeof(__be32));
+		}
 	}
 
 	for (i = 0; i < num_ranges; i++) {
@@ -996,7 +1010,8 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 	return 0;
 
 fq_alloc_failed:
-	dev_err(dev, "dpa_fq_alloc() failed\n");
+fqids_alloc_failed:
+	dev_err(dev, "Cannot allocate memory for frame queues\n");
 	return -ENOMEM;
 
 invalid_default_queue:
