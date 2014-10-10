@@ -24,7 +24,6 @@
 #include <linux/io.h>
 #include <linux/fsl/qe.h>
 #include <asm/prom.h>
-#include <sysdev/fsl_soc.h>
 
 #undef DEBUG
 
@@ -62,16 +61,16 @@ void __par_io_config_pin(struct qe_pio_regs __iomem *par_io, u8 pin, int dir,
 	pin_mask1bit = (u32) (1 << (QE_PIO_PINS - (pin + 1)));
 
 	/* Set open drain, if required */
-	tmp_val = in_be32(&par_io->cpodr);
+	tmp_val = ioread32be(&par_io->cpodr);
 	if (open_drain)
-		out_be32(&par_io->cpodr, pin_mask1bit | tmp_val);
+		iowrite32be(pin_mask1bit | tmp_val, &par_io->cpodr);
 	else
-		out_be32(&par_io->cpodr, ~pin_mask1bit & tmp_val);
+		iowrite32be(~pin_mask1bit & tmp_val, &par_io->cpodr);
 
 	/* define direction */
 	tmp_val = (pin > (QE_PIO_PINS / 2) - 1) ?
-		in_be32(&par_io->cpdir2) :
-		in_be32(&par_io->cpdir1);
+		ioread32be(&par_io->cpdir2) :
+		ioread32be(&par_io->cpdir1);
 
 	/* get all bits mask for 2 bit per port */
 	pin_mask2bits = (u32) (0x3 << (QE_PIO_PINS -
@@ -83,34 +82,30 @@ void __par_io_config_pin(struct qe_pio_regs __iomem *par_io, u8 pin, int dir,
 
 	/* clear and set 2 bits mask */
 	if (pin > (QE_PIO_PINS / 2) - 1) {
-		out_be32(&par_io->cpdir2,
-			 ~pin_mask2bits & tmp_val);
+		iowrite32be(~pin_mask2bits & tmp_val, &par_io->cpdir2);
 		tmp_val &= ~pin_mask2bits;
-		out_be32(&par_io->cpdir2, new_mask2bits | tmp_val);
+		iowrite32be(new_mask2bits | tmp_val, &par_io->cpdir2);
 	} else {
-		out_be32(&par_io->cpdir1,
-			 ~pin_mask2bits & tmp_val);
+		iowrite32be(~pin_mask2bits & tmp_val, &par_io->cpdir1);
 		tmp_val &= ~pin_mask2bits;
-		out_be32(&par_io->cpdir1, new_mask2bits | tmp_val);
+		iowrite32be(new_mask2bits | tmp_val, &par_io->cpdir1);
 	}
 	/* define pin assignment */
 	tmp_val = (pin > (QE_PIO_PINS / 2) - 1) ?
-		in_be32(&par_io->cppar2) :
-		in_be32(&par_io->cppar1);
+		ioread32be(&par_io->cppar2) :
+		ioread32be(&par_io->cppar1);
 
 	new_mask2bits = (u32) (assignment << (QE_PIO_PINS -
 			(pin % (QE_PIO_PINS / 2) + 1) * 2));
 	/* clear and set 2 bits mask */
 	if (pin > (QE_PIO_PINS / 2) - 1) {
-		out_be32(&par_io->cppar2,
-			 ~pin_mask2bits & tmp_val);
+		iowrite32be(~pin_mask2bits & tmp_val, &par_io->cppar2);
 		tmp_val &= ~pin_mask2bits;
-		out_be32(&par_io->cppar2, new_mask2bits | tmp_val);
+		iowrite32be(new_mask2bits | tmp_val, &par_io->cppar2);
 	} else {
-		out_be32(&par_io->cppar1,
-			 ~pin_mask2bits & tmp_val);
+		iowrite32be(~pin_mask2bits & tmp_val, &par_io->cppar1);
 		tmp_val &= ~pin_mask2bits;
-		out_be32(&par_io->cppar1, new_mask2bits | tmp_val);
+		iowrite32be(new_mask2bits | tmp_val, &par_io->cppar1);
 	}
 }
 EXPORT_SYMBOL(__par_io_config_pin);
@@ -138,12 +133,12 @@ int par_io_data_set(u8 port, u8 pin, u8 val)
 	/* calculate pin location */
 	pin_mask = (u32) (1 << (QE_PIO_PINS - 1 - pin));
 
-	tmp_val = in_be32(&par_io[port].cpdata);
+	tmp_val = ioread32be(&par_io[port].cpdata);
 
 	if (val == 0)		/* clear */
-		out_be32(&par_io[port].cpdata, ~pin_mask & tmp_val);
+		iowrite32be(~pin_mask & tmp_val, &par_io[port].cpdata);
 	else			/* set */
-		out_be32(&par_io[port].cpdata, pin_mask | tmp_val);
+		iowrite32be(pin_mask | tmp_val, &par_io[port].cpdata);
 
 	return 0;
 }
@@ -200,17 +195,17 @@ static void dump_par_io(void)
 	pr_info("%s: par_io=%p\n", __func__, par_io);
 	for (i = 0; i < num_par_io_ports; i++) {
 		pr_info("	cpodr[%u]=%08x\n", i,
-			in_be32(&par_io[i].cpodr));
+			ioread32be(&par_io[i].cpodr));
 		pr_info("	cpdata[%u]=%08x\n", i,
-			in_be32(&par_io[i].cpdata));
+			ioread32be(&par_io[i].cpdata));
 		pr_info("	cpdir1[%u]=%08x\n", i,
-			in_be32(&par_io[i].cpdir1));
+			ioread32be(&par_io[i].cpdir1));
 		pr_info("	cpdir2[%u]=%08x\n", i,
-			in_be32(&par_io[i].cpdir2));
+			ioread32be(&par_io[i].cpdir2));
 		pr_info("	cppar1[%u]=%08x\n", i,
-			in_be32(&par_io[i].cppar1));
+			ioread32be(&par_io[i].cppar1));
 		pr_info("	cppar2[%u]=%08x\n", i,
-			in_be32(&par_io[i].cppar2));
+			ioread32be(&par_io[i].cppar2));
 	}
 }
 EXPORT_SYMBOL(dump_par_io);

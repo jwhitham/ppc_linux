@@ -4,7 +4,6 @@
 
 config QUICC_ENGINE
 	bool "Freescale QUICC Engine (QE) Support"
-	depends on FSL_SOC && (PPC32 || PPC64)
 	select LIB_RHEAP
 	select CRC32
 	---help---
