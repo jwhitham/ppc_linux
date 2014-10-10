@@ -19,6 +19,7 @@
 #include <asm/fsl_guts.h>
 #include <asm/cputhreads.h>
 #include <asm/fsl_pm.h>
+#include <asm/machdep.h>
 
 const struct fsl_pm_ops *qoriq_pm_ops;
 
@@ -152,7 +153,9 @@ static void rcpm_v2_irq_mask(int cpu)
 	int hw_cpu = get_hard_smp_processor_id(cpu);
 	unsigned int mask = 1 << hw_cpu;
 
-	setbits32(&rcpm_v2_regs->tpmimr0, mask);
+	if (strcmp(cur_cpu_spec->cpu_name, "e6500"))
+		setbits32(&rcpm_v2_regs->tpmimr0, mask);
+
 	setbits32(&rcpm_v2_regs->tpmcimr0, mask);
 	setbits32(&rcpm_v2_regs->tpmmcmr0, mask);
 	setbits32(&rcpm_v2_regs->tpmnmimr0, mask);
@@ -163,7 +166,9 @@ static void rcpm_v2_irq_unmask(int cpu)
 	int hw_cpu = get_hard_smp_processor_id(cpu);
 	unsigned int mask = 1 << hw_cpu;
 
-	clrbits32(&rcpm_v2_regs->tpmimr0, mask);
+	if (strcmp(cur_cpu_spec->cpu_name, "e6500"))
+		clrbits32(&rcpm_v2_regs->tpmimr0, mask);
+
 	clrbits32(&rcpm_v2_regs->tpmcimr0, mask);
 	clrbits32(&rcpm_v2_regs->tpmmcmr0, mask);
 	clrbits32(&rcpm_v2_regs->tpmnmimr0, mask);
@@ -188,6 +193,12 @@ static void rcpm_v2_cpu_enter_state(int cpu, int state)
 		/* one bit corresponds to one thread for PH10 of 6500 */
 		setbits32(&rcpm_v2_regs->tph10setr0, 1 << hw_cpu);
 		break;
+#ifdef CONFIG_PPC_BOOK3E_64
+	case E500_PM_PW10:
+		/* one bit corresponds to one thread for PW10 of 6500 */
+		book3e_die();
+		break;
+#endif
 	case E500_PM_PH15:
 		setbits32(&rcpm_v2_regs->pcph15setr, mask);
 		break;
@@ -207,18 +218,22 @@ static void rcpm_v2_cpu_exit_state(int cpu, int state)
 	unsigned int hw_cpu = get_hard_smp_processor_id(cpu);
 	u32 mask = 1 << cpu_core_index_of_thread(hw_cpu);
 
+	/*
+	 * The true value read from these registers only means
+	 * there is a pending request.
+	 */
 	switch (state) {
 	case E500_PM_PH10:
-		setbits32(&rcpm_v2_regs->tph10clrr0, 1 << hw_cpu);
+		out_be32(&rcpm_v2_regs->tph10clrr0, 1 << hw_cpu);
 		break;
 	case E500_PM_PH15:
-		setbits32(&rcpm_v2_regs->pcph15clrr, mask);
+		out_be32(&rcpm_v2_regs->pcph15clrr, mask);
 		break;
 	case E500_PM_PH20:
-		setbits32(&rcpm_v2_regs->pcph20clrr, mask);
+		out_be32(&rcpm_v2_regs->pcph20clrr, mask);
 		break;
 	case E500_PM_PH30:
-		setbits32(&rcpm_v2_regs->pcph30clrr, mask);
+		out_be32(&rcpm_v2_regs->pcph30clrr, mask);
 		break;
 	default:
 		pr_err("%s: Unknown cpu PM state (%d)\n", __func__, state);

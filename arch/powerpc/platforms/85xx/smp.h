@@ -12,4 +12,6 @@ static inline void mpc85xx_smp_init(void)
 }
 #endif
 
+extern long fsl_enable_threads(void *);
+
 #endif /* not POWERPC_85XX_SMP_H_ */

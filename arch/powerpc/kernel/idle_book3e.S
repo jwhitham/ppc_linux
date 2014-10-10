@@ -79,6 +79,12 @@ _GLOBAL(\name)
 	b	1b
 .endm
 
+_GLOBAL(book3e_die)
+	wrteei  1
+	PPC_WAIT(0)
+1:
+	b	1b
+
 /* epapr_ev_idle_start below is patched with the proper hcall
    opcodes during kernel initialization */
 .macro EPAPR_EV_IDLE_LOOP

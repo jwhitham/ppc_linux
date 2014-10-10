@@ -16,9 +16,10 @@
 #include <linux/suspend.h>
 
 #define E500_PM_PH10	1
-#define E500_PM_PH15	2
-#define E500_PM_PH20	3
-#define E500_PM_PH30	4
+#define E500_PM_PW10	2
+#define E500_PM_PH15	3
+#define E500_PM_PH20	4
+#define E500_PM_PH30	5
 #define E500_PM_DOZE	E500_PM_PH10
 #define E500_PM_NAP	E500_PM_PH15
 
