@@ -1987,6 +1987,7 @@ config FB_FSL_DCU
 	select FB_CFB_IMAGEBLIT
 	select FB_MODE_HELPERS
 	select VIDEOMODE_HELPERS
+	select REGMAP_MMIO
 	---help---
 	  Framebuffer driver for the Freescale SoC DCU.
 

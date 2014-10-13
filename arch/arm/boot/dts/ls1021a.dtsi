@@ -123,6 +123,7 @@
 		scfg: scfg@1570000 {
 			compatible = "fsl,ls1021a-scfg", "syscon";
 			reg = <0x0 0x1570000 0x0 0x10000>;
+			big-endian;
 		};
 
 		crypto: crypto@1700000 {
