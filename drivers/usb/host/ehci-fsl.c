@@ -30,7 +30,9 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/fsl_devices.h>
+#ifdef CONFIG_PPC
 #include <sysdev/fsl_soc.h>
+#endif
 
 #include "ehci-fsl.h"
 
@@ -686,7 +688,9 @@ static int ehci_fsl_drv_suspend(struct device *dev)
 		return 0;
 	}
 #endif
+#ifdef CONFIG_PPC
 	mpc85xx_pmc_set_wake(dev, true);
+#endif
 
 	ehci_prepare_ports_for_controller_suspend(hcd_to_ehci(hcd),
 			device_may_wakeup(dev));
@@ -729,7 +733,9 @@ static int ehci_fsl_drv_resume(struct device *dev)
 	}
 #endif
 
+#ifdef CONFIG_PPC
 	mpc85xx_pmc_set_wake(dev, false);
+#endif
 
 	ehci_prepare_ports_for_controller_resume(ehci);
 	if (!fsl_deep_sleep())
