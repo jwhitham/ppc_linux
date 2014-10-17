@@ -207,15 +207,8 @@ int gfar_asf_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	do {
 		lstatus = txbdp->lstatus;
 		if ((lstatus & BD_LFLAG(TXBD_READY))) {
-			u32 imask;
 			/* BD not free for tx */
-			netif_tx_stop_queue(txq);
 			dev->stats.tx_fifo_errors++;
-			spin_lock_irq(&tx_queue->grp->grplock);
-			imask = gfar_read(&regs->imask);
-			imask |= IMASK_TX_DEFAULT;
-			gfar_write(&regs->imask, imask);
-			spin_unlock_irq(&tx_queue->grp->grplock);
 			return NETDEV_TX_BUSY;
 		}
 
