@@ -1,0 +1,27 @@
+Gating clock bindings for Freescale LS1021A SOC
+
+Required properties:
+- compatible:		Should be "fsl,ls1021a-gate"
+- reg:			Address and length of the register set
+- #clock-cells:		Should be <1>
+
+The clock consumers should specify the desired clock by having one clock
+ID in its "clocks" phandle cell.
+Please see include/dt-bindings/clock/ls1021a-clock.h for the full list of
+LS1021A clock IDs.
+
+Example:
+
+gate: gate@1ee0000 {
+	compatible = "fsl,ls1021a-gate";
+	reg = <0x0 0x1ee0000 0x0 0x10000>;
+	#clock-cells = <1>;
+};
+
+wdog0: wdog@2ad0000 {
+	compatible = "fsl,ls1021a-wdt", "fsl,imx21-wdt";
+	reg = <0x0 0x2ad0000 0x0 0x10000>;
+	interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
+	clocks = <&gate LS1021A_CLK_WDOG12_EN>;
+	clock-names = "wdog12_en";
+};
