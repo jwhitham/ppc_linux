@@ -47,12 +47,14 @@
 			compatible = "arm,cortex-a7";
 			device_type = "cpu";
 			reg = <0xf00>;
+			clocks = <&cluster1_clk>;
 		};
 
 		cpu@f01 {
 			compatible = "arm,cortex-a7";
 			device_type = "cpu";
 			reg = <0xf01>;
+			clocks = <&cluster1_clk>;
 		};
 	};
 
@@ -194,16 +196,7 @@
 				reg = <0x800>;
 				clocks = <&sysclk>;
 				clock-output-names = "cga-pll1", "cga-pll1-div2",
-						"cga-pll1-div3", "cga-pll1-div4";
-			};
-
-			cga_pll2: pll2@820 {
-				compatible = "fsl,core-pll-clock";
-				#clock-cells = <1>;
-				reg = <0x820>;
-				clocks = <&sysclk>;
-				clock-output-names = "cga-pll2", "cga-pll2-div2",
-						"cga-pll2-div3", "cga-pll2-div4";
+						"cga-pll1-div4";
 			};
 
 			platform_clk: pll@c00 {
@@ -214,15 +207,13 @@
 				clock-output-names = "platform-clk", "platform-clk-div2";
 			};
 
-
 			cluster1_clk: clk0c0@0 {
 				compatible = "fsl,core-mux-clock";
-				#clock-cells = <1>;
+				#clock-cells = <0>;
 				reg = <0x0>;
-				clock-names = "pll1cga", "pll1cga-div2";
-				clocks = <&cga_pll1 0>, <&cga_pll1 2>;
+				clock-names = "pll1cga", "pll1cga-div2", "pll1cga-div4";
+				clocks = <&cga_pll1 0>, <&cga_pll1 1>, <&cga_pll1 2>;
 				clock-output-names = "cluster1-clk";
-
 			};
 
 		};
