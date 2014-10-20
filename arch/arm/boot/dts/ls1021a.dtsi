@@ -76,6 +76,7 @@
 		compatible = "simple-bus";
 		#address-cells = <2>;
 		#size-cells = <2>;
+		device_type = "soc";
 		interrupt-parent = <&gic>;
 		ranges;
 
