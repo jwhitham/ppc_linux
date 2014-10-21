@@ -34,6 +34,12 @@
 #define CCSR_GPIO1_GPDAT	0x130008
 #define CCSR_GPIO1_GPDIR_29	0x4
 
+#define EPU_BLOCK_OFFSET	0x00000000
+#define NPC_BLOCK_OFFSET	0x00001000
+
+#define CSTTACR0		0xb00
+#define CG1CR0			0x31c
+
 /* 128 bytes buffer for restoring data broke by DDR training initialization */
 #define DDR_BUF_SIZE	128
 static u8 ddr_buff[DDR_BUF_SIZE] __aligned(64);
@@ -179,14 +185,17 @@ int fsl_enter_epu_deepsleep(void)
 	 */
 	setbits32(ccsr_base + CPC_CPCHDBCR0, CPC_CPCHDBCR0_SPEC_DIS);
 
-	fsl_dp_fsm_setup(dcsr_base, NULL);
+	fsl_epu_setup_default(dcsr_base + EPU_BLOCK_OFFSET);
+	fsl_npc_setup_default(dcsr_base + NPC_BLOCK_OFFSET);
+	out_be32(dcsr_base + RCPM_BLOCK_OFFSET + CSTTACR0, 0x00001001);
+	out_be32(dcsr_base + RCPM_BLOCK_OFFSET + CG1CR0, 0x00000001);
 
 	fsl_dp_enter_low(ccsr_base, dcsr_base, pld_base, pld_flag);
 
 	/* disable Warm Device Reset request */
 	clrbits32(ccsr_base + CCSR_SCFG_DPSLPCR, CCSR_SCFG_DPSLPCR_WDRR_EN);
 
-	fsl_dp_fsm_clean(dcsr_base, NULL);
+	fsl_epu_clean_default(dcsr_base + EPU_BLOCK_OFFSET);
 
 	return 0;
 }
