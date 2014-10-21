@@ -14,7 +14,7 @@ config TDM_TEST
 
 config UCC_TDM_TEST
 	tristate "UCC TDM test Module"
-	depends on FSL_SOC || CONFIG_QE
+	depends on FSL_SOC || QUICC_ENGINE
 	---help---
 	  This UCC TDM test module is a small test module to test
 	  ucc tdm transfer and receive data via ucc1.

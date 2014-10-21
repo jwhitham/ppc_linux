@@ -6,7 +6,7 @@ menu "TDM Device support"
 
 config TDM_FSL
         tristate "Driver for Freescale TDM controller"
-        depends on FSL_SOC
+        depends on FSL_SOC || ARCH_MXC
         ---help---
           This is a driver for Freescale TDM controller. The controller
           is found in various Freescale SOCs viz MPC8315, P1020. The TDM driver
@@ -15,7 +15,7 @@ config TDM_FSL
 
 config FSL_UCC_TDM
        tristate "UCC TDM driver for Freescale QE engine"
-       depends on FSL_SOC || CONFIG_QE
+       depends on FSL_SOC || QUICC_ENGINE
        ---help---
          This is a driver for Freescale QE UCC working with TDM interface.
 
