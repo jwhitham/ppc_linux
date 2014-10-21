@@ -108,6 +108,18 @@ config CAN_FLEXCAN
 	---help---
 	  Say Y here if you want to support for Freescale FlexCAN.
 
+config CAN_FLEXCAN_RX_FIFO_EN
+	tristate "Support for RX FIFO mode in Freescale FLEXCAN based chips"
+	depends on CAN_FLEXCAN
+	---help---
+	  Say Y here if your Freescale SoC's FlexCAN module has support for RX FIFO MODE.
+
+config CAN_FLEXCAN_ERRATA_ERR005829
+	tristate "ERRATA_ERR005829 applicable to certain variants of Freescale FLEXCAN based chips"
+	depends on CAN_FLEXCAN
+	---help---
+	  Say Y here if your Freescale SoC's FlexCAN module needs s/w workaround for ERRATA ERR005829.
+
 config PCH_CAN
 	tristate "Intel EG20T PCH CAN controller"
 	depends on PCI
