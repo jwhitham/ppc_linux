@@ -2773,6 +2773,7 @@ static void init_tls_job(u32 *sh_desc, dma_addr_t ptr,
 	u32 out_options = 0, in_options;
 	dma_addr_t dst_dma, src_dma;
 	int len, sec4_sg_index = 0;
+	bool is_gcm = false;
 
 #ifdef DEBUG
 	debug("assoclen %d cryptlen %d authsize %d\n",
@@ -2791,11 +2792,19 @@ static void init_tls_job(u32 *sh_desc, dma_addr_t ptr,
 		       desc_bytes(sh_desc), 1);
 #endif
 
+	if (((ctx->class1_alg_type & OP_ALG_ALGSEL_MASK) ==
+	      OP_ALG_ALGSEL_AES) &&
+	    ((ctx->class1_alg_type & OP_ALG_AAI_MASK) == OP_ALG_AAI_GCM))
+		is_gcm = true;
+
 	len = desc_len(sh_desc);
 	init_job_desc_shared(desc, ptr, len, HDR_SHARE_DEFER | HDR_REVERSE);
 
 	if (all_contig) {
-		src_dma = sg_dma_address(req->assoc);
+		if (is_gcm)
+			src_dma = edesc->iv_dma;
+		else
+			src_dma = sg_dma_address(req->assoc);
 		in_options = 0;
 	} else {
 		src_dma = edesc->sec4_sg_dma;
