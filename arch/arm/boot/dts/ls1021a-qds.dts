@@ -308,6 +308,30 @@
 	};
 };
 
+&uqe {
+	tdma: ucc@2000 {
+		compatible = "fsl,ucc-tdm";
+		rx-clock-name = "brg1";
+		tx-clock-name = "brg1";
+		fsl,rx-sync-clock = "none";
+		fsl,tx-sync-clock = "none";
+		fsl,tx-timeslot = <0xfffffffe>;
+		fsl,rx-timeslot = <0xfffffffe>;
+		fsl,tdm-framer-type = "e1";
+		fsl,tdm-mode = "internal-loopback";
+		fsl,tdm-id = <0>;
+		fsl,siram-entry-id = <0>;
+	};
+
+	serial: ucc@2200 {
+		device_type = "serial";
+		compatible = "ucc_uart";
+		port-number = <1>;
+		rx-clock-name = "brg2";
+		tx-clock-name = "brg2";
+	};
+};
+
 &pwm3 {
 	status = "okay";
 };
