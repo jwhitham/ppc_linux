@@ -20,6 +20,7 @@ struct cmux_clk {
 	struct clk_hw hw;
 	void __iomem *reg;
 	u32 flags;
+	unsigned int num_parents;
 };
 
 #define PLL_KILL			BIT(31)
@@ -28,14 +29,13 @@ struct cmux_clk {
 #define to_cmux_clk(p)		container_of(p, struct cmux_clk, hw)
 
 static void __iomem *base;
-static unsigned int clocks_per_pll;
 
 static int cmux_set_parent(struct clk_hw *hw, u8 idx)
 {
 	struct cmux_clk *clk = to_cmux_clk(hw);
 	u32 clksel;
 
-	clksel = ((idx / clocks_per_pll) << 2) + idx % clocks_per_pll;
+	clksel = ((idx / clk->num_parents) << 2) + idx % clk->num_parents;
 	if (clk->flags & CLKSEL_ADJUST)
 		clksel += 8;
 	clksel = (clksel & 0xf) << CLKSEL_SHIFT;
@@ -53,7 +53,7 @@ static u8 cmux_get_parent(struct clk_hw *hw)
 	clksel = (clksel >> CLKSEL_SHIFT) & 0xf;
 	if (clk->flags & CLKSEL_ADJUST)
 		clksel -= 8;
-	clksel = (clksel >> 2) * clocks_per_pll + clksel % 4;
+	clksel = (clksel >> 2) * clk->num_parents + clksel % 4;
 
 	return clksel;
 }
@@ -101,6 +101,7 @@ static void __init core_mux_init(struct device_node *np)
 		goto err_name;
 	}
 	cmux_clk->reg = base + offset;
+	cmux_clk->num_parents = count;
 
 	node = of_find_compatible_node(NULL, NULL, "fsl,p4080-clockgen");
 	if (node && (offset >= 0x80))
@@ -176,9 +177,6 @@ static void __init core_pll_init(struct device_node *np)
 		pr_err("%s: clock is not supported\n", np->name);
 		return;
 	}
-
-	/* output clock number per PLL */
-	clocks_per_pll = count;
 
 	subclks = kzalloc(sizeof(struct clk *) * count, GFP_KERNEL);
 	if (!subclks) {
