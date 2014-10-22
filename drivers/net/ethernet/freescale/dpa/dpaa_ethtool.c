@@ -189,8 +189,8 @@ static void __cold dpa_get_pauseparam(struct net_device *net_dev,
 	}
 
 	epause->autoneg = mac_dev->autoneg_pause;
-	epause->rx_pause = mac_dev->rx_pause;
-	epause->tx_pause = mac_dev->tx_pause;
+	epause->rx_pause = mac_dev->rx_pause_active;
+	epause->tx_pause = mac_dev->tx_pause_active;
 }
 
 static int __cold dpa_set_pauseparam(struct net_device *net_dev,
@@ -201,6 +201,7 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 	struct phy_device       *phy_dev;
 	int _errno;
 	u32 newadv, oldadv;
+	bool rx_pause, tx_pause;
 
 	priv = netdev_priv(net_dev);
 	mac_dev = priv->mac_dev;
@@ -225,7 +226,9 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 	 * adjust_link is triggered by a forced renegotiation of sym/asym PAUSE
 	 * settings.
 	 */
-	mac_dev->autoneg_pause = epause->autoneg;
+	mac_dev->autoneg_pause = !!epause->autoneg;
+	mac_dev->rx_pause_req = !!epause->rx_pause;
+	mac_dev->tx_pause_req = !!epause->tx_pause;
 
 	/* Determine the sym/asym advertised PAUSE capabilities from the desired
 	 * rx/tx pause settings.
@@ -254,25 +257,12 @@ static int __cold dpa_set_pauseparam(struct net_device *net_dev,
 		}
 	}
 
-	if (epause->autoneg)
-		return 0;
+	get_pause_cfg(mac_dev, &rx_pause, &tx_pause);
+	_errno = set_mac_active_pause(mac_dev, rx_pause, tx_pause);
+	if (unlikely(_errno < 0))
+		netdev_err(net_dev, "set_mac_active_pause() = %d\n", _errno);
 
-	/* If PAUSE frame autonegotiation is disabled,
-	 * ethtool rx/tx settings are enforced.
-	 */
-	_errno = set_mac_rx_pause(mac_dev, !!epause->rx_pause);
-	if (unlikely(_errno < 0)) {
-		netdev_err(net_dev, "set_mac_rx_pause() = %d\n", _errno);
-		return _errno;
-	}
-
-	_errno = set_mac_tx_pause(mac_dev, !!epause->tx_pause);
-	if (unlikely(_errno < 0)) {
-		netdev_err(net_dev, "set_mac_tx_pause() = %d\n", _errno);
-		return _errno;
-	}
-
-	return 0;
+	return _errno;
 }
 
 #ifdef CONFIG_PM

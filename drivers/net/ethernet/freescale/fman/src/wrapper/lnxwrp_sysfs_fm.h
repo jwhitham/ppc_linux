@@ -126,7 +126,7 @@ int fm_profile_dump_regs(void *h_pcd, int ppnum, char *buf, int nn);
 		int k, m = n; \
 		phys_addr_t pa = virt_to_phys(&((st)->phrase)); \
 		k = snprintf(&buf[m], PAGE_SIZE - m, \
-		"0x%010llX: 0x%08x%8s\t%s\n", pa, \
+		"0x%010llX: 0x%08x%8s\t%s\n", (unsigned long long) pa, \
 		ioread32be((uint32_t *)&((st)->phrase)), "", #phrase); \
 		if (k < 0 || m > PAGE_SIZE - 90) \
 			FM_DMP_PGSZ_ERR \

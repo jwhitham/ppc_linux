@@ -48,10 +48,6 @@ extern int dpa_num_cpus;
 #define dpa_get_rx_extra_headroom() dpa_rx_extra_headroom
 #define dpa_get_max_frm() dpa_max_frm
 
-/* Currently we have the same max_frm on all interfaces, so these macros
- * don't get a net_device argument. This will change in the future.
- */
-#define dpa_get_min_mtu()	64
 #define dpa_get_max_mtu()	\
 	(dpa_get_max_frm() - (VLAN_ETH_HLEN + ETH_FCS_LEN))
 
@@ -495,11 +491,11 @@ static inline uint16_t dpa_get_headroom(struct dpa_buffer_layout_s *bl)
 	 *
 	 * Also make sure the headroom is a multiple of data_align bytes
 	 */
-	headroom = bl->priv_data_size +
+	headroom = (uint16_t)(bl->priv_data_size +
 		   (bl->parse_results ? DPA_PARSE_RESULTS_SIZE : 0) +
 		   (bl->hash_results || bl->time_stamp ?
 		    DPA_TIME_STAMP_SIZE + DPA_HASH_RESULTS_SIZE : 0) +
-		   bl->manip_extra_space;
+		   bl->manip_extra_space);
 
 	return bl->data_align ? ALIGN(headroom, bl->data_align) : headroom;
 }

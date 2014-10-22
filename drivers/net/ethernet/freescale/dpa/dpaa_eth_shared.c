@@ -488,7 +488,7 @@ int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev)
 	fd.bpid = dpa_bp->bpid;
 
 	fd.length20 = skb_headlen(skb);
-	fd.addr_hi = bmb.hi;
+	fd.addr_hi = (uint8_t)bmb.hi;
 	fd.addr_lo = bmb.lo;
 	fd.offset = priv->tx_headroom;
 
@@ -580,6 +580,7 @@ buf_acquire_failed:
 	/* We're done with the skb */
 	dev_kfree_skb(skb);
 
+	/* err remains unused, NETDEV_TX_OK must be returned here */
 	return NETDEV_TX_OK;
 }
 
@@ -670,7 +671,7 @@ static const struct dev_pm_ops shared_pm_ops = {
 static int
 dpaa_eth_shared_probe(struct platform_device *_of_dev)
 {
-	int err = 0, i;
+	int err = 0, i, channel;
 	struct device *dev;
 	struct device_node *dpa_node;
 	struct dpa_bp *dpa_bp;
@@ -755,12 +756,14 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 
 	priv->mac_dev = mac_dev;
 
-	priv->channel = dpa_get_channel();
+	channel = dpa_get_channel();
 
-	if (priv->channel < 0) {
-		err = priv->channel;
+	if (channel < 0) {
+		err = channel;
 		goto get_channel_failed;
 	}
+
+	priv->channel = (uint16_t)channel;
 
 	/* Start a thread that will walk the cpus with affine portals
 	 * and add this pool channel to each's dequeue mask.

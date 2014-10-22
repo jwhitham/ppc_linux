@@ -231,7 +231,7 @@ void fm_port_get_buff_layout_ext_params(struct fm_port *port, struct fm_port_par
 
  @Cautions	Allowed only after the port is binded.
 *//***************************************************************************/
-int fm_get_tx_port_channel(struct fm_port *port);
+uint16_t fm_get_tx_port_channel(struct fm_port *port);
 
 /**************************************************************************//**
  @Function	fm_set_tx_port_params

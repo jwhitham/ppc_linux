@@ -3152,8 +3152,9 @@ t_Error FM_PORT_Disable(t_Handle h_FmPort)
     err = fman_port_disable(&p_FmPort->port);
     if (err == -EBUSY)
     {
-        fman_port_enable(&p_FmPort->port);
-        RETURN_ERROR(MINOR, E_BUSY, ("%s: can't disable! BMI or QMI is Busy", p_FmPort->name));
+        DBG(WARNING, ("%s: BMI or QMI is Busy. Port forced down",
+               p_FmPort->name));
+        err = E_OK;
     }
     else if (err != 0)
     {

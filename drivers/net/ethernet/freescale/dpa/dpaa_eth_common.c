@@ -260,12 +260,11 @@ dpa_get_stats64(struct net_device *net_dev,
 int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 {
 	const int max_mtu = dpa_get_max_mtu();
-	const int min_mtu = dpa_get_min_mtu();
 
 	/* Make sure we don't exceed the Ethernet controller's MAXFRM */
-	if (new_mtu < min_mtu || new_mtu > max_mtu) {
+	if (new_mtu < 68 || new_mtu > max_mtu) {
 		netdev_err(net_dev, "Invalid L3 mtu %d (must be between %d and %d).\n",
-				new_mtu, min_mtu, max_mtu);
+				new_mtu, 68, max_mtu);
 		return -EINVAL;
 	}
 	net_dev->mtu = new_mtu;
@@ -759,6 +758,7 @@ void dpa_bp_drain(struct dpa_bp *bp)
 				 * drain them one by one
 				 */
 				num = 1;
+				ret = 1;
 				continue;
 			} else {
 				/* Pool is fully drained */
@@ -1220,7 +1220,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 				dpa_fq->fq_type == FQ_TYPE_TX_CONF_MQ) {
 			initfq.we_mask |= QM_INITFQ_WE_CGID;
 			initfq.fqd.fq_ctrl |= QM_FQCTRL_CGE;
-			initfq.fqd.cgid = priv->cgr_data.cgr.cgrid;
+			initfq.fqd.cgid = (uint8_t)priv->cgr_data.cgr.cgrid;
 			/* Set a fixed overhead accounting, in an attempt to
 			 * reduce the impact of fixed-size skb shells and the
 			 * driver's needed headroom on system memory. This is
@@ -1268,7 +1268,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 				 dpa_fq->fq_type == FQ_TYPE_RX_PCD)) {
 			initfq.we_mask |= QM_INITFQ_WE_CGID;
 			initfq.fqd.fq_ctrl |= QM_FQCTRL_CGE;
-			initfq.fqd.cgid = priv->ingress_cgr.cgrid;
+			initfq.fqd.cgid = (uint8_t)priv->ingress_cgr.cgrid;
 			/* Set a fixed overhead accounting, just like for the
 			 * egress CGR.
 			 */

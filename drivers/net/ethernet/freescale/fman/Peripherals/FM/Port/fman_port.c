@@ -856,8 +856,6 @@ int fman_port_disable(const struct fman_port *port)
         if (count == 0)
         {
             /* Timeout */
-            iowrite32be(ioread32be(&port->qmi_regs->fmqm_pnc) |
-                QMI_PORT_CFG_EN, &port->qmi_regs->fmqm_pnc);
             failure = TRUE;
         }
     }
@@ -876,10 +874,6 @@ int fman_port_disable(const struct fman_port *port)
     if (count == 0)
     {
         /* Timeout */
-        iowrite32be(ioread32be(&port->qmi_regs->fmqm_pnc) |
-            QMI_PORT_CFG_EN, &port->qmi_regs->fmqm_pnc);
-        iowrite32be(ioread32be(bmi_cfg_reg) | BMI_PORT_CFG_EN,
-            bmi_cfg_reg);
         failure = TRUE;
     }
 

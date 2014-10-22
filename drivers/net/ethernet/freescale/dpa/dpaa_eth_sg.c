@@ -261,14 +261,14 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 #endif /* CONFIG_FSL_DPAA_TS */
 
 		/* sgt[0] is from lowmem, was dma_map_single()-ed */
-		dma_unmap_single(dpa_bp->dev, sgt[0].addr,
+		dma_unmap_single(dpa_bp->dev, (dma_addr_t)sgt[0].addr,
 				sgt[0].length, dma_dir);
 
 		/* remaining pages were mapped with dma_map_page() */
 		for (i = 1; i < nr_frags; i++) {
 			DPA_BUG_ON(sgt[i].extension);
 
-			dma_unmap_page(dpa_bp->dev, sgt[i].addr,
+			dma_unmap_page(dpa_bp->dev, (dma_addr_t)sgt[i].addr,
 					sgt[i].length, dma_dir);
 		}
 
@@ -774,7 +774,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		goto sg0_map_failed;
 
 	}
-	sgt[0].addr_hi = upper_32_bits(addr);
+	sgt[0].addr_hi = (uint8_t)upper_32_bits(addr);
 	sgt[0].addr_lo = lower_32_bits(addr);
 
 	/* populate the rest of SGT entries */
@@ -796,7 +796,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 		}
 
 		/* keep the offset in the address */
-		sgt[i].addr_hi = upper_32_bits(addr);
+		sgt[i].addr_hi = (uint8_t)upper_32_bits(addr);
 		sgt[i].addr_lo = lower_32_bits(addr);
 	}
 	sgt[i - 1].final = 1;
@@ -821,7 +821,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 
 	fd->bpid = 0xff;
 	fd->cmd |= FM_FD_CMD_FCO;
-	fd->addr_hi = upper_32_bits(addr);
+	fd->addr_hi = (uint8_t)upper_32_bits(addr);
 	fd->addr_lo = lower_32_bits(addr);
 
 	return 0;

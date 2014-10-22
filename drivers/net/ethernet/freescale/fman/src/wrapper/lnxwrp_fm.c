@@ -1331,7 +1331,7 @@ void fm_port_get_buff_layout_ext_params(struct fm_port *port, struct fm_port_par
 }
 EXPORT_SYMBOL(fm_port_get_buff_layout_ext_params);
 
-int fm_get_tx_port_channel(struct fm_port *port)
+uint16_t fm_get_tx_port_channel(struct fm_port *port)
 {
     t_LnxWrpFmPortDev   *p_LnxWrpFmPortDev = (t_LnxWrpFmPortDev*)port;
 
