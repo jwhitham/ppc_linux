@@ -1094,14 +1094,22 @@ MODULE_DEVICE_TABLE(of, of_fsl_qman_ids);
 static u32 saved_isdr;
 static int qman_pm_suspend_noirq(struct device *dev)
 {
+	uint32_t idle_state;
+
 	suspend_unused_qportal();
 	/* save isdr, disable all, clear isr */
 	saved_isdr = qm_err_isr_disable_read(qm);
 	qm_err_isr_disable_write(qm, 0xffffffff);
 	qm_err_isr_status_clear(qm, 0xffffffff);
-	/* should be idle, otherwise abort ? */
+	idle_state = qm_in(IDLE_STAT);
+	if (!(idle_state & 0x1)) {
+		pr_err("Qman not idle 0x%x aborting\n", idle_state);
+		qm_err_isr_disable_write(qm, saved_isdr);
+		resume_unused_qportal();
+		return -EBUSY;
+	}
 #ifdef CONFIG_PM_DEBUG
-	pr_info("Qman suspend code, IDLE_STAT = 0x%x\n", qm_in(IDLE_STAT));
+	pr_info("Qman suspend code, IDLE_STAT = 0x%x\n", idle_state);
 #endif
 	return 0;
 }

@@ -670,14 +670,23 @@ static u32 saved_isdr;
 
 static int bman_pm_suspend_noirq(struct device *dev)
 {
+	uint32_t idle_state;
+
 	suspend_unused_bportal();
 	/* save isdr, disable all, clear isr */
 	saved_isdr = bm_err_isr_disable_read(bm);
 	bm_err_isr_disable_write(bm, 0xffffffff);
 	bm_err_isr_status_clear(bm, 0xffffffff);
-	/* should be idle, otherwise abort ? */
+
+	idle_state = bm_in(STATE_IDLE);
+	if (!(idle_state & 0x1)) {
+		pr_err("Bman not idle 0x%x aborting\n", idle_state);
+		bm_err_isr_disable_write(bm, saved_isdr);
+		resume_unused_bportal();
+		return -EBUSY;
+	}
 #ifdef CONFIG_PM_DEBUG
-	pr_info("Bman suspend code, IDLE_STAT = 0x%x\n", bm_in(STATE_IDLE));
+	pr_info("Bman suspend code, IDLE_STAT = 0x%x\n", idle_state);
 #endif
 	return 0;
 }
