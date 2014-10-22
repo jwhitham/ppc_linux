@@ -528,6 +528,19 @@
 			big-endian;
 		};
 
+		sai1: sai@2b50000 {
+			compatible = "fsl,vf610-sai";
+			reg = <0x0 0x2b50000 0x0 0x10000>;
+			interrupts = <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&platform_clk 1>;
+			clock-names = "sai";
+			dma-names = "tx", "rx";
+			dmas = <&edma0 1 47>,
+				<&edma0 1 46>;
+			big-endian-regs;
+			status = "disabled";
+		};
+
 		sai2: sai@2b60000 {
 			compatible = "fsl,vf610-sai";
 			reg = <0x0 0x2b60000 0x0 0x10000>;

@@ -18,6 +18,44 @@
 		enet0_sgmii_phy = &sgmii_phy2;
 		enet1_sgmii_phy = &sgmii_phy0;
 	};
+
+	clocks {
+		sys_mclk: clock {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <24576000>;
+		};
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3p3v: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "3P3V";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
+	};
+
+	sound {
+		compatible = "fsl,vf610-sgtl5000";
+		simple-audio-card,name = "FSL-VF610-TWR-BOARD";
+		simple-audio-card,routing =
+			"MIC_IN", "Microphone Jack",
+			"Microphone Jack", "Mic Bias",
+			"LINE_IN", "Line In Jack",
+			"Headphone Jack", "HP_OUT",
+			"Speaker Ext", "LINE_OUT";
+
+		simple-audio-card,cpu = <&sai1>;
+
+		simple-audio-card,codec = <&codec>;
+	};
 };
 
 &dcu0 {
@@ -95,6 +133,14 @@
 
 &i2c1 {
 	status = "okay";
+	codec: sgtl5000@a {
+		compatible = "fsl,sgtl5000";
+		reg = <0x0a>;
+		VDDA-supply = <&reg_3p3v>;
+		VDDIO-supply = <&reg_3p3v>;
+		clocks = <&sys_mclk 1>;
+	};
+
 	hdmi: sii9022a@39 {
 	      compatible = "fsl,sii902x";
 	      reg = <0x39>;
@@ -246,4 +292,8 @@
 		spi-max-frequency = <20000000>;
 		reg = <1>;
 	};
+};
+
+&sai1 {
+	status = "okay";
 };

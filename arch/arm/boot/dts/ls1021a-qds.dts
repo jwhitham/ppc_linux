@@ -21,6 +21,44 @@
 		enet1_sgmii_phy = &sgmii_phy1d;
 	};
 
+	clocks {
+		sys_mclk: clock {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <24576000>;
+		};
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3p3v: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "3P3V";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-always-on;
+		};
+	};
+
+	sound {
+		compatible = "fsl,vf610-sgtl5000";
+		simple-audio-card,name = "FSL-VF610-TWR-BOARD";
+		simple-audio-card,routing =
+			"MIC_IN", "Microphone Jack",
+			"Microphone Jack", "Mic Bias",
+			"LINE_IN", "Line In Jack",
+			"Headphone Jack", "HP_OUT",
+			"Speaker Ext", "LINE_OUT";
+
+		simple-audio-card,cpu = <&sai2>;
+
+		simple-audio-card,codec = <&codec>;
+	};
+
 	soc {
 		leds {
 			compatible = "pwm-leds";
@@ -178,6 +216,14 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x4>;
+
+			codec: sgtl5000@2a {
+				compatible = "fsl,sgtl5000";
+				reg = <0x2a>;
+				VDDA-supply = <&reg_3p3v>;
+				VDDIO-supply = <&reg_3p3v>;
+				clocks = <&sys_mclk 1>;
+			};
 		};
 	};
 };
@@ -369,5 +415,9 @@
 };
 
 &can1 {
+	status = "okay";
+};
+
+&sai2 {
 	status = "okay";
 };
