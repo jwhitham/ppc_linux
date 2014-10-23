@@ -117,19 +117,10 @@ capwap_control_dtls_rx_dqrr(struct qman_portal		*portal,
 			const struct qm_dqrr_entry	*dq)
 {
 	struct net_device		*net_dev;
-	struct dpa_priv_s		*priv;
-	struct dpa_percpu_priv_s	*percpu_priv;
 	const struct qm_fd *fd = &dq->fd;
 	struct capwap_tunnel_ctx *ctx;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
-
-	if (unlikely(dpaa_eth_napi_schedule(percpu_priv, portal)))
-		return qman_cb_dqrr_stop;
 
 	ctx = &control_dtls_ctx;
 
@@ -149,19 +140,10 @@ capwap_control_n_dtls_rx_dqrr(struct qman_portal		*portal,
 			const struct qm_dqrr_entry	*dq)
 {
 	struct net_device		*net_dev;
-	struct dpa_priv_s		*priv;
-	struct dpa_percpu_priv_s	*percpu_priv;
 	const struct qm_fd *fd = &dq->fd;
 	struct capwap_tunnel_ctx *ctx;
 
 	net_dev = ((struct dpa_fq *)fq)->net_dev;
-	priv = netdev_priv(net_dev);
-
-	/* IRQ handler, non-migratable; safe to use __this_cpu_ptr here */
-	percpu_priv = __this_cpu_ptr(priv->percpu_priv);
-
-	if (unlikely(dpaa_eth_napi_schedule(percpu_priv, portal)))
-		return qman_cb_dqrr_stop;
 
 	ctx = &control_n_dtls_ctx;
 

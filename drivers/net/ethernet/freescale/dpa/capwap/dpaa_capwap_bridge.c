@@ -53,6 +53,8 @@ static const char capwap_hdr[] = {
 
 #define ETHERNET_HEADER_LENGTH 14
 
+#define DPA_NAPI_WEIGHT		64
+
 struct fslbr_if_stats {
 	uint32_t if_rx;
 	uint32_t if_tx;
@@ -93,6 +95,58 @@ static int encrypt_status; /* 0: non-dtls encrypt, 1: dtls encrypt */
 
 static struct sk_buff *alloc_bman_skb(void *bp, unsigned int length);
 static void free_bman_skb(struct sk_buff *skb);
+
+static void capwap_napi_enable(struct dpa_priv_s *priv)
+{
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i, j;
+
+	for_each_possible_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+
+		for (j = 0; j < qman_portal_max; j++)
+			napi_enable(&percpu_priv->np[j].napi);
+	}
+}
+
+static void capwap_napi_disable(struct dpa_priv_s *priv)
+{
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i, j;
+
+	for_each_possible_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+
+		for (j = 0; j < qman_portal_max; j++)
+			napi_disable(&percpu_priv->np[j].napi);
+	}
+}
+
+static int capwap_napi_add(struct net_device *net_dev)
+{
+	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct dpa_percpu_priv_s *percpu_priv;
+	int i, cpu;
+
+	for_each_possible_cpu(cpu) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, cpu);
+
+		percpu_priv->np = kzalloc(
+			qman_portal_max * sizeof(struct dpa_napi_portal),
+			GFP_KERNEL);
+
+		if (unlikely(percpu_priv->np == NULL)) {
+			netdev_err(net_dev, "kzalloc() failed\n");
+			return -ENOMEM;
+		}
+
+		for (i = 0; i < qman_portal_max; i++)
+			netif_napi_add(net_dev, &percpu_priv->np[i].napi,
+					dpaa_eth_poll, DPA_NAPI_WEIGHT);
+	}
+
+	return 0;
+}
 
 static inline struct fslbr_if *distribute_to_eth(const struct ethhdr *eth)
 {
@@ -622,9 +676,14 @@ static struct miscdevice fslbr_miscdev = {
 
 int capwap_br_init(struct dpaa_capwap_domain *domain)
 {
-	int ret = 0;
+	int ret = 0, i;
 	struct dpa_priv_s *priv;
 	struct device *dev;
+	struct net_device *dummy_dev;
+	size_t alloc_size;
+	struct net_device *p;
+	struct dpa_fq *fq_base, *d_fq;
+	struct dpa_percpu_priv_s *percpu_priv;
 
 	fslbr_if_count = 0;
 	encrypt_status = 1;
@@ -641,6 +700,52 @@ int capwap_br_init(struct dpaa_capwap_domain *domain)
 	dev = (&fslbr_miscdev)->this_device;
 	if (device_create_file(dev, &dev_attr_capwap_bridge))
 		dev_err(dev, "Error creating sysfs file\n");
+
+	alloc_size = sizeof(struct net_device);
+	/* ensure 32-byte alignment of private area */
+	alloc_size = ALIGN(alloc_size, NETDEV_ALIGN);
+	alloc_size += sizeof(struct dpa_priv_s);
+	/* ensure 32-byte alignment of whole construct */
+	alloc_size += NETDEV_ALIGN - 1;
+
+	p = kzalloc(alloc_size, GFP_KERNEL);
+	if (!p)
+		return -ENOMEM;
+
+	dummy_dev = PTR_ALIGN(p, NETDEV_ALIGN);
+	priv = netdev_priv(dummy_dev);
+	init_dummy_netdev(dummy_dev);
+
+	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+
+	if (priv->percpu_priv == NULL) {
+		dev_err(dev, "alloc_percpu() failed\n");
+		kfree(p);
+		return -ENOMEM;
+	}
+	for_each_possible_cpu(i) {
+		percpu_priv = per_cpu_ptr(priv->percpu_priv, i);
+		memset(percpu_priv, 0, sizeof(*percpu_priv));
+	}
+
+	/* Initialize NAPI */
+	ret = capwap_napi_add(dummy_dev);
+	if (ret < 0) {
+		dpa_private_napi_del(dummy_dev);
+		free_percpu(priv->percpu_priv);
+		kfree(p);
+		return ret;
+	}
+
+	fq_base = (struct dpa_fq *)capwap_domain->fqs->inbound_core_rx_fqs
+			.fq_base;
+	d_fq = &fq_base[1];
+	d_fq->net_dev = dummy_dev;
+	d_fq = &fq_base[3];
+	d_fq->net_dev = dummy_dev;
+
+	capwap_napi_enable(priv);
+
 	return ret;
 }
 
