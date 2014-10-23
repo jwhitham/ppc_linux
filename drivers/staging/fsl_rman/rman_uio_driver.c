@@ -243,7 +243,7 @@ static int fsl_rman_probe(struct platform_device *dev)
 	struct rman_dev *rman_dev;
 	struct device_node *rman_node, *child;
 	struct rman_inbound_block *ib, *tmp;
-	int err;
+	int err, global_reg_found = 0;
 
 	rman_node = dev->dev.of_node;
 	if (!rman_node) {
@@ -268,14 +268,17 @@ static int fsl_rman_probe(struct platform_device *dev)
 			fsl_rman_ib_probe(child, rman_dev);
 
 		if (of_device_is_compatible(child, "fsl,rman-global-cfg")) {
-			err = of_address_to_resource(child, 0, &regs);
-			if (unlikely(err < 0)) {
-				dev_err(&dev->dev,
-					"Can't get property 'reg'\n");
-				err = -EFAULT;
-				goto _err;
-			}
+			if (of_address_to_resource(child, 0, &regs))
+				global_reg_found = 0;
+			else
+				global_reg_found = 1;
 		}
+	}
+
+	if (!global_reg_found) {
+		dev_err(&dev->dev, "Can't init global registers\n");
+		err = -ENODEV;
+		goto _err;
 	}
 
 	snprintf(rman_dev->info.name, sizeof(rman_dev->info.name),
