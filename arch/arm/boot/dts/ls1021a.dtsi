@@ -229,6 +229,7 @@
 			clocks = <&platform_clk 1>;
 			spi-num-chipselects = <5>;
 			big-endian;
+			tcfq-mode;
 			status = "disabled";
 		};
 
