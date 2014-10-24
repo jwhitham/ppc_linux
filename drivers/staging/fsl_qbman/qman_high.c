@@ -3464,10 +3464,11 @@ int qman_ceetm_lni_enable_shaper(struct qm_ceetm_lni *lni, int coupled,
 
 	lni->shaper_enable = 1;
 	lni->shaper_couple = coupled;
+	lni->oal = oal;
 
 	config_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
 	config_opts.dcpid = lni->dcp_idx;
-	config_opts.shaper_config.cpl = (coupled << 7) | oal;
+	config_opts.shaper_config.cpl = (coupled << 7) | lni->oal;
 	config_opts.shaper_config.crtcr = (lni->cr_token_rate.whole << 13) |
 			 lni->cr_token_rate.fraction;
 	config_opts.shaper_config.ertcr = (lni->er_token_rate.whole << 13) |
@@ -3480,13 +3481,25 @@ EXPORT_SYMBOL(qman_ceetm_lni_enable_shaper);
 
 int qman_ceetm_lni_disable_shaper(struct qm_ceetm_lni *lni)
 {
+	struct qm_mcc_ceetm_mapping_shaper_tcfc_config config_opts;
+
 	if (!lni->shaper_enable) {
 		pr_err("The shaper has been disabled\n");
 		return -EINVAL;
 	}
 
+	config_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
+	config_opts.dcpid = lni->dcp_idx;
+	config_opts.shaper_config.cpl = (lni->shaper_couple << 7) | lni->oal;
+	config_opts.shaper_config.crtbl = lni->cr_token_bucket_limit;
+	config_opts.shaper_config.ertbl = lni->er_token_bucket_limit;
+	/* Set CR/ER rate with all 1's to configure an infinite rate, thus
+	 * disable the shaping.
+	 */
+	config_opts.shaper_config.crtcr = 0xFFFFFF;
+	config_opts.shaper_config.ertcr = 0xFFFFFF;
 	lni->shaper_enable = 0;
-	return 0;
+	return qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
 }
 EXPORT_SYMBOL(qman_ceetm_lni_disable_shaper);
 
@@ -3540,8 +3553,7 @@ int qman_ceetm_lni_get_commit_rate(struct qm_ceetm_lni *lni,
 	query_opts.dcpid = lni->dcp_idx;
 
 	ret = qman_ceetm_query_mapping_shaper_tcfc(&query_opts, &query_result);
-	if (ret | !query_result.shaper_query.crtcr |
-			 !query_result.shaper_query.crtbl) {
+	if (ret) {
 		pr_err("The LNI CR rate or limit is not set\n");
 		return -EINVAL;
 	}
@@ -3602,8 +3614,7 @@ int qman_ceetm_lni_get_excess_rate(struct qm_ceetm_lni *lni,
 	query_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
 	query_opts.dcpid = lni->dcp_idx;
 	ret = qman_ceetm_query_mapping_shaper_tcfc(&query_opts, &query_result);
-	if (ret | !query_result.shaper_query.ertcr |
-			 !query_result.shaper_query.ertbl) {
+	if (ret) {
 		pr_err("The LNI ER rate or limit is not set\n");
 		return -EINVAL;
 	}

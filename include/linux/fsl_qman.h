@@ -2381,8 +2381,9 @@ struct qm_ceetm_lni {
 	int is_claimed;
 	struct qm_ceetm_sp *sp;
 	struct list_head channels;
-	u8 shaper_enable;
-	u8 shaper_couple;
+	int shaper_enable;
+	int shaper_couple;
+	int oal;
 	struct qm_ceetm_rate cr_token_rate;
 	struct qm_ceetm_rate er_token_rate;
 	u16 cr_token_bucket_limit;
