@@ -2461,7 +2461,7 @@ struct qm_ceetm_lfq {
  *
  * Return 0 for success, or -EINVAL if prescaler or qman clock is not available.
   */
-int qman_ceetm_bps2tokenrate(u32 bps,
+int qman_ceetm_bps2tokenrate(u64 bps,
 				struct qm_ceetm_rate *token_rate,
 				int rounding);
 
@@ -2475,7 +2475,7 @@ int qman_ceetm_bps2tokenrate(u32 bps,
  * Return 0 for success, or -EINVAL if prescaler or qman clock is not available.
  */
 int qman_ceetm_tokenrate2bps(const struct qm_ceetm_rate *token_rate,
-			      u32 *bps,
+			      u64 *bps,
 			      int rounding);
 
 int qman_alloc_ceetm0_channel_range(u32 *result, u32 count, u32 align,

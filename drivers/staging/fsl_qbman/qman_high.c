@@ -3223,7 +3223,7 @@ static int qman_ceetm_write_statistics(u16 cid, enum qm_dc_portal dcp_idx,
 	return 0;
 }
 
-int qman_ceetm_bps2tokenrate(u32 bps, struct qm_ceetm_rate *token_rate,
+int qman_ceetm_bps2tokenrate(u64 bps, struct qm_ceetm_rate *token_rate,
 							int rounding)
 {
 	u16 pres;
@@ -3254,16 +3254,20 @@ int qman_ceetm_bps2tokenrate(u32 bps, struct qm_ceetm_rate *token_rate,
 	 *	token-rate = (bps*2^19) / (PRES*QHZ)
 	 *	N = (bps*2^32) / (PRES*QHz)
 	 *
+	 * And to avoid 64-bit overflow if 'bps' is larger than 4Gbps
+	 * (yet minimise rounding error if 'bps' is small), we reorganise
+	 * the formula to use two 16-bit shifts rather than 1 32-bit shift.
+	 *      N = (((bps*2^16)/PRES)*2^16)/QHz
 	 */
-	temp = ROUNDING(((u64)bps << 32), pres, rounding);
-	temp = ROUNDING(temp, qman_freq, rounding);
+	temp = ROUNDING((bps << 16), pres, rounding);
+	temp = ROUNDING((temp << 16), qman_freq, rounding);
 	token_rate->whole = temp >> 13;
 	token_rate->fraction = temp & (((u64)1 << 13) - 1);
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_bps2tokenrate);
 
-int qman_ceetm_tokenrate2bps(const struct qm_ceetm_rate *token_rate, u32 *bps,
+int qman_ceetm_tokenrate2bps(const struct qm_ceetm_rate *token_rate, u64 *bps,
 							int rounding)
 {
 	u16 pres;
