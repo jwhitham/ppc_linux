@@ -21,12 +21,17 @@
 #include <linux/mmc/host.h>
 #include "sdhci-pltfm.h"
 #include "sdhci-esdhc.h"
+
+#if defined CONFIG_PPC_OF
 #include <asm/mpc85xx.h>
+#endif
 
 #define VENDOR_V_22	0x12
 #define VENDOR_V_23	0x13
 
+#if defined CONFIG_PPC_OF
 static u32 svr;
+#endif
 
 static u32 esdhc_readl(struct sdhci_host *host, int reg)
 {
@@ -72,11 +77,13 @@ static u16 esdhc_readw(struct sdhci_host *host, int reg)
 	else
 		ret = (sdhci_32bs_readl(host, base) >> shift) & 0xffff;
 
+#if defined CONFIG_PPC_OF
 	/* T4240-R1.0-R2.0 had a incorrect vendor version and spec version */
 	if ((reg == SDHCI_HOST_VERSION) &&
 			((SVR_SOC_VER(svr) == SVR_T4240) &&
 			 (SVR_REV(svr) <= 0x20)))
 		ret = (VENDOR_V_23 << SDHCI_VENDOR_VER_SHIFT) | SDHCI_SPEC_200;
+#endif
 
 	return ret;
 }
@@ -209,6 +216,7 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 		if (!host->pwr || !val)
 			return;
 
+#if defined CONFIG_PPC_OF
 		if (SVR_SOC_VER(svr) == SVR_T4240) {
 			u8 vol;
 
@@ -219,6 +227,7 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 				vol |= ESDHC_VOL_SEL;
 		} else
 			return;
+#endif
 	}
 
 	sdhci_clrsetbits(host, 0xff, val, reg);
@@ -261,6 +270,7 @@ static void esdhci_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 		return;
 	}
 
+#if defined CONFIG_PPC_OF
 	/*
 	 * Check for A-004388: eSDHC DMA might not stop if error
 	 * occurs on system transaction
@@ -285,6 +295,7 @@ static void esdhci_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 		((SVR_SOC_VER(svr) == SVR_P5021) && (SVR_REV(svr) <= 0x21)) ||
 		((SVR_SOC_VER(svr) == SVR_P5040) && (SVR_REV(svr) <= 0x21))))
 		return;
+#endif
 
 	sdhci_reset(host, SDHCI_RESET_DATA);
 
@@ -412,7 +423,9 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 {
 	u32 vvn;
 
+#if defined CONFIG_PPC_OF
 	svr =  mfspr(SPRN_SVR);
+#endif
 	vvn = esdhc_readl(host, SDHCI_SLOT_INT_STATUS);
 	vvn = (vvn & SDHCI_VENDOR_VER_MASK) >> SDHCI_VENDOR_VER_SHIFT;
 	if (vvn == VENDOR_V_22)
@@ -421,6 +434,7 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 	if (vvn > VENDOR_V_22)
 		host->quirks &= ~SDHCI_QUIRK_NO_BUSY_IRQ;
 
+#if defined CONFIG_PPC_OF
 	/*
 	 * Check for A-005055: A glitch is generated on the card clock
 	 * due to software reset or a clock change
@@ -447,6 +461,7 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 	    ((SVR_SOC_VER(svr) == SVR_P1014) && (SVR_REV(svr) == 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_P1010) && (SVR_REV(svr) == 0x10)))
 		host->quirks2 |= SDHCI_QUIRK2_DISABLE_CLOCK_BEFORE_RESET;
+#endif
 }
 
 /* Return: 1 - the card is present; 0 - card is absent */
