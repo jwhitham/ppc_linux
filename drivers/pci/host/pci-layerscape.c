@@ -62,7 +62,6 @@ static int ls_pcie_link_up(struct pcie_port *pp)
 	struct ls_pcie *pcie = to_ls_pcie(pp);
 
 	regmap_read(pcie->scfg, SCFG_PEXMSCPORTSR(pcie->index), &state);
-	state = bitrev32(state);
 	state = (state >> LTSSM_STATE_SHIFT) & LTSSM_STATE_MASK;
 
 	if (state < LTSSM_PCIE_L0)
