@@ -3110,6 +3110,11 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 					policer_params->modify_policer_params;
 				next_engine_params->params.plcrParams.
 					newFqid = action->enq_params.new_fqid;
+#if (DPAA_VERSION >= 11)
+				next_engine_params->params.plcrParams.
+					newRelativeStorageProfileId =
+					action->enq_params.new_rel_vsp_id;
+#endif /* (DPAA_VERSION >= 11) */
 			} else {
 				next_engine_params->nextEngine = e_FM_PCD_DONE;
 				next_engine_params->params.enqueueParams.
@@ -3120,12 +3125,12 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 					next_engine_params->params.
 						enqueueParams.overrideFqid =
 						TRUE;
-			}
 #if (DPAA_VERSION >= 11)
-			next_engine_params->params.enqueueParams.
-				  newRelativeStorageProfileId =
-				      action->enq_params.new_rel_vsp_id;
+				next_engine_params->params.enqueueParams.
+					newRelativeStorageProfileId =
+					action->enq_params.new_rel_vsp_id;
 #endif
+			}
 		}
 
 		if (action->enq_params.hmd != DPA_OFFLD_DESC_NONE) {
