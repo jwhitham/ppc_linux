@@ -114,7 +114,7 @@
 		compatible = "atmel,at45db021d", "atmel,at45", "atmel,dataflash";
 		#address-cells = <1>;
 		#size-cells = <1>;
-		spi-max-frequency = <16000000>;
+		spi-max-frequency = <3000000>;
 		spi-cpol;
 		spi-cpha;
 		reg = <0>;
