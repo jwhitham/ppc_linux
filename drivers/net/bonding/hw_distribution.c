@@ -353,9 +353,8 @@ bool are_all_slaves_linkup(struct bonding *bond)
 	struct slave *slave;
 
 	bond_for_each_slave(bond, slave)
-		if (!(SLAVE_IS_OK(slave))) {
+		if (!(IS_UP(slave->dev)))
 			return false;
-		}
 
 	return true;
 }
