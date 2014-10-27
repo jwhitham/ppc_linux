@@ -751,7 +751,7 @@ void dpa_bp_drain(struct dpa_bp *bp)
 		struct bm_buffer bmb[8];
 		int i;
 
-		ret = bman_acquire(bp->pool, bmb, 8, 0);
+		ret = bman_acquire(bp->pool, bmb, num, 0);
 		if (ret < 0) {
 			if (num == 8) {
 				/* we have less than 8 buffers left;
