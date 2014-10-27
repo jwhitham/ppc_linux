@@ -441,9 +441,11 @@ static bool fsl_sai_readable_reg(struct device *dev, unsigned int reg)
 static bool fsl_sai_volatile_reg(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
+	case FSL_SAI_TCSR:
 	case FSL_SAI_TFR:
-	case FSL_SAI_RFR:
 	case FSL_SAI_TDR:
+	case FSL_SAI_RCSR:
+	case FSL_SAI_RFR:
 	case FSL_SAI_RDR:
 		return true;
 	default:
@@ -485,6 +487,7 @@ static struct regmap_config fsl_sai_regmap_config = {
 	.readable_reg = fsl_sai_readable_reg,
 	.volatile_reg = fsl_sai_volatile_reg,
 	.writeable_reg = fsl_sai_writeable_reg,
+	.cache_type = REGCACHE_RBTREE,
 };
 
 static bool fsl_sai_filter(struct dma_chan *chan, void *param)
@@ -587,6 +590,33 @@ static int fsl_sai_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int fsl_sai_suspend(struct device *dev)
+{
+	struct fsl_sai *sai = dev_get_drvdata(dev);
+
+	regcache_cache_only(sai->regmap, true);
+	regcache_mark_dirty(sai->regmap);
+
+	return 0;
+}
+
+static int fsl_sai_resume(struct device *dev)
+{
+	struct fsl_sai *sai = dev_get_drvdata(dev);
+
+	/* Restore all registers */
+	regcache_cache_only(sai->regmap, false);
+	regcache_sync(sai->regmap);
+
+	return 0;
+};
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops fsl_sai_pm = {
+	SET_SYSTEM_SLEEP_PM_OPS(fsl_sai_suspend, fsl_sai_resume)
+};
+
 static const struct of_device_id fsl_sai_ids[] = {
 	{ .compatible = "fsl,vf610-sai", },
 	{ /* sentinel */ }
@@ -599,6 +629,7 @@ static struct platform_driver fsl_sai_driver = {
 		.name = "fsl-sai",
 		.owner = THIS_MODULE,
 		.of_match_table = fsl_sai_ids,
+		.pm = &fsl_sai_pm,
 	},
 };
 module_platform_driver(fsl_sai_driver);
