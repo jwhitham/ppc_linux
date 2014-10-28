@@ -178,6 +178,121 @@ _GLOBAL(disable_backside_L2_cache)
 1:
 	blr
 
+/********    Cluster Backside L2 Cache    ********/
+cluster_need_L2_cache:
+	/* if L2 cache is disabled, skip it */
+	lwz	r4, 0(r3)
+	andis.	r4, r4, L2CSR0_L2E@h
+	beq	1f
+
+	li	r5, 0
+	blr
+1:
+	li	r5, 1
+	blr
+
+/*
+ * Flush cluster shared backside L2 cache
+ * r3 = virtual address of cluster L2 controller
+ */
+_GLOBAL(cluster_flush_backside_L2_cache)
+	mflr	r10
+	bl	cluster_need_L2_cache
+	mtlr	r10
+	cmpwi	r5, 0
+	bne	2f
+
+__cluster_flush_backside_L2_cache:
+	/* flush the L2 cache */
+	lwz	r4, 0(r3)
+	ori	r4, r4, L2CSR0_L2FL@l
+	msync
+	isync
+	stw	r4, 0(r3)
+	isync
+1:
+	lwz	r4, 0(r3)
+	andi.	r4, r4, L2CSR0_L2FL@l
+	bne	1b
+2:
+	blr
+
+/*
+ * Flush and invalidate cluster shared backside L2 cache
+ * r3 = virtual address of cluster L2 controller
+ */
+_GLOBAL(cluster_flush_invalidate_L2_cache)
+	mflr	r11
+	bl	cluster_flush_backside_L2_cache
+	mtlr	r11
+
+	/* clear backside L2 Cache Lock  */
+	lwz	r4, 0(r3)
+	oris	r4, r4, L2CSR0_L2LFC@l
+	msync
+	isync
+	stw	r4, 0(r3)
+	isync
+1:
+	lwz	r4, 0(r3)
+	andis.	r4, r4, L2CSR0_L2LFC@l
+	bne	1b
+
+	/* invalidate backside L2 cache */
+	lwz	r4, 0(r3)
+	oris	r4, r4, L2CSR0_L2FI@h
+	msync
+	isync
+	stw	r4, 0(r3)
+	isync
+1:
+	lwz	r4, 0(r3)
+	andis.	r4, r4, L2CSR0_L2FI@h
+	bne	1b
+
+	blr
+
+/*
+ * Disable cluster shared backside L2 cache
+ * r3 = virtual address of cluster L2 controller
+ */
+_GLOBAL(cluster_disable_L2_cache)
+	/* disable L2 cache */
+	li	r4, 0
+	msync
+	isync
+	stw	r4, 0(r3)
+	isync
+
+	blr
+
+/*
+ * Invalidate and enable cluster shared L2 cache
+ * r3 = virtual address of cluster L2 controller
+ */
+_GLOBAL(cluster_invalidate_enable_L2)
+	lis	r4, (L2CSR0_L2FI|L2CSR0_L2LFC)@h
+	ori	r4, r4, (L2CSR0_L2FI|L2CSR0_L2LFC)@l
+	msync
+	isync
+	stw	r4, 0(r3)
+	isync
+
+	/* wait for the invalidate to finish */
+1:	lwz	r5, 0(r3)
+	cmp 	0, r5, r4
+	bne	1b
+
+	/* enable cluster L2 cache */
+	lwz	r4, 0(r3)
+	oris	r4, r4, (L2CSR0_L2E|L2CSR0_L2PE)@h
+	msync
+	isync
+	stw	r4, 0(r3)
+	isync
+
+	blr
+
 /********    Platform Cache    ********/
 
 #define L2CTL_L2E	0x80000000
