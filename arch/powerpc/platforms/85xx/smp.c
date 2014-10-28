@@ -28,6 +28,7 @@
 #include <asm/fsl_guts.h>
 #include <asm/cputhreads.h>
 #include <asm/fsl_pm.h>
+#include <asm/cacheflush.h>
 
 #include <sysdev/fsl_soc.h>
 #include <sysdev/mpic.h>
@@ -247,6 +248,191 @@ static void smp_85xx_mach_cpu_die(void)
 #endif /* CONFIG_PPC_E500MC */
 #endif
 
+#if defined(CONFIG_PPC_E500MC) && defined(CONFIG_HOTPLUG_CPU)
+static int cluster_offline(unsigned int cpu)
+{
+	unsigned long flags;
+	int i;
+	const struct cpumask *mask;
+	static void __iomem *cluster_l2_base;
+	int ret = 0;
+
+	mask = cpu_cluster_mask(cpu);
+	cluster_l2_base = get_cpu_l2_base(cpu);
+
+	/* Wait until all CPU has entered wait state. */
+	for_each_cpu(i, mask) {
+		if (!spin_event_timeout(
+				qoriq_pm_ops->cpu_ready(i, E500_PM_PW10),
+				10000, 100)) {
+			pr_err("%s: cpu enter wait state timeout.\n",
+					__func__);
+			ret = -ETIMEDOUT;
+			goto out;
+		}
+	}
+
+	/* Flush, invalidate L2 cache */
+	local_irq_save(flags);
+	cluster_flush_invalidate_L2_cache(cluster_l2_base);
+
+	/* Let all cores of the same cluster enter PH20 state */
+	for_each_cpu(i, mask) {
+		qoriq_pm_ops->cpu_enter_state(i, E500_PM_PH20);
+	}
+
+	/* Wait until all cores has entered PH20 state */
+	for_each_cpu(i, mask) {
+		if (!spin_event_timeout(
+				qoriq_pm_ops->cpu_ready(i, E500_PM_PH20),
+				10000, 100)) {
+			pr_err("%s: core enter PH20 timeout\n", __func__);
+			ret = -ETIMEDOUT;
+			goto irq_restore_out;
+		}
+	}
+
+	/* Disable L2 cache */
+	cluster_disable_L2_cache(cluster_l2_base);
+
+	/* Cluster enter PCL10 stste */
+	qoriq_pm_ops->cluster_enter_state(cpu, E500_PM_PCL10);
+
+	if (!spin_event_timeout(qoriq_pm_ops->cpu_ready(cpu, E500_PM_PCL10),
+				10000, 100)) {
+		/* If entering PCL10 failed. Enable L2 cache back */
+		cluster_invalidate_enable_L2(cluster_l2_base);
+		pr_err("%s: cluster enter PCL10 timeout\n", __func__);
+		ret = -ETIMEDOUT;
+	}
+
+irq_restore_out:
+	local_irq_restore(flags);
+out:
+	iounmap(cluster_l2_base);
+	return ret;
+}
+
+static int cluster_online(unsigned int cpu)
+{
+	unsigned long flags;
+	int i;
+	const struct cpumask *mask;
+	static void __iomem *cluster_l2_base;
+	int ret = 0;
+
+	mask = cpu_cluster_mask(cpu);
+	cluster_l2_base = get_cpu_l2_base(cpu);
+
+	local_irq_save(flags);
+
+	qoriq_pm_ops->cluster_exit_state(cpu, E500_PM_PCL10);
+
+	/* Wait until cluster exit PCL10 state */
+	if (!spin_event_timeout(
+				!qoriq_pm_ops->cpu_ready(cpu, E500_PM_PCL10),
+				10000, 100)) {
+		pr_err("%s: cluster exit PCL10 timeout\n", __func__);
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+
+	/* Invalidate and enable L2 cache */
+	cluster_invalidate_enable_L2(cluster_l2_base);
+
+	/* Let all cores of a cluster exit PH20 state */
+	for_each_cpu(i, mask) {
+		qoriq_pm_ops->cpu_exit_state(i, E500_PM_PH20);
+	}
+
+	/* Wait until all cores of a cluster exit PH20 state */
+	for_each_cpu(i, mask) {
+		if (!spin_event_timeout(
+				!qoriq_pm_ops->cpu_ready(i, E500_PM_PH20),
+				10000, 100)) {
+			pr_err("%s: core exit PH20 timeout\n", __func__);
+			ret = -ETIMEDOUT;
+			break;
+		}
+	}
+
+out:
+	local_irq_restore(flags);
+	iounmap(cluster_l2_base);
+	return ret;
+}
+
+void platform_cpu_die(unsigned int cpu)
+{
+	int i;
+	const struct cpumask *cluster_mask;
+
+	if (PVR_VER(cur_cpu_spec->pvr_value) == PVR_VER_E6500) {
+		cluster_mask = cpu_cluster_mask(cpu);
+		for_each_cpu(i, cluster_mask) {
+			if (cpu_online(i))
+				return;
+		}
+
+		cluster_offline(cpu);
+	}
+}
+#endif
+
+static struct device_node *cpu_to_l2cache(int cpu)
+{
+	struct device_node *np;
+	struct device_node *cache;
+
+	if (!cpu_present(cpu))
+		return NULL;
+
+	np = of_get_cpu_node(cpu, NULL);
+	if (np == NULL)
+		return NULL;
+
+	cache = of_find_next_cache_node(np);
+
+	of_node_put(np);
+
+	return cache;
+}
+
+DEFINE_PER_CPU(cpumask_t, cpu_cluster_map);
+EXPORT_PER_CPU_SYMBOL(cpu_cluster_map);
+
+static void init_cpu_cluster_map(void)
+{
+	struct device_node *l2_cache, *np;
+	int cpu, i;
+	char buf[20];
+	ptrdiff_t len = PTR_ALIGN(buf + PAGE_SIZE - 1, PAGE_SIZE) - buf;
+
+	for_each_cpu(cpu, cpu_present_mask) {
+		l2_cache = cpu_to_l2cache(cpu);
+		if (!l2_cache)
+			continue;
+
+		for_each_cpu(i, cpu_present_mask) {
+			np = cpu_to_l2cache(i);
+			if (!np)
+				continue;
+			if (np == l2_cache) {
+				cpumask_set_cpu(cpu, cpu_cluster_mask(i));
+				cpumask_set_cpu(i, cpu_cluster_mask(cpu));
+			}
+			of_node_put(np);
+		}
+		of_node_put(l2_cache);
+		cpumask_scnprintf(buf, len-2, cpu_cluster_mask(cpu));
+	}
+}
+
+static void smp_85xx_bringup_done(void)
+{
+	init_cpu_cluster_map();
+}
+
 static inline void flush_spin_table(void *spin_table)
 {
 	flush_dcache_range((ulong)spin_table,
@@ -337,6 +523,15 @@ static int smp_85xx_kick_cpu(int nr)
 			return -ENOENT;
 	}
 #endif
+#endif
+
+#if defined(CONFIG_PPC_E500MC) && defined(CONFIG_HOTPLUG_CPU)
+	/* If cluster is in PCL10, exit PCL10 first */
+	if (system_state == SYSTEM_RUNNING &&
+			(PVR_VER(cur_cpu_spec->pvr_value) == PVR_VER_E6500)) {
+		if (qoriq_pm_ops->cpu_ready(nr, E500_PM_PCL10))
+			cluster_online(nr);
+	}
 #endif
 
 	np = of_get_cpu_node(nr, NULL);
@@ -462,6 +657,7 @@ out:
 struct smp_ops_t smp_85xx_ops = {
 	.kick_cpu = smp_85xx_kick_cpu,
 	.cpu_bootable = smp_generic_cpu_bootable,
+	.bringup_done = smp_85xx_bringup_done,
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_disable	= generic_cpu_disable,
 	.cpu_die	= generic_cpu_die,

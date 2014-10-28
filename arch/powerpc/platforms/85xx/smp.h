@@ -4,6 +4,12 @@
 #include <linux/init.h>
 
 #ifdef CONFIG_SMP
+DECLARE_PER_CPU(cpumask_t, cpu_cluster_map);
+static inline struct cpumask *cpu_cluster_mask(int cpu)
+{
+	return &per_cpu(cpu_cluster_map, cpu);
+}
+
 void __init mpc85xx_smp_init(void);
 #else
 static inline void mpc85xx_smp_init(void)

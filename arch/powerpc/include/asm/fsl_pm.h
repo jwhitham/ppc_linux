@@ -19,7 +19,9 @@
 #define E500_PM_PW10	2
 #define E500_PM_PH15	3
 #define E500_PM_PH20	4
-#define E500_PM_PH30	5
+#define E500_PM_PW20	5
+#define E500_PM_PH30	6
+#define E500_PM_PCL10	7
 #define E500_PM_DOZE	E500_PM_PH10
 #define E500_PM_NAP	E500_PM_PH15
 
@@ -31,9 +33,12 @@ struct fsl_pm_ops {
 	void (*irq_unmask)(int cpu);
 	void (*cpu_enter_state)(int cpu, int state);
 	void (*cpu_exit_state)(int cpu, int state);
+	void (*cluster_enter_state)(int cpu, int state);
+	void (*cluster_exit_state)(int cpu, int state);
 	int (*plat_enter_state)(int state);
 	void (*freeze_time_base)(int freeze);
 	void (*set_ip_power)(int enable, u32 mask);
+	bool (*cpu_ready)(unsigned int cpu, int state);
 };
 
 extern const struct fsl_pm_ops *qoriq_pm_ops;
