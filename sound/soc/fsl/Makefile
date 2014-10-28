@@ -10,15 +10,21 @@ obj-$(CONFIG_SND_SOC_P1022_DS) += snd-soc-p1022-ds.o
 snd-soc-p1022-rdk-objs := p1022_rdk.o
 obj-$(CONFIG_SND_SOC_P1022_RDK) += snd-soc-p1022-rdk.o
 
-# Freescale PowerPC SSI/DMA Platform Support
+# Freescale SSI/DMA/SAI/SPDIF Support
+snd-soc-fsl-sai-objs := fsl_sai.o
 snd-soc-fsl-ssi-objs := fsl_ssi.o
 snd-soc-fsl-spdif-objs := fsl_spdif.o
 snd-soc-fsl-utils-objs := fsl_utils.o
 snd-soc-fsl-dma-objs := fsl_dma.o
+obj-$(CONFIG_SND_SOC_FSL_SAI) += snd-soc-fsl-sai.o
 obj-$(CONFIG_SND_SOC_FSL_SSI) += snd-soc-fsl-ssi.o
 obj-$(CONFIG_SND_SOC_FSL_SPDIF) += snd-soc-fsl-spdif.o
 obj-$(CONFIG_SND_SOC_FSL_UTILS) += snd-soc-fsl-utils.o
 obj-$(CONFIG_SND_SOC_POWERPC_DMA) += snd-soc-fsl-dma.o
+
+# VF610 Platform Support
+snd-soc-vf610-sgtl5000-objs := vf610-sgtl5000.o
+obj-$(CONFIG_SND_SOC_VF610_SGTL5000) += snd-soc-vf610-sgtl5000.o
 
 # MPC5200 Platform Support
 obj-$(CONFIG_SND_MPC52xx_DMA) += mpc5200_dma.o

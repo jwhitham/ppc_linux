@@ -6,7 +6,7 @@ config PPC_BESTCOMM
 	tristate "Bestcomm DMA engine support"
 	depends on PPC_MPC52xx
 	default n
-	select PPC_LIB_RHEAP
+	select LIB_RHEAP
 	help
 	  BestComm is the name of the communication coprocessor found
 	  on the Freescale MPC5200 family of processor.  Its usage is

@@ -14,6 +14,9 @@
 #include <linux/jiffies.h>
 #include <asm/cp15.h>
 #include <asm/proc-fns.h>
+#include<asm/smp.h>
+#include<asm/smp_plat.h>
+#include<asm/cacheflush.h>
 
 #include "common.h"
 
@@ -35,6 +38,22 @@ static inline void cpu_enter_lowpower(void)
 	"	mcr	p15, 0, %0, c1, c0, 0\n"
 	  : "=&r" (v)
 	  : "r" (0), "Ir" (CR_C), "Ir" (0x40)
+	  : "cc");
+}
+
+static inline void cpu_leave_lowpower(void)
+{
+	unsigned int v;
+
+	asm volatile(
+	"	mrc     p15, 0, %0, c1, c0, 0\n"
+	"       orr     %0, %0, %1\n"
+	"       mcr     p15, 0, %0, c1, c0, 0\n"
+	"       mrc     p15, 0, %0, c1, c0, 1\n"
+	"       orr     %0, %0, %2\n"
+	"       mcr     p15, 0, %0, c1, c0, 1\n"
+	  : "=&r" (v)
+	  : "Ir" (CR_C), "Ir" (0x40)
 	  : "cc");
 }
 
@@ -64,5 +83,43 @@ int imx_cpu_kill(unsigned int cpu)
 			return 0;
 	imx_enable_cpu(cpu, false);
 	imx_set_cpu_arg(cpu, 0);
+	return 1;
+}
+
+/*
+ * For LS102x platforms, shutdowning a CPU is not supported by hardware.
+ * So we just put the offline CPU into lower-power state here.
+ */
+void __ref ls1021a_cpu_die(unsigned int cpu)
+{
+	v7_exit_coherency_flush(louis);
+
+	/*we are ready to enter lower-power state*/
+	wfi();
+	/*
+	 * bring this CPU back into the world of cache
+	 * coherency, and then restore interrupts
+	 */
+	cpu_leave_lowpower();
+
+	/*
+	 * Do not return to the idle loop - jump back to the secondary
+	 * cpu initialisation.  There's some initialisation which needs
+	 * to be repeated to undo the effects of taking the CPU offline.
+	 */
+	__asm__("mov    sp, %0\n"
+	"       mov     fp, #0\n"
+	"       b       secondary_startup"
+		:
+		: "r" (task_stack_page(current) + THREAD_SIZE - 8));
+}
+
+int ls1021a_cpu_kill(unsigned int cpu)
+{
+	unsigned long timeout = jiffies + msecs_to_jiffies(50);
+
+	while (!ls1_get_cpu_arg(cpu))
+		if (time_after(jiffies, timeout))
+			return 0;
 	return 1;
 }

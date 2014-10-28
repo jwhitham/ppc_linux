@@ -1,0 +1,18 @@
+menu "SOC (System On Chip) specific Drivers"
+
+config	FSL_SOC_DRIVERS
+	bool "Freescale Soc Drivers"
+	depends on FSL_SOC || ARCH_MXC
+	default n
+	help
+	Say y here to enable Freescale Soc Device Drivers support.
+	The Soc Drivers provides the device driver that is a specific block
+	or feature on Freescale platform.
+
+if FSL_SOC_DRIVERS
+	source "drivers/soc/fsl/Kconfig"
+endif
+
+source drivers/soc/qe/Kconfig
+
+endmenu

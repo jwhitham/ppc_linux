@@ -29,6 +29,7 @@
 #include <linux/stddef.h>
 #include <linux/sched.h>
 #include <linux/init.h>
+#include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/tdm.h>
@@ -37,8 +38,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
-#include <sysdev/fsl_soc.h>
-#include <sysdev/fsl_soc.h>
 #include <linux/slab.h>
 #include "fsl_ucc_tdm.h"
 
@@ -143,27 +142,27 @@ static void dump_ucc(struct ucc_tdm_private *priv)
 	ucc_fast_dump_regs(priv->uccf);
 	dev_info(priv->dev, "Dumping UCC %d Parameter RAM\n",
 			priv->ut_info->uf_info.ucc_num);
-	dev_info(priv->dev, "rbase = 0x%x\n", in_be32(&ucc_pram->rbase));
-	dev_info(priv->dev, "rbptr = 0x%x\n", in_be32(&ucc_pram->rbptr));
-	dev_info(priv->dev, "mrblr = 0x%x\n", in_be16(&ucc_pram->mrblr));
-	dev_info(priv->dev, "rbdlen = 0x%x\n", in_be16(&ucc_pram->rbdlen));
-	dev_info(priv->dev, "rbdstat = 0x%x\n", in_be16(&ucc_pram->rbdstat));
-	dev_info(priv->dev, "rstate = 0x%x\n", in_be32(&ucc_pram->rstate));
-	dev_info(priv->dev, "rdptr = 0x%x\n", in_be32(&ucc_pram->rdptr));
-	dev_info(priv->dev, "riptr = 0x%x\n", in_be16(&ucc_pram->riptr));
-	dev_info(priv->dev, "tbase = 0x%x\n", in_be32(&ucc_pram->tbase));
-	dev_info(priv->dev, "tbptr = 0x%x\n", in_be32(&ucc_pram->tbptr));
-	dev_info(priv->dev, "tbdlen = 0x%x\n", in_be16(&ucc_pram->tbdlen));
-	dev_info(priv->dev, "tbdstat = 0x%x\n", in_be16(&ucc_pram->tbdstat));
-	dev_info(priv->dev, "tstate = 0x%x\n", in_be32(&ucc_pram->tstate));
-	dev_info(priv->dev, "tdptr = 0x%x\n", in_be32(&ucc_pram->tdptr));
-	dev_info(priv->dev, "tiptr = 0x%x\n", in_be16(&ucc_pram->tiptr));
-	dev_info(priv->dev, "rcrc = 0x%x\n", in_be32(&ucc_pram->rcrc));
-	dev_info(priv->dev, "tcrc = 0x%x\n", in_be32(&ucc_pram->tcrc));
-	dev_info(priv->dev, "c_mask = 0x%x\n", in_be32(&ucc_pram->c_mask));
-	dev_info(priv->dev, "c_pers = 0x%x\n", in_be32(&ucc_pram->c_pres));
-	dev_info(priv->dev, "disfc = 0x%x\n", in_be16(&ucc_pram->disfc));
-	dev_info(priv->dev, "crcec = 0x%x\n", in_be16(&ucc_pram->crcec));
+	dev_info(priv->dev, "rbase = 0x%x\n", ioread32be(&ucc_pram->rbase));
+	dev_info(priv->dev, "rbptr = 0x%x\n", ioread32be(&ucc_pram->rbptr));
+	dev_info(priv->dev, "mrblr = 0x%x\n", ioread16be(&ucc_pram->mrblr));
+	dev_info(priv->dev, "rbdlen = 0x%x\n", ioread16be(&ucc_pram->rbdlen));
+	dev_info(priv->dev, "rbdstat = 0x%x\n", ioread16be(&ucc_pram->rbdstat));
+	dev_info(priv->dev, "rstate = 0x%x\n", ioread32be(&ucc_pram->rstate));
+	dev_info(priv->dev, "rdptr = 0x%x\n", ioread32be(&ucc_pram->rdptr));
+	dev_info(priv->dev, "riptr = 0x%x\n", ioread16be(&ucc_pram->riptr));
+	dev_info(priv->dev, "tbase = 0x%x\n", ioread32be(&ucc_pram->tbase));
+	dev_info(priv->dev, "tbptr = 0x%x\n", ioread32be(&ucc_pram->tbptr));
+	dev_info(priv->dev, "tbdlen = 0x%x\n", ioread16be(&ucc_pram->tbdlen));
+	dev_info(priv->dev, "tbdstat = 0x%x\n", ioread16be(&ucc_pram->tbdstat));
+	dev_info(priv->dev, "tstate = 0x%x\n", ioread32be(&ucc_pram->tstate));
+	dev_info(priv->dev, "tdptr = 0x%x\n", ioread32be(&ucc_pram->tdptr));
+	dev_info(priv->dev, "tiptr = 0x%x\n", ioread16be(&ucc_pram->tiptr));
+	dev_info(priv->dev, "rcrc = 0x%x\n", ioread32be(&ucc_pram->rcrc));
+	dev_info(priv->dev, "tcrc = 0x%x\n", ioread32be(&ucc_pram->tcrc));
+	dev_info(priv->dev, "c_mask = 0x%x\n", ioread32be(&ucc_pram->c_mask));
+	dev_info(priv->dev, "c_pers = 0x%x\n", ioread32be(&ucc_pram->c_pres));
+	dev_info(priv->dev, "disfc = 0x%x\n", ioread16be(&ucc_pram->disfc));
+	dev_info(priv->dev, "crcec = 0x%x\n", ioread16be(&ucc_pram->crcec));
 }
 
 static void dump_bds(struct ucc_tdm_private *priv)
@@ -243,18 +242,18 @@ static void init_si(struct ucc_tdm_private *priv)
 		mask = 0x01 << i;
 
 		if (priv->tx_ts_mask & mask)
-			out_be16(&siram[siram_entry_id * 32 + i],
-					siram_entry_valid);
+			iowrite16be(siram_entry_valid,
+				    &siram[siram_entry_id * 32 + i]);
 		else
-			out_be16(&siram[siram_entry_id * 32 + i],
-					siram_entry_closed);
+			iowrite16be(siram_entry_closed,
+				    &siram[siram_entry_id * 32 + i]);
 
 		if (priv->rx_ts_mask & mask)
-			out_be16(&siram[siram_entry_id * 32 + 0x200 +  i],
-					siram_entry_valid);
+			iowrite16be(siram_entry_valid,
+				    &siram[siram_entry_id * 32 + 0x200 +  i]);
 		else
-			out_be16(&siram[siram_entry_id * 32 + 0x200 +  i],
-					siram_entry_closed);
+			iowrite16be(siram_entry_closed,
+				    &siram[siram_entry_id * 32 + 0x200 +  i]);
 	}
 
 	setbits16(&siram[(siram_entry_id * 32) + (priv->num_of_ts - 1)],
@@ -288,16 +287,16 @@ static void init_si(struct ucc_tdm_private *priv)
 
 	switch (tdm_port) {
 	case 0:
-		out_be16(&si_regs->sixmr1[0], sixmr);
+		iowrite16be(sixmr, &si_regs->sixmr1[0]);
 		break;
 	case 1:
-		out_be16(&si_regs->sixmr1[1], sixmr);
+		iowrite16be(sixmr, &si_regs->sixmr1[1]);
 		break;
 	case 2:
-		out_be16(&si_regs->sixmr1[2], sixmr);
+		iowrite16be(sixmr, &si_regs->sixmr1[2]);
 		break;
 	case 3:
-		out_be16(&si_regs->sixmr1[3], sixmr);
+		iowrite16be(sixmr, &si_regs->sixmr1[3]);
 		break;
 	default:
 		dev_err(priv->dev, "can not find tdm sixmr reg\n");
@@ -348,7 +347,7 @@ static int utdm_init(struct ucc_tdm_private *priv)
 		(u8) QE_CR_PROTOCOL_UNSPECIFIED, 0);
 
 	/* Set UPSMR normal mode */
-	out_be32(&priv->uf_regs->upsmr, 0);
+	iowrite32be(0, &priv->uf_regs->upsmr);
 
 	priv->tx_bd = dma_alloc_coherent(priv->dev,
 			NUM_OF_BUF * MAX_RX_BUF_LENGTH,
@@ -408,27 +407,27 @@ static int utdm_init(struct ucc_tdm_private *priv)
 	}
 
 	/* Set RIPTR, TIPTR */
-	out_be16(&priv->ucc_pram->riptr, (u16)riptr);
-	out_be16(&priv->ucc_pram->tiptr, (u16)tiptr);
+	iowrite16be((u16)riptr, &priv->ucc_pram->riptr);
+	iowrite16be((u16)tiptr, &priv->ucc_pram->tiptr);
 
 	/* Set MRBLR */
-	out_be16(&priv->ucc_pram->mrblr, (u16)MAX_RX_BUF_LENGTH);
+	iowrite16be((u16)MAX_RX_BUF_LENGTH, &priv->ucc_pram->mrblr);
 
 	/* Set RBASE, TBASE */
-	out_be32(&priv->ucc_pram->rbase, (u32)priv->dma_rx_bd);
-	out_be32(&priv->ucc_pram->tbase, (u32)priv->dma_tx_bd);
+	iowrite32be((u32)priv->dma_rx_bd, &priv->ucc_pram->rbase);
+	iowrite32be((u32)priv->dma_tx_bd, &priv->ucc_pram->tbase);
 
 	/* Set RSTATE, TSTATE */
-	out_be32(&priv->ucc_pram->rstate, 0x30000000);
-	out_be32(&priv->ucc_pram->tstate, 0x30000000);
+	iowrite32be(0x30000000, &priv->ucc_pram->rstate);
+	iowrite32be(0x30000000, &priv->ucc_pram->tstate);
 
 	/* Set C_MASK, C_PRES for 16bit CRC */
-	out_be32(&priv->ucc_pram->c_mask, 0x0000F0B8);
-	out_be32(&priv->ucc_pram->c_pres, 0x0000FFFF);
+	iowrite32be(0x0000F0B8, &priv->ucc_pram->c_mask);
+	iowrite32be(0x0000FFFF, &priv->ucc_pram->c_pres);
 
-	out_be16(&priv->ucc_pram->res0, 0);
+	iowrite16be(0, &priv->ucc_pram->res0);
 	for (i = 0; i < 4; i++)
-		out_be32(&priv->ucc_pram->res4[i], 0x0);
+		iowrite32be(0x0, &priv->ucc_pram->res4[i]);
 
 	/* Get BD buffer */
 	bd_buffer = dma_alloc_coherent(priv->dev,
@@ -454,18 +453,18 @@ static int utdm_init(struct ucc_tdm_private *priv)
 		else
 			bd_status = R_E | R_I | R_W | R_CM;
 
-		out_be32((u32 *)(priv->rx_bd + i), bd_status);
-		out_be32(&priv->rx_bd[i].buf, priv->dma_rx_addr
-				+ i * MAX_RX_BUF_LENGTH);
+		iowrite32be(bd_status, (u32 *)(priv->rx_bd + i));
+		iowrite32be(priv->dma_rx_addr + i * MAX_RX_BUF_LENGTH,
+			    &priv->rx_bd[i].buf);
 
 		if (i < (NUM_OF_BUF - 1))
 			bd_status =  T_I;
 		else
 			bd_status =  T_I | T_W;
 
-		out_be32((u32 *)(priv->tx_bd + i), bd_status);
-		out_be32(&priv->tx_bd[i].buf, priv->dma_tx_addr
-				+ i * MAX_RX_BUF_LENGTH);
+		iowrite32be(bd_status, (u32 *)(priv->tx_bd + i));
+		iowrite32be(priv->dma_tx_addr + i * MAX_RX_BUF_LENGTH,
+			    &priv->tx_bd[i].buf);
 	}
 
 	priv->phase_rx = 0;
@@ -546,7 +545,7 @@ static int ucc_tdm_write(struct tdm_adapter *adap, u8 *write_buf,
 			priv->phase_tx = 0;
 
 		bd = (priv->tx_bd + priv->phase_tx);
-		bd_stat_len = in_be32((u32 __iomem *)bd);
+		bd_stat_len = ioread32be((u32 __iomem *)bd);
 		tdm_send_buf = priv->tx_buffer +
 				priv->phase_tx * MAX_RX_BUF_LENGTH;
 
@@ -557,7 +556,7 @@ static int ucc_tdm_write(struct tdm_adapter *adap, u8 *write_buf,
 			copy_len = MAX_RX_BUF_LENGTH;
 
 		ret = spin_event_timeout(((bd_stat_len =
-				in_be32((u32 __iomem *)bd)) & T_R) != T_R ,
+				ioread32be((u32 __iomem *)bd)) & T_R) != T_R ,
 				1000000, 500);
 		if (!ret) {
 			dev_err(priv->dev, "TDM write data error!\n");
@@ -570,11 +569,11 @@ static int ucc_tdm_write(struct tdm_adapter *adap, u8 *write_buf,
 
 		bd_stat_len &= ~(T_L | BD_LEN_MASK);
 		if (i == (buf_num - 1))
-			out_be32((u32 __iomem *)(bd),
-				bd_stat_len | T_R | T_L | T_I | copy_len);
+			iowrite32be(bd_stat_len | T_R | T_L | T_I | copy_len,
+				    (u32 __iomem *)(bd));
 		else
-			out_be32((u32 __iomem *)(bd),
-				bd_stat_len | T_R | T_I | copy_len);
+			iowrite32be(bd_stat_len | T_R | T_I | copy_len,
+				    (u32 __iomem *)(bd));
 
 		priv->phase_tx++;
 	}
@@ -593,8 +592,8 @@ static irqreturn_t ucc_tdm_irq_handler(int irq, void *dev_id)
 	ut_info = priv->ut_info;
 	uccf = priv->uccf;
 
-	ucce = in_be32(uccf->p_ucce);
-	uccm = in_be32(uccf->p_uccm);
+	ucce = ioread32be(uccf->p_ucce);
+	uccm = ioread32be(uccf->p_uccm);
 
 	if ((ucce >> 16) & UCC_TRANS_UCCE_RXB) {
 		if (priv->phase_rx  == NUM_OF_BUF - 1)
@@ -607,7 +606,7 @@ static irqreturn_t ucc_tdm_irq_handler(int irq, void *dev_id)
 
 	}
 
-	out_be32(uccf->p_ucce, ucce);
+	iowrite32be(ucce, uccf->p_ucce);
 
 	return IRQ_HANDLED;
 
@@ -763,18 +762,18 @@ static int ucc_tdm_probe(struct platform_device *pdev)
 	struct ucc_tdm_info *ut_info;
 	struct resource res;
 	int ucc_num;
-	const unsigned int *prop;
+	u32 val;
 	const char *sprop;
 	struct device_node *np2;
 	int ret;
 
-	prop = of_get_property(np, "cell-index", NULL);
-	if (!prop) {
+	ret = of_property_read_u32_index(np, "cell-index", 0, &val);
+	if (ret) {
 		dev_err(&pdev->dev, "Invalid ucc property\n");
 		return -ENODEV;
 	}
 
-	ucc_num = *prop - 1;
+	ucc_num = val - 1;
 	if ((ucc_num > 7) || (ucc_num < 0)) {
 		dev_err(&pdev->dev, ": Invalid UCC num\n");
 		return -EINVAL;
@@ -859,54 +858,54 @@ static int ucc_tdm_probe(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, utdm_priv);
 	utdm_priv->dev = &pdev->dev;
 
-	prop = of_get_property(np, "fsl,tx-timeslot", NULL);
-	if (!prop) {
+	ret = of_property_read_u32_index(np, "fsl,tx-timeslot", 0, &val);
+	if (ret) {
 		ret = -EINVAL;
 		dev_err(&pdev->dev, "Invalid tx-timeslot property\n");
 		goto err_miss_property;
 	}
-	utdm_priv->tx_ts_mask = *prop;
+	utdm_priv->tx_ts_mask = val;
 
-	prop = of_get_property(np, "fsl,rx-timeslot", NULL);
-	if (!prop) {
+	ret = of_property_read_u32_index(np, "fsl,rx-timeslot", 0, &val);
+	if (ret) {
 		ret = -EINVAL;
 		dev_err(&pdev->dev, "Invalid rx-timeslot property\n");
 		goto err_miss_property;
 	}
-	utdm_priv->rx_ts_mask = *prop;
+	utdm_priv->rx_ts_mask = val;
 
-	prop = of_get_property(np, "fsl,tdm-id", NULL);
-	if (!prop) {
+	ret = of_property_read_u32_index(np, "fsl,tdm-id", 0, &val);
+	if (ret) {
 		ret = -EINVAL;
 		dev_err(&pdev->dev, "No fsl,tdm-id property for this UCC\n");
 		goto err_miss_property;
 	}
-	utdm_priv->tdm_port = *prop;
+	utdm_priv->tdm_port = val;
 	ut_info->uf_info.tdm_num = utdm_priv->tdm_port ;
 
-	prop = of_get_property(np, "fsl,tdm-mode", NULL);
-	if (!prop) {
+	sprop = of_get_property(np, "fsl,tdm-mode", NULL);
+	if (!sprop) {
 		ret = -EINVAL;
 		dev_err(&pdev->dev, "No tdm-mode property for UCC\n");
 		goto err_miss_property;
 	}
-	utdm_priv->tdm_mode = set_tdm_mode((const char *)prop);
+	utdm_priv->tdm_mode = set_tdm_mode(sprop);
 
-	prop = of_get_property(np, "fsl,tdm-framer-type", NULL);
-	if (!prop) {
+	sprop = of_get_property(np, "fsl,tdm-framer-type", NULL);
+	if (!sprop) {
 		ret = -EINVAL;
 		dev_err(&pdev->dev, "No tdm-framer-type property for UCC\n");
 		goto err_miss_property;
 	}
-	utdm_priv->tdm_framer_type = set_tdm_framer((const char *)prop);
+	utdm_priv->tdm_framer_type = set_tdm_framer(sprop);
 
-	prop = of_get_property(np, "fsl,siram-entry-id", NULL);
-	if (!prop) {
+	ret = of_property_read_u32_index(np, "fsl,siram-entry-id", 0, &val);
+	if (ret) {
 		ret = -EINVAL;
 		dev_err(&pdev->dev, "No siram entry id for UCC\n");
 		goto err_miss_property;
 	}
-	utdm_priv->siram_entry_id = *(const u32 *)prop;
+	utdm_priv->siram_entry_id = val;
 
 	np2 = of_find_node_by_name(NULL, "si");
 	if (!np2) {
@@ -1008,11 +1007,11 @@ static void store_clk_config(struct ucc_tdm_private *utdm_priv)
 	struct qe_mux *qe_mux_reg = &qe_immr->qmx;
 
 	/* store si clk */
-	utdm_priv->cmxsi1cr_h = in_be32(&qe_mux_reg->cmxsi1cr_h);
-	utdm_priv->cmxsi1cr_l = in_be32(&qe_mux_reg->cmxsi1cr_l);
+	utdm_priv->cmxsi1cr_h = ioread32be(&qe_mux_reg->cmxsi1cr_h);
+	utdm_priv->cmxsi1cr_l = ioread32be(&qe_mux_reg->cmxsi1cr_l);
 
 	/* store si sync */
-	utdm_priv->cmxsi1syr = in_be32(&qe_mux_reg->cmxsi1syr);
+	utdm_priv->cmxsi1syr = ioread32be(&qe_mux_reg->cmxsi1syr);
 
 	/* store ucc clk */
 	memcpy_fromio(utdm_priv->cmxucr, qe_mux_reg->cmxucr, 4 * sizeof(u32));
@@ -1024,10 +1023,10 @@ static void resume_clk_config(struct ucc_tdm_private *utdm_priv)
 
 	memcpy_toio(qe_mux_reg->cmxucr, utdm_priv->cmxucr, 4 * sizeof(u32));
 
-	out_be32(&qe_mux_reg->cmxsi1cr_h, utdm_priv->cmxsi1cr_h);
-	out_be32(&qe_mux_reg->cmxsi1cr_l, utdm_priv->cmxsi1cr_l);
+	iowrite32be(utdm_priv->cmxsi1cr_h, &qe_mux_reg->cmxsi1cr_h);
+	iowrite32be(utdm_priv->cmxsi1cr_l, &qe_mux_reg->cmxsi1cr_l);
 
-	out_be32(&qe_mux_reg->cmxsi1syr, utdm_priv->cmxsi1syr);
+	iowrite32be(utdm_priv->cmxsi1syr, &qe_mux_reg->cmxsi1syr);
 
 }
 
@@ -1044,8 +1043,8 @@ static int ucc_tdm_suspend(struct device *dev)
 	uf_regs = utdm_priv->uf_regs;
 
 	/* backup gumr guemr*/
-	utdm_priv->gumr = in_be32(&uf_regs->gumr);
-	utdm_priv->guemr = in_8(&uf_regs->guemr);
+	utdm_priv->gumr = ioread32be(&uf_regs->gumr);
+	utdm_priv->guemr = ioread8(&uf_regs->guemr);
 
 	utdm_priv->ucc_pram_bak = kmalloc(sizeof(struct ucc_transparent_param),
 					GFP_KERNEL);
@@ -1086,25 +1085,25 @@ static int ucc_tdm_resume(struct device *dev)
 	uccf = utdm_priv->uccf;
 
 	/* restore gumr guemr */
-	out_8(&uf_regs->guemr, utdm_priv->guemr);
-	out_be32(&uf_regs->gumr, utdm_priv->gumr);
+	iowrite8(utdm_priv->guemr, &uf_regs->guemr);
+	iowrite32be(utdm_priv->gumr, &uf_regs->gumr);
 
 	/* Set Virtual Fifo registers */
-	out_be16(&uf_regs->urfs, uf_info->urfs);
-	out_be16(&uf_regs->urfet, uf_info->urfet);
-	out_be16(&uf_regs->urfset, uf_info->urfset);
-	out_be16(&uf_regs->utfs, uf_info->utfs);
-	out_be16(&uf_regs->utfet, uf_info->utfet);
-	out_be16(&uf_regs->utftt, uf_info->utftt);
+	iowrite16be(uf_info->urfs, &uf_regs->urfs);
+	iowrite16be(uf_info->urfet, &uf_regs->urfet);
+	iowrite16be(uf_info->urfset, &uf_regs->urfset);
+	iowrite16be(uf_info->utfs, &uf_regs->utfs);
+	iowrite16be(uf_info->utfet, &uf_regs->utfet);
+	iowrite16be(uf_info->utftt, &uf_regs->utftt);
 	/* utfb, urfb are offsets from MURAM base */
-	out_be32(&uf_regs->utfb, uccf->ucc_fast_tx_virtual_fifo_base_offset);
-	out_be32(&uf_regs->urfb, uccf->ucc_fast_rx_virtual_fifo_base_offset);
+	iowrite32be(uccf->ucc_fast_tx_virtual_fifo_base_offset, &uf_regs->utfb);
+	iowrite32be(uccf->ucc_fast_rx_virtual_fifo_base_offset, &uf_regs->urfb);
 
 	/* tdm Rx Tx and sync clock routing */
 	resume_clk_config(utdm_priv);
 
-	out_be32(&uf_regs->uccm, uf_info->uccm_mask);
-	out_be32(&uf_regs->ucce, 0xffffffff);
+	iowrite32be(uf_info->uccm_mask, &uf_regs->uccm);
+	iowrite32be(0xffffffff, &uf_regs->ucce);
 
 	ucc_fast_disable(utdm_priv->uccf, COMM_DIR_RX | COMM_DIR_TX);
 
@@ -1117,7 +1116,7 @@ static int ucc_tdm_resume(struct device *dev)
 		(u8)QE_CR_PROTOCOL_UNSPECIFIED, 0);
 
 	/* Set UPSMR normal mode */
-	out_be32(&uf_regs->upsmr, 0);
+	iowrite32be(0, &uf_regs->upsmr);
 
 	/* init parameter base */
 	cecr_subblock = ucc_fast_get_qe_cr_subblock(uf_info->ucc_num);
@@ -1139,18 +1138,18 @@ static int ucc_tdm_resume(struct device *dev)
 		else
 			bd_status = R_E | R_I | R_W | R_CM;
 
-		out_be32((u32 *)(utdm_priv->rx_bd + i), bd_status);
-		out_be32(&utdm_priv->rx_bd[i].buf, utdm_priv->dma_rx_addr
-				+ i * MAX_RX_BUF_LENGTH);
+		iowrite32be(bd_status, (u32 *)(utdm_priv->rx_bd + i));
+		iowrite32be(utdm_priv->dma_rx_addr + i * MAX_RX_BUF_LENGTH,
+			    &utdm_priv->rx_bd[i].buf);
 
 		if (i < (NUM_OF_BUF - 1))
 			bd_status =  T_I;
 		else
 			bd_status =  T_I | T_W;
 
-		out_be32((u32 *)(utdm_priv->tx_bd + i), bd_status);
-		out_be32(&utdm_priv->tx_bd[i].buf, utdm_priv->dma_tx_addr
-				+ i * MAX_RX_BUF_LENGTH);
+		iowrite32be(bd_status, (u32 *)(utdm_priv->tx_bd + i));
+		iowrite32be(utdm_priv->dma_tx_addr + i * MAX_RX_BUF_LENGTH,
+			    &utdm_priv->tx_bd[i].buf);
 	}
 
 	/* if tdm is busy enable TX and RX */

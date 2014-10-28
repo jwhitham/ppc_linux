@@ -37,10 +37,16 @@ struct fsl_pm_ops {
 
 extern const struct fsl_pm_ops *qoriq_pm_ops;
 
-struct fsm_reg_vals;
+struct fsm_reg_vals {
+	u32 offset;
+	u32 value;
+};
 
-extern void fsl_dp_fsm_setup(void __iomem *dcsr_base, struct fsm_reg_vals *val);
-extern void fsl_dp_fsm_clean(void __iomem *dcsr_base, struct fsm_reg_vals *val);
+void fsl_fsm_setup(void __iomem *base, struct fsm_reg_vals *val);
+void fsl_epu_setup_default(void __iomem *epu_base);
+void fsl_npc_setup_default(void __iomem *npc_base);
+void fsl_fsm_clean(void __iomem *base, struct fsm_reg_vals *val);
+void fsl_epu_clean_default(void __iomem *epu_base);
 
 extern int fsl_dp_iomap(void);
 extern void fsl_dp_iounmap(void);

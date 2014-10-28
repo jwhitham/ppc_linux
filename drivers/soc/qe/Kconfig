@@ -1,0 +1,46 @@
+#
+# QE Communication options
+#
+
+config QUICC_ENGINE
+	bool "Freescale QUICC Engine (QE) Support"
+	select LIB_RHEAP
+	select CRC32
+	---help---
+	  The QUICC Engine (QE) is a new generation of communications
+	  coprocessors on Freescale embedded CPUs (akin to CPM in older chips).
+	  Selecting this option means that you wish to build a kernel
+	  for a machine with a QE coprocessor.
+
+config QE_GPIO
+	bool "QE GPIO support"
+	depends on QUICC_ENGINE
+	select ARCH_REQUIRE_GPIOLIB
+	---help---
+	  Say Y here if you're going to use hardware that connects to the
+	  QE GPIOs.
+
+
+config UCC_SLOW
+	bool
+	default y if SERIAL_QE
+	help
+	  This option provides qe_lib support to UCC slow
+	  protocols: UART, BISYNC, QMC
+
+config UCC_FAST
+	bool
+	default y if UCC_GETH || FSL_UCC_TDM || FSL_UCC_HDLC
+	help
+	  This option provides qe_lib support to UCC fast
+	  protocols: HDLC, Ethernet, ATM, transparent
+
+config UCC
+	bool
+	default y if UCC_FAST || UCC_SLOW
+
+config QE_USB
+	bool
+	default y if USB_FSL_QE
+	help
+	  QE USB Controller support

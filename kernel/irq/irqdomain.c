@@ -502,6 +502,43 @@ unsigned int irq_create_of_mapping(struct device_node *controller,
 }
 EXPORT_SYMBOL_GPL(irq_create_of_mapping);
 
+unsigned int irq_create_of_mapping_new(struct of_phandle_args *irq_data)
+{
+	struct irq_domain *domain;
+	irq_hw_number_t hwirq;
+	unsigned int type = IRQ_TYPE_NONE;
+	unsigned int virq;
+
+	domain = irq_data->np ?
+			irq_find_host(irq_data->np) : irq_default_domain;
+	if (!domain) {
+		pr_warn("no irq domain found for %s !\n",
+			of_node_full_name(irq_data->np));
+		return 0;
+	}
+
+	/* If domain has no translation, then we assume interrupt line */
+	if (domain->ops->xlate == NULL)
+		hwirq = irq_data->args[0];
+	else {
+		if (domain->ops->xlate(domain, irq_data->np, irq_data->args,
+					irq_data->args_count, &hwirq, &type))
+			return 0;
+	}
+
+	/* Create mapping */
+	virq = irq_create_mapping(domain, hwirq);
+	if (!virq)
+		return virq;
+
+	/* Set type if specified and different than the current one */
+	if (type != IRQ_TYPE_NONE &&
+	    type != irq_get_trigger_type(virq))
+		irq_set_irq_type(virq, type);
+	return virq;
+}
+EXPORT_SYMBOL_GPL(irq_create_of_mapping_new);
+
 /**
  * irq_dispose_mapping() - Unmap an interrupt
  * @virq: linux irq number of the interrupt to unmap

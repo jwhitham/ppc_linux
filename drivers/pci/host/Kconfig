@@ -19,4 +19,12 @@ config PCI_TEGRA
 	bool "NVIDIA Tegra PCIe controller"
 	depends on ARCH_TEGRA
 
+config PCI_LAYERSCAPE
+	bool "Freescale Layerscape PCIe controller"
+	depends on OF
+	select PCIE_DW
+	select MFD_SYSCON
+	help
+	  Say Y here if you want PCIe controller support on Layerscape SoCs.
+
 endmenu

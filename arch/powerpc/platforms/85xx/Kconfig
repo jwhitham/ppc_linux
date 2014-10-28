@@ -19,7 +19,7 @@ if PPC32
 
 config FSL_85XX_CACHE_SRAM
 	bool "Freescale l2cache sram support"
-	select PPC_LIB_RHEAP
+	select LIB_RHEAP
 	help
 	  When selected, this option enables cache-sram support
 	  for memory allocation on P1/P2 QorIQ platforms.

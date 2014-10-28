@@ -62,6 +62,17 @@ config PWM_BFIN
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-bfin.
 
+config PWM_FSL_FTM
+	tristate "Freescale FlexTimer Module (FTM) PWM support"
+	depends on OF
+	select REGMAP_MMIO
+	help
+	  Generic FTM PWM framework driver for Freescale VF610 and
+	  Layerscape LS-1 SoCs.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-fsl-ftm.
+
 config PWM_IMX
 	tristate "i.MX PWM support"
 	depends on ARCH_MXC

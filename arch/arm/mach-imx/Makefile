@@ -102,6 +102,7 @@ obj-$(CONFIG_SOC_IMX6SL) += clk-imx6sl.o mach-imx6sl.o
 
 ifeq ($(CONFIG_PM),y)
 obj-$(CONFIG_SOC_IMX6Q) += pm-imx6q.o headsmp.o
+obj-$(CONFIG_SOC_LS1021A) += pm-ls1.o sleep-ls1.o
 endif
 
 # i.MX5 based machines
@@ -113,5 +114,9 @@ obj-$(CONFIG_MACH_IMX51_DT) += imx51-dt.o
 obj-$(CONFIG_SOC_IMX53) += mach-imx53.o
 
 obj-$(CONFIG_SOC_VF610) += clk-vf610.o mach-vf610.o
+
+obj-$(CONFIG_SOC_LS1021A) += mach-ls1021a.o
+
+obj-$(CONFIG_SOC_LS1021A) += clk-ls1021a.o
 
 obj-y += devices/

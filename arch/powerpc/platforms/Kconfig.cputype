@@ -33,7 +33,7 @@ config PPC_8xx
 	bool "Freescale 8xx"
 	select FSL_SOC
 	select 8xx
-	select PPC_LIB_RHEAP
+	select LIB_RHEAP
 
 config 40x
 	bool "AMCC 40x"

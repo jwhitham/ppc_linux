@@ -81,27 +81,37 @@ static inline int run_descriptor_deco0(struct device *ctrldev, u32 *desc,
 					u32 *status)
 {
 	struct caam_drv_private *ctrlpriv = dev_get_drvdata(ctrldev);
-	struct caam_full __iomem *topregs;
+	struct caam_ctrl __iomem *ctrl = ctrlpriv->ctrl;
+	struct caam_deco __iomem *deco = ctrlpriv->deco;
 	unsigned int timeout = 100000;
 	u32 deco_dbg_reg, flags;
 	int i;
 
-	/* Set the bit to request direct access to DECO0 */
-	topregs = (struct caam_full __iomem *)ctrlpriv->ctrl;
-	setbits32(&topregs->ctrl.deco_rq, DECORR_RQD0ENABLE);
 
-	while (!(rd_reg32(&topregs->ctrl.deco_rq) & DECORR_DEN0) &&
+	if (ctrlpriv->virt_en == 1) {
+		setbits32(&ctrl->deco_rsr, DECORSR_JR0);
+
+		while (!(rd_reg32(&ctrl->deco_rsr) & DECORSR_VALID) &&
+		       --timeout)
+			cpu_relax();
+
+		timeout = 100000;
+	}
+
+	setbits32(&ctrl->deco_rq, DECORR_RQD0ENABLE);
+
+	while (!(rd_reg32(&ctrl->deco_rq) & DECORR_DEN0) &&
 								 --timeout)
 		cpu_relax();
 
 	if (!timeout) {
 		dev_err(ctrldev, "failed to acquire DECO 0\n");
-		clrbits32(&topregs->ctrl.deco_rq, DECORR_RQD0ENABLE);
+		clrbits32(&ctrl->deco_rq, DECORR_RQD0ENABLE);
 		return -ENODEV;
 	}
 
 	for (i = 0; i < desc_len(desc); i++)
-		wr_reg32(&topregs->deco.descbuf[i], *(desc + i));
+		wr_reg32(&deco->descbuf[i], *(desc + i));
 
 	flags = DECO_JQCR_WHL;
 	/*
@@ -112,11 +122,11 @@ static inline int run_descriptor_deco0(struct device *ctrldev, u32 *desc,
 		flags |= DECO_JQCR_FOUR;
 
 	/* Instruct the DECO to execute it */
-	wr_reg32(&topregs->deco.jr_ctl_hi, flags);
+	wr_reg32(&deco->jr_ctl_hi, flags);
 
 	timeout = 10000000;
 	do {
-		deco_dbg_reg = rd_reg32(&topregs->deco.desc_dbg);
+		deco_dbg_reg = rd_reg32(&deco->desc_dbg);
 		/*
 		 * If an error occured in the descriptor, then
 		 * the DECO status field will be set to 0x0D
@@ -127,11 +137,14 @@ static inline int run_descriptor_deco0(struct device *ctrldev, u32 *desc,
 		cpu_relax();
 	} while ((deco_dbg_reg & DESC_DBG_DECO_STAT_VALID) && --timeout);
 
-	*status = rd_reg32(&topregs->deco.op_status_hi) &
+	*status = rd_reg32(&deco->op_status_hi) &
 		  DECO_OP_STATUS_HI_ERR_MASK;
 
+	if (ctrlpriv->virt_en == 1)
+		clrbits32(&ctrl->deco_rsr, DECORSR_JR0);
+
 	/* Mark the DECO as free */
-	clrbits32(&topregs->ctrl.deco_rq, DECORR_RQD0ENABLE);
+	clrbits32(&ctrl->deco_rq, DECORR_RQD0ENABLE);
 
 	if (!timeout)
 		return -EAGAIN;
@@ -162,13 +175,13 @@ static int instantiate_rng(struct device *ctrldev, int state_handle_mask,
 			   int gen_sk)
 {
 	struct caam_drv_private *ctrlpriv = dev_get_drvdata(ctrldev);
-	struct caam_full __iomem *topregs;
+	struct caam_ctrl __iomem *ctrl;
 	struct rng4tst __iomem *r4tst;
 	u32 *desc, status, rdsta_val;
 	int ret = 0, sh_idx;
 
-	topregs = (struct caam_full __iomem *)ctrlpriv->ctrl;
-	r4tst = &topregs->ctrl.r4tst[0];
+	ctrl = (struct caam_ctrl __iomem *)ctrlpriv->ctrl;
+	r4tst = &ctrl->r4tst[0];
 
 	desc = kmalloc(CAAM_CMD_SZ * 7, GFP_KERNEL);
 	if (!desc)
@@ -198,12 +211,11 @@ static int instantiate_rng(struct device *ctrldev, int state_handle_mask,
 		 * CAAM eras), then try again.
 		 */
 		rdsta_val =
-			rd_reg32(&topregs->ctrl.r4tst[0].rdsta) & RDSTA_IFMASK;
+			rd_reg32(&ctrl->r4tst[0].rdsta) & RDSTA_IFMASK;
 		if (status || !(rdsta_val & (1 << sh_idx)))
 			ret = -EAGAIN;
 		if (ret)
 			break;
-
 		dev_info(ctrldev, "Instantiated RNG4 SH%d\n", sh_idx);
 		/* Clear the contents before recreating the descriptor */
 		memset(desc, 0x00, CAAM_CMD_SZ * 7);
@@ -271,12 +283,12 @@ static int caam_remove(struct platform_device *pdev)
 {
 	struct device *ctrldev;
 	struct caam_drv_private *ctrlpriv;
-	struct caam_full __iomem *topregs;
+	struct caam_ctrl __iomem *ctrl;
 	int ring, ret = 0;
 
 	ctrldev = &pdev->dev;
 	ctrlpriv = dev_get_drvdata(ctrldev);
-	topregs = (struct caam_full __iomem *)ctrlpriv->ctrl;
+	ctrl = (struct caam_ctrl __iomem *)ctrlpriv->ctrl;
 
 	/* Remove platform devices for JobRs */
 	for (ring = 0; ring < ctrlpriv->total_jobrs; ring++) {
@@ -298,7 +310,7 @@ static int caam_remove(struct platform_device *pdev)
 #endif
 
 	/* Unmap controller region */
-	iounmap(&topregs->ctrl);
+	iounmap(&ctrl);
 
 	kfree(ctrlpriv->jrpdev);
 	kfree(ctrlpriv);
@@ -315,12 +327,12 @@ static int caam_remove(struct platform_device *pdev)
 static void kick_trng(struct device *dev, int ent_delay)
 {
 	struct caam_drv_private *ctrlpriv = dev_get_drvdata(dev);
-	struct caam_full __iomem *topregs;
+	struct caam_ctrl __iomem *ctrl;
 	struct rng4tst __iomem *r4tst;
 	u32 val;
 
-	topregs = (struct caam_full __iomem *)ctrlpriv->ctrl;
-	r4tst = &topregs->ctrl.r4tst[0];
+	ctrl = (struct caam_ctrl __iomem *)ctrlpriv->ctrl;
+	r4tst = &ctrl->r4tst[0];
 
 	/* put RNG4 into program mode */
 	setbits32(&r4tst->rtmctl, RTMCTL_PRGM);
@@ -375,19 +387,19 @@ static int caam_rng_init(struct device *dev)
 {
 	int gen_sk, ent_delay = RTSDCTL_ENT_DLY_MIN;
 	struct caam_drv_private *ctrlpriv = dev_get_drvdata(dev);
-	u64 cha_vid;
-	struct caam_full __iomem *topregs;
+	u64 cha_vid_ls;
+	struct caam_ctrl __iomem *ctrl;
 	int ret = 0;
 
-	topregs = (struct caam_full __iomem *)ctrlpriv->ctrl;
-	cha_vid = rd_reg64(&topregs->ctrl.perfmon.cha_id);
+	ctrl = (struct caam_ctrl __iomem *)ctrlpriv->ctrl;
+	cha_vid_ls = rd_reg32(&ctrl->perfmon.cha_id_ls);
 	/*
 	 * If SEC has RNG version >= 4 and RNG state handle has not been
 	 * already instantiated, do RNG instantiation
 	 */
-	if ((cha_vid & CHA_ID_RNG_MASK) >> CHA_ID_RNG_SHIFT >= 4) {
+	if ((cha_vid_ls & CHA_ID_LS_RNG_MASK) >> CHA_ID_LS_RNG_SHIFT >= 4) {
 		ctrlpriv->rng4_sh_init =
-			rd_reg32(&topregs->ctrl.r4tst[0].rdsta);
+			rd_reg32(&ctrl->r4tst[0].rdsta);
 		/*
 		 * If the secure keys (TDKEK, JDKEK, TDSK), were already
 		 * generated, signal this to the function that is instantiating
@@ -398,7 +410,7 @@ static int caam_rng_init(struct device *dev)
 		ctrlpriv->rng4_sh_init &= RDSTA_IFMASK;
 		do {
 			int inst_handles =
-				rd_reg32(&topregs->ctrl.r4tst[0].rdsta) &
+				rd_reg32(&ctrl->r4tst[0].rdsta) &
 								RDSTA_IFMASK;
 			/*
 			 * If either SH were instantiated by somebody else
@@ -433,7 +445,7 @@ static int caam_rng_init(struct device *dev)
 		ctrlpriv->rng4_sh_init = ~ctrlpriv->rng4_sh_init & RDSTA_IFMASK;
 
 		/* Enable RDB bit so that RNG works faster */
-		setbits32(&topregs->ctrl.scfgr, SCFGR_RDBENABLE);
+		setbits32(&ctrl->scfgr, SCFGR_RDBENABLE);
 	}
 	return 0;
 }
@@ -446,11 +458,13 @@ static int caam_probe(struct platform_device *pdev)
 	struct device *dev;
 	struct device_node *nprop, *np;
 	struct caam_ctrl __iomem *ctrl;
-	struct caam_full __iomem *topregs;
 	struct caam_drv_private *ctrlpriv;
 #ifdef CONFIG_DEBUG_FS
 	struct caam_perfmon *perfmon;
 #endif
+	u32 scfgr, comp_params;
+	int pg_size;
+	int BLOCK_OFFSET = 0;
 
 	ctrlpriv = kzalloc(sizeof(struct caam_drv_private), GFP_KERNEL);
 	if (!ctrlpriv)
@@ -468,10 +482,27 @@ static int caam_probe(struct platform_device *pdev)
 		dev_err(dev, "caam: of_iomap() failed\n");
 		return -ENOMEM;
 	}
-	ctrlpriv->ctrl = (struct caam_ctrl __force *)ctrl;
+	/* Finding the page size for using the CTPR_MS register */
+	comp_params = rd_reg32(&ctrl->perfmon.comp_parms_ms);
+	pg_size = (comp_params & CTPR_MS_PG_SZ_MASK) >> CTPR_MS_PG_SZ_SHIFT;
 
-	/* topregs used to derive pointers to CAAM sub-blocks only */
-	topregs = (struct caam_full __iomem *)ctrl;
+	/* Allocating the BLOCK_OFFSET based on the supported page size on
+	 * the platform
+	 */
+	if (pg_size == 0)
+		BLOCK_OFFSET = PG_SIZE_4K;
+	else
+		BLOCK_OFFSET = PG_SIZE_64K;
+
+	ctrlpriv->ctrl = (struct caam_ctrl __force *)ctrl;
+	ctrlpriv->assure = (struct caam_assurance __force *)
+			   ((uint8_t *)ctrl +
+			    BLOCK_OFFSET * ASSURE_BLOCK_NUMBER
+			   );
+	ctrlpriv->deco = (struct caam_deco __force *)
+			 ((uint8_t *)ctrl +
+			 BLOCK_OFFSET * DECO_BLOCK_NUMBER
+			 );
 
 	/* Get the IRQ of the controller (for security violations only) */
 	ctrlpriv->secvio_irq = of_irq_to_resource(nprop, 0, NULL);
@@ -480,8 +511,34 @@ static int caam_probe(struct platform_device *pdev)
 	 * Enable DECO watchdogs and, if this is a PHYS_ADDR_T_64BIT kernel,
 	 * long pointers in master configuration register
 	 */
-	setbits32(&topregs->ctrl.mcr, MCFGR_WDENABLE |
+	setbits32(&ctrl->mcr, MCFGR_WDENABLE |
 		  (sizeof(dma_addr_t) == sizeof(u64) ? MCFGR_LONG_PTR : 0));
+
+	/*
+	 *  Read the Compile Time paramters and SCFGR to determine
+	 * if Virtualization is enabled for this platform
+	 */
+	scfgr = rd_reg32(&ctrl->scfgr);
+
+	ctrlpriv->virt_en = 0;
+	if (comp_params & CTPR_MS_VIRT_EN_INCL) {
+		/* VIRT_EN_INCL = 1 & VIRT_EN_POR = 1 or
+		 * VIRT_EN_INCL = 1 & VIRT_EN_POR = 0 & SCFGR_VIRT_EN = 1
+		 */
+		if ((comp_params & CTPR_MS_VIRT_EN_POR) ||
+		    (!(comp_params & CTPR_MS_VIRT_EN_POR) &&
+		       (scfgr & SCFGR_VIRT_EN)))
+				ctrlpriv->virt_en = 1;
+	} else {
+		/* VIRT_EN_INCL = 0 && VIRT_EN_POR_VALUE = 1 */
+		if (comp_params & CTPR_MS_VIRT_EN_POR)
+				ctrlpriv->virt_en = 1;
+	}
+
+	if (ctrlpriv->virt_en == 1)
+		setbits32(&ctrl->jrstart, JRSTART_JR0_START |
+			  JRSTART_JR1_START | JRSTART_JR2_START |
+			  JRSTART_JR3_START);
 
 	if (sizeof(dma_addr_t) == sizeof(u64))
 		if (of_device_is_compatible(nprop, "fsl,sec-v5.0"))
@@ -508,7 +565,7 @@ static int caam_probe(struct platform_device *pdev)
 	ctrlpriv->jrpdev = kzalloc(sizeof(struct platform_device *) * rspec,
 								GFP_KERNEL);
 	if (ctrlpriv->jrpdev == NULL) {
-		iounmap(&topregs->ctrl);
+		iounmap(&ctrl);
 		return -ENOMEM;
 	}
 
@@ -521,6 +578,11 @@ static int caam_probe(struct platform_device *pdev)
 			pr_warn("JR%d Platform device creation error\n", ring);
 			continue;
 		}
+		ctrlpriv->jr[ring] = (struct caam_job_ring __force *)
+				     ((uint8_t *)ctrl +
+				     (ring + JR_BLOCK_NUMBER) *
+				      BLOCK_OFFSET
+				     );
 		ctrlpriv->total_jobrs++;
 		ring++;
 	}
@@ -539,12 +601,16 @@ static int caam_probe(struct platform_device *pdev)
 	}
 
 	/* Check to see if QI present. If so, enable */
-	ctrlpriv->qi_present = !!(rd_reg64(&topregs->ctrl.perfmon.comp_parms) &
-				  CTPR_QI_MASK);
+	ctrlpriv->qi_present =
+			!!(rd_reg32(&ctrl->perfmon.comp_parms_ms) &
+			   CTPR_MS_QI_MASK);
 	if (ctrlpriv->qi_present) {
-		ctrlpriv->qi = (struct caam_queue_if __force *)&topregs->qi;
+		ctrlpriv->qi = (struct caam_queue_if __force *)
+			       ((uint8_t *)ctrl +
+				BLOCK_OFFSET * QI_BLOCK_NUMBER
+			       );
 		/* This is all that's required to physically enable QI */
-		wr_reg32(&topregs->qi.qi_control_lo, QICTL_DQEN);
+		wr_reg32(&ctrlpriv->qi->qi_control_lo, QICTL_DQEN);
 
 		/* If QMAN driver is present, init CAAM-QI backend */
 #ifdef CONFIG_FSL_QMAN
@@ -568,8 +634,9 @@ static int caam_probe(struct platform_device *pdev)
 
 	/* NOTE: RTIC detection ought to go here, around Si time */
 
-	caam_id = rd_reg64(&topregs->ctrl.perfmon.caam_id);
 	ctrlpriv->era = caam_get_era();
+	caam_id = (u64)rd_reg32(&ctrl->perfmon.caam_id_ms) << 32 |
+		  (u64)rd_reg32(&ctrl->perfmon.caam_id_ls);
 
 	/* Report "alive" for developer to see */
 	dev_info(dev, "device ID = 0x%016llx (Era %d)\n", caam_id,
@@ -661,11 +728,11 @@ static int caam_probe(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-static int caam_stop_qi(struct caam_full __iomem *topregs)
+static int caam_stop_qi(struct caam_queue_if __iomem *qi)
 {
 	int qi_stopped, loop = 0;
 
-	setbits32(&topregs->qi.qi_control_lo, QICTL_STOP);
+	setbits32(&qi->qi_control_lo, QICTL_STOP);
 
 	/*
 	 * Wait till QI Job's in Holding tank/deco are completed.
@@ -673,10 +740,10 @@ static int caam_stop_qi(struct caam_full __iomem *topregs)
 	 * reenabled.
 	 */
 	while (loop <= 100000) {
-		qi_stopped = rd_reg32(&topregs->qi.qi_status) &
+		qi_stopped = rd_reg32(&qi->qi_status) &
 			 QISTA_STOPD;
 		if (qi_stopped) {
-			wr_reg32(&topregs->qi.qi_control_lo,
+			wr_reg32(&qi->qi_control_lo,
 				 QICTL_STOP);
 			return 0;
 		}
@@ -684,7 +751,7 @@ static int caam_stop_qi(struct caam_full __iomem *topregs)
 	}
 
 	/* Failed to stop QI interface. Reenable QI Interface */
-	wr_reg32(&topregs->qi.qi_control_lo, QICTL_DQEN);
+	wr_reg32(&qi->qi_control_lo, QICTL_DQEN);
 	return -EBUSY;
 }
 
@@ -692,22 +759,22 @@ static int caam_stop_qi(struct caam_full __iomem *topregs)
 static int caam_suspend(struct device *dev)
 {
 	struct caam_drv_private *caam_priv;
-	struct caam_full __iomem *topregs;
 	struct caam_ctrl __iomem *ctrl;
+	struct caam_queue_if __iomem *qi;
 	int ret = 0;
 
 	caam_priv = dev_get_drvdata(dev);
 	ctrl = caam_priv->ctrl;
-	topregs = (struct caam_full __iomem *)ctrl;
+	qi = caam_priv->qi;
 
 	/* QI Interface graceful stoppping during suspend */
 	if (caam_priv->qi_present) {
 		int qi_dqen;
 
-		qi_dqen = rd_reg32(&topregs->qi.qi_control_lo) &
+		qi_dqen = rd_reg32(&qi->qi_control_lo) &
 			QICTL_DQEN;
 		if (qi_dqen)
-			ret = caam_stop_qi(topregs);
+			ret = caam_stop_qi(qi);
 	}
 
 	return ret;
@@ -717,23 +784,23 @@ static int caam_suspend(struct device *dev)
 static int caam_resume(struct device *dev)
 {
 	struct caam_drv_private *caam_priv;
-	struct caam_full __iomem *topregs;
 	struct caam_ctrl __iomem *ctrl;
+	struct caam_queue_if __iomem *qi;
 	int ret;
 
 	caam_priv = dev_get_drvdata(dev);
 	ctrl = caam_priv->ctrl;
-	topregs = (struct caam_full __iomem *)ctrl;
+	qi = caam_priv->qi;
 	/*
 	 * Enable DECO watchdogs and, if this is a PHYS_ADDR_T_64BIT kernel,
 	 * long pointers in master configuration register
 	 */
-	setbits32(&topregs->ctrl.mcr, MCFGR_WDENABLE |
+	setbits32(&ctrl->mcr, MCFGR_WDENABLE |
 		  (sizeof(dma_addr_t) == sizeof(u64) ? MCFGR_LONG_PTR : 0));
 
 	/* Enable QI interface of SEC */
 	if (caam_priv->qi_present)
-		wr_reg32(&topregs->qi.qi_control_lo, QICTL_DQEN);
+		wr_reg32(&qi->qi_control_lo, QICTL_DQEN);
 
 	ret = caam_rng_init(dev);
 
