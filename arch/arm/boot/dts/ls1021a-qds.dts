@@ -280,7 +280,7 @@
 		};
 
 		fpga: board-control@3,0 {
-			compatible = "fsl,ls1021aqds-fpga", "fsl,fpga-qixis";
+			compatible = "fsl,ls1021aqds-fpga", "simple-bus";
 			#address-cells = <1>;
 			#size-cells = <1>;
 			reg = <0x3 0x0 0x0000100>;
