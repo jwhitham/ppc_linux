@@ -454,7 +454,7 @@ config MTD_NAND_FSL_ELBC
 
 config MTD_NAND_FSL_IFC
 	tristate "NAND support for Freescale IFC controller"
-	depends on MTD_NAND && FSL_SOC
+	depends on MEMORY && MTD_NAND && FSL_SOC
 	select FSL_IFC
 	help
 	  Various Freescale chips e.g P1010, include a NAND Flash machine
