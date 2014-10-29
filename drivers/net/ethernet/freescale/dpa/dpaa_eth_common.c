@@ -1541,7 +1541,7 @@ void dpa_release_sgt(struct qm_sg_entry *sgt)
 			DPA_BUG_ON(sgt[i].extension);
 
 			bmb[j].hi       = sgt[i].addr_hi;
-			bmb[j].lo       = sgt[i].addr_lo;
+			bmb[j].lo       = be32_to_cpu(sgt[i].addr_lo);
 
 			j++; i++;
 		} while (j < ARRAY_SIZE(bmb) &&
@@ -1656,13 +1656,13 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	 */
 	switch (ethertype) {
 	case ETH_P_IP:
-		parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
+		parse_result->l3r = cpu_to_be16(FM_L3_PARSE_RESULT_IPV4);
 		iph = ip_hdr(skb);
 		DPA_BUG_ON(iph == NULL);
 		l4_proto = iph->protocol;
 		break;
 	case ETH_P_IPV6:
-		parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
+		parse_result->l3r = cpu_to_be16(FM_L3_PARSE_RESULT_IPV6);
 		ipv6h = ipv6_hdr(skb);
 		DPA_BUG_ON(ipv6h == NULL);
 		l4_proto = ipv6h->nexthdr;
