@@ -111,7 +111,6 @@ static irqreturn_t srio_uio_irq_handler(int irq, struct uio_info *dev_info)
 		out_be32(sriodev->regs.regs_win + LTLEECSR, 0);
 
 	for (i = 0; i < sriodev->port_num; i++) {
-		if (port_bits & (1 << (31 - i))) {
 			/* Clear retry error threshold exceeded */
 			out_be32(sriodev->regs.regs_win + IECSR + 0x80 * i,
 				 SRIO_IECSR_CLEAR);
@@ -121,7 +120,6 @@ static irqreturn_t srio_uio_irq_handler(int irq, struct uio_info *dev_info)
 			/* Clear EDCSR */
 			out_be32(sriodev->regs.regs_win + EDCSR + 0x40 * i,
 				 0);
-		}
 	}
 
 	return IRQ_HANDLED;
