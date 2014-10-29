@@ -60,12 +60,6 @@ static struct device *get_jrdev(struct dpa_ipsec *dpa_ipsec);
 #define PTR_LEN			2	/* Descriptor is created only for 8 byte
 					 * pointer. PTR_LEN is in words. */
 
-static const struct of_device_id sec_jr_match[] = {
-	{
-	 .compatible = "fsl,sec-v4.0-job-ring"
-	}
-};
-
 /* retrieve and store SEC information */
 int get_sec_info(struct dpa_ipsec *dpa_ipsec)
 {
@@ -101,25 +95,18 @@ int get_sec_info(struct dpa_ipsec *dpa_ipsec)
 
 static struct device *get_jrdev(struct dpa_ipsec *dpa_ipsec)
 {
-	struct device_node *sec_jr_node;
-	struct platform_device *sec_of_jr_dev;
+	struct device *sec_jr_dev;
 
-	if (dpa_ipsec->jrdev)
+	if (!IS_ERR_OR_NULL(dpa_ipsec->jrdev))
 		return dpa_ipsec->jrdev;
 
-	sec_jr_node = of_find_matching_node(NULL, &sec_jr_match[0]);
-	if (!sec_jr_node) {
-		log_err("Couln't find the device_node SEC job-ring, check the device tree\n");
+	sec_jr_dev = caam_jr_alloc();
+	if (IS_ERR(sec_jr_dev)) {
+		log_err("No available SEC job-ring\n");
 		return NULL;
 	}
 
-	sec_of_jr_dev = of_find_device_by_node(sec_jr_node);
-	if (!sec_of_jr_dev) {
-		log_err("SEC job-ring of_device null\n");
-		return NULL;
-	}
-
-	return &sec_of_jr_dev->dev;
+	return sec_jr_dev;
 }
 
 static inline u32 get_ipsec_op_type(enum dpa_ipsec_direction sa_dir)
