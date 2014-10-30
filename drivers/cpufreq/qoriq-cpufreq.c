@@ -20,6 +20,7 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
+#include <linux/cpu.h>
 
 /**
  * struct cpu_data - per CPU data struct
@@ -323,6 +324,62 @@ static int qoriq_cpufreq_verify(struct cpufreq_policy *policy)
 	return cpufreq_frequency_table_verify(policy, table);
 }
 
+/*
+ * t4240 specific data struct used by a workaround for errata:
+ * A-008083: Dynamic frequency switch (DFS) can hang SoC
+ * when changing frequency of a cluster with active cores
+ * or snoop transactions.
+ *
+ * Basically, the workaround is putting a cluster to PCL10 status
+ * before changing its frequency.
+ */
+struct t4240_dfs {
+	struct clk *parent;
+	struct clk *child;
+	unsigned int cpu;
+	spinlock_t lock;
+} t4dfs;
+
+static int t4240_workaround;
+
+static void t4240_work_fn(struct work_struct *unused)
+{
+	struct cpumask mask;
+	int i;
+	struct t4240_dfs dfs;
+
+	spin_lock(&t4dfs.lock);
+	dfs.cpu = t4dfs.cpu;
+	dfs.parent = t4dfs.parent;
+	dfs.child = t4dfs.child;
+	spin_unlock(&t4dfs.lock);
+
+	/* save the cpu mask */
+	cpumask_copy(&mask, cpu_core_mask(dfs.cpu));
+
+	/*
+	 * shut down all the CPUs in this cluster.
+	 * this cluster will enter PCL10 automatically.
+	 */
+	for_each_cpu(i, &mask)
+		cpu_down(i);
+
+	/* switch CPU frequency safely */
+	clk_set_parent(dfs.child, dfs.parent);
+
+	/* bring CPUs back */
+	for_each_cpu(i, &mask)
+		cpu_up(i);
+}
+
+/*
+ * CPUFreq framework requires CPU must be online when
+ * changing its frequency, while this workaround requires
+ * CPU must be offline. So, use a workqueue here to fulfill
+ * both requirements.
+ */
+static DECLARE_WORK(t4240_dfs_work, t4240_work_fn);
+
 static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 		unsigned int target_freq, unsigned int relation)
 {
@@ -331,6 +388,18 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 	struct clk *parent;
 	int ret;
 	struct cpu_data *data = per_cpu(cpu_data, policy->cpu);
+	int workaround = 0;
+
+	/*
+	 * workaround should be applied on 2 conditions:
+	 * 1. on t4240 platform
+	 * 2. the cluster CPU belongs to is not same as
+	 *	 the cluster boot CPU belongs to.
+	 */
+	if (t4240_workaround &&
+			(cpumask_equal(cpu_core_mask(boot_cpuid),
+				cpu_core_mask(policy->cpu)) == 0))
+		workaround = 1;
 
 	cpufreq_frequency_table_target(policy, data->table,
 			target_freq, relation, &new);
@@ -345,13 +414,23 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_PRECHANGE);
 
 	parent = of_clk_get(data->parent, data->table[new].driver_data);
-	ret = clk_set_parent(data->clk, parent);
-	if (ret)
+
+	if (t4240_workaround == 1) {
 		freqs.new = freqs.old;
+		ret = -1;
+	}
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
 	mutex_unlock(&cpufreq_lock);
 
+	if (workaround == 1) {
+		spin_lock(&t4dfs.lock);
+		t4dfs.parent = parent;
+		t4dfs.child = data->clk;
+		t4dfs.cpu = policy->cpu;
+		spin_unlock(&t4dfs.lock);
+		schedule_work(&t4240_dfs_work);
+	}
 	return ret;
 }
 
@@ -404,6 +483,13 @@ static int __init qoriq_cpufreq_init(void)
 	}
 
 	of_node_put(np);
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,t4240-clockgen");
+	if (np) {
+		t4240_workaround = 1;
+		spin_lock_init(&t4dfs.lock);
+		of_node_put(np);
+	}
 
 	ret = cpufreq_register_driver(&qoriq_cpufreq_driver);
 	if (!ret)
