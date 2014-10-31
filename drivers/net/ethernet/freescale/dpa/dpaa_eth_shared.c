@@ -269,18 +269,19 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 
 	if (fd->format == qm_fd_sg) {
 		if (dpa_bp->vaddr) {
-			sgt = dpa_phys2virt(dpa_bp,
-					    qm_fd_addr(fd)) + dpa_fd_offset(fd);
+			sgt = dpa_phys2virt(dpa_bp, qm_fd_addr(fd)) +
+				dpa_fd_offset(fd);
 
 			for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
+				void *frag_addr = dpa_phys2virt(dpa_bp,
+						qm_sg_addr(&sgt[i]) +
+						be16_to_cpu(sgt[i].offset));
+				u32 frag_length = be32_to_cpu(sgt[i].length);
 				BUG_ON(sgt[i].extension);
 
 				/* copy from sgt[i] */
-				memcpy(skb_put(skb, sgt[i].length),
-					dpa_phys2virt(dpa_bp,
-							qm_sg_addr(&sgt[i]) +
-							sgt[i].offset),
-					sgt[i].length);
+				memcpy(skb_put(skb, frag_length), frag_addr,
+						frag_length);
 				if (sgt[i].final)
 					break;
 			}
@@ -300,12 +301,13 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 							dpa_bp->size));
 
 			for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
+				u32 frag_length = be32_to_cpu(sgt[i].length);
 				BUG_ON(sgt[i].extension);
-
 				copy_from_unmapped_area(
-					skb_put(skb, sgt[i].length),
-					qm_sg_addr(&sgt[i]) + sgt[i].offset,
-					sgt[i].length);
+						skb_put(skb, frag_length),
+						qm_sg_addr(&sgt[i]) +
+						be16_to_cpu(sgt[i].offset),
+						frag_length);
 
 				if (sgt[i].final)
 					break;
