@@ -518,7 +518,7 @@ static int create_inpol_cls_tbl(struct dpa_ipsec *dpa_ipsec,
 	memset(&params, 0, sizeof(params));
 	params.entry_mgmt = DPA_CLS_TBL_MANAGE_BY_REF;
 	params.type = DPA_CLS_TBL_EXACT_MATCH;
-	params.exact_match_params.entries_cnt = DPA_IPSEC_MAX_IN_POL_PER_SA;
+	params.exact_match_params.entries_cnt = DPA_IPSEC_MAX_POL_PER_SA;
 	params.exact_match_params.key_size = dpa_ipsec->sa_mng.inpol_key_size;
 	params.exact_match_params.use_priorities = true;
 	params.cc_node = cc_node;
@@ -3240,6 +3240,13 @@ static int check_sa_params(struct dpa_ipsec_sa_params *sa_params)
 		return -EINVAL;
 	}
 
+	if (sa_params->crypto_params.alg_suite <
+	     DPA_IPSEC_CIPHER_ALG_3DES_CBC_HMAC_96_MD5_128 ||
+	    sa_params->crypto_params.alg_suite >
+	     DPA_IPSEC_CIPHER_ALG_AES_CTR_HMAC_SHA_512_256) {
+		log_err("Invalid alg_suite value\n");
+		return -EINVAL;
+	}
 	/*
 	 * check crypto params:
 	 * - an authentication key must always be provided
@@ -3657,6 +3664,7 @@ int dpa_ipsec_free(int dpa_ipsec_id)
 		sa_id = instance->used_sa_ids[i];
 		if (sa_id != DPA_OFFLD_INVALID_OBJECT_ID) {
 			sa = get_sa_from_sa_id(instance, sa_id);
+			BUG_ON(!sa);
 			if (sa_is_inbound(sa)) {
 				if (sa_is_child(sa))
 					remove_inbound_sa(sa->parent_sa);
@@ -5855,7 +5863,7 @@ int dpa_ipsec_sa_get_seq_number(int sa_id, uint64_t *seq)
 out:
 	put_instance(dpa_ipsec);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(dpa_ipsec_sa_get_seq_number);
 

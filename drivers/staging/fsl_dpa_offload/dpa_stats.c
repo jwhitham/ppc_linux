@@ -46,13 +46,17 @@
 /* FMD includes */
 #include "fm_pcd_ext.h"
 
-#define STATS_VAL_SIZE 4
 #define UNSUPPORTED_CNT_SEL -1
 #define CLASSIF_STATS_SHIFT 4
 #define WORKQUEUE_MAX_ACTIVE 3
 
 #define DPA_STATS_US_CNT 0x80000000
 
+#define CHECK_INSTANCE_ZERO \
+		if (dpa_stats_id != 0) { \
+			log_err("DPA Stats supports only instance zero\n"); \
+			return -ENOSYS; \
+		}
 
 /* Global dpa_stats component */
 struct dpa_stats *gbl_dpa_stats;
@@ -120,9 +124,12 @@ static int check_dpa_stats_params(const struct dpa_stats_params *params)
 		return -EINVAL;
 	}
 
-	if (params->storage_area_len < STATS_VAL_SIZE) {
-		log_err("Parameter storage_area_len %d cannot be bellow %d\n",
-			params->storage_area_len, STATS_VAL_SIZE);
+	/* Check user-provided storage area length */
+	if (params->storage_area_len < DPA_STATS_CNT_SEL_LEN ||
+	    params->storage_area_len > DPA_STATS_MAX_STORAGE_AREA_SIZE) {
+		log_err("Parameter storage_area_len %d must be in range (%d - %d)\n",
+			params->storage_area_len,
+			DPA_STATS_CNT_SEL_LEN, DPA_STATS_MAX_STORAGE_AREA_SIZE);
 		return -EINVAL;
 	}
 
@@ -153,13 +160,13 @@ static int set_cnt_classif_node_retrieve_func(struct dpa_stats_cnt_cb *cnt_cb,
 				enum dpa_stats_classif_node_type ccnode_type)
 {
 	switch (ccnode_type) {
-	case DPA_CLS_TBL_HASH:
+	case DPA_STATS_CLASSIF_NODE_HASH:
 		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_hash_stats;
 		break;
-	case DPA_CLS_TBL_INDEXED:
+	case DPA_STATS_CLASSIF_NODE_INDEXED:
 		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_index_stats;
 		break;
-	case DPA_CLS_TBL_EXACT_MATCH:
+	case DPA_STATS_CLASSIF_NODE_EXACT_MATCH:
 		cnt_cb->f_get_cnt_stats = get_cnt_ccnode_match_stats;
 		break;
 	default:
@@ -1152,7 +1159,7 @@ static int copy_key_descriptor(const struct dpa_offload_lookup_key *src,
 	}
 
 	/* Check that key size is not zero */
-	if (src->size == 0) {
+	if ((src->size == 0) || (src->size > DPA_OFFLD_MAXENTRYKEYSIZE)) {
 		log_err("Lookup key descriptor size (%d) must be in range (1 - %d) bytes\n",
 			src->size, DPA_OFFLD_MAXENTRYKEYSIZE);
 		return -EINVAL;
@@ -1378,7 +1385,7 @@ static int cnt_gen_sel_to_stats(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	return 0;
 }
@@ -1498,7 +1505,7 @@ static int set_cnt_eth_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return err;
 
 	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
+	cnt_cb->bytes_num = DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	/* Get FM MAC handle */
 	err = get_fm_mac(params->eth_params.src, &fm_mac);
@@ -1589,7 +1596,7 @@ static int set_cnt_reass_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return err;
 
 	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
+	cnt_cb->bytes_num = DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	/* Check the user-provided reassembly manip */
 	err = FM_PCD_ManipGetStatistics(params->reass_params.reass, &stats);
@@ -1653,7 +1660,7 @@ static int set_cnt_frag_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return err;
 
 	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
+	cnt_cb->bytes_num = DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	/* Check the user-provided fragmentation handle */
 	err = FM_PCD_ManipGetStatistics(params->frag_params.frag, &stats);
@@ -1718,7 +1725,7 @@ static int set_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return err;
 
 	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
+	cnt_cb->bytes_num = DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	err = alloc_cnt_stats(&cnt_cb->info, cnt_cb->members_num);
 	if (err)
@@ -1816,7 +1823,7 @@ static int set_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 	cnt_cb->members_num = 1;
 
 	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
+	cnt_cb->bytes_num = DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	err = alloc_cnt_stats(&cnt_cb->info, cnt_cb->members_num);
 	if (err)
@@ -1921,7 +1928,7 @@ static int set_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 		return err;
 
 	/* Set number of bytes that will be written by this counter */
-	cnt_cb->bytes_num = STATS_VAL_SIZE * cnt_cb->info.stats_num;
+	cnt_cb->bytes_num = DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	err = alloc_cnt_stats(&cnt_cb->info, cnt_cb->members_num);
 	if (err)
@@ -2151,7 +2158,7 @@ static int set_cls_cnt_eth_cb(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	cnt_cb->gen_cb.objs = kcalloc(cnt_cb->members_num, sizeof(t_Handle),
 								GFP_KERNEL);
@@ -2235,7 +2242,7 @@ static int set_cls_cnt_reass_cb(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	cnt_cb->gen_cb.objs = kcalloc(cnt_cb->members_num, sizeof(t_Handle),
 								GFP_KERNEL);
@@ -2303,7 +2310,7 @@ static int set_cls_cnt_frag_cb(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	cnt_cb->gen_cb.objs = kcalloc(cnt_cb->members_num, sizeof(t_Handle),
 								GFP_KERNEL);
@@ -2342,7 +2349,8 @@ static int set_cls_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 {
 	struct dpa_stats *dpa_stats = cnt_cb->dpa_stats;
 	uint32_t cnt_sel = params->plcr_params.cnt_sel;
-	uint32_t i, j, stats, stats_idx, stats_base_idx;
+	uint32_t i, j, stats_idx, stats_base_idx;
+	uint64_t stats;
 	int err;
 
 	if (!dpa_stats) {
@@ -2371,7 +2379,7 @@ static int set_cls_cnt_plcr_cb(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	cnt_cb->gen_cb.objs = kcalloc(cnt_cb->members_num, sizeof(t_Handle),
 								GFP_KERNEL);
@@ -2550,7 +2558,7 @@ static int set_cls_cnt_classif_tbl_cb(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-			STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	/* Allocate memory for key descriptors */
 	tbl_cb->keys = kcalloc(params->class_members, sizeof(*tbl_cb->keys),
@@ -2745,7 +2753,7 @@ static int set_cls_cnt_ccnode_cb(struct dpa_stats_cnt_cb *cnt_cb,
 
 	/* Set number of bytes that will be written by this counter */
 	cnt_cb->bytes_num = cnt_cb->members_num *
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+			DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 	/* Set retrieve function depending on counter type */
 	err = set_cnt_classif_node_retrieve_func(cnt_cb, prm.ccnode_type);
@@ -3173,10 +3181,10 @@ static inline void get_cnt_32bit_stats(struct dpa_stats_req_cb *req_cb,
 	for (j = 0; j < stats_info->stats_num; j++) {
 		if (stats_info->stats_off[j] == UNSUPPORTED_CNT_SEL) {
 			/* Write the memory location */
-			memset(req_cb->request_area, 0, STATS_VAL_SIZE);
+			memset(req_cb->request_area, 0, DPA_STATS_CNT_SEL_LEN);
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE;
+			req_cb->request_area += DPA_STATS_CNT_SEL_LEN;
 			continue;
 		}
 
@@ -3203,7 +3211,7 @@ static inline void get_cnt_32bit_stats(struct dpa_stats_req_cb *req_cb,
 					stats_info->stats[stats_index];
 
 		/* Update the memory pointer */
-		req_cb->request_area += STATS_VAL_SIZE;
+		req_cb->request_area += DPA_STATS_CNT_SEL_LEN;
 
 		if (stats_info->reset)
 			stats_info->stats[stats_index] = 0;
@@ -3244,7 +3252,7 @@ static inline void get_cnt_64bit_stats(struct dpa_stats_req_cb *req_cb,
 				(uint32_t)stats_info->stats[stats_index];
 
 		/* Update the memory pointer */
-		req_cb->request_area += STATS_VAL_SIZE;
+		req_cb->request_area += DPA_STATS_CNT_SEL_LEN;
 
 		if (stats_info->reset)
 			stats_info->stats[stats_index] = 0;
@@ -3352,7 +3360,7 @@ static int get_cnt_plcr_stats(struct dpa_stats_req_cb *req_cb,
 					(uint32_t)info->stats[stats_index];
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE;
+			req_cb->request_area += DPA_STATS_CNT_SEL_LEN;
 
 			if (info->reset)
 				info->stats[stats_index] = 0;
@@ -3373,11 +3381,11 @@ static int get_cnt_cls_tbl_match_stats(struct dpa_stats_req_cb *req_cb,
 		if (!cnt_cb->tbl_cb.keys[i].valid) {
 			/* Write the memory location */
 			memset(req_cb->request_area, 0,
-				cnt_cb->info.stats_num * STATS_VAL_SIZE);
+				cnt_cb->info.stats_num * DPA_STATS_CNT_SEL_LEN);
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE *
-					cnt_cb->info.stats_num;
+			req_cb->request_area +=
+				DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 			continue;
 		}
 
@@ -3423,11 +3431,11 @@ static int get_cnt_cls_tbl_hash_stats(struct dpa_stats_req_cb *req_cb,
 		if (!cnt_cb->tbl_cb.keys[i].valid) {
 			/* Write the memory location */
 			memset(req_cb->request_area, 0,
-				cnt_cb->info.stats_num * STATS_VAL_SIZE);
+				cnt_cb->info.stats_num * DPA_STATS_CNT_SEL_LEN);
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE *
-					cnt_cb->info.stats_num;
+			req_cb->request_area +=
+				DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 			continue;
 		}
 
@@ -3463,11 +3471,11 @@ static int get_cnt_cls_tbl_index_stats(struct dpa_stats_req_cb *req_cb,
 		if (!cnt_cb->tbl_cb.keys[i].valid) {
 			/* Write the memory location */
 			memset(req_cb->request_area, 0,
-				cnt_cb->info.stats_num * STATS_VAL_SIZE);
+				cnt_cb->info.stats_num * DPA_STATS_CNT_SEL_LEN);
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE *
-					cnt_cb->info.stats_num;
+			req_cb->request_area +=
+				DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 			continue;
 		}
 
@@ -3503,11 +3511,11 @@ static int get_cnt_cls_tbl_frag_stats(struct dpa_stats_req_cb *req_cb,
 		if (!cnt_cb->tbl_cb.keys[i].valid) {
 			/* Write the memory location */
 			memset(req_cb->request_area, 0,
-				cnt_cb->info.stats_num * STATS_VAL_SIZE);
+				cnt_cb->info.stats_num * DPA_STATS_CNT_SEL_LEN);
 
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE *
-					cnt_cb->info.stats_num;
+			req_cb->request_area +=
+				DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 			continue;
 		}
 
@@ -3628,11 +3636,11 @@ static int get_cnt_ipsec_stats(struct dpa_stats_req_cb *req_cb,
 		if (!cnt_cb->ipsec_cb.valid[i]) {
 			/* Write the memory location */
 			memset(req_cb->request_area, 0,
-				cnt_cb->info.stats_num * STATS_VAL_SIZE);
+				cnt_cb->info.stats_num * DPA_STATS_CNT_SEL_LEN);
 
 			/* Update the memory pointer */
 			req_cb->request_area +=
-				STATS_VAL_SIZE * cnt_cb->info.stats_num;
+				DPA_STATS_CNT_SEL_LEN * cnt_cb->info.stats_num;
 
 			continue;
 		}
@@ -3704,7 +3712,7 @@ static int get_cnt_us_stats(struct dpa_stats_req_cb *req_cb,
 			/* Write the memory location */
 			*(uint32_t *)(req_cb->request_area) = 0;
 			/* Update the memory pointer */
-			req_cb->request_area += STATS_VAL_SIZE;
+			req_cb->request_area += DPA_STATS_CNT_SEL_LEN;
 		}
 	}
 	return 0;
@@ -3744,14 +3752,17 @@ int dpa_stats_init(const struct dpa_stats_params *params, int *dpa_stats_id)
 	struct dpa_stats *dpa_stats = NULL;
 	int err = 0;
 
-	/* Multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
-
 	/* Sanity checks */
 	if (gbl_dpa_stats) {
 		log_err("DPA Stats component already initialized. Multiple DPA Stats instances are not supported.\n");
 		return -EPERM;
 	}
+
+	/*
+	 * Multiple DPA Stats instances are not currently supported. The only
+	 * supported instance instance is zero.
+	 */
+	*dpa_stats_id = 0;
 
 	/* Check user-provided parameters */
 	err = check_dpa_stats_params(params);
@@ -3822,7 +3833,7 @@ int dpa_stats_create_counter(int dpa_stats_id,
 	int err = 0, err_rb = 0;
 
 	/* multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
+	CHECK_INSTANCE_ZERO;
 
 	if (!gbl_dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
@@ -3981,7 +3992,7 @@ int dpa_stats_create_class_counter(int dpa_stats_id,
 	int err = 0, err_rb = 0;
 
 	/* multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
+	CHECK_INSTANCE_ZERO;
 
 	if (!gbl_dpa_stats) {
 		log_err("DPA Stats component is not initialized\n");
@@ -4339,6 +4350,14 @@ int dpa_stats_get_counters(struct dpa_stats_cnt_request_params params,
 		return -EPERM;
 	}
 
+	/* Check user-provided size for array of counters */
+	if (params.cnts_ids_len == 0 ||
+	    params.cnts_ids_len > DPA_STATS_REQ_CNTS_IDS_LEN) {
+		log_err("Number of requested counter ids (%d) must be in range (1 - %d)\n",
+			params.cnts_ids_len, DPA_STATS_REQ_CNTS_IDS_LEN);
+		return -EINVAL;
+	}
+
 	/* Check user-provided cnts_len pointer */
 	if (!cnts_len) {
 		log_err("Parameter cnts_len cannot be NULL\n");
@@ -4357,10 +4376,10 @@ int dpa_stats_get_counters(struct dpa_stats_cnt_request_params params,
 
 	for (i = 0; i < params.cnts_ids_len; i++) {
 		if (params.cnts_ids[i] == DPA_OFFLD_INVALID_OBJECT_ID ||
-		    params.cnts_ids[i] > dpa_stats->config.max_counters) {
-			log_err("Counter id (cnt_ids[%d]) %d is not initialized or is greater than maximum counters %d\n",
+		    params.cnts_ids[i] >= dpa_stats->config.max_counters) {
+			log_err("Counter id (cnt_ids[%d]) %d is not initialized or is greater than maximum counter id %d\n",
 				i, params.cnts_ids[i],
-				dpa_stats->config.max_counters);
+				dpa_stats->config.max_counters - 1);
 			return -EINVAL;
 		}
 	}
@@ -4458,8 +4477,9 @@ int dpa_stats_reset_counters(int *cnts_ids, unsigned int cnts_ids_len)
 	}
 
 	/* Check user-provided cnts_len pointer */
-	if (cnts_ids_len == 0) {
-		log_err("Parameter cnts_ids_len cannot be 0\n");
+	if (cnts_ids_len == 0 || cnts_ids_len > DPA_STATS_REQ_CNTS_IDS_LEN) {
+		log_err("Parameter cnts_ids_len %d must be in range (1 - %d)\n",
+			cnts_ids_len, DPA_STATS_REQ_CNTS_IDS_LEN);
 		return -EINVAL;
 	}
 
@@ -4473,8 +4493,8 @@ int dpa_stats_reset_counters(int *cnts_ids, unsigned int cnts_ids_len)
 
 	for (i = 0; i < cnts_ids_len; i++)
 		if (cnts_ids[i] == DPA_OFFLD_INVALID_OBJECT_ID ||
-		    cnts_ids[i] > dpa_stats->config.max_counters) {
-			log_err("Counter id (cnts_ids[%d]) %d is not initialized or is greater than maximum counters %d\n",
+		    cnts_ids[i] >= dpa_stats->config.max_counters) {
+			log_err("Counter id (cnt_ids[%d]) %d is not initialized or is greater than maximum counter id %d\n",
 				i, cnts_ids[i],
 				dpa_stats->config.max_counters - 1);
 			return -EINVAL;
@@ -4527,7 +4547,7 @@ EXPORT_SYMBOL(dpa_stats_reset_counters);
 int dpa_stats_free(int dpa_stats_id)
 {
 	/* multiple DPA Stats instances are not currently supported */
-	unused(dpa_stats_id);
+	CHECK_INSTANCE_ZERO;
 
 	return free_resources();
 }

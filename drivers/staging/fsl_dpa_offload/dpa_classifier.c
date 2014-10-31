@@ -947,8 +947,7 @@ static int hash_table_modify_entry(
 	hash_set_index = crc64_ecma(key->byte,
 			ptable->params.hash_params.key_size,
 			hash_set_index);
-	hash_set_index =
-			(u64)(hash_set_index & ptable->hash_mask) >>
+	hash_set_index = (u64)(hash_set_index & ptable->hash_mask) >>
 			(8 * (6 - ptable->params.hash_params.hash_offs) + 4);
 
 	/*
@@ -965,12 +964,10 @@ static int hash_table_modify_entry(
 
 	memset(&key_params, 0, sizeof(t_FmPcdCcKeyParams));
 
-	cc_node_index =
-			ptable->entry[entry_id].int_cc_node_index;
+	cc_node_index = ptable->entry[entry_id].int_cc_node_index;
 	entry_index = ptable->entry[entry_id].entry_index;
 
-	cc_node =
-			(t_Handle)ptable->int_cc_node[cc_node_index].cc_node;
+	cc_node = (t_Handle)ptable->int_cc_node[cc_node_index].cc_node;
 
 	if (!action) {
 		/* Save action to next engine params */
@@ -998,8 +995,6 @@ static int hash_table_modify_entry(
 					&key_params.ccNextEngineParams);
 			if (err)
 				return -err;
-
-			hmd = ptable->entry[entry_id].hmd;
 		}
 	} else {
 		/*
@@ -1565,7 +1560,6 @@ static int table_delete_entry_by_ref(struct dpa_cls_table *ptable, int entry_id)
 {
 	t_Error err;
 	struct dpa_cls_tbl_shadow_entry *shadow_entry;
-	struct dpa_cls_tbl_shadow_entry_indexed *shadow_entry_indexed;
 	uint8_t entry_index;
 	unsigned int cc_node_index;
 	t_Handle cc_node;
@@ -1635,30 +1629,16 @@ static int table_delete_entry_by_ref(struct dpa_cls_table *ptable, int entry_id)
 	int_cc_node->used--;
 
 	if (ptable->shadow_table) {
-		if (ptable->params.type == DPA_CLS_TBL_INDEXED) {
-			shadow_list_entry = ptable->shadow_table[0].
-					shadow_entry[entry_index].next;
-			shadow_entry_indexed = list_entry(shadow_list_entry,
-					struct dpa_cls_tbl_shadow_entry_indexed,
-					list_node);
-
-			list_del(&shadow_entry_indexed->list_node);
-
-			kfree(shadow_entry_indexed);
-		} else {
-			shadow_list_entry =
-					ptable->entry[entry_id].shadow_entry;
-			shadow_entry = list_entry(shadow_list_entry,
+		shadow_list_entry = ptable->entry[entry_id].shadow_entry;
+		shadow_entry = list_entry(shadow_list_entry,
 						struct dpa_cls_tbl_shadow_entry,
 						list_node);
 
-			list_del(&shadow_entry->list_node);
+		list_del(&shadow_entry->list_node);
 
-			kfree(shadow_entry->key.byte);
-			kfree(shadow_entry->key.mask);
-			kfree(shadow_entry);
-		}
-
+		kfree(shadow_entry->key.byte);
+		kfree(shadow_entry->key.mask);
+		kfree(shadow_entry);
 	}
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
@@ -2080,6 +2060,51 @@ static int table_get_entry_stats_by_ref(struct dpa_cls_table	*ptable,
 
 	return ret;
 }
+
+int dpa_classif_table_get_miss_stats(int			td,
+				struct dpa_cls_tbl_entry_stats	*stats)
+{
+	struct dpa_cls_table *ptable;
+	t_FmPcdCcKeyStatistics key_stats;
+	t_Error err;
+	int i, ret = 0;
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) -->\n",
+			__func__, __LINE__));
+
+	/* Parameters sanity check. */
+	if (!stats) {
+		log_err("\"stats\" cannot be NULL.\n");
+		return -EINVAL;
+	}
+
+	LOCK_OBJECT(table_array, td, ptable, -EINVAL);
+	memset(stats, 0, sizeof(*stats));
+	for (i = 0; i < ptable->int_cc_nodes_count; i++) {
+		memset(&key_stats, 0, sizeof(key_stats));
+		err = FM_PCD_MatchTableGetMissStatistics(
+				(t_Handle)ptable->int_cc_node[i].cc_node,
+				&key_stats);
+		if (err != E_OK) {
+			log_warn("FMan driver call failed - FM_PCD_MatchTableGetMissStatistics. Failed to acquire key statistics.\n");
+			memset(stats, 0, sizeof(*stats));
+			ret = -EPERM;
+			break;
+		}
+		stats->pkts += key_stats.frameCount;
+		stats->bytes += key_stats.byteCount;
+	}
+	RELEASE_OBJECT(ptable);
+
+	if (ret < 0)
+		log_err("Failed to get miss stats in table td=%d.\n", td);
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n",
+			__func__, __LINE__));
+
+	return ret;
+}
+EXPORT_SYMBOL(dpa_classif_table_get_miss_stats);
 
 int dpa_classif_table_get_params(int td, struct dpa_cls_tbl_params *params)
 {
@@ -3085,6 +3110,11 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 					policer_params->modify_policer_params;
 				next_engine_params->params.plcrParams.
 					newFqid = action->enq_params.new_fqid;
+#if (DPAA_VERSION >= 11)
+				next_engine_params->params.plcrParams.
+					newRelativeStorageProfileId =
+					action->enq_params.new_rel_vsp_id;
+#endif /* (DPAA_VERSION >= 11) */
 			} else {
 				next_engine_params->nextEngine = e_FM_PCD_DONE;
 				next_engine_params->params.enqueueParams.
@@ -3095,12 +3125,12 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 					next_engine_params->params.
 						enqueueParams.overrideFqid =
 						TRUE;
-			}
 #if (DPAA_VERSION >= 11)
-			next_engine_params->params.enqueueParams.
-				  newRelativeStorageProfileId =
-				      action->enq_params.new_rel_vsp_id;
+				next_engine_params->params.enqueueParams.
+					newRelativeStorageProfileId =
+					action->enq_params.new_rel_vsp_id;
 #endif
+			}
 		}
 
 		if (action->enq_params.hmd != DPA_OFFLD_DESC_NONE) {
@@ -3185,7 +3215,7 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 				return -EINVAL;
 			}
 			next_engine_params->h_Manip = (t_Handle)
-			dpa_classif_hm_lock_chain(action->enq_params.hmd);
+			dpa_classif_hm_lock_chain(action->mcast_params.hmd);
 			if (!next_engine_params->h_Manip) {
 				log_err("Failed to attach HM op hmd=%d to "
 					"classification entry.\n",
@@ -3193,7 +3223,7 @@ static int action_to_next_engine_params(const struct dpa_cls_tbl_action *action,
 				return -EINVAL;
 			}
 
-			*hmd = action->enq_params.hmd;
+			*hmd = action->mcast_params.hmd;
 		} else
 			next_engine_params->h_Manip = NULL;
 		next_engine_params->nextEngine = e_FM_PCD_FR;
@@ -3742,7 +3772,6 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 	BUG_ON(!node_array);
 	BUG_ON(!hm);
 
-	/* This HM operation is linked to another HM op */
 	for (i = num_nodes - 1; i >= 0; i--) {
 		/*
 		 * If the node is empty, save an empty space and skip
@@ -3778,6 +3807,8 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 			/* Node does not exist, we need to create it */
 			hm->hm_node[i] = kzalloc(sizeof(struct dpa_cls_hm_node),
 						 GFP_KERNEL);
+			dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+				__LINE__, hm->hm_node[i]));
 			if (!hm->hm_node[i]) {
 				log_err("Not enough memory for HM node "
 					"management.\n");
@@ -3788,6 +3819,9 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 			hm->hm_node[i]->node = node_array[i];
 			INIT_LIST_HEAD(&hm->hm_node[i]->list_node);
 
+			/* Initialize dontParseAfterManip to TRUE */
+			hm->hm_node[i]->params.u.hdr.dontParseAfterManip = TRUE;
+
 			/* Add this new node to the HM chain: */
 			list_add(&hm->hm_node[i]->list_node,
 				hm->hm_chain);
@@ -3795,6 +3829,166 @@ static int import_hm_nodes_to_chain(void * const *node_array,
 	}
 
 	return 0;
+}
+
+static struct dpa_cls_hm_node *try_compatible_node(const struct dpa_cls_hm *hm)
+{
+	struct dpa_cls_hm_node *hm_node = NULL;
+	const int update_flags = DPA_CLS_HM_UPDATE_IPv4_UPDATE |
+					DPA_CLS_HM_UPDATE_IPv6_UPDATE |
+					DPA_CLS_HM_UPDATE_UDP_TCP_UPDATE;
+	const int replace_flags = DPA_CLS_HM_REPLACE_IPv4_BY_IPv6 |
+					DPA_CLS_HM_REPLACE_IPv6_BY_IPv4;
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) -->\n", __func__,
+		__LINE__));
+
+	if (list_empty(hm->hm_chain)) {
+		/*
+		 * There is nothing in the HM node chain. Don't bother any more
+		 * to look for anything:
+		 */
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <-- did not find a compatible node.\n",
+			__func__, __LINE__));
+		return NULL;
+	}
+
+	/* Get the last item in the chain */
+	hm_node = list_entry(hm->hm_chain->next,
+				struct dpa_cls_hm_node, list_node);
+	/*
+	 * If the previous HM node is not a HDR_MANIP, then it can't be
+	 * compatible for aggregation:
+	 */
+	if (hm_node->params.type != e_FM_PCD_MANIP_HDR) {
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <-- did not find a compatible node.\n",
+			__func__, __LINE__));
+		return NULL;
+	}
+
+	switch (hm->type) {
+	case DPA_CLS_HM_TYPE_REMOVE:
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Looking for REMOVE HM compatible nodes...\n",
+			__func__, __LINE__));
+		/*
+		 * If in the previous HM node the remove operation is already
+		 * used, then it is not compatible for aggregation:
+		 */
+		if (hm_node->params.u.hdr.rmv)
+			hm_node = NULL;
+		break;
+	case DPA_CLS_HM_TYPE_INSERT:
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Looking for INSERT HM compatible nodes...\n",
+			__func__, __LINE__));
+		/*
+		 * If in the previous HM node the insert operation is already
+		 * used, then it is not compatible for aggregation:
+		 */
+		if (hm_node->params.u.hdr.insrt)
+			hm_node = NULL;
+		break;
+	case DPA_CLS_HM_TYPE_UPDATE:
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Looking for UPDATE HM compatible nodes...\n",
+			__func__, __LINE__));
+		/*
+		 * If in the previous HM node the update operation is already
+		 * used and we also have to do header updates, then it is not
+		 * compatible for aggregation:
+		 */
+		if ((hm->update_params.op_flags & update_flags) &&
+			(hm_node->params.u.hdr.fieldUpdate))
+			hm_node = NULL;
+
+		/*
+		 * If in the previous HM node the custom header replace
+		 * operation is already used and we also have to do header
+		 * replacement, then it is not compatible for aggregation:
+		 */
+		if ((hm->update_params.op_flags & replace_flags) &&
+			(hm_node->params.u.hdr.custom))
+			hm_node = NULL;
+		break;
+	case DPA_CLS_HM_TYPE_VLAN:
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Looking for VLAN HM compatible nodes...\n",
+			__func__, __LINE__));
+		switch (hm->vlan_params.type) {
+		case DPA_CLS_HM_VLAN_INGRESS:
+			/*
+			 * If in the previous HM node the remove operation is
+			 * already used, then it is not compatible for
+			 * aggregation:
+			 */
+			if (hm_node->params.u.hdr.rmv)
+				hm_node = NULL;
+			break;
+		case DPA_CLS_HM_VLAN_EGRESS:
+			/*
+			 * If in the previous HM node the insert operation is
+			 * already used and we need to insert VLANs, then it is
+			 * not compatible for aggregation:
+			 */
+			if ((hm->vlan_params.egress.num_tags) &&
+				(hm_node->params.u.hdr.insrt))
+				hm_node = NULL;
+			/*
+			 * If in the previous HM node the update operation is
+			 * already used and we need to do VLAN update, then it
+			 * is not compatible for aggregation:
+			 */
+			if ((hm->vlan_params.egress.update_op) &&
+				(hm_node->params.u.hdr.fieldUpdate))
+				hm_node = NULL;
+			break;
+		default:
+			hm_node = NULL;
+			break;
+		}
+		break;
+	case DPA_CLS_HM_TYPE_MPLS:
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Looking for MPLS HM compatible nodes...\n",
+			__func__, __LINE__));
+		switch (hm->mpls_params.type) {
+		case DPA_CLS_HM_MPLS_INSERT_LABELS:
+			/*
+			 * If in the previous HM node the insert operation is
+			 * already used, then it is not compatible for
+			 * aggregation:
+			 */
+			if (hm_node->params.u.hdr.insrt)
+				hm_node = NULL;
+			break;
+		case DPA_CLS_HM_MPLS_REMOVE_ALL_LABELS:
+			/*
+			 * If in the previous HM node the remove operation is
+			 * already used, then it is not compatible for
+			 * aggregation:
+			 */
+			if (hm_node->params.u.hdr.rmv)
+				hm_node = NULL;
+			break;
+		default:
+			hm_node = NULL;
+			break;
+		}
+		break;
+	default:
+		hm_node = NULL;
+		break;
+	}
+
+#ifdef DPA_CLASSIFIER_DEBUG
+	if (hm_node)
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): FOUND compatible hm_node = 0x%p.\n",
+			__func__, __LINE__, hm_node));
+	else
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Compatible hm_node NOT FOUND.\n",
+			__func__, __LINE__));
+#endif /* DPA_CLASSIFIER_DEBUG */
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+		__LINE__));
+
+	return hm_node;
 }
 
 static int add_local_hm_nodes_to_chain(struct dpa_cls_hm *phm)
@@ -3847,8 +4041,8 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 	pcurrent->params.h_NextManip = (pnext) ? (t_Handle)pnext->node : NULL;
 
 #ifdef DPA_CLASSIFIER_DEBUG
-	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Dumping HM node params.\n",
-		__func__, __LINE__));
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Dumping HM node params for hm_node @ 0x%p\n",
+		__func__, __LINE__, pcurrent));
 	switch (pcurrent->params.type) {
 	case e_FM_PCD_MANIP_HDR:
 		dpa_cls_dbg(("	hm_node_params.type = "
@@ -3856,9 +4050,33 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 		dpa_cls_dbg(("	hm_node_params.u.hdr.rmv = %d\n",
 			pcurrent->params.u.hdr.rmv));
 		if (pcurrent->params.u.hdr.rmv) {
-			dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams"
-				".type = %d\n",
-				pcurrent->params.u.hdr.rmvParams.type));
+			switch (pcurrent->params.u.hdr.rmvParams.type) {
+			case e_FM_PCD_MANIP_RMV_GENERIC:
+				dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams"
+					".type = e_FM_PCD_MANIP_RMV_GENERIC\n"));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams."
+					"u.generic.offset = %u\n",
+					pcurrent->params.u.hdr.rmvParams.u.generic.offset));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams."
+					"u.generic.size = %u\n",
+					pcurrent->params.u.hdr.rmvParams.u.generic.size));
+				break;
+			case e_FM_PCD_MANIP_RMV_BY_HDR:
+				dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams"
+					".type = e_FM_PCD_MANIP_RMV_BY_HDR\n"));
+				if (pcurrent->params.u.hdr.rmvParams.u.byHdr.type == e_FM_PCD_MANIP_RMV_BY_HDR_SPECIFIC_L2) {
+					dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams."
+						"u.byHdr.type = e_FM_PCD_MANIP_RMV_BY_HDR_SPECIFIC_L2\n"));
+					dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams."
+						"u.byHdr.u.specificL2 = %d\n",
+						pcurrent->params.u.hdr.rmvParams.u.byHdr.u.specificL2));
+				} else {
+					dpa_cls_dbg(("	hm_node_params.u.hdr.rmvParams."
+						"u.byHdr.type = %d\n",
+						pcurrent->params.u.hdr.rmvParams.u.byHdr.type));
+				}
+				break;
+			}
 		}
 		dpa_cls_dbg(("	hm_node_params.u.hdr.insrt = %d\n",
 			pcurrent->params.u.hdr.insrt));
@@ -3951,10 +4169,26 @@ static int init_hm_chain(void *fm_pcd, struct list_head *chain_head,
 		dpa_cls_dbg(("	hm_node_params.u.hdr.custom = %d\n",
 			pcurrent->params.u.hdr.custom));
 		if (pcurrent->params.u.hdr.custom) {
-			dpa_cls_dbg(("	hm_node_params.u.hdr."
-				"custom.type = %d\n",
-				pcurrent->params.u.hdr.customParams.type));
+			if (pcurrent->params.u.hdr.customParams.type ==
+					e_FM_PCD_MANIP_HDR_CUSTOM_IP_REPLACE) {
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams."
+					"type = e_FM_PCD_MANIP_HDR_CUSTOM_IP_REPLACE\n"));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams.u.ipHdrReplace.replaceType = %d\n",
+					pcurrent->params.u.hdr.customParams.u.ipHdrReplace.replaceType));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams.u.ipHdrReplace.decTtlHl = %d\n",
+					pcurrent->params.u.hdr.customParams.u.ipHdrReplace.decTtlHl));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams.u.ipHdrReplace.updateIpv4Id = %d\n",
+					pcurrent->params.u.hdr.customParams.u.ipHdrReplace.updateIpv4Id));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams.u.ipHdrReplace.id = %u\n",
+					pcurrent->params.u.hdr.customParams.u.ipHdrReplace.id));
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams.u.ipHdrReplace.hdrSize = %u\n",
+					pcurrent->params.u.hdr.customParams.u.ipHdrReplace.hdrSize));
+			} else
+				dpa_cls_dbg(("	hm_node_params.u.hdr.customParams.type = %d\n",
+					pcurrent->params.u.hdr.customParams.type));
 		}
+		dpa_cls_dbg(("	hm_node_params.u.hdr.dontParseAfterManip = %d\n",
+			pcurrent->params.u.hdr.dontParseAfterManip));
 		break;
 	case e_FM_PCD_MANIP_FRAG:
 		dpa_cls_dbg(("	hm_node_params.type = "
@@ -4088,41 +4322,6 @@ static void remove_hm_node(struct dpa_cls_hm_node *node)
 
 	/* Remove the node */
 	kfree(node);
-}
-
-static struct dpa_cls_hm_node
-	*find_compatible_hm_node(enum dpa_cls_hm_node_type	type,
-				struct list_head		*list)
-{
-	struct dpa_cls_hm_node *phm_node;
-	e_FmPcdManipHdrFieldUpdateType val;
-
-	BUG_ON(!list);
-
-	switch (type) {
-	case DPA_CLS_HM_NODE_IPv4_HDR_UPDATE:
-		val = e_FM_PCD_MANIP_HDR_FIELD_UPDATE_IPV4;
-		break;
-	case DPA_CLS_HM_NODE_IPv6_HDR_UPDATE:
-		val = e_FM_PCD_MANIP_HDR_FIELD_UPDATE_IPV6;
-		break;
-	case DPA_CLS_HM_NODE_TCPUDP_HDR_UPDATE:
-		val = e_FM_PCD_MANIP_HDR_FIELD_UPDATE_TCP_UDP;
-		break;
-	default:
-		log_err("Don't know how to search for nodes compatible with "
-			"type=%d.\n", type);
-		return NULL;
-	}
-
-	list_for_each_entry(phm_node, list, list_node) {
-		if ((phm_node->params.type == e_FM_PCD_MANIP_HDR) &&
-			(phm_node->params.u.hdr.fieldUpdate) &&
-			(phm_node->params.u.hdr.fieldUpdateParams.type == val))
-				return phm_node;
-	}
-
-	return NULL;
 }
 
 static int create_new_hm_op(int *hmd, int next_hmd)
@@ -4324,12 +4523,8 @@ static int nat_hm_prepare_nodes(struct dpa_cls_hm *pnat_hm,
 				const struct dpa_cls_hm_nat_resources *res)
 {
 	struct dpa_cls_hm_node *hm_node = NULL;
-	struct dpa_cls_hm *pnext_hm = NULL;
 	void * const *phm_nodes;
 	int err = 0;
-	enum dpa_cls_hm_node_type l3_update_node = DPA_CLS_HM_NODE_LAST_ENTRY;
-	enum dpa_cls_hm_node_type l4_update_node = DPA_CLS_HM_NODE_LAST_ENTRY;
-	unsigned int ip_ver = 0;
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) -->\n", __func__,
 		__LINE__));
@@ -4341,83 +4536,47 @@ static int nat_hm_prepare_nodes(struct dpa_cls_hm *pnat_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->l3_update_node;
 
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
 		return import_hm_nodes_to_chain(phm_nodes,
 					pnat_hm->num_nodes,
 					pnat_hm);
 	}
 
-	/* Create HM nodes */
-	if (pnat_hm->nat_params.type == DPA_CLS_HM_NAT_TYPE_TRADITIONAL) {
-		if (pnat_hm->nat_params.flags &
-			DPA_CLS_HM_NAT_UPDATE_SIP)
-			ip_ver = pnat_hm->nat_params.nat.sip.version;
-		if (pnat_hm->nat_params.flags &
-			DPA_CLS_HM_NAT_UPDATE_DIP)
-			ip_ver = pnat_hm->nat_params.nat.dip.version;
-		if ((pnat_hm->nat_params.flags &
-				DPA_CLS_HM_NAT_UPDATE_SPORT) ||
-				(pnat_hm->nat_params.flags &
-				DPA_CLS_HM_NAT_UPDATE_DPORT))
-			l4_update_node = DPA_CLS_HM_NODE_TCPUDP_HDR_UPDATE;
-		if (ip_ver) {
-			if (ip_ver == 4)
-				l3_update_node =
-					DPA_CLS_HM_NODE_IPv4_HDR_UPDATE;
-			else
-				l3_update_node =
-					DPA_CLS_HM_NODE_IPv6_HDR_UPDATE;
-		}
-	} else {
-		if (pnat_hm->nat_params.nat_pt.type ==
-				DPA_CLS_HM_NAT_PT_IPv6_TO_IPv4)
-			l3_update_node =
-				DPA_CLS_HM_NODE_HDR_REPLACE_IPv6_BY_IPv4;
-		else
-			l3_update_node =
-				DPA_CLS_HM_NODE_HDR_REPLACE_IPv4_BY_IPv6;
+	/* Create a header manip node for this update: */
+	hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n",
+		__func__, __LINE__, hm_node));
+	if (!hm_node) {
+		log_err("No more memory for header manip nodes.\n");
+		return -ENOMEM;
 	}
 
-	/* Check if we can attach to an existing update node */
-	if (!list_empty(&pnat_hm->list_node))
-		pnext_hm = list_entry(pnat_hm->list_node.next,
-			struct dpa_cls_hm,
-			list_node);
+	INIT_LIST_HEAD(&hm_node->list_node);
 
-	if (l3_update_node != DPA_CLS_HM_NODE_LAST_ENTRY) {
-		/* Check if we can attach to an existing L3 update node */
-		if (pnext_hm)
-			hm_node = find_compatible_hm_node(l3_update_node,
-							pnext_hm->hm_chain);
-		/* If not, create an L3 update node: */
-		if (!hm_node) {
-			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
-			if (!hm_node) {
-				log_err("No more memory for header manip "
-					"nodes.\n");
-				return -ENOMEM;
-			}
-			INIT_LIST_HEAD(&hm_node->list_node);
-			pnat_hm->hm_node[0] = hm_node;
-		}
-	}
+	/* Initialize dontParseAfterManip to TRUE */
+	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
-	hm_node = NULL;
-	if (l4_update_node != DPA_CLS_HM_NODE_LAST_ENTRY) {
-		/* Check if we can attach to an existing L4 update node */
-		if (pnext_hm)
-			hm_node = find_compatible_hm_node(l4_update_node,
-							pnext_hm->hm_chain);
-		/* If not create an L4 update node: */
+	pnat_hm->hm_node[0] = hm_node;
+
+	if (pnat_hm->nat_params.flags &
+		(DPA_CLS_HM_NAT_UPDATE_SPORT | DPA_CLS_HM_NAT_UPDATE_DPORT)) {
+		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n",
+			__func__, __LINE__, hm_node));
 		if (!hm_node) {
-			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
-			if (!hm_node) {
-				log_err("No more memory for header manip "
-					"nodes.\n");
-				return -ENOMEM;
-			}
-			INIT_LIST_HEAD(&hm_node->list_node);
-			pnat_hm->hm_node[1] = hm_node;
+			log_err("No more memory for header manip nodes.\n");
+			return -ENOMEM;
 		}
+
+		INIT_LIST_HEAD(&hm_node->list_node);
+
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
+		pnat_hm->hm_node[1] = hm_node;
 	}
 
 	add_local_hm_nodes_to_chain(pnat_hm);
@@ -4444,7 +4603,12 @@ static int nat_hm_update_params(struct dpa_cls_hm *pnat_hm)
 		hm_node = pnat_hm->hm_node[0];
 
 		hm_node->params.type = e_FM_PCD_MANIP_HDR;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+		if (pnat_hm->hm_node[1])
+			hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+		else
+			hm_node->params.u.hdr.dontParseAfterManip &=
+					(pnat_hm->nat_params.reparse) ? FALSE :
+						TRUE;
 
 		if (pnat_hm->nat_params.type ==
 					DPA_CLS_HM_NAT_TYPE_TRADITIONAL) {
@@ -4559,9 +4723,11 @@ static int nat_hm_update_params(struct dpa_cls_hm *pnat_hm)
 
 		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 		hm_node->params.u.hdr.fieldUpdate	= TRUE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 		hm_node->params.u.hdr.fieldUpdateParams.type =
 				e_FM_PCD_MANIP_HDR_FIELD_UPDATE_TCP_UDP;
+
+		hm_node->params.u.hdr.dontParseAfterManip &=
+				(pnat_hm->nat_params.reparse) ? FALSE : TRUE;
 
 		if (pnat_hm->nat_params.flags & DPA_CLS_HM_NAT_UPDATE_SPORT) {
 			hm_node->params.u.hdr.fieldUpdateParams.u.tcpUdp.
@@ -4882,24 +5048,37 @@ static int fwd_hm_prepare_nodes(struct dpa_cls_hm *pfwd_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->fwd_node;
 
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
 		return import_hm_nodes_to_chain(phm_nodes,
 					pfwd_hm->num_nodes,
 					pfwd_hm);
 	}
 
+	/* Create a header manip node: */
 	hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+
+	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+		__LINE__, hm_node));
 	if (!hm_node) {
-		log_err("Not enough memory for header manip nodes.\n");
+		log_err("No more memory for header manip nodes.\n");
 		return -ENOMEM;
 	}
 
 	INIT_LIST_HEAD(&hm_node->list_node);
-	pfwd_hm->hm_node[0]	= hm_node;
+
+	/* Initialize dontParseAfterManip to TRUE */
+	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
+	pfwd_hm->hm_node[0] = hm_node;
 
 	if (pfwd_hm->update_params.ip_frag_params.mtu) {
 		/* IP fragmentation option is enabled */
 		/* Create a header manip node: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+			__LINE__, hm_node));
 		if (!hm_node) {
 			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
@@ -4932,8 +5111,10 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 
 	hm_node = pfwd_hm->hm_node[0];
 
-	hm_node->params.type			= e_FM_PCD_MANIP_HDR;
-	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pfwd_hm->fwd_params.reparse) ? FALSE : TRUE;
+
 	switch (pfwd_hm->fwd_params.out_if_type) {
 	case DPA_CLS_HM_IF_TYPE_ETHERNET:
 		/* Update Ethernet MACS */
@@ -4941,7 +5122,6 @@ static int fwd_hm_update_params(struct dpa_cls_hm *pfwd_hm)
 		hm_node->params.u.hdr.insrtParams.type	=
 						e_FM_PCD_MANIP_INSRT_GENERIC;
 		hm_node->params.u.hdr.insrtParams.u.generic.replace = TRUE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 		size = (uint8_t)(sizeof(struct ethhdr) - ETHERTYPE_SIZE);
 		pdata = kzalloc(size, GFP_KERNEL);
@@ -5309,21 +5489,35 @@ static int remove_hm_prepare_nodes(struct dpa_cls_hm *premove_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->remove_node;
 
-		err = import_hm_nodes_to_chain(phm_nodes,
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
+		return import_hm_nodes_to_chain(phm_nodes,
 					premove_hm->num_nodes,
 					premove_hm);
-	} else { /* Create HM nodes */
+	}
+
+	hm_node = try_compatible_node(premove_hm);
+	if (hm_node == NULL) {
+		/* Create a header manip node for this remove: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+			__LINE__, hm_node));
 		if (!hm_node) {
-			log_err("Not enough memory for header manip nodes.\n");
+			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
-		premove_hm->hm_node[0]	= hm_node;
 
-		add_local_hm_nodes_to_chain(premove_hm);
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
+
+	premove_hm->hm_node[0] = hm_node;
+
+	add_local_hm_nodes_to_chain(premove_hm);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -5344,9 +5538,11 @@ static int remove_hm_update_params(struct dpa_cls_hm *premove_hm)
 
 	hm_node = premove_hm->hm_node[0];
 
-	hm_node->params.type			= e_FM_PCD_MANIP_HDR;
-	hm_node->params.u.hdr.rmv		= TRUE;
-	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+	hm_node->params.type		= e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.rmv	= TRUE;
+
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(premove_hm->remove_params.reparse) ? FALSE : TRUE;
 
 	switch (premove_hm->remove_params.type) {
 	case DPA_CLS_HM_REMOVE_ETHERNET:
@@ -5594,21 +5790,35 @@ static int insert_hm_prepare_nodes(struct dpa_cls_hm *pinsert_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->insert_node;
 
-		err = import_hm_nodes_to_chain(phm_nodes,
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
+		return import_hm_nodes_to_chain(phm_nodes,
 					pinsert_hm->num_nodes,
 					pinsert_hm);
-	} else { /* Create HM nodes */
+	}
+
+	hm_node = try_compatible_node(pinsert_hm);
+	if (hm_node == NULL) {
+		/* Create a header manip node for this insert: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+			__LINE__, hm_node));
 		if (!hm_node) {
-			log_err("Not enough memory for header manip nodes.\n");
+			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
-		pinsert_hm->hm_node[0]	= hm_node;
 
-		add_local_hm_nodes_to_chain(pinsert_hm);
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
+
+	pinsert_hm->hm_node[0] = hm_node;
+
+	add_local_hm_nodes_to_chain(pinsert_hm);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -5635,7 +5845,9 @@ static int insert_hm_update_params(struct dpa_cls_hm *pinsert_hm)
 	hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 	hm_node->params.u.hdr.insrt		= TRUE;
 	hm_node->params.u.hdr.insrtParams.type	= e_FM_PCD_MANIP_INSRT_GENERIC;
-	hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pinsert_hm->insert_params.reparse) ? FALSE : TRUE;
 
 	switch (pinsert_hm->insert_params.type) {
 	case DPA_CLS_HM_INSERT_ETHERNET:
@@ -5986,8 +6198,6 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 {
 	struct dpa_cls_hm_node *hm_node = NULL;
 	void * const *phm_nodes;
-	struct dpa_cls_hm *pnext_hm = NULL;
-	int update_ops, replace_ops;
 	int err = 0;
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) -->\n", __func__,
@@ -6000,73 +6210,32 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->update_node;
 
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
 		return import_hm_nodes_to_chain(phm_nodes,
 					pupdate_hm->num_nodes,
 					pupdate_hm);
 	}
 
-	update_ops = DPA_CLS_HM_UPDATE_IPv4_UPDATE |
-			DPA_CLS_HM_UPDATE_IPv6_UPDATE |
-			DPA_CLS_HM_UPDATE_UDP_TCP_UPDATE;
-
-	replace_ops = DPA_CLS_HM_REPLACE_IPv4_BY_IPv6 |
-			DPA_CLS_HM_REPLACE_IPv6_BY_IPv4;
-
-	if ((pupdate_hm->update_params.op_flags & update_ops) ||
-		(pupdate_hm->update_params.op_flags & replace_ops)) {
-		/* Create HM nodes */
-		/* Check if we can attach to an existing update node */
-		if (!list_empty(&pupdate_hm->list_node)) {
-			pnext_hm = list_entry(pupdate_hm->list_node.next,
-					struct dpa_cls_hm,
-					list_node);
-
-			if (pupdate_hm->update_params.op_flags &
-				DPA_CLS_HM_UPDATE_IPv4_UPDATE)
-				/*
-				 * See if there is any other IPv4 update node
-				 * in this chain
-				 */
-				hm_node = find_compatible_hm_node(
-					DPA_CLS_HM_NODE_IPv4_HDR_UPDATE,
-					pnext_hm->hm_chain);
-
-			if (pupdate_hm->update_params.op_flags &
-				DPA_CLS_HM_UPDATE_IPv6_UPDATE)
-				/*
-				 * See if there is any other IPv6 update node
-				 * in this chain
-				 */
-				hm_node = find_compatible_hm_node(
-					DPA_CLS_HM_NODE_IPv6_HDR_UPDATE,
-					pnext_hm->hm_chain);
-
-			if (pupdate_hm->update_params.op_flags &
-				DPA_CLS_HM_UPDATE_UDP_TCP_UPDATE)
-				/*
-				 * See if there is any other TCP/UDP header
-				 * update node in this chain
-				 */
-				hm_node = find_compatible_hm_node(
-					DPA_CLS_HM_NODE_TCPUDP_HDR_UPDATE,
-					pnext_hm->hm_chain);
-		}
-
-		/*
-		 * If no compatible HM node was found for the header update
-		 * operations...
-		 */
-		if (!hm_node) {
+	if (pupdate_hm->update_params.op_flags != DPA_CLS_HM_UPDATE_NONE) {
+		hm_node = try_compatible_node(pupdate_hm);
+		if ((pupdate_hm->update_params.ip_frag_params.mtu) ||
+				(hm_node == NULL)) {
 			/* Create a header manip node for this update: */
 			hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
 
+			dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n",
+				__func__, __LINE__, hm_node));
 			if (!hm_node) {
-				log_err("No more memory for header manip "
-					"nodes.\n");
+				log_err("No more memory for header manip nodes.\n");
 				return -ENOMEM;
 			}
 
 			INIT_LIST_HEAD(&hm_node->list_node);
+
+			/* Initialize dontParseAfterManip to TRUE */
+			hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 		}
 
 		pupdate_hm->hm_node[0] = hm_node;
@@ -6076,6 +6245,8 @@ static int update_hm_prepare_nodes(struct dpa_cls_hm *pupdate_hm,
 		/* IP fragmentation option is enabled */
 		/* Create a header manip node: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+			__LINE__, hm_node));
 		if (!hm_node) {
 			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
@@ -6116,7 +6287,9 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 	if (pupdate_hm->update_params.op_flags & update_ops) {
 		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
 		hm_node->params.u.hdr.fieldUpdate	= TRUE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
+		hm_node->params.u.hdr.dontParseAfterManip &=
+			(pupdate_hm->update_params.reparse) ? FALSE : TRUE;
 
 		if (pupdate_hm->update_params.op_flags &
 				DPA_CLS_HM_UPDATE_IPv4_UPDATE) {
@@ -6256,11 +6429,13 @@ static int update_hm_update_params(struct dpa_cls_hm *pupdate_hm)
 	}
 
 	if (pupdate_hm->update_params.op_flags & replace_ops) {
-		hm_node->params.type		= e_FM_PCD_MANIP_HDR;
-		hm_node->params.u.hdr.custom	= TRUE;
-		hm_node->params.u.hdr.customParams.type =
+		hm_node->params.type			= e_FM_PCD_MANIP_HDR;
+		hm_node->params.u.hdr.custom		= TRUE;
+		hm_node->params.u.hdr.customParams.type	=
 				e_FM_PCD_MANIP_HDR_CUSTOM_IP_REPLACE;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
+
+		hm_node->params.u.hdr.dontParseAfterManip &=
+			(pupdate_hm->update_params.reparse) ? FALSE : TRUE;
 
 		if (pupdate_hm->update_params.op_flags &
 				DPA_CLS_HM_REPLACE_IPv4_BY_IPv6) {
@@ -6525,6 +6700,12 @@ int dpa_classif_modify_update_hm(int hmd,
 		}
 	}
 
+	if (modify_flags & DPA_CLS_HM_UPDATE_MOD_IP_FRAG_MTU) {
+		pupdate_hm->update_params.ip_frag_params.mtu =
+				new_update_params->ip_frag_params.mtu;
+		update[1] = true;
+	}
+
 	if (update[0]) {
 		ret = update_hm_update_params(pupdate_hm);
 		if (ret == 0) {
@@ -6553,7 +6734,34 @@ int dpa_classif_modify_update_hm(int hmd,
 		}
 	}
 
-	/* update[1] not supported at this time */
+	if (update[1]) {
+		ret = update_hm_update_params(pupdate_hm);
+		if (ret == 0) {
+			t_FmPcdManipParams new_hm_node_params;
+
+			hm_node = pupdate_hm->hm_node[1];
+
+			/*
+			 * Have to make a copy of the manip node params because
+			 * ManipNodeReplace does not accept h_NextManip != NULL.
+			 */
+			memcpy(&new_hm_node_params, &hm_node->params,
+						sizeof(new_hm_node_params));
+			new_hm_node_params.h_NextManip = NULL;
+			error = FM_PCD_ManipNodeReplace(hm_node->node,
+							&new_hm_node_params);
+			if (error != E_OK) {
+				release_desc_table(&hm_array);
+				mutex_unlock(&pupdate_hm->access);
+				log_err("FMan driver call failed - "
+					"FM_PCD_ManipNodeReplace, while trying "
+					"to modify hmd=%d, manip node "
+					"handle=0x%p.\n", hmd, hm_node->node);
+				return -EBUSY;
+			}
+		}
+
+	}
 
 	release_desc_table(&hm_array);
 	mutex_unlock(&pupdate_hm->access);
@@ -6670,21 +6878,35 @@ static int vlan_hm_prepare_nodes(struct dpa_cls_hm *pvlan_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->vlan_node;
 
-		err = import_hm_nodes_to_chain(phm_nodes,
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
+		return import_hm_nodes_to_chain(phm_nodes,
 					pvlan_hm->num_nodes,
 					pvlan_hm);
-	} else { /* Create HM nodes */
+	}
+
+	hm_node = try_compatible_node(pvlan_hm);
+	if (hm_node == NULL) {
+		/* Create a header manip node for this insert: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+			__LINE__, hm_node));
 		if (!hm_node) {
-			log_err("Not enough memory for header manip nodes.\n");
+			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
-		pvlan_hm->hm_node[0]	= hm_node;
 
-		add_local_hm_nodes_to_chain(pvlan_hm);
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
+
+	pvlan_hm->hm_node[0] = hm_node;
+
+	add_local_hm_nodes_to_chain(pvlan_hm);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -6708,6 +6930,8 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 	hm_node = pvlan_hm->hm_node[0];
 
 	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pvlan_hm->vlan_params.reparse) ? FALSE : TRUE;
 
 	switch (pvlan_hm->vlan_params.type) {
 	case DPA_CLS_HM_VLAN_INGRESS:
@@ -6718,7 +6942,6 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 					e_FM_PCD_MANIP_RMV_BY_HDR_SPECIFIC_L2;
 		hm_node->params.u.hdr.rmvParams.u.byHdr.u.specificL2 =
 					e_FM_PCD_MANIP_HDR_RMV_STACKED_QTAGS;
-		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 		break;
 	case DPA_CLS_HM_VLAN_EGRESS:
@@ -6760,7 +6983,6 @@ static int vlan_hm_update_params(struct dpa_cls_hm *pvlan_hm)
 			hm_node->params.u.hdr.fieldUpdate = TRUE;
 			hm_node->params.u.hdr.fieldUpdateParams.type =
 					e_FM_PCD_MANIP_HDR_FIELD_UPDATE_VLAN;
-			hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 
 			switch (pvlan_hm->vlan_params.egress.update_op) {
 			case DPA_CLS_HM_VLAN_UPDATE_VPri:
@@ -7057,21 +7279,35 @@ static int mpls_hm_prepare_nodes(struct dpa_cls_hm *pmpls_hm,
 	if (res) { /* Import HM nodes */
 		phm_nodes = &res->ins_rm_node;
 
-		err = import_hm_nodes_to_chain(phm_nodes,
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
+			__LINE__));
+
+		return import_hm_nodes_to_chain(phm_nodes,
 					pmpls_hm->num_nodes,
 					pmpls_hm);
-	} else { /* Create HM nodes */
+	}
+
+	hm_node = try_compatible_node(pmpls_hm);
+	if (hm_node == NULL) {
+		/* Create a header manip node for this insert: */
 		hm_node = kzalloc(sizeof(*hm_node), GFP_KERNEL);
+
+		dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d): Created new hm_node = 0x%p\n", __func__,
+			__LINE__, hm_node));
 		if (!hm_node) {
-			log_err("Not enough memory for header manip nodes.\n");
+			log_err("No more memory for header manip nodes.\n");
 			return -ENOMEM;
 		}
 
 		INIT_LIST_HEAD(&hm_node->list_node);
-		pmpls_hm->hm_node[0]	= hm_node;
 
-		add_local_hm_nodes_to_chain(pmpls_hm);
+		/* Initialize dontParseAfterManip to TRUE */
+		hm_node->params.u.hdr.dontParseAfterManip = TRUE;
 	}
+
+	pmpls_hm->hm_node[0] = hm_node;
+
+	add_local_hm_nodes_to_chain(pmpls_hm);
 
 	dpa_cls_dbg(("DEBUG: dpa_classifier %s (%d) <--\n", __func__,
 		__LINE__));
@@ -7095,6 +7331,8 @@ static int mpls_hm_update_params(struct dpa_cls_hm *pmpls_hm)
 	hm_node = pmpls_hm->hm_node[0];
 
 	hm_node->params.type = e_FM_PCD_MANIP_HDR;
+	hm_node->params.u.hdr.dontParseAfterManip &=
+			(pmpls_hm->mpls_params.reparse) ? FALSE : TRUE;
 
 	switch (pmpls_hm->mpls_params.type) {
 	case DPA_CLS_HM_MPLS_REMOVE_ALL_LABELS:
@@ -7579,23 +7817,22 @@ int dpa_classif_mcast_create_group(
 		sizeof(struct dpa_cls_mcast_group_params));
 
 	/*
+	 * initialize the array of indexes of used members
+	 */
+	pgroup->member_ids = kzalloc(sizeof(int) * max_members, GFP_KERNEL);
+	if (!pgroup->member_ids) {
+		log_err("No more memory for DPA multicast index members array.\n");
+		err = -ENOMEM;
+		goto dpa_classif_mcast_create_group_error;
+	}
+
+	/*
 	 * initialize the array of used members
 	 */
 	pgroup->entries = kzalloc(sizeof(struct members) * max_members,
 				  GFP_KERNEL);
 	if (!pgroup->entries) {
 		log_err("No more memory for DPA multicast member entries.\n");
-		err = -ENOMEM;
-		goto dpa_classif_mcast_create_group_error;
-	}
-
-	/*
-	 * initialize the array of indexes of used members
-	 */
-	pgroup->member_ids = kzalloc(sizeof(int) * max_members, GFP_KERNEL);
-	if (!pgroup->member_ids) {
-		log_err("No more memory for DPA multicast index members "
-			"array.\n");
 		err = -ENOMEM;
 		goto dpa_classif_mcast_create_group_error;
 	}
@@ -7748,8 +7985,10 @@ int dpa_classif_mcast_create_group(
 
 dpa_classif_mcast_create_group_error:
 	if (pgroup) {
-		dpa_classif_hm_release_chain(pgroup->entries[0].hmd);
-		kfree(pgroup->entries);
+		if (pgroup->entries) {
+			dpa_classif_hm_release_chain(pgroup->entries[0].hmd);
+			kfree(pgroup->entries);
+		}
 		kfree(pgroup->member_ids);
 		mutex_destroy(&pgroup->access);
 		if (*grpd != DPA_OFFLD_DESC_NONE) {
@@ -7759,6 +7998,7 @@ dpa_classif_mcast_create_group_error:
 		}
 		kfree(pgroup);
 	}
+	kfree(replic_grp_params);
 
 	*grpd = DPA_OFFLD_DESC_NONE;
 
@@ -7975,9 +8215,16 @@ int dpa_classif_mcast_remove_member(int grpd, int md)
 	mutex_lock(&pgroup->access);
 	release_desc_table(&mcast_grp_array);
 
-	if ((md <= 0) || (md > pgroup->group_params.max_members)) {
+	if (pgroup->num_members <= 1) {
 		mutex_unlock(&pgroup->access);
-		log_err("Invalid member descriptor (grpd=%d).\n", md);
+		log_err("Last member in group cannot be removed (md=%d).\n",
+			md);
+		return -EINVAL;
+	}
+
+	if ((md < 0) || (md > pgroup->group_params.max_members)) {
+		mutex_unlock(&pgroup->access);
+		log_err("Invalid member descriptor (md=%d).\n", md);
 		return -EINVAL;
 	}
 
