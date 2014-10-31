@@ -20,7 +20,7 @@ struct cmux_clk {
 	struct clk_hw hw;
 	void __iomem *reg;
 	u32 flags;
-	unsigned int num_parents;
+	unsigned int clk_per_pll;
 };
 
 #define PLL_KILL			BIT(31)
@@ -35,7 +35,7 @@ static int cmux_set_parent(struct clk_hw *hw, u8 idx)
 	struct cmux_clk *clk = to_cmux_clk(hw);
 	u32 clksel;
 
-	clksel = ((idx / clk->num_parents) << 2) + idx % clk->num_parents;
+	clksel = ((idx / clk->clk_per_pll) << 2) + idx % clk->clk_per_pll;
 	if (clk->flags & CLKSEL_ADJUST)
 		clksel += 8;
 	clksel = (clksel & 0xf) << CLKSEL_SHIFT;
@@ -53,7 +53,7 @@ static u8 cmux_get_parent(struct clk_hw *hw)
 	clksel = (clksel >> CLKSEL_SHIFT) & 0xf;
 	if (clk->flags & CLKSEL_ADJUST)
 		clksel -= 8;
-	clksel = (clksel >> 2) * clk->num_parents + clksel % 4;
+	clksel = (clksel >> 2) * clk->clk_per_pll + clksel % 4;
 
 	return clksel;
 }
@@ -73,6 +73,7 @@ static void __init core_mux_init(struct device_node *np)
 	u32	offset;
 	const char *clk_name;
 	const char **parent_names;
+	struct of_phandle_args clkspec;
 
 	rc = of_property_read_u32(np, "reg", &offset);
 	if (rc) {
@@ -101,7 +102,16 @@ static void __init core_mux_init(struct device_node *np)
 		goto err_name;
 	}
 	cmux_clk->reg = base + offset;
-	cmux_clk->num_parents = count;
+	rc = of_parse_phandle_with_args(np, "clocks", "#clock-cells", 0,
+					&clkspec);
+	if (rc) {
+		pr_err("%s: parse clock node error\n", __func__);
+		goto err_clk;
+	}
+
+	cmux_clk->clk_per_pll = of_property_count_strings(clkspec.np,
+			"clock-output-names");
+	of_node_put(clkspec.np);
 
 	node = of_find_compatible_node(NULL, NULL, "fsl,p4080-clockgen");
 	if (node && (offset >= 0x80))
