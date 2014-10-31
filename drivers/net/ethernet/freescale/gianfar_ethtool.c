@@ -42,11 +42,13 @@
 #include <linux/phy.h>
 #include <linux/sort.h>
 #include <linux/if_vlan.h>
-#ifdef CONFIG_PM
-#include <sysdev/fsl_soc.h>
-#endif
 
 #include "gianfar.h"
+
+int __attribute__ ((weak)) mpc85xx_pmc_set_wake(struct device *dev, bool enable)
+{
+	return 0;
+}
 
 #define GFAR_MAX_COAL_USECS 0xffff
 #define GFAR_MAX_COAL_FRAMES 0xff
