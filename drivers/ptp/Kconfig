@@ -37,6 +37,21 @@ config PTP_1588_CLOCK_GIANFAR
 	  To compile this driver as a module, choose M here: the module
 	  will be called gianfar_ptp.
 
+config PTP_1588_CLOCK_DPAA
+	tristate "Freescale dTSEC as PTP clock"
+	depends on FSL_DPAA_ETH
+	select PTP_1588_CLOCK
+        select FSL_DPAA_TS
+        default n
+	help
+	  This driver adds support for using the dTSEC as a PTP
+	  clock. This clock is only useful if your PTP programs are
+	  getting hardware time stamps on the PTP Ethernet packets
+	  using the SO_TIMESTAMPING API.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called dpaa_ptp.
+
 config PTP_1588_CLOCK_IXP46X
 	tristate "Intel IXP46x as PTP clock"
 	depends on IXP4XX_ETH

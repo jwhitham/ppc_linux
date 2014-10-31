@@ -59,6 +59,10 @@
 /* Size in bytes of the FQ taildrop threshold */
 #define DPA_FQ_TD		0x200000
 
+#ifdef CONFIG_PTP_1588_CLOCK_DPAA
+struct ptp_priv_s ptp_priv;
+#endif
+
 static struct dpa_bp *dpa_bp_array[64];
 
 int dpa_max_frm;
@@ -584,6 +588,24 @@ dpa_mac_probe(struct platform_device *_of_dev)
 	}
 #endif
 
+#ifdef CONFIG_PTP_1588_CLOCK_DPAA
+	phandle_prop = of_get_property(mac_node, "ptimer-handle", &lenp);
+	if (phandle_prop && ((mac_dev->phy_if != PHY_INTERFACE_MODE_SGMII) ||
+			((mac_dev->phy_if == PHY_INTERFACE_MODE_SGMII) &&
+			 (mac_dev->speed == SPEED_1000)))) {
+		ptp_priv.node = of_find_node_by_phandle(*phandle_prop);
+		if (ptp_priv.node) {
+			ptp_priv.of_dev = of_find_device_by_node(ptp_priv.node);
+			if (unlikely(ptp_priv.of_dev == NULL)) {
+				dev_err(dpa_dev,
+			"Cannot find device represented by timer_node\n");
+				of_node_put(ptp_priv.node);
+				return ERR_PTR(-EINVAL);
+			}
+			ptp_priv.mac_dev = mac_dev;
+		}
+	}
+#endif
 	return mac_dev;
 }
 

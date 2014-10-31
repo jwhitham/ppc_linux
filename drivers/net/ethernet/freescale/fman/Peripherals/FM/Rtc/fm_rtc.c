@@ -661,6 +661,36 @@ t_Error FM_RTC_SetFreqCompensation(t_Handle h_FmRtc, uint32_t freqCompensation)
     return E_OK;
 }
 
+#ifdef CONFIG_PTP_1588_CLOCK_DPAA
+/*****************************************************************************/
+t_Error FM_RTC_EnableInterrupt(t_Handle h_FmRtc, uint32_t events)
+{
+	t_FmRtc *p_Rtc = (t_FmRtc *)h_FmRtc;
+
+	SANITY_CHECK_RETURN_ERROR(p_Rtc, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR(!p_Rtc->p_RtcDriverParam, E_INVALID_STATE);
+
+	/* enable interrupt */
+	fman_rtc_enable_interupt(p_Rtc->p_MemMap, events);
+
+	return E_OK;
+}
+
+/*****************************************************************************/
+t_Error FM_RTC_DisableInterrupt(t_Handle h_FmRtc, uint32_t events)
+{
+	t_FmRtc *p_Rtc = (t_FmRtc *)h_FmRtc;
+
+	SANITY_CHECK_RETURN_ERROR(p_Rtc, E_INVALID_HANDLE);
+	SANITY_CHECK_RETURN_ERROR(!p_Rtc->p_RtcDriverParam, E_INVALID_STATE);
+
+	/* disable interrupt */
+	fman_rtc_disable_interupt(p_Rtc->p_MemMap, events);
+
+	return E_OK;
+}
+#endif
+
 /*****************************************************************************/
 #if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
 t_Error FM_RTC_DumpRegs(t_Handle h_FmRtc)
