@@ -19,6 +19,9 @@
 #include <asm/fsl_guts.h>
 #include <asm/cputhreads.h>
 #include <asm/fsl_pm.h>
+#include <asm/machdep.h>
+
+#include <platforms/85xx/smp.h>
 
 const struct fsl_pm_ops *qoriq_pm_ops;
 
@@ -152,7 +155,9 @@ static void rcpm_v2_irq_mask(int cpu)
 	int hw_cpu = get_hard_smp_processor_id(cpu);
 	unsigned int mask = 1 << hw_cpu;
 
-	setbits32(&rcpm_v2_regs->tpmimr0, mask);
+	if (strcmp(cur_cpu_spec->cpu_name, "e6500"))
+		setbits32(&rcpm_v2_regs->tpmimr0, mask);
+
 	setbits32(&rcpm_v2_regs->tpmcimr0, mask);
 	setbits32(&rcpm_v2_regs->tpmmcmr0, mask);
 	setbits32(&rcpm_v2_regs->tpmnmimr0, mask);
@@ -163,7 +168,9 @@ static void rcpm_v2_irq_unmask(int cpu)
 	int hw_cpu = get_hard_smp_processor_id(cpu);
 	unsigned int mask = 1 << hw_cpu;
 
-	clrbits32(&rcpm_v2_regs->tpmimr0, mask);
+	if (strcmp(cur_cpu_spec->cpu_name, "e6500"))
+		clrbits32(&rcpm_v2_regs->tpmimr0, mask);
+
 	clrbits32(&rcpm_v2_regs->tpmcimr0, mask);
 	clrbits32(&rcpm_v2_regs->tpmmcmr0, mask);
 	clrbits32(&rcpm_v2_regs->tpmnmimr0, mask);
@@ -188,6 +195,12 @@ static void rcpm_v2_cpu_enter_state(int cpu, int state)
 		/* one bit corresponds to one thread for PH10 of 6500 */
 		setbits32(&rcpm_v2_regs->tph10setr0, 1 << hw_cpu);
 		break;
+#ifdef CONFIG_PPC_BOOK3E_64
+	case E500_PM_PW10:
+		/* one bit corresponds to one thread for PW10 of 6500 */
+		book3e_die();
+		break;
+#endif
 	case E500_PM_PH15:
 		setbits32(&rcpm_v2_regs->pcph15setr, mask);
 		break;
@@ -207,23 +220,67 @@ static void rcpm_v2_cpu_exit_state(int cpu, int state)
 	unsigned int hw_cpu = get_hard_smp_processor_id(cpu);
 	u32 mask = 1 << cpu_core_index_of_thread(hw_cpu);
 
+	/*
+	 * The true value read from these registers only means
+	 * there is a pending request.
+	 */
 	switch (state) {
 	case E500_PM_PH10:
-		setbits32(&rcpm_v2_regs->tph10clrr0, 1 << hw_cpu);
+		out_be32(&rcpm_v2_regs->tph10clrr0, 1 << hw_cpu);
 		break;
 	case E500_PM_PH15:
-		setbits32(&rcpm_v2_regs->pcph15clrr, mask);
+		out_be32(&rcpm_v2_regs->pcph15clrr, mask);
 		break;
 	case E500_PM_PH20:
-		setbits32(&rcpm_v2_regs->pcph20clrr, mask);
+		out_be32(&rcpm_v2_regs->pcph20clrr, mask);
 		break;
 	case E500_PM_PH30:
-		setbits32(&rcpm_v2_regs->pcph30clrr, mask);
+		out_be32(&rcpm_v2_regs->pcph30clrr, mask);
 		break;
 	default:
 		pr_err("%s: Unknown cpu PM state (%d)\n", __func__, state);
 	}
 }
+
+static void rcpm_v2_cluster_enter_state(int cpu, int state)
+{
+	u32 cpu_on_cluster, cluster_mask;
+	const struct cpumask *cpumask;
+
+	cpumask = cpu_cluster_mask(cpu);
+	cpu_on_cluster = cpu / cpumask_weight(cpumask);
+	cluster_mask = 1 << cpu_on_cluster;
+
+	switch (state) {
+	case E500_PM_PCL10:
+		/* one bit corresponds to one cluster */
+		out_be32(&rcpm_v2_regs->clpcl10setr, cluster_mask);
+
+		break;
+	default:
+		pr_err("%s: Unknown cluster PM state (%d)\n", __func__, state);
+	}
+}
+
+static void rcpm_v2_cluster_exit_state(int cpu, int state)
+{
+	u32 cpu_on_cluster, cluster_mask;
+	const struct cpumask *cpumask;
+
+	cpumask = cpu_cluster_mask(cpu);
+	cpu_on_cluster = cpu / cpumask_weight(cpumask);
+	cluster_mask = 1 << cpu_on_cluster;
+
+	switch (state) {
+	case E500_PM_PCL10:
+		/* one bit corresponds to one cluster */
+		out_be32(&rcpm_v2_regs->clpcl10clrr, cluster_mask);
+		break;
+	default:
+		pr_err("%s: Unknown cluster PM state (%d)\n", __func__, state);
+	}
+}
+
 
 static int rcpm_v2_plat_enter_state(int state)
 {
@@ -258,6 +315,75 @@ static int rcpm_v2_plat_enter_state(int state)
 	return ret;
 }
 
+bool rcpm_v2_cpu_ready(unsigned int cpu, int state)
+{
+	unsigned int hw_cpu;
+	u32 mask;
+	bool ret = false;
+	const struct cpumask *cluster_mask;
+	u32 cpu_on_cluster = 0;
+	int tmp_cpu = 0;
+
+	hw_cpu = get_hard_smp_processor_id(cpu);
+
+	switch (state) {
+	case E500_PM_PH10:
+		if (in_be32(&rcpm_v2_regs->tph10sr0) & (1 << hw_cpu))
+			ret = true;
+		break;
+	case E500_PM_PW10:
+		if (in_be32(&rcpm_v2_regs->twaitsr0) & (1 << hw_cpu))
+			ret = true;
+		break;
+	case E500_PM_PH15:
+		mask = 1 << cpu_core_index_of_thread(hw_cpu);
+
+		if (in_be32(&rcpm_v2_regs->pcph15sr) & mask)
+			ret = true;
+		break;
+	case E500_PM_PH20:
+		mask = 1 << cpu_core_index_of_thread(hw_cpu);
+
+		if (in_be32(&rcpm_v2_regs->pcph20sr) & mask)
+			ret = true;
+		break;
+	case E500_PM_PW20:
+		mask = 1 << cpu_core_index_of_thread(hw_cpu);
+
+		if (in_be32(&rcpm_v2_regs->pcpw20sr) & mask)
+			ret = true;
+		break;
+	case E500_PM_PH30:
+		mask = 1 << cpu_core_index_of_thread(hw_cpu);
+
+		if (in_be32(&rcpm_v2_regs->pcph30sr) & mask)
+			ret = true;
+		break;
+	case E500_PM_PCL10:
+		cluster_mask = cpu_cluster_mask(boot_cpuid);
+		tmp_cpu += cpumask_weight(cluster_mask);
+
+		while (cpu >= tmp_cpu) {
+			cpu_on_cluster++;
+			cluster_mask = cpu_cluster_mask(tmp_cpu);
+			tmp_cpu += cpumask_weight(cluster_mask);
+		}
+
+		mask = 1 << cpu_on_cluster;
+
+		if (in_be32(&rcpm_v2_regs->clpcl10sr) & mask)
+			ret = true;
+		break;
+	default:
+		pr_err("%s: Unknown platform PM state (%d)\n",
+				__func__, state);
+		ret = false;
+
+	}
+
+	return ret;
+}
+
 static const struct fsl_pm_ops qoriq_rcpm_v1_ops = {
 	.irq_mask = rcpm_v1_irq_mask,
 	.irq_unmask = rcpm_v1_irq_unmask,
@@ -273,9 +399,12 @@ static const struct fsl_pm_ops qoriq_rcpm_v2_ops = {
 	.irq_unmask = rcpm_v2_irq_unmask,
 	.cpu_enter_state = rcpm_v2_cpu_enter_state,
 	.cpu_exit_state = rcpm_v2_cpu_exit_state,
+	.cluster_enter_state = rcpm_v2_cluster_enter_state,
+	.cluster_exit_state = rcpm_v2_cluster_exit_state,
 	.plat_enter_state = rcpm_v2_plat_enter_state,
 	.set_ip_power = rcpm_v2_set_ip_power,
 	.freeze_time_base = rcpm_v2_freeze_time_base,
+	.cpu_ready = rcpm_v2_cpu_ready,
 };
 
 static const struct of_device_id rcpm_matches[] = {

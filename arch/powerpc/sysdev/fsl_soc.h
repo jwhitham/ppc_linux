@@ -8,6 +8,7 @@ struct spi_device;
 
 extern phys_addr_t get_dcsrbase(void);
 extern phys_addr_t get_immrbase(void);
+extern void __iomem *get_cpu_l2_base(int cpu);
 #if defined(CONFIG_CPM2) || defined(CONFIG_QUICC_ENGINE) || defined(CONFIG_8xx)
 extern u32 get_brgfreq(void);
 extern u32 get_baudrate(void);

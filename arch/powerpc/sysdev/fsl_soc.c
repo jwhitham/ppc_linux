@@ -108,6 +108,23 @@ phys_addr_t get_immrbase(void)
 
 EXPORT_SYMBOL(get_immrbase);
 
+/* get address of cluster shared L2 cache controller */
+void __iomem *get_cpu_l2_base(int cpu)
+{
+	static void __iomem *cpu_l2_base;
+	struct device_node *np, *cache;
+
+	np = of_get_cpu_node(cpu, NULL);
+	cache = of_find_next_cache_node(np);
+
+	of_node_put(np);
+
+	cpu_l2_base = of_iomap(cache, 0);
+
+	return cpu_l2_base;
+}
+EXPORT_SYMBOL(get_cpu_l2_base);
+
 static u32 sysfreq = -1;
 
 u32 fsl_get_sys_freq(void)

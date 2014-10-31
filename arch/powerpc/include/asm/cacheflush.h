@@ -34,6 +34,10 @@ extern void __flush_disable_L1(void);
 #ifdef CONFIG_FSL_SOC_BOOKE
 extern void flush_dcache_L1(void);
 void flush_backside_L2_cache(void);
+void cluster_flush_backside_L2_cache(void *cluster_l2_base);
+void cluster_flush_invalidate_L2_cache(void *cluster_l2_base);
+void cluster_disable_L2_cache(void *cluster_l2_base);
+void cluster_invalidate_enable_L2(void *cluster_l2_base);
 void disable_backside_L2_cache(void);
 void flush_disable_L2(void);
 void invalidate_enable_L2(void);
