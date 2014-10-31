@@ -861,6 +861,7 @@ config SOC_LS1021A
 	select PCI_DOMAINS if PCI
 	select ZONE_DMA if ARM_LPAE
 	select FSL_SLEEP_FSM if PM
+	select ARCH_HAS_CPUFREQ
 
 	help
 	  This enable support for Freescale LS1021A  processor.

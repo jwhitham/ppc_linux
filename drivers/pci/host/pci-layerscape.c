@@ -252,17 +252,59 @@ static int __init ls_pcie_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int ls_pcie_pm_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int ls_pcie_pm_resume(struct device *dev)
+{
+	struct ls_pcie *pcie = dev_get_drvdata(dev);
+	int count = 0;
+	u32 val;
+
+	while (!ls_pcie_link_up(&pcie->pp)) {
+		usleep_range(100, 1000);
+		count++;
+		if (count >= 200) {
+			dev_err(dev, "phy link never came up\n");
+			return -ENODEV;
+		}
+	}
+
+	if (of_device_is_compatible(pcie->dev->of_node, "fsl,ls1021a-pcie")) {
+		/*
+		 * LS1021A Workaround for internal TKT228622
+		 * to fix the INTx hang issue
+		 */
+		val = ioread32(pcie->dbi + PCIE_STRFMR1);
+		val &= 0xffff;
+		iowrite32(val, pcie->dbi + PCIE_STRFMR1);
+
+		ls1021a_pcie_msi_fixup(&pcie->pp);
+	}
+
+	return 0;
+};
+#endif /* CONFIG_PM_SLEEP */
+
 static const struct of_device_id ls_pcie_of_match[] = {
 	{ .compatible = "fsl,ls1021a-pcie" },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, ls_pcie_of_match);
 
+static const struct dev_pm_ops ls_pcie_pm = {
+	SET_SYSTEM_SLEEP_PM_OPS(ls_pcie_pm_suspend, ls_pcie_pm_resume)
+};
+
 static struct platform_driver ls_pcie_driver = {
 	.driver = {
 		.name = "layerscape-pcie",
 		.owner = THIS_MODULE,
 		.of_match_table = ls_pcie_of_match,
+		.pm = &ls_pcie_pm,
 	},
 };
 

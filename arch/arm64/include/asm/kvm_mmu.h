@@ -91,6 +91,7 @@ int kvm_mmu_init(void);
 void kvm_clear_hyp_idmap(void);
 
 #define	kvm_set_pte(ptep, pte)		set_pte(ptep, pte)
+#define	kvm_set_pmd(pmdp, pmd)		set_pmd(pmdp, pmd)
 
 static inline bool kvm_is_write_fault(unsigned long esr)
 {
@@ -116,13 +117,37 @@ static inline void kvm_set_s2pte_writable(pte_t *pte)
 	pte_val(*pte) |= PTE_S2_RDWR;
 }
 
+static inline void kvm_set_s2pmd_writable(pmd_t *pmd)
+{
+	pmd_val(*pmd) |= PMD_S2_RDWR;
+}
+
+#define kvm_pgd_addr_end(addr, end)	pgd_addr_end(addr, end)
+#define kvm_pud_addr_end(addr, end)	pud_addr_end(addr, end)
+#define kvm_pmd_addr_end(addr, end)	pmd_addr_end(addr, end)
+
+static inline bool kvm_page_empty(void *ptr)
+{
+	struct page *ptr_page = virt_to_page(ptr);
+	return page_count(ptr_page) == 1;
+}
+
+#define kvm_pte_table_empty(ptep) kvm_page_empty(ptep)
+#ifndef CONFIG_ARM64_64K_PAGES
+#define kvm_pmd_table_empty(pmdp) kvm_page_empty(pmdp)
+#else
+#define kvm_pmd_table_empty(pmdp) (0)
+#endif
+#define kvm_pud_table_empty(pudp) (0)
+
+
 struct kvm;
 
-static inline void coherent_icache_guest_page(struct kvm *kvm, gfn_t gfn)
+static inline void coherent_icache_guest_page(struct kvm *kvm, hva_t hva,
+					      unsigned long size)
 {
 	if (!icache_is_aliasing()) {		/* PIPT */
-		unsigned long hva = gfn_to_hva(kvm, gfn);
-		flush_icache_range(hva, hva + PAGE_SIZE);
+		flush_icache_range(hva, hva + size);
 	} else if (!icache_is_aivivt()) {	/* non ASID-tagged VIVT */
 		/* any kind of VIPT cache */
 		__flush_icache_all();
