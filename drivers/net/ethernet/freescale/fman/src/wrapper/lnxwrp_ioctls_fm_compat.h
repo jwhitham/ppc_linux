@@ -350,6 +350,9 @@ typedef struct ioc_compat_fm_port_pcd_params_t {
     compat_uptr_t                    p_kg_params;
     compat_uptr_t                    p_plcr_params;
     compat_uptr_t                    p_ip_reassembly_manip;
+#if DPAA_VERSION >= 11
+    compat_uptr_t                    p_capwap_reassembly_manip;
+#endif
 } ioc_compat_fm_port_pcd_params_t;
 
 typedef struct ioc_compat_fm_pcd_kg_cc_t {

@@ -26,6 +26,29 @@ config FSL_DPAA_OFFLINE_PORTS
 	  Choosing this feature will not impact the functionality and/or performance of the system,
 	  so it is safe to have it.
 
+config FSL_CAPWAP
+	bool "DPAA CAPWAP support"
+	depends on FSL_DPAA_ETH
+	default n
+	---help---
+	  CAPWAP Domain implements an offload mode for CAPWAP encapsulation and decapsulation.
+	  There are three drivers: CAPWAP domain driver implements Domain configuration and
+	  initialization; CAPWAP bridge driver establish a bridge between PCIe NIC and CAPWAP
+	  tunnels; CAPWAP tunnel driver provide a unified APIs to access CAPWAP tunnels.
+if FSL_CAPWAP
+
+config FSL_CAPWAP_BRIDGE_ZMC
+	bool "CAPWAP Bridge use Zero-MM-Copy to get a better performance"
+	depends on USE_HW_SKB
+	default y
+	---help---
+	  If Linux has integrate patch named:"net: use hardware buffer pool to allocate skb",
+	  NIC will use BMan buffer to allocated skb, so that there will be no memory copy
+	  during the whole process.
+	  you can select this option to get a better performance data for CAPWAP Bridge.
+
+endif # FSL_CAPWAP
+
 config FSL_DPAA_ETH_JUMBO_FRAME
 	bool "Optimize for jumbo frames"
 	default n

@@ -50,14 +50,14 @@
 #define HC_HCOR_OPCODE_SYNC                                     0x2
 #define HC_HCOR_OPCODE_CC                                       0x3
 #define HC_HCOR_OPCODE_CC_CAPWAP_REASSM_TIMEOUT                 0x5
-#define HC_HCOR_OPCODE_CC_IP_REASSM_TIMEOUT                     0x10
-#define HC_HCOR_OPCODE_CC_IP_FRAG_INITIALIZATION                0x11
-#define HC_HCOR_ACTION_REG_IP_REASSM_TIMEOUT_ACTIVE_SHIFT       24
-#define HC_HCOR_EXTRA_REG_IP_REASSM_TIMEOUT_TSBS_SHIFT          24
-#define HC_HCOR_ACTION_REG_IP_REASSM_TIMEOUT_RES_SHIFT          16
-#define HC_HCOR_ACTION_REG_IP_REASSM_TIMEOUT_RES_MASK           0xF
-#define HC_HCOR_ACTION_REG_IP_FRAG_SCRATCH_POOL_CMD_SHIFT       24
-#define HC_HCOR_ACTION_REG_IP_FRAG_SCRATCH_POOL_BPID            16
+#define HC_HCOR_OPCODE_CC_REASSM_TIMEOUT                     0x10
+#define HC_HCOR_OPCODE_CC_IP_FRAG_INITIALIZATION             0x11
+#define HC_HCOR_ACTION_REG_REASSM_TIMEOUT_ACTIVE_SHIFT       24
+#define HC_HCOR_EXTRA_REG_REASSM_TIMEOUT_TSBS_SHIFT          24
+#define HC_HCOR_ACTION_REG_REASSM_TIMEOUT_RES_SHIFT          16
+#define HC_HCOR_ACTION_REG_REASSM_TIMEOUT_RES_MASK           0xF
+#define HC_HCOR_ACTION_REG_IP_FRAG_SCRATCH_POOL_CMD_SHIFT    24
+#define HC_HCOR_ACTION_REG_IP_FRAG_SCRATCH_POOL_BPID         16
 
 #define HC_HCOR_GBL                         0x20000000
 
@@ -108,7 +108,7 @@ typedef _Packed struct t_HcFrame {
         t_FmPcdKgPortRegs                       portRegsForRead;
         volatile uint32_t                       clsPlanEntries[CLS_PLAN_NUM_PER_GRP];
         t_FmPcdCcCapwapReassmTimeoutParams      ccCapwapReassmTimeout;
-        t_FmPcdCcIpReassmTimeoutParams          ccIpReassmTimeout;
+        t_FmPcdCcReassmTimeoutParams            ccReassmTimeout;
     } hcSpecificData;
 } _PackedType t_HcFrame;
 
@@ -275,7 +275,7 @@ t_Handle FmHcConfigAndInit(t_FmHcParams *p_FmHcParams)
         XX_Free(p_FmHc);
         return NULL;
     }
- 
+
     err = FM_PORT_ConfigMaxFrameLength(p_FmHc->h_HcPortDev, sizeof(t_HcFrame));
     if (err != E_OK)
     {
@@ -660,6 +660,7 @@ t_Error FmHcPcdKgSetClsPlan(t_Handle h_FmHc, t_FmPcdKgInterModuleClsPlanSet *p_S
         p_HcFrame->opcode = (uint32_t)(HC_HCOR_GBL | HC_HCOR_OPCODE_KG_SCM);
         p_HcFrame->actionReg  = FmPcdKgBuildWriteClsPlanBlockActionReg((uint8_t)(i / CLS_PLAN_NUM_PER_GRP));
         p_HcFrame->extraReg = HC_HCOR_KG_SCHEME_REGS_MASK;
+        ASSERT_COND(IN_RANGE(0, (i-p_Set->baseEntry) ,FM_PCD_MAX_NUM_OF_CLS_PLANS-1));
         memcpy((void*)&p_HcFrame->hcSpecificData.clsPlanEntries, (void *)&p_Set->vectors[i-p_Set->baseEntry], CLS_PLAN_NUM_PER_GRP*sizeof(uint32_t));
         p_HcFrame->commandSequence = seqNum;
 
@@ -764,7 +765,7 @@ t_Error FmHcPcdCcIpFragScratchPollCmd(t_Handle h_FmHc, bool fill, t_FmPcdCcFragS
     return E_OK;
 }
 
-t_Error FmHcPcdCcIpTimeoutReassm(t_Handle h_FmHc, t_FmPcdCcIpReassmTimeoutParams *p_CcIpReassmTimeoutParams, uint8_t *p_Result)
+t_Error FmHcPcdCcTimeoutReassm(t_Handle h_FmHc, t_FmPcdCcReassmTimeoutParams *p_CcReassmTimeoutParams, uint8_t *p_Result)
 {
     t_FmHc                              *p_FmHc = (t_FmHc*)h_FmHc;
     t_HcFrame                           *p_HcFrame;
@@ -779,9 +780,9 @@ t_Error FmHcPcdCcIpTimeoutReassm(t_Handle h_FmHc, t_FmPcdCcIpReassmTimeoutParams
         RETURN_ERROR(MINOR, E_NO_MEMORY, ("HC Frame object"));
 
     memset(p_HcFrame, 0, sizeof(t_HcFrame));
-    p_HcFrame->opcode = (uint32_t)(HC_HCOR_GBL | HC_HCOR_OPCODE_CC_IP_REASSM_TIMEOUT);
-    p_HcFrame->actionReg = (uint32_t)((p_CcIpReassmTimeoutParams->activate ? 0 : 1) << HC_HCOR_ACTION_REG_IP_REASSM_TIMEOUT_ACTIVE_SHIFT);
-    p_HcFrame->extraReg = (p_CcIpReassmTimeoutParams->tsbs << HC_HCOR_EXTRA_REG_IP_REASSM_TIMEOUT_TSBS_SHIFT) | p_CcIpReassmTimeoutParams->iprcpt;
+    p_HcFrame->opcode = (uint32_t)(HC_HCOR_GBL | HC_HCOR_OPCODE_CC_REASSM_TIMEOUT);
+    p_HcFrame->actionReg = (uint32_t)((p_CcReassmTimeoutParams->activate ? 0 : 1) << HC_HCOR_ACTION_REG_REASSM_TIMEOUT_ACTIVE_SHIFT);
+    p_HcFrame->extraReg = (p_CcReassmTimeoutParams->tsbs << HC_HCOR_EXTRA_REG_REASSM_TIMEOUT_TSBS_SHIFT) | p_CcReassmTimeoutParams->iprcpt;
     p_HcFrame->commandSequence = seqNum;
 
     BUILD_FD(sizeof(t_HcFrame));
@@ -792,7 +793,7 @@ t_Error FmHcPcdCcIpTimeoutReassm(t_Handle h_FmHc, t_FmPcdCcIpReassmTimeoutParams
     }
 
     *p_Result = (uint8_t)
-        ((p_HcFrame->actionReg >> HC_HCOR_ACTION_REG_IP_REASSM_TIMEOUT_RES_SHIFT) & HC_HCOR_ACTION_REG_IP_REASSM_TIMEOUT_RES_MASK);
+        ((p_HcFrame->actionReg >> HC_HCOR_ACTION_REG_REASSM_TIMEOUT_RES_SHIFT) & HC_HCOR_ACTION_REG_REASSM_TIMEOUT_RES_MASK);
 
     PutBuf(p_FmHc, p_HcFrame, seqNum);
     return E_OK;

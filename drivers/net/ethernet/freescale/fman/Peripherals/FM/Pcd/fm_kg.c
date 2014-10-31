@@ -1382,12 +1382,11 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                 case (e_FM_PCD_EXTRACT_BY_HDR):
                     switch (p_Extract->extractByHdr.hdr)
                     {
-
-#ifdef FM_CAPWAP_SUPPORT
+#if (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
                         case (HEADER_TYPE_UDP_LITE):
                             p_Extract->extractByHdr.hdr = HEADER_TYPE_UDP;
                             break;
-#endif
+#endif /* (DPAA_VERSION >= 11) || ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT)) */
                         case (HEADER_TYPE_UDP_ENCAP_ESP):
                             switch (p_Extract->extractByHdr.type)
                             {

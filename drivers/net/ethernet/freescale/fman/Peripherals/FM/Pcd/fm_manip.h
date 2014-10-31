@@ -52,19 +52,27 @@
 
 #define NUM_OF_SCRATCH_POOL_BUFFERS             1000 /*TODO - Change it!!*/
 
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 #define HMAN_OC_RMV_N_OR_INSRT_INT_FRM_HDR                      0x2e
 #define HMAN_OC_INSRT_HDR_BY_TEMPL_N_OR_FRAG_AFTER              0x31
-#define HMAN_OC_CAPWAP_FRAGMENTATION                            0x33
-#define HMAN_OC_IP_MANIP                                        0x34
-#define HMAN_OC_IP_FRAGMENTATION                                0x74
-#define HMAN_OC_IP_REASSEMBLY                                   0xB4
-#define HMAN_OC_IPSEC_MANIP                                     0xF4
 #define HMAN_OC_MV_INT_FRAME_HDR_FROM_FRM_TO_BUFFER_PREFFIX     0x2f
 #define HMAN_OC_CAPWAP_RMV_DTLS_IF_EXIST                        0x30
 #define HMAN_OC_CAPWAP_REASSEMBLY                               0x11 /* dummy */
 #define HMAN_OC_CAPWAP_INDEXED_STATS                            0x32 /* dummy */
+#define HMAN_OC_CAPWAP_FRAGMENTATION                            0x33
+#else
+#define HMAN_OC_CAPWAP_MANIP                                    0x2F
+#define HMAN_OC_CAPWAP_FRAG_CHECK                               0x2E
+#define HMAN_OC_CAPWAP_FRAGMENTATION                            0x33
+#define HMAN_OC_CAPWAP_REASSEMBLY                               0x30
+#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
+#define HMAN_OC_IP_MANIP                                        0x34
+#define HMAN_OC_IP_FRAGMENTATION                                0x74
+#define HMAN_OC_IP_REASSEMBLY                                   0xB4
+#define HMAN_OC_IPSEC_MANIP                                     0xF4
 #define HMAN_OC                                                 0x35
 
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 #define HMAN_RMV_HDR                               0x80000000
 #define HMAN_INSRT_INT_FRM_HDR                     0x40000000
 
@@ -98,28 +106,44 @@
 #define FM_PCD_MANIP_INDEXED_STATS_ENTRY_SIZE               4
 #define FM_PCD_MANIP_INDEXED_STATS_CNIA                     0x20000000
 #define FM_PCD_MANIP_INDEXED_STATS_DPD                      0x10000000
+#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
 
-#define FM_PCD_MANIP_IP_REASM_TABLE_SIZE                    0x40
-#define FM_PCD_MANIP_IP_REASM_TABLE_ALIGN                   8
+#if (DPAA_VERSION >= 11)
+#define FM_PCD_MANIP_CAPWAP_DTLS                            0x00040000
+#define FM_PCD_MANIP_CAPWAP_NADEN                           0x20000000
 
-#define FM_PCD_MANIP_IP_REASM_COMMON_PARAM_TABLE_SIZE       64
-#define FM_PCD_MANIP_IP_REASM_COMMON_PARAM_TABLE_ALIGN      8
-#define FM_PCD_MANIP_IP_REASM_TIME_OUT_BETWEEN_FRAMES       0x80000000
-#define FM_PCD_MANIP_IP_REASM_COUPLING_ENABLE               0x40000000
-#define FM_PCD_MANIP_IP_REASM_COUPLING_MASK                 0xFF000000
-#define FM_PCD_MANIP_IP_REASM_COUPLING_SHIFT                24
-#define FM_PCD_MANIP_IP_REASM_LIODN_MASK                    0x0000003F
-#define FM_PCD_MANIP_IP_REASM_LIODN_SHIFT                   56
-#define FM_PCD_MANIP_IP_REASM_ELIODN_MASK                   0x000003c0
-#define FM_PCD_MANIP_IP_REASM_ELIODN_SHIFT                  38
-#define FM_PCD_MANIP_IP_REASM_COMMON_INT_BUFFER_IDX_MASK    0x000000FF
-#define FM_PCD_MANIP_IP_REASM_COMMON_INT_BUFFER_IDX_SHIFT   24
+#define FM_PCD_MANIP_CAPWAP_FRAG_CHECK_MTU_SHIFT            16
+#define FM_PCD_MANIP_CAPWAP_FRAG_CHECK_NO_FRAGMENTATION     0xFFFF0000
+#define FM_PCD_MANIP_CAPWAP_FRAG_CHECK_CNIA                 0x20000000
+
+#define FM_PCD_MANIP_CAPWAP_FRAG_COMPRESS_EN                0x04000000
+#define FM_PCD_MANIP_CAPWAP_FRAG_SCRATCH_BPID               24
+#define FM_PCD_MANIP_CAPWAP_FRAG_SG_BDID_EN                 0x08000000
+#define FM_PCD_MANIP_CAPWAP_FRAG_SG_BDID_MASK               0xFF000000
+#define FM_PCD_MANIP_CAPWAP_FRAG_SG_BDID_SHIFT              24
+#endif /* (DPAA_VERSION >= 11) */
+
+#define FM_PCD_MANIP_REASM_TABLE_SIZE                    0x40
+#define FM_PCD_MANIP_REASM_TABLE_ALIGN                   8
+
+#define FM_PCD_MANIP_REASM_COMMON_PARAM_TABLE_SIZE       64
+#define FM_PCD_MANIP_REASM_COMMON_PARAM_TABLE_ALIGN      8
+#define FM_PCD_MANIP_REASM_TIME_OUT_BETWEEN_FRAMES       0x80000000
+#define FM_PCD_MANIP_REASM_COUPLING_ENABLE               0x40000000
+#define FM_PCD_MANIP_REASM_COUPLING_MASK                 0xFF000000
+#define FM_PCD_MANIP_REASM_COUPLING_SHIFT                24
+#define FM_PCD_MANIP_REASM_LIODN_MASK                    0x0000003F
+#define FM_PCD_MANIP_REASM_LIODN_SHIFT                   56
+#define FM_PCD_MANIP_REASM_ELIODN_MASK                   0x000003c0
+#define FM_PCD_MANIP_REASM_ELIODN_SHIFT                  38
+#define FM_PCD_MANIP_REASM_COMMON_INT_BUFFER_IDX_MASK    0x000000FF
+#define FM_PCD_MANIP_REASM_COMMON_INT_BUFFER_IDX_SHIFT   24
+#define FM_PCD_MANIP_REASM_TIMEOUT_THREAD_THRESH        1024
 
 #define FM_PCD_MANIP_IP_MTU_SHIFT                           16
 #define FM_PCD_MANIP_IP_NO_FRAGMENTATION                    0xFFFF0000
 #define FM_PCD_MANIP_IP_CNIA                                0x20000000
 
-#define FM_PCD_MANIP_IP_REASSM_TIMEOUT_THREAD_THRESH        1024
 #define FM_PCD_MANIP_IP_FRAG_DF_SHIFT                       28
 #define FM_PCD_MANIP_IP_FRAG_SCRATCH_BPID                   24
 #define FM_PCD_MANIP_IP_FRAG_SG_BDID_EN                     0x08000000
@@ -149,6 +173,13 @@
 #define HMCD_OPCODE_TCP_UDP_UPDATE              0x0E
 #define HMCD_OPCODE_TCP_UDP_CHECKSUM            0x14
 #define HMCD_OPCODE_REPLACE_IP                  0x12
+#define HMCD_OPCODE_RMV_TILL                    0x15
+#define HMCD_OPCODE_UDP_INSRT                   0x16
+#define HMCD_OPCODE_IP_INSRT                    0x17
+#define HMCD_OPCODE_CAPWAP_RMV                  0x18
+#define HMCD_OPCODE_CAPWAP_INSRT                0x18
+
+#define HMCD_LAST                               0x00800000
 
 #define HMCD_DSCP_VALUES                        64
 
@@ -157,8 +188,17 @@
 #define HMCD_PARAM_SIZE                         4
 #define HMCD_IPV4_ADDR_SIZE                     4
 #define HMCD_IPV6_ADDR_SIZE                     0x10
+#define HMCD_L4_HDR_SIZE                        8
 
-#define HMCD_LAST                               0x00800000
+#define HMCD_CAPWAP_INSRT                       0x00010000
+#define HMCD_INSRT_UDP_LITE                     0x00010000
+#define HMCD_IP_ID_MASK                         0x0000FFFF
+#define HMCD_IP_SIZE_MASK                       0x0000FF00
+#define HMCD_IP_SIZE_SHIFT                      8
+#define HMCD_IP_LAST_PID_MASK                   0x000000FF
+#define HMCD_IP_OR_QOS                          0x00010000
+#define HMCD_IP_L4_CS_CALC                      0x00040000
+
 
 #define HMCD_OC_SHIFT                           24
 
@@ -271,6 +311,7 @@ typedef enum e_ManipInfo {
 #pragma pack(push,1)
 #endif /* defined(__MWERKS__) && ... */
 
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 typedef _Packed struct t_CapwapReasmPram {
     volatile uint32_t mode;
     volatile uint32_t autoLearnHashTblPtr;
@@ -296,17 +337,18 @@ typedef _Packed struct t_CapwapReasmPram {
     volatile uint32_t externalBufferBusy;
     volatile uint32_t reserved1[4];
 } _PackedType t_CapwapReasmPram;
+#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
 
-typedef _Packed struct t_IpReassTbl {
+typedef _Packed struct t_ReassTbl {
     volatile uint16_t waysNumAndSetSize;
     volatile uint16_t autoLearnHashKeyMask;
-    volatile uint32_t ipReassCommonPrmTblPtr;
+    volatile uint32_t reassCommonPrmTblPtr;
     volatile uint32_t liodnAlAndAutoLearnHashTblPtrHi;
     volatile uint32_t autoLearnHashTblPtrLow;
     volatile uint32_t liodnSlAndAutoLearnSetLockTblPtrHi;
     volatile uint32_t autoLearnSetLockTblPtrLow;
-    volatile uint16_t minFragSize;
-    volatile uint16_t reserved1;
+    volatile uint16_t minFragSize; /* Not relevant for CAPWAP*/
+    volatile uint16_t maxReassemblySize; /* Only relevant for CAPWAP*/
     volatile uint32_t totalSuccessfullyReasmFramesCounter;
     volatile uint32_t totalValidFragmentCounter;
     volatile uint32_t totalProcessedFragCounter;
@@ -315,9 +357,9 @@ typedef _Packed struct t_IpReassTbl {
     volatile uint32_t totalDiscardedFragsCounter;
     volatile uint32_t totalMoreThan16FramesCounter;
     volatile uint32_t reserved2[2];
-} _PackedType t_IpReassTbl;
+} _PackedType t_ReassTbl;
 
-typedef _Packed struct t_IpReassCommonTbl {
+typedef _Packed struct t_ReassCommonTbl {
     volatile uint32_t timeoutModeAndFqid;
     volatile uint32_t reassFrmDescIndexPoolTblPtr;
     volatile uint32_t liodnAndReassFrmDescPoolPtrHi;
@@ -334,7 +376,7 @@ typedef _Packed struct t_IpReassCommonTbl {
     volatile uint32_t totalDmaSemaphoreDepletionCounter;
     volatile uint32_t totalNCSPCounter;
     volatile uint32_t discardMask;
-} _PackedType t_IpReassCommonTbl;
+} _PackedType t_ReassCommonTbl;
 
 typedef _Packed struct t_Hmtd {
     volatile uint16_t   cfg;
@@ -355,6 +397,7 @@ typedef _Packed struct t_Hmtd {
 /***********************************************************************/
 /*  Driver's internal structures                                       */
 /***********************************************************************/
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 typedef struct
 {
     t_Handle p_AutoLearnHashTbl;
@@ -371,7 +414,8 @@ typedef struct
     uint32_t fqidForTimeOutFrames;
     uint32_t timeoutRoutineRequestTime;
     uint32_t bitFor1Micro;
-} t_FragParams;
+} t_CapwapFragParams;
+#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
 
 typedef struct
 {
@@ -379,21 +423,12 @@ typedef struct
 #if (DPAA_VERSION == 10)
     uint8_t                 scratchBpid;
 #endif /* (DPAA_VERSION == 10) */
-} t_IpFragParams;
+} t_FragParams;
 
-typedef struct t_IpReassmParams
+typedef struct t_ReassmParams
 {
-    t_Handle                        h_Ipv4Ad;
-    t_Handle                        h_Ipv6Ad;
-    bool                            ipv6Assigned;
     e_NetHeaderType                 hdr; /* Header selection */
-    t_IpReassCommonTbl              *p_IpReassCommonTbl;
-    t_IpReassTbl                    *p_Ipv4ReassTbl;
-    t_IpReassTbl                    *p_Ipv6ReassTbl;
-    uintptr_t                       ipv4AutoLearnHashTblAddr;
-    uintptr_t                       ipv6AutoLearnHashTblAddr;
-    uintptr_t                       ipv4AutoLearnSetLockTblAddr;
-    uintptr_t                       ipv6AutoLearnSetLockTblAddr;
+    t_ReassCommonTbl              	*p_ReassCommonTbl;
     uintptr_t                       reassFrmDescrIndxPoolTblAddr;
     uintptr_t                       reassFrmDescrPoolTblAddr;
     uintptr_t                       timeOutTblAddr;
@@ -406,14 +441,36 @@ typedef struct t_IpReassmParams
     uint32_t                        fqidForTimeOutFrames;
     e_FmPcdManipReassemTimeOutMode  timeOutMode;
     uint32_t                        timeoutThresholdForReassmProcess;
-    uint16_t                        minFragSize[2];
-    e_FmPcdManipReassemWaysNumber   numOfFramesPerHashEntry[2];
-    uint8_t                         relativeSchemeId[2];
-    t_Handle                        h_Ipv4Scheme;
-    t_Handle                        h_Ipv6Scheme;
-    uint32_t                        nonConsistentSpFqid;
-} t_IpReassmParams;
-
+    union {
+	struct {
+		t_Handle                h_Ipv4Ad;
+	    t_Handle                h_Ipv6Ad;
+	    bool                    ipv6Assigned;
+	    t_ReassTbl				*p_Ipv4ReassTbl;
+	    t_ReassTbl              *p_Ipv6ReassTbl;
+	    uintptr_t               ipv4AutoLearnHashTblAddr;
+	    uintptr_t               ipv6AutoLearnHashTblAddr;
+	    uintptr_t               ipv4AutoLearnSetLockTblAddr;
+	    uintptr_t               ipv6AutoLearnSetLockTblAddr;
+	    uint16_t                        minFragSize[2];
+	    e_FmPcdManipReassemWaysNumber   numOfFramesPerHashEntry[2];
+	    uint8_t                         relativeSchemeId[2];
+	    t_Handle                        h_Ipv4Scheme;
+	    t_Handle                        h_Ipv6Scheme;
+	    uint32_t                        nonConsistentSpFqid;
+	} ip;
+	struct {
+		t_Handle                h_Ad;
+	    t_ReassTbl				*p_ReassTbl;
+	    uintptr_t               autoLearnHashTblAddr;
+	    uintptr_t               autoLearnSetLockTblAddr;
+	    uint16_t                maxRessembledsSize;
+	    e_FmPcdManipReassemWaysNumber   numOfFramesPerHashEntry;
+	    uint8_t                 relativeSchemeId;
+	    t_Handle                h_Scheme;
+	} capwap;
+    };
+} t_ReassmParams;
 
 typedef struct{
     e_FmPcdManipType        type;
@@ -437,17 +494,19 @@ typedef struct{
     e_ManipUnifiedPosition  unifiedPosition;
     /* end HdrManip */
     uint8_t                 *p_Template;
-    t_Handle                h_Frag;
-    bool                    frag;
-    bool                    reassm;
-    uint16_t                sizeForFragmentation;
     uint8_t                 owner;
     uint32_t                updateParams;
     uint32_t                shadowUpdateParams;
-    t_FragParams            fragParams;
+    bool                    frag;
+    bool                    reassm;
+    uint16_t                sizeForFragmentation;
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
+    t_Handle                h_Frag;
+    t_CapwapFragParams      capwapFragParams;
+#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
     union {
-        t_IpReassmParams    ipReassmParams;
-        t_IpFragParams      ipFragParams;
+        t_ReassmParams    	reassmParams;
+        t_FragParams      	fragParams;
     };
     uint8_t                 icOffset;
     uint16_t                ownerTmp;
@@ -456,7 +515,6 @@ typedef struct{
     t_Handle                h_FmPcd;
     t_List                  nodesLst;
     t_Handle                h_Spinlock;
-
 } t_FmPcdManip;
 
 typedef struct t_FmPcdCcSavedManipParams

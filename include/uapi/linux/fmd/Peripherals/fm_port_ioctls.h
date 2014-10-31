@@ -500,8 +500,10 @@ typedef struct ioc_fm_port_pcd_params_t {
     ioc_fm_port_pcd_kg_params_t     *p_kg_params;   /**< Keygen parameters for this port */
     ioc_fm_port_pcd_plcr_params_t   *p_plcr_params; /**< Policer parameters for this port */
     void                            *p_ip_reassembly_manip;/**< IP Reassembly manipulation */
+#if (DPAA_VERSION >= 11)
+    void                            *p_capwap_reassembly_manip;/**< CAPWAP Reassembly manipulation */
+#endif /* (DPAA_VERSION >= 11) */
 } ioc_fm_port_pcd_params_t;
-
 
 /**************************************************************************//**
  @Description   A structure for defining the Parser starting point

@@ -54,7 +54,8 @@ void __init corenet_gen_pic_init(void)
 	 * to enable the mixed mode of MPIC.
 	 */
 	if ((SVR_SOC_VER(svr) == SVR_T1040) ||
-	    (SVR_SOC_VER(svr) == SVR_T1042)) {
+	    (SVR_SOC_VER(svr) == SVR_T1042) ||
+	    (SVR_SOC_VER(svr) == SVR_T1024)) {
 		ppc_md.get_irq = mpic_get_irq;
 	}
 
@@ -150,6 +151,9 @@ static const char * const boards[] __initconst = {
 	"fsl,P4080DS",
 	"fsl,P5020DS",
 	"fsl,P5040DS",
+	"fsl,T1023QDS",
+	"fsl,T1024QDS",
+	"fsl,T1024RDB",
 	"fsl,T1040QDS",
 	"fsl,T1042QDS",
 	"fsl,T1040RDB",
@@ -172,6 +176,9 @@ static const char * const hv_boards[] __initconst = {
 	"fsl,P4080DS-hv",
 	"fsl,P5020DS-hv",
 	"fsl,P5040DS-hv",
+	"fsl,T1023QDS-hv",
+	"fsl,T1024QDS-hv",
+	"fsl,T1024RDB-hv",
 	"fsl,T1040QDS-hv",
 	"fsl,T1042QDS-hv",
 	"fsl,T1040RDB-hv",

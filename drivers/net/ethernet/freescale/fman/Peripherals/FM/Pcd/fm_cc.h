@@ -389,6 +389,7 @@ typedef struct
     bool                modifiedState;
     uint32_t            requiredAction;
     t_Handle            h_IpReassemblyManip;
+    t_Handle            h_CapwapReassemblyManip;
 
     t_FmPcdCcKeyAndNextEngineParams keyAndNextEngineParams[FM_PCD_MAX_NUM_OF_CC_GROUPS];
 } t_FmPcdCcTree;

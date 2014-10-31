@@ -82,7 +82,7 @@ int fsl_dp_iomap(void)
 	if (np) {
 		pld_flag = T1040QDS_TETRA_FLAG;
 	} else {
-		np = of_find_compatible_node(NULL, NULL, "fsl,t104xrdb-cpld");
+		np = of_find_compatible_node(NULL, NULL, "fsl,deepsleep-cpld");
 		if (np) {
 			pld_flag = T104xRDB_CPLD_FLAG;
 		} else {

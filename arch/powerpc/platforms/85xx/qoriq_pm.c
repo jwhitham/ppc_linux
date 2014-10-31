@@ -154,6 +154,16 @@ static const struct platform_suspend_ops qoriq_suspend_ops = {
 	.end = qoriq_suspend_end,
 };
 
+static const struct of_device_id deepsleep_matches[] = {
+	{
+		.compatible = "fsl,t1040-rcpm",
+	},
+	{
+		.compatible = "fsl,t1024-rcpm",
+	},
+	{},
+};
+
 static int __init qoriq_suspend_init(void)
 {
 	struct device_node *np;
@@ -165,7 +175,7 @@ static int __init qoriq_suspend_init(void)
 	if (np)
 		sleep_pm_state = PLAT_PM_LPM20;
 
-	np = of_find_compatible_node(NULL, NULL, "fsl,t1040-rcpm");
+	np = of_find_matching_node_and_match(NULL, deepsleep_matches, NULL);
 	if (np) {
 		fsl_enter_deepsleep = fsl_enter_epu_deepsleep;
 		sleep_modes |= FSL_DEEP_SLEEP;

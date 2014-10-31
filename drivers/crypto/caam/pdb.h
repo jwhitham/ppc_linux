@@ -315,7 +315,7 @@ struct dtls_block_encap_pdb {
 	u16 epoch;
 	u16 seq_num[3];
 	u32 iv[4];
-};
+} __packed;
 
 struct tls_block_decap_pdb {
 	u8 rsvd[3];
@@ -340,7 +340,7 @@ struct dtls_block_decap_pdb {
 	u16 seq_num[3];
 	u32 iv[4];
 	u64 antireplay_scorecard;
-};
+} __packed;
 
 /*
  * SRTP Protocol Data Blocks

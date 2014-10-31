@@ -3518,13 +3518,15 @@ t_Error FM_Init(t_Handle h_Fm)
 	if (((SVR_SOC_VER(svr) == SVR_T4240 && SVR_REV(svr) > 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_T4160 && SVR_REV(svr) > 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_T4080 && SVR_REV(svr) > 0x10)) ||
+	    (SVR_SOC_VER(svr) == SVR_T1024) ||
+	    (SVR_SOC_VER(svr) == SVR_T1023) ||
 	    (SVR_SOC_VER(svr) == SVR_T2080) ||
 	    (SVR_SOC_VER(svr) == SVR_T2081)) {
 		DBG(WARNING, ("Hack: No FM reset!\n"));
 	} else {
 		WRITE_UINT32(p_Fm->p_FmFpmRegs->fm_rstc, FPM_RSTC_FM_RESET);
-		CORE_MemoryBarrier();
-		XX_UDelay(100);
+        CORE_MemoryBarrier();
+        XX_UDelay(100);
 	}
 
         if (fman_is_qmi_halt_not_busy_state(p_Fm->p_FmQmiRegs))
@@ -4932,37 +4934,43 @@ t_Error FM_GetSpecialOperationCoding(t_Handle               h_Fm,
 
     if (revInfo.packageRev == IP_OFFLOAD_PACKAGE_NUMBER)
     {
-        switch (spOper)
-        {
-            case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN|FM_SP_OP_IPSEC_MANIP):
-            case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN|FM_SP_OP_IPSEC_MANIP|FM_SP_OP_RPD):
-                    *p_SpOperCoding = 5;
-                    break;
-            case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_MANIP):
-            case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_MANIP|FM_SP_OP_RPD):
-                    *p_SpOperCoding = 6;
-                    break;
-            case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN|FM_SP_OP_RPD):
-                    *p_SpOperCoding = 3;
-                    break;
-            case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN):
-                    *p_SpOperCoding = 1;
-                    break;
-            case (FM_SP_OP_IPSEC|FM_SP_OP_RPD):
-                    *p_SpOperCoding = 4;
-                    break;
-            case (FM_SP_OP_IPSEC):
-                    *p_SpOperCoding = 2;
-                    break;
-            case (FM_SP_OP_DCL4C):
-                    *p_SpOperCoding = 7;
-                    break;
-            case (FM_SP_OP_CLEAR_RPD):
-                    *p_SpOperCoding = 8;
-                    break;
-            default:
-                RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
-        }
+    switch (spOper)
+    {
+        case (FM_SP_OP_CAPWAP_DTLS_DEC):
+                *p_SpOperCoding = 9;
+                break;
+        case (FM_SP_OP_CAPWAP_DTLS_ENC):
+                *p_SpOperCoding = 10;
+                break;
+        case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN|FM_SP_OP_IPSEC_MANIP):
+        case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN|FM_SP_OP_IPSEC_MANIP|FM_SP_OP_RPD):
+                *p_SpOperCoding = 5;
+                break;
+        case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_MANIP):
+        case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_MANIP|FM_SP_OP_RPD):
+                *p_SpOperCoding = 6;
+                break;
+        case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN|FM_SP_OP_RPD):
+                *p_SpOperCoding = 3;
+                break;
+        case (FM_SP_OP_IPSEC|FM_SP_OP_IPSEC_UPDATE_UDP_LEN):
+                *p_SpOperCoding = 1;
+                break;
+        case (FM_SP_OP_IPSEC|FM_SP_OP_RPD):
+                *p_SpOperCoding = 4;
+                break;
+        case (FM_SP_OP_IPSEC):
+                *p_SpOperCoding = 2;
+                break;
+        case (FM_SP_OP_DCL4C):
+                *p_SpOperCoding = 7;
+                break;
+        case (FM_SP_OP_CLEAR_RPD):
+                *p_SpOperCoding = 8;
+                break;
+        default:
+            RETURN_ERROR(MINOR, E_INVALID_VALUE, NO_MSG);
+    }
     }
     return E_OK;
 }

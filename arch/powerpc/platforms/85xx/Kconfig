@@ -286,7 +286,7 @@ config CORENET_GENERIC
 	  For 64bit kernel, the following boards are supported:
 	    T208x QDS and RDB, T4240 QDS, T4240 RDB and B4 QDS
 	  The following boards are supported for both 32bit and 64bit kernel:
-	    P5020 DS, P5040 DS, T104xQDS, T104xRDB
+	    P5020 DS, P5040 DS, T104xQDS, T104xRDB, T102xQDS, T102xRDB
 
 endif # FSL_SOC_BOOKE
 

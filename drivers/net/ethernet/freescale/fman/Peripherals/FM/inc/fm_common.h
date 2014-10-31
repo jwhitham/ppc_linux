@@ -51,6 +51,10 @@
 #define CLS_PLAN_NUM_PER_GRP                        8
 
 #define IP_OFFLOAD_PACKAGE_NUMBER                   106
+#define CAPWAP_OFFLOAD_PACKAGE_NUMBER               108
+#define IS_OFFLOAD_PACKAGE(num) ((num == IP_OFFLOAD_PACKAGE_NUMBER) || (num == CAPWAP_OFFLOAD_PACKAGE_NUMBER))
+
+
 
 
 /**************************************************************************//**
@@ -165,7 +169,9 @@ typedef _Packed struct t_FmPcdCtrlParamsPage {
     volatile uint32_t misc;
     volatile uint32_t errorsDiscardMask;
     volatile uint32_t discardMask;
-    volatile uint8_t  reserved3[180];
+    volatile uint8_t  reserved3[4];
+    volatile uint32_t postBmiFetchNia;
+    volatile uint8_t  reserved4[172];
 } _PackedType t_FmPcdCtrlParamsPage;
 
 
@@ -188,11 +194,11 @@ typedef struct t_FmPcdCcFragScratchPoolCmdParams {
     uint8_t     bufferPoolId;
 } t_FmPcdCcFragScratchPoolCmdParams;
 
-typedef struct t_FmPcdCcIpReassmTimeoutParams {
+typedef struct t_FmPcdCcReassmTimeoutParams {
     bool        activate;
     uint8_t     tsbs;
     uint32_t    iprcpt;
-} t_FmPcdCcIpReassmTimeoutParams;
+} t_FmPcdCcReassmTimeoutParams;
 
 typedef struct {
     uint8_t             baseEntry;
@@ -251,6 +257,7 @@ typedef struct {
     uint32_t        nia;
     t_FmFmanCtrl    orFmanCtrl;
     bool            overwrite;
+    uint8_t         ofpDpde;
 } t_SetCcParams;
 
 typedef struct {
@@ -326,6 +333,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 #define UPDATE_PSO                              0x40000000
 #define UPDATE_NIA_PNDN                         0x20000000
 #define UPDATE_FMFP_PRC_WITH_ONE_RISC_ONLY      0x10000000
+#define UPDATE_OFP_DPTE                         0x08000000
 #define UPDATE_NIA_FENE                         0x04000000
 #define UPDATE_NIA_CMNE                         0x02000000
 #define UPDATE_NIA_FPNE                         0x01000000
@@ -341,7 +349,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
 #define UPDATE_KG_NIA_CC_WA                     0x10000000
 #define UPDATE_KG_OPT_MODE                      0x08000000
 #define UPDATE_KG_NIA                           0x04000000
-#define UPDATE_CC_SHADOW_CLEAR					0x02000000
+#define UPDATE_CC_SHADOW_CLEAR                    0x02000000
 /* @} */
 
 #define UPDATE_FPM_BRKC_SLP                     0x80000000
@@ -772,7 +780,8 @@ t_Error     FmPcdCcModifyNextEngineParamTree(t_Handle h_FmPcd, t_Handle h_FmPcdC
 uint32_t    FmPcdCcGetNodeAddrOffsetFromNodeInfo(t_Handle h_FmPcd, t_Handle h_Pointer);
 t_Handle    FmPcdCcTreeGetSavedManipParams(t_Handle h_FmTree);
 void        FmPcdCcTreeSetSavedManipParams(t_Handle h_FmTree, t_Handle h_SavedManipParams);
-t_Error     FmPcdCcTreeAddIPR(t_Handle h_FmPcd, t_Handle h_FmTree, t_Handle h_NetEnv, t_Handle h_IpReassemblyManip, bool schemes);
+t_Error     FmPcdCcTreeAddIPR(t_Handle h_FmPcd, t_Handle h_FmTree, t_Handle h_NetEnv, t_Handle h_ReassemblyManip, bool schemes);
+t_Error     FmPcdCcTreeAddCPR(t_Handle h_FmPcd, t_Handle h_FmTree, t_Handle h_NetEnv, t_Handle h_ReassemblyManip, bool schemes);
 t_Error     FmPcdCcBindTree(t_Handle h_FmPcd, t_Handle h_PcdParams, t_Handle h_CcTree,  uint32_t  *p_Offset,t_Handle h_FmPort);
 t_Error     FmPcdCcUnbindTree(t_Handle h_FmPcd, t_Handle h_CcTree);
 

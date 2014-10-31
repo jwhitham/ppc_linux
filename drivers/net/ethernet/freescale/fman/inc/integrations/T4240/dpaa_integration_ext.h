@@ -232,7 +232,7 @@ typedef enum
 #define FM_PCD_PLCR_NUM_ENTRIES         256                 /**< Total number of policer profiles */
 #define FM_PCD_KG_NUM_OF_SCHEMES        32                  /**< Total number of KG schemes */
 #define FM_PCD_MAX_NUM_OF_CLS_PLANS     256                 /**< Number of classification plan entries. */
-#define FM_PCD_PRS_SW_PATCHES_SIZE      0x00000240          /**< Number of bytes saved for patches */
+#define FM_PCD_PRS_SW_PATCHES_SIZE      0x00000440          /**< Number of bytes saved for patches */
 #define FM_PCD_SW_PRS_SIZE              0x00000800          /**< Total size of SW parser area */
 
 /* RTC defines */
