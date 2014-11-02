@@ -274,7 +274,7 @@ struct fman_port_oh_bmi_regs {
 	uint32_t reserved0080[0x20];	/**< 0x080 - 0x0FF Reserved */
 	uint32_t fmbm_oebmpi[2];	/**< Buf Mngr Observed Pool Info */
 	uint32_t reserved0108[0x16];	/**< 0x108 - 0x15F Reserved */
-	uint32_t fmbm_ocgm;		/**< Observed Congestion Group Map */
+	uint32_t fmbm_ocgm[FMAN_PORT_CG_MAP_NUM]; /**< Observed Congestion Group Map */
 	uint32_t reserved0164[0x7];	/**< 0x164 - 0x17F Reserved */
 	uint32_t fmbm_ompd;		/**< Observed BMan Pool Depletion */
 	uint32_t reserved0184[0x1F];	/**< 0x184 - 0x1FF Reserved */

@@ -312,7 +312,7 @@ typedef enum e_ManipInfo {
 #endif /* defined(__MWERKS__) && ... */
 
 #if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
-typedef _Packed struct t_CapwapReasmPram {
+typedef struct t_CapwapReasmPram {
     volatile uint32_t mode;
     volatile uint32_t autoLearnHashTblPtr;
     volatile uint32_t intStatsTblPtr;
@@ -336,7 +336,7 @@ typedef _Packed struct t_CapwapReasmPram {
     volatile uint32_t internalBufferBusy;
     volatile uint32_t externalBufferBusy;
     volatile uint32_t reserved1[4];
-} _PackedType t_CapwapReasmPram;
+} t_CapwapReasmPram;
 #endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
 
 typedef _Packed struct t_ReassTbl {
@@ -359,7 +359,7 @@ typedef _Packed struct t_ReassTbl {
     volatile uint32_t reserved2[2];
 } _PackedType t_ReassTbl;
 
-typedef _Packed struct t_ReassCommonTbl {
+typedef struct t_ReassCommonTbl {
     volatile uint32_t timeoutModeAndFqid;
     volatile uint32_t reassFrmDescIndexPoolTblPtr;
     volatile uint32_t liodnAndReassFrmDescPoolPtrHi;
@@ -376,7 +376,7 @@ typedef _Packed struct t_ReassCommonTbl {
     volatile uint32_t totalDmaSemaphoreDepletionCounter;
     volatile uint32_t totalNCSPCounter;
     volatile uint32_t discardMask;
-} _PackedType t_ReassCommonTbl;
+} t_ReassCommonTbl;
 
 typedef _Packed struct t_Hmtd {
     volatile uint16_t   cfg;

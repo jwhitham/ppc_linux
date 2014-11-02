@@ -198,7 +198,7 @@ static __inline__ t_EthHash * AllocHashTable(uint16_t size)
     t_EthHash *p_Hash;
 
     /* Allocate address hash table */
-    p_Hash = (t_EthHash *)XX_Malloc(size*sizeof(t_EthHash *));
+    p_Hash = (t_EthHash *)XX_Malloc(sizeof(t_EthHash));
     if (!p_Hash)
     {
         REPORT_ERROR(MAJOR, E_NO_MEMORY, ("Address hash table"));

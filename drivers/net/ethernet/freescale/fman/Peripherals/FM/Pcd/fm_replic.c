@@ -380,10 +380,11 @@ static t_Error AllocMember(t_FmPcdFrmReplicGroup *p_ReplicGroup)
         (t_AdOfTypeResult*)FM_MURAM_AllocMem(h_Muram,
                                              FM_PCD_CC_AD_ENTRY_SIZE,
                                              FM_PCD_CC_AD_TABLE_ALIGN);
-
     if (!p_CurrentMember->p_MemberAd)
+    {
+        XX_Free(p_CurrentMember);
         RETURN_ERROR(MAJOR, E_NO_MEMORY, ("member AD table"));
-
+    }
     IOMemSet32((uint8_t*)p_CurrentMember->p_MemberAd, 0, FM_PCD_CC_AD_ENTRY_SIZE);
 
     /* Add the new member to the available members list */
@@ -591,7 +592,6 @@ static void DeleteGroup(t_FmPcdFrmReplicGroup *p_ReplicGroup)
 
         /* free the replicator group */
         XX_Free(p_ReplicGroup);
-        p_ReplicGroup = NULL;
     }
 }
 
@@ -833,13 +833,8 @@ t_Error FM_PCD_FrmReplicAddMember(t_Handle                  h_ReplicGroup,
 
     /* group lock */
     err = FrmReplicGroupTryLock(p_ReplicGroup);
-    if (err)
-    {
-        if (GET_ERROR_TYPE(err) == E_BUSY)
-            return ERROR_CODE(E_BUSY);
-        else
-            RETURN_ERROR(MAJOR, err, ("try lock in Add member"));
-    }
+    if (GET_ERROR_TYPE(err) == E_BUSY)
+        return ERROR_CODE(E_BUSY);
 
     if (memberIndex > p_ReplicGroup->numOfEntries)
     {
@@ -954,13 +949,8 @@ t_Error FM_PCD_FrmReplicRemoveMember(t_Handle   h_ReplicGroup,
 
     /* lock */
     err = FrmReplicGroupTryLock(p_ReplicGroup);
-    if (err)
-    {
-        if (GET_ERROR_TYPE(err) == E_BUSY)
-            return ERROR_CODE(E_BUSY);
-        else
-            RETURN_ERROR(MAJOR, err, ("try lock in Remove member"));
-    }
+    if (GET_ERROR_TYPE(err) == E_BUSY)
+        return ERROR_CODE(E_BUSY);
 
     if (memberIndex >= p_ReplicGroup->numOfEntries)
         RETURN_ERROR(MAJOR, E_INVALID_SELECTION, ("member index to remove"));

@@ -57,13 +57,13 @@
 /*----------------------------------------------------*/
 /* MII Configuration Control Memory Map Registers     */
 /*----------------------------------------------------*/
-typedef _Packed struct t_MemacMiiAccessMemMap
+typedef struct t_MemacMiiAccessMemMap
 {
     volatile uint32_t   mdio_cfg;       /* 0x030  */
     volatile uint32_t   mdio_ctrl;      /* 0x034  */
     volatile uint32_t   mdio_data;      /* 0x038  */
     volatile uint32_t   mdio_addr;      /* 0x03c  */
-} _PackedType t_MemacMiiAccessMemMap ;
+} t_MemacMiiAccessMemMap ;
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
 #pragma pack(pop)

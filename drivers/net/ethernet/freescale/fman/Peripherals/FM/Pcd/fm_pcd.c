@@ -1044,8 +1044,7 @@ t_Error FM_PCD_Free(t_Handle h_FmPcd)
 
     if (p_FmPcd->p_FmPcdPlcr)
     {
-        if ((err = PlcrFree(p_FmPcd)) != E_OK)
-            RETURN_ERROR(MINOR, err, NO_MSG);
+        PlcrFree(p_FmPcd);
         XX_Free(p_FmPcd->p_FmPcdPlcr);
         p_FmPcd->p_FmPcdPlcr = NULL;
     }
@@ -1485,7 +1484,7 @@ t_Handle FM_PCD_NetEnvCharacteristicsSet(t_Handle h_FmPcd, t_FmPcdNetEnvParams  
             for (k = 0; (k < FM_PCD_MAX_NUM_OF_INTERCHANGEABLE_HDRS)
                     && (p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr != HEADER_TYPE_NONE); k++)
             {
-                GET_PRS_HDR_NUM(hdrNum, p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr);
+                hdrNum = GetPrsHdrNum(p_FmPcd->netEnvs[netEnvCurrId].units[i].hdrs[k].hdr);
                 if ((hdrNum == ILLEGAL_HDR_NUM) || (hdrNum == NO_HDR_NUM))
                 {
                     REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, NO_MSG);
@@ -1749,11 +1748,8 @@ uint32_t FM_PCD_GetCounter(t_Handle h_FmPcd, e_FmPcdCounters counter)
                 return GET_UINT32(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_tpcnt);
         case (e_FM_PCD_PLCR_COUNTERS_LENGTH_MISMATCH):
                 return GET_UINT32(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_flmcnt);
-
-        default:
-            REPORT_ERROR(MINOR, E_INVALID_STATE, ("Unsupported type of counter"));
-            return 0;
     }
+    return 0;
 }
 
 #if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
@@ -1824,15 +1820,12 @@ t_Error FM_PCD_SetException(t_Handle h_FmPcd, e_FmPcdExceptions exception, bool 
             case (e_FM_PCD_PLCR_EXCEPTION_ATOMIC_ACTION_COMPLETE):
                 if (!p_FmPcd->p_FmPcdPlcr)
                     RETURN_ERROR(MINOR, E_INVALID_STATE, ("Can't ask for this interrupt - policer is not working"));
-            break;
+                break;
             case (e_FM_PCD_PRS_EXCEPTION_DOUBLE_ECC):
             case (e_FM_PCD_PRS_EXCEPTION_SINGLE_ECC):
                 if (!p_FmPcd->p_FmPcdPrs)
                     RETURN_ERROR(MINOR, E_INVALID_STATE, ("Can't ask for this interrupt - parser is not working"));
-            break;
-            default:
-                RETURN_ERROR(MINOR, E_INVALID_STATE, ("Unsupported exception"));
-
+                break;
         }
 
         switch (exception)
@@ -1901,24 +1894,20 @@ t_Error FM_PCD_SetException(t_Handle h_FmPcd, e_FmPcdExceptions exception, bool 
                     tmpReg &= ~FM_PCD_PLCR_ATOMIC_ACTION_COMPLETE;
                 WRITE_UINT32(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_ier, tmpReg);
                 break;
-             default:
-                RETURN_ERROR(MINOR, E_INVALID_STATE, ("Unsupported exception"));
         }
         /* for ECC exceptions driver automatically enables ECC mechanism, if disabled.
            Driver may disable them automatically, depending on driver's status */
-        if (enable && ( (exception == e_FM_PCD_KG_EXCEPTION_DOUBLE_ECC) |
+        if (enable && ((exception == e_FM_PCD_KG_EXCEPTION_DOUBLE_ECC) |
                        (exception == e_FM_PCD_PLCR_EXCEPTION_DOUBLE_ECC) |
                        (exception == e_FM_PCD_PRS_EXCEPTION_DOUBLE_ECC) |
                        (exception == e_FM_PCD_PRS_EXCEPTION_SINGLE_ECC)))
             FmEnableRamsEcc(p_FmPcd->h_Fm);
-        if (!enable && ( (exception == e_FM_PCD_KG_EXCEPTION_DOUBLE_ECC) |
+        if (!enable && ((exception == e_FM_PCD_KG_EXCEPTION_DOUBLE_ECC) |
                        (exception == e_FM_PCD_PLCR_EXCEPTION_DOUBLE_ECC) |
                        (exception == e_FM_PCD_PRS_EXCEPTION_DOUBLE_ECC) |
                        (exception == e_FM_PCD_PRS_EXCEPTION_SINGLE_ECC)))
             FmDisableRamsEcc(p_FmPcd->h_Fm);
     }
-    else
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Undefined exception"));
 
     return E_OK;
 }
@@ -1953,8 +1942,7 @@ t_Error FM_PCD_ForceIntr (t_Handle h_FmPcd, e_FmPcdExceptions exception)
                 RETURN_ERROR(MINOR, E_INVALID_STATE, ("Can't ask for this interrupt -parsrer is not working"));
             break;
         default:
-            RETURN_ERROR(MINOR, E_INVALID_STATE, ("Invalid interrupt requested"));
-
+            RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Invalid interrupt requested"));
     }
     switch (exception)
     {
@@ -1996,8 +1984,6 @@ t_Error FM_PCD_ForceIntr (t_Handle h_FmPcd, e_FmPcdExceptions exception)
                 RETURN_ERROR(MINOR, E_NOT_SUPPORTED, ("The selected exception is masked"));
             WRITE_UINT32(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_ifr, FM_PCD_PLCR_ATOMIC_ACTION_COMPLETE);
             break;
-        default:
-            RETURN_ERROR(MINOR, E_NOT_SUPPORTED, ("The selected exception may not be forced"));
     }
 
     return E_OK;
@@ -2130,11 +2116,9 @@ t_Error FM_PCD_ModifyCounter(t_Handle h_FmPcd, e_FmPcdCounters counter, uint32_t
         case (e_FM_PCD_PLCR_COUNTERS_LENGTH_MISMATCH):
               WRITE_UINT32(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_flmcnt, value);
             break;
-        default:
-            RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Unsupported type of counter"));
     }
 
-return E_OK;
+    return E_OK;
 }
 
 t_Handle FM_PCD_GetHcPort(t_Handle h_FmPcd)

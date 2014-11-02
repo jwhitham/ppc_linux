@@ -1514,7 +1514,7 @@ int fman_port_add_congestion_grps(struct fman_port *port,
         max_grp_map_num = 1;
         if (port->fm_rev_maj != 4)
             return -EINVAL;
-        grp_map_reg = &port->bmi_regs->oh.fmbm_ocgm;
+        grp_map_reg = port->bmi_regs->oh.fmbm_ocgm;
         break;
     default:
         return -EINVAL;
@@ -1551,7 +1551,7 @@ int fman_port_remove_congestion_grps(struct fman_port *port,
         max_grp_map_num = 1;
         if (port->fm_rev_maj != 4)
             return -EINVAL;
-        grp_map_reg = &port->bmi_regs->oh.fmbm_ocgm;
+        grp_map_reg = port->bmi_regs->oh.fmbm_ocgm;
         break;
     default:
         return -EINVAL;

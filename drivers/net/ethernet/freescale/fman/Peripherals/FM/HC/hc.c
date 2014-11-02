@@ -90,12 +90,12 @@ do {                                      \
 #pragma pack(push,1)
 #endif /* defined(__MWERKS__) && ... */
 
-typedef _Packed struct t_FmPcdKgPortRegs {
+typedef struct t_FmPcdKgPortRegs {
     volatile uint32_t                       spReg;
     volatile uint32_t                       cppReg;
-} _PackedType t_FmPcdKgPortRegs;
+} t_FmPcdKgPortRegs;
 
-typedef _Packed struct t_HcFrame {
+typedef struct t_HcFrame {
     volatile uint32_t                           opcode;
     volatile uint32_t                           actionReg;
     volatile uint32_t                           extraReg;
@@ -276,7 +276,7 @@ t_Handle FmHcConfigAndInit(t_FmHcParams *p_FmHcParams)
         return NULL;
     }
 
-    err = FM_PORT_ConfigMaxFrameLength(p_FmHc->h_HcPortDev, sizeof(t_HcFrame));
+    err = FM_PORT_ConfigMaxFrameLength(p_FmHc->h_HcPortDev, (uint16_t)sizeof(t_HcFrame));
     if (err != E_OK)
     {
         REPORT_ERROR(MAJOR, err, ("FM HC port init!"));
@@ -644,7 +644,7 @@ t_Error FmHcPcdKgSetClsPlan(t_Handle h_FmHc, t_FmPcdKgInterModuleClsPlanSet *p_S
     t_FmHc                  *p_FmHc = (t_FmHc*)h_FmHc;
     t_HcFrame               *p_HcFrame;
     t_DpaaFD                fmFd;
-    uint32_t                i;
+    uint8_t                 i, idx;
     uint32_t                seqNum;
     t_Error                 err = E_OK;
 
@@ -661,7 +661,10 @@ t_Error FmHcPcdKgSetClsPlan(t_Handle h_FmHc, t_FmPcdKgInterModuleClsPlanSet *p_S
         p_HcFrame->actionReg  = FmPcdKgBuildWriteClsPlanBlockActionReg((uint8_t)(i / CLS_PLAN_NUM_PER_GRP));
         p_HcFrame->extraReg = HC_HCOR_KG_SCHEME_REGS_MASK;
         ASSERT_COND(IN_RANGE(0, (i-p_Set->baseEntry) ,FM_PCD_MAX_NUM_OF_CLS_PLANS-1));
-        memcpy((void*)&p_HcFrame->hcSpecificData.clsPlanEntries, (void *)&p_Set->vectors[i-p_Set->baseEntry], CLS_PLAN_NUM_PER_GRP*sizeof(uint32_t));
+        idx = (uint8_t)(i - p_Set->baseEntry);
+        ASSERT_COND(idx < FM_PCD_MAX_NUM_OF_CLS_PLANS);
+        memcpy(&p_HcFrame->hcSpecificData.clsPlanEntries, &p_Set->vectors[idx], CLS_PLAN_NUM_PER_GRP*sizeof(uint32_t));
+
         p_HcFrame->commandSequence = seqNum;
 
         BUILD_FD(sizeof(t_HcFrame));
@@ -693,9 +696,12 @@ t_Error FmHcPcdKgDeleteClsPlan(t_Handle h_FmHc, uint8_t  grpId)
     ASSERT_COND(p_ClsPlanSet->numOfClsPlanEntries <= FM_PCD_MAX_NUM_OF_CLS_PLANS);
 
     if (FmHcPcdKgSetClsPlan(p_FmHc, p_ClsPlanSet) != E_OK)
+    {
+        XX_Free(p_ClsPlanSet);
         RETURN_ERROR(MAJOR, E_INVALID_STATE, NO_MSG);
-    XX_Free(p_ClsPlanSet);
+    }
 
+    XX_Free(p_ClsPlanSet);
     FmPcdKgDestroyClsPlanGrp(p_FmHc->h_FmPcd, grpId);
 
     return E_OK;

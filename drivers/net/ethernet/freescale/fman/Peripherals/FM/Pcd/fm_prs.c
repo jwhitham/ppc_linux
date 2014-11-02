@@ -118,6 +118,12 @@ t_Handle PrsConfig(t_FmPcd *p_FmPcd,t_FmPcdParams *p_FmPcdParams)
     return p_FmPcdPrs;
 }
 
+#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
+    static uint8_t             swPrsPatch[] = SW_PRS_UDP_LITE_PATCH;
+#else
+    static uint8_t             swPrsPatch[] = SW_PRS_OFFLOAD_PATCH;
+#endif /* FM_CAPWAP_SUPPORT */
+
 t_Error PrsInit(t_FmPcd *p_FmPcd)
 {
     t_FmPcdDriverParam  *p_Param = p_FmPcd->p_FmPcdDriverParam;
@@ -125,11 +131,6 @@ t_Error PrsInit(t_FmPcd *p_FmPcd)
     uint32_t            *p_LoadTarget = (uint32_t *)PTR_MOVE(p_FmPcd->p_FmPcdPrs->p_SwPrsCode,
                                                              FM_PCD_SW_PRS_SIZE-FM_PCD_PRS_SW_PATCHES_SIZE);
     struct fman_prs_regs *PrsRegs = (struct fman_prs_regs *)p_FmPcd->p_FmPcdPrs->p_FmPcdPrsRegs;
-#if ((DPAA_VERSION == 10) && defined(FM_CAPWAP_SUPPORT))
-    uint8_t             swPrsPatch[] = SW_PRS_UDP_LITE_PATCH;
-#else
-    uint8_t             swPrsPatch[] = SW_PRS_OFFLOAD_PATCH;
-#endif /* FM_CAPWAP_SUPPORT */
     uint32_t            i;
 
     ASSERT_COND(sizeof(swPrsPatch) <= (FM_PCD_PRS_SW_PATCHES_SIZE-FM_PCD_PRS_SW_TAIL_SIZE));

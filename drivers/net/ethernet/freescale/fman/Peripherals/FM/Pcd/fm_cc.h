@@ -190,35 +190,35 @@ typedef uint32_t ccPrivateInfo_t; /**< private info of CC: */
 #pragma pack(push,1)
 #endif /* defined(__MWERKS__) && ... */
 
-typedef _Packed struct
+typedef struct
 {
     volatile uint32_t fqid;
     volatile uint32_t plcrProfile;
     volatile uint32_t nia;
     volatile uint32_t res;
-} _PackedType t_AdOfTypeResult;
+} t_AdOfTypeResult;
 
-typedef _Packed struct
+typedef struct
 {
     volatile uint32_t ccAdBase;
     volatile uint32_t matchTblPtr;
     volatile uint32_t pcAndOffsets;
     volatile uint32_t gmask;
-} _PackedType t_AdOfTypeContLookup;
+} t_AdOfTypeContLookup;
 
-typedef _Packed struct
+typedef struct
 {
     volatile uint32_t profileTableAddr;
     volatile uint32_t reserved;
     volatile uint32_t nextActionIndx;
     volatile uint32_t statsTableAddr;
-} _PackedType t_AdOfTypeStats;
+} t_AdOfTypeStats;
 
-typedef _Packed union
+typedef union
 {
     volatile t_AdOfTypeResult        adResult;
     volatile t_AdOfTypeContLookup    adContLookup;
-} _PackedType t_Ad;
+} t_Ad;
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
 #pragma pack(pop)

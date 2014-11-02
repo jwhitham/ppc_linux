@@ -839,7 +839,12 @@ static t_Error TgecInit(t_Handle h_Tgec)
                            e_FM_MAC_10G,
                            p_Tgec->fmMacControllerDriver.macId,
                            p_TgecDriverParam->max_frame_length);
-    /* we consider having no IPC a non crasher... */
+    if (err != E_OK)
+    {
+        FreeInitResources(p_Tgec);
+        RETURN_ERROR(MINOR, err, NO_MSG);
+    }
+/* we consider having no IPC a non crasher... */
 
 #ifdef FM_TX_FIFO_CORRUPTION_ERRATA_10GMAC_A007
     if (p_Tgec->fmMacControllerDriver.fmRevInfo.majorRev == 2)
@@ -886,14 +891,17 @@ static t_Error TgecFree(t_Handle h_Tgec)
 
     SANITY_CHECK_RETURN_ERROR(p_Tgec, E_INVALID_HANDLE);
 
-    FreeInitResources(p_Tgec);
-
     if (p_Tgec->p_TgecDriverParam)
     {
+        /* Called after config */
         XX_Free(p_Tgec->p_TgecDriverParam);
         p_Tgec->p_TgecDriverParam = NULL;
     }
-    XX_Free (p_Tgec);
+    else
+        /* Called after init */
+        FreeInitResources(p_Tgec);
+
+    XX_Free(p_Tgec);
 
     return E_OK;
 }
@@ -989,7 +997,7 @@ t_Handle TGEC_Config(t_FmMacParams *p_FmMacParam)
     if (!p_TgecDriverParam)
     {
         REPORT_ERROR(MAJOR, E_NO_MEMORY, ("10G MAC driver parameters"));
-        TgecFree(p_Tgec);
+        XX_Free(p_Tgec);
         return NULL;
     }
     memset(p_TgecDriverParam, 0, sizeof(struct tgec_cfg));

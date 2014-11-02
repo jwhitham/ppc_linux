@@ -1736,7 +1736,7 @@ int fm_plcr_dump_regs(void *h_fm_pcd, char *buf, int nn)
 			&p_pcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_pmr,
 			"fmpl_pmr");
 
-	for (i = 0; i < 64; ++i)
+	for (i = 0; i < 63; ++i)
 		FM_DMP_MEM_32(buf, n,
 			&p_pcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_pmr[i]);
 

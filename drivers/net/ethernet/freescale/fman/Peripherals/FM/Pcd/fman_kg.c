@@ -267,7 +267,7 @@ void fman_kg_write_sp(struct fman_kg_regs *regs, uint32_t sp, bool add)
 
 	struct fman_kg_pe_regs *kgpe_regs;
 	uint32_t tmp;
-	
+
 	kgpe_regs = (struct fman_kg_pe_regs *)&(regs->fmkg_indirect[0]);
 	tmp = ioread32be(&kgpe_regs->fmkg_pe_sp);
 
@@ -283,7 +283,7 @@ void fman_kg_write_sp(struct fman_kg_regs *regs, uint32_t sp, bool add)
 void fman_kg_write_cpp(struct fman_kg_regs *regs, uint32_t cpp)
 {
 	struct fman_kg_pe_regs *kgpe_regs;
-	
+
 	kgpe_regs = (struct fman_kg_pe_regs *)&(regs->fmkg_indirect[0]);
 
 	iowrite32be(cpp, &kgpe_regs->fmkg_pe_cpp);
@@ -318,7 +318,7 @@ void fman_kg_init(struct fman_kg_regs *regs,
 {
 	uint32_t tmp;
 	int i;
-	
+
 	iowrite32be(FM_EX_KG_DOUBLE_ECC | FM_EX_KG_KEYSIZE_OVERFLOW,
 			&regs->fmkg_eer);
 
@@ -328,7 +328,7 @@ void fman_kg_init(struct fman_kg_regs *regs,
 
 	if (exceptions & FM_EX_KG_KEYSIZE_OVERFLOW)
 		tmp |= FM_EX_KG_KEYSIZE_OVERFLOW;
-	
+
 	iowrite32be(tmp, &regs->fmkg_eeer);
 	iowrite32be(0, &regs->fmkg_fdor);
 	iowrite32be(0, &regs->fmkg_gdv0r);
@@ -471,7 +471,7 @@ int fman_kg_build_scheme(struct fman_kg_scheme_params *params,
 		tmp_reg |= (uint32_t)params->cc_params.base_offset <<
 				FMAN_KG_SCH_MODE_CCOBASE_SHIFT;
 	}
-	
+
 	tmp_reg |= FMAN_KG_SCH_MODE_EN;
 	scheme_regs->kgse_mode = tmp_reg;
 
@@ -644,7 +644,7 @@ int fman_kg_build_scheme(struct fman_kg_scheme_params *params,
 
 	/* Policer Profile register */
 	if (params->policer_params.bypass_pp_gen) {
-		tmp_reg = FMAN_KG_SCH_PP_NO_GEN;
+		tmp_reg = 0;
 	} else {
 		/* Lower 8 bits of 24-bits extracted from hash result
 		 * are used for policer profile generation.
@@ -862,7 +862,7 @@ int fman_kg_build_bind_cls_plans(uint8_t grp_base,
 					uint32_t *bind_cls_plans)
 {
 	/* Check grp_base and grp_mask are 5-bits values */
-	if ((grp_base & ~0x0000001F) || (grp_mask & !0x0000001F))
+	if ((grp_base & ~0x0000001F) || (grp_mask & ~0x0000001F))
 		return -EINVAL;
 
 	*bind_cls_plans = (uint32_t) ((grp_mask << FMAN_KG_PE_CPP_MASK_SHIFT) | grp_base);
@@ -879,7 +879,7 @@ int fman_kg_write_bind_cls_plans(struct fman_kg_regs *regs,
 	int err;
 
 	kg_pe_regs = (struct fman_kg_pe_regs *)&(regs->fmkg_indirect[0]);
-	
+
 	iowrite32be(bind_cls_plans, &kg_pe_regs->fmkg_pe_cpp);
 
 	tmp_reg = build_ar_bind_cls_plan(hwport_id, TRUE);

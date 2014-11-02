@@ -158,8 +158,7 @@ struct fman_fpm_regs {
 	uint32_t fmfp_ee;	/**< FPM Event & Mask 0xdc */
 	uint32_t fmfp_cev[4];	/**< FPM CPU Event 1-4 0xe0-0xef */
 	uint32_t res00f0[4];	/**< res 0xf0-0xff */
-	uint32_t fmfp_ps[50];	/**< FPM Port Status 0x100-0x1c7 */
-	uint32_t res01c8[14];	/**< res 0x1c8-0x1ff */
+	uint32_t fmfp_ps[64];	/**< FPM Port Status 0x100-0x1ff */
 	uint32_t fmfp_clfabc;	/**< FPM CLFABC 0x200 */
 	uint32_t fmfp_clfcc;	/**< FPM CLFCC 0x204 */
 	uint32_t fmfp_clfaval;	/**< FPM CLFAVAL 0x208 */

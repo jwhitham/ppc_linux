@@ -559,17 +559,13 @@ static t_Error DtsecConfigException(t_Handle h_Dtsec, e_FmMacExceptions exceptio
     {
         if (!p_Dtsec->ptpTsuEnabled)
             RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Exception valid for 1588 only"));
-        switch (exception){
-        case (e_FM_MAC_EX_1G_1588_TS_RX_ERR):
-            if (enable)
-                p_Dtsec->enTsuErrExeption = TRUE;
-            else
-                p_Dtsec->enTsuErrExeption = FALSE;
-            break;
-        default:
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Undefined exception"));
-        }
+
+        if (enable)
+            p_Dtsec->enTsuErrExeption = TRUE;
+        else
+            p_Dtsec->enTsuErrExeption = FALSE;
     }
+
     return E_OK;
 }
 
@@ -1090,7 +1086,7 @@ static t_Error DtsecSetWakeOnLan(t_Handle h_Dtsec, bool en)
 static t_Error DtsecAdjustLink(t_Handle h_Dtsec, e_EnetSpeed speed, bool fullDuplex)
 {
     t_Dtsec             *p_Dtsec = (t_Dtsec *)h_Dtsec;
-    t_Error             err;
+    int                 err;
     enum enet_interface enet_interface;
     enum enet_speed     enet_speed;
 
@@ -1102,12 +1098,12 @@ static t_Error DtsecAdjustLink(t_Handle h_Dtsec, e_EnetSpeed speed, bool fullDup
     enet_speed = (enum enet_speed) ENET_SPEED_FROM_MODE(p_Dtsec->enetMode);
     p_Dtsec->halfDuplex = !fullDuplex;
 
-    err = (t_Error)fman_dtsec_adjust_link(p_Dtsec->p_MemMap, enet_interface, enet_speed, fullDuplex);
+    err = fman_dtsec_adjust_link(p_Dtsec->p_MemMap, enet_interface, enet_speed, fullDuplex);
 
-    if (err == E_CONFLICT)
+    if (err == -EINVAL)
         RETURN_ERROR(MAJOR, E_CONFLICT, ("Ethernet interface does not support Half Duplex mode"));
 
-    return err;
+    return (t_Error)err;
 }
 
 /* .............................................................................. */
@@ -1190,20 +1186,16 @@ static t_Error DtsecSetException(t_Handle h_Dtsec, e_FmMacExceptions exception, 
     {
         if (!p_Dtsec->ptpTsuEnabled)
             RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Exception valid for 1588 only"));
-        switch (exception)
+
+        if (enable)
         {
-        case (e_FM_MAC_EX_1G_1588_TS_RX_ERR):
-            if (enable)
-            {
-                p_Dtsec->enTsuErrExeption = TRUE;
-                fman_dtsec_enable_tmr_interrupt(p_Dtsec->p_MemMap);
-            } else {
-                p_Dtsec->enTsuErrExeption = FALSE;
-                fman_dtsec_disable_tmr_interrupt(p_Dtsec->p_MemMap);
-            }
-            break;
-        default:
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Undefined exception"));
+            p_Dtsec->enTsuErrExeption = TRUE;
+            fman_dtsec_enable_tmr_interrupt(p_Dtsec->p_MemMap);
+        }
+        else
+        {
+            p_Dtsec->enTsuErrExeption = FALSE;
+            fman_dtsec_disable_tmr_interrupt(p_Dtsec->p_MemMap);
         }
     }
 
@@ -1330,6 +1322,8 @@ static t_Error DtsecInit(t_Handle h_Dtsec)
     maxFrmLn = fman_dtsec_get_max_frame_len(p_Dtsec->p_MemMap);
     err = FmSetMacMaxFrame(p_Dtsec->fmMacControllerDriver.h_Fm, e_FM_MAC_1G,
             p_Dtsec->fmMacControllerDriver.macId, maxFrmLn);
+    if (err)
+        RETURN_ERROR(MINOR,err, NO_MSG);
 
     p_Dtsec->p_MulticastAddrHash = AllocHashTable(EXTENDED_HASH_TABLE_SIZE);
     if (!p_Dtsec->p_MulticastAddrHash) {
@@ -1386,14 +1380,17 @@ static t_Error DtsecFree(t_Handle h_Dtsec)
 
     SANITY_CHECK_RETURN_ERROR(p_Dtsec, E_INVALID_HANDLE);
 
-    FreeInitResources(p_Dtsec);
-
     if (p_Dtsec->p_DtsecDriverParam)
     {
+        /* Called after config */
         XX_Free(p_Dtsec->p_DtsecDriverParam);
         p_Dtsec->p_DtsecDriverParam = NULL;
     }
-    XX_Free (h_Dtsec);
+    else
+        /* Called after init */
+        FreeInitResources(p_Dtsec);
+
+    XX_Free(p_Dtsec);
 
     return E_OK;
 }

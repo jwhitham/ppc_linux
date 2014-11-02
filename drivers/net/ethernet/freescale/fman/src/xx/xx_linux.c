@@ -400,33 +400,10 @@ typedef struct {
 
 t_Handle interruptHandlers[0x00010000];
 
-static irqreturn_t LinuxInterruptHandler (int irq, void *dev_id)
-{
-    t_InterruptHandler *p_IntrHndl = (t_InterruptHandler *)dev_id;
-    p_IntrHndl->f_Isr(p_IntrHndl->handle);
-    return IRQ_HANDLED;
-}
 
 t_Error XX_SetIntr(int irq, t_Isr *f_Isr, t_Handle handle)
 {
-    const char *device;
-    t_InterruptHandler *p_IntrHndl;
-
-    device = GetDeviceName(irq);
-    if (device == NULL)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Interrupt source - %d", irq));
-
-    p_IntrHndl = (t_InterruptHandler *)XX_Malloc(sizeof(t_InterruptHandler));
-    if (p_IntrHndl == NULL)
-        RETURN_ERROR(MAJOR, E_NO_MEMORY, NO_MSG);
-    p_IntrHndl->f_Isr = f_Isr;
-    p_IntrHndl->handle = handle;
-    interruptHandlers[irq] = p_IntrHndl;
-
-    if (request_irq(GetDeviceIrqNum(irq), LinuxInterruptHandler, 0, device, p_IntrHndl) < 0)
-        RETURN_ERROR(MAJOR, E_BUSY, ("Can't get IRQ %s\n", device));
-    disable_irq(GetDeviceIrqNum(irq));
-
+/* not used */
     return E_OK;
 }
 

@@ -44,7 +44,6 @@
 #include "fm_muram_ext.h"
 #include "fm_common.h"
 
-
 #define __ERR_MODULE__  MODULE_FM_MURAM
 
 

@@ -246,6 +246,7 @@ static t_Error AddFree(t_MM *p_MM, uint64_t base, uint64_t end)
                     else
                         p_MM->freeBlocks[i] = p_CurrB->p_Next;
                     XX_Free(p_CurrB);
+                    p_CurrB = NULL;
                 }
                 break;
             }
@@ -575,7 +576,10 @@ static uint64_t MmGetGreaterAlignment(t_MM *p_MM, uint64_t size, uint64_t alignm
 
     /* calls Update routine to update a lists of free blocks */
     if ( CutFree ( p_MM, holdBase, holdEnd ) != E_OK )
+    {
+        XX_Free(p_NewBusyB);
         return (uint64_t)(ILLEGAL_BASE);
+    }
 
     /* insert the new busy block into the list of busy blocks */
     AddBusy ( p_MM, p_NewBusyB );
@@ -617,12 +621,15 @@ t_Error MM_Init(t_Handle *h_MM, uint64_t base, uint64_t size)
     /* Initializes counter of free memory to total size */
     p_MM->freeMemSize = size;
 
-    /* Initializes a new memory block */
-    if ((p_MM->memBlocks = CreateNewBlock(base, size)) == NULL)
-        RETURN_ERROR(MAJOR, E_NO_MEMORY, NO_MSG);
-
     /* A busy list is empty */
     p_MM->busyBlocks = 0;
+
+    /* Initializes a new memory block */
+    if ((p_MM->memBlocks = CreateNewBlock(base, size)) == NULL)
+    {
+        MM_Free(p_MM);
+        RETURN_ERROR(MAJOR, E_NO_MEMORY, NO_MSG);
+    }
 
     /* Initializes a new free block for each free list*/
     for (i=0; i <= MM_MAX_ALIGNMENT; i++)
@@ -631,7 +638,10 @@ t_Error MM_Init(t_Handle *h_MM, uint64_t base, uint64_t size)
         newSize = size - (newBase - base);
 
         if ((p_MM->freeBlocks[i] = CreateFreeBlock(newBase, newSize)) == NULL)
+        {
+            MM_Free(p_MM);
             RETURN_ERROR(MAJOR, E_NO_MEMORY, NO_MSG);
+        }
     }
 
     *h_MM = p_MM;
@@ -754,6 +764,7 @@ uint64_t MM_Get(t_Handle h_MM, uint64_t size, uint64_t alignment, char* name)
     if ( CutFree ( p_MM, holdBase, holdEnd ) != E_OK )
     {
         XX_UnlockIntrSpinlock(p_MM->h_Spinlock, intFlags);
+        XX_Free(p_NewBusyB);
         return (uint64_t)(ILLEGAL_BASE);
     }
 
@@ -810,6 +821,7 @@ uint64_t MM_GetForce(t_Handle h_MM, uint64_t base, uint64_t size, char* name)
     if ( CutFree ( p_MM, base, base+size ) != E_OK )
     {
         XX_UnlockIntrSpinlock(p_MM->h_Spinlock, intFlags);
+        XX_Free(p_NewBusyB);
         return (uint64_t)(ILLEGAL_BASE);
     }
 
@@ -898,6 +910,7 @@ uint64_t MM_GetForceMin(t_Handle h_MM, uint64_t size, uint64_t alignment, uint64
     if ( CutFree( p_MM, holdBase, holdEnd ) != E_OK )
     {
         XX_UnlockIntrSpinlock(p_MM->h_Spinlock, intFlags);
+        XX_Free(p_NewBusyB);
         return (uint64_t)(ILLEGAL_BASE);
     }
 
