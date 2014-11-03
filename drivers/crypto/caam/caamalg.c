@@ -961,7 +961,7 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	struct aead_tfm *tfm = &aead->base.crt_aead;
 	struct caam_ctx *ctx = crypto_aead_ctx(aead);
 	struct device *jrdev = ctx->jrdev;
-	bool key_fits_inline = false;
+	bool keys_fit_inline = false;
 	u32 *key_jump_cmd, *zero_payload_jump_cmd,
 	    *zero_assoc_jump_cmd1, *zero_assoc_jump_cmd2;
 	u32 *desc;
@@ -976,16 +976,16 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	 */
 	if (DESC_GCM_ENC_LEN + DESC_JOB_IO_LEN +
 	    ctx->enckeylen <= CAAM_DESC_BYTES_MAX)
-		key_fits_inline = true;
+		keys_fit_inline = true;
 
 	desc = ctx->sh_desc_enc;
 
 	init_sh_desc(desc, HDR_SHARE_SERIAL);
 
-	/* skip key loading if it is loaded due to sharing */
+	/* skip key loading if they are loaded due to sharing */
 	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
 				   JUMP_COND_SHRD);
-	if (key_fits_inline)
+	if (keys_fit_inline)
 		append_key_as_imm(desc, (void *)ctx->key, ctx->enckeylen,
 				  ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	else
@@ -1083,16 +1083,16 @@ static int gcm_set_sh_desc(struct crypto_aead *aead)
 	 */
 	if (DESC_GCM_DEC_LEN + DESC_JOB_IO_LEN +
 	    ctx->enckeylen <= CAAM_DESC_BYTES_MAX)
-		key_fits_inline = true;
+		keys_fit_inline = true;
 
 	desc = ctx->sh_desc_dec;
 
 	init_sh_desc(desc, HDR_SHARE_SERIAL);
 
-	/* skip key loading if it is loaded due to sharing */
+	/* skip key loading if they are loaded due to sharing */
 	key_jump_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL |
 				   JUMP_COND_SHRD);
-	if (key_fits_inline)
+	if (keys_fit_inline)
 		append_key_as_imm(desc, (void *)ctx->key, ctx->enckeylen,
 				  ctx->enckeylen, CLASS_1 | KEY_DEST_CLASS_REG);
 	else
