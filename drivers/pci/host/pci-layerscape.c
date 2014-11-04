@@ -90,7 +90,7 @@ static irqreturn_t ls_pcie_msi_irq_handler(int irq, void *data)
 
 	/* clear the interrupt */
 	regmap_write(pcie->scfg, SCFG_SPIMSICLRCR,
-		     MSI_LS1021A_DATA(pcie->index));
+		     cpu_to_be32(MSI_LS1021A_DATA(pcie->index)));
 
 	msi_irq = irq_find_mapping(pp->irq_domain, 0);
 	if (!msi_irq) {
