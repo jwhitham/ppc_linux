@@ -7972,6 +7972,7 @@ int dpa_classif_mcast_create_group(
 	}
 
 	kfree(replic_grp_params);
+	replic_grp_params = NULL;
 
 	if (!pgroup->group) {
 		log_err("Could not create %s group %d\n",
