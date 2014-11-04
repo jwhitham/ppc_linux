@@ -18,7 +18,9 @@ obj-$(CONFIG_PTP_1588_CLOCK_GIANFAR) += gianfar_ptp.o
 gianfar_driver-objs := gianfar.o \
 		gianfar_ethtool.o
 ifeq ($(CONFIG_GIANFAR),y)
+ifdef CONFIG_PPC
 	obj-$(CONFIG_AS_FASTPATH) += asf_gianfar.o
+endif
 endif
 gianfar_driver-$(CONFIG_FSL_GIANFAR_1588) += gianfar_1588.o
 gianfar_driver-$(CONFIG_GFAR_DBG_LOOP) += gianfar_debugfs.o

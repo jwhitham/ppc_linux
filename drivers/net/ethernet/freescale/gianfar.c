@@ -114,7 +114,17 @@
 #endif
 
 #ifdef CONFIG_AS_FASTPATH
+#ifdef CONFIG_PPC
 #include "asf_gianfar.h"
+#else
+
+devfp_hook_t   devfp_rx_hook;
+EXPORT_SYMBOL(devfp_rx_hook);
+
+devfp_hook_t   devfp_tx_hook;
+EXPORT_SYMBOL(devfp_tx_hook);
+
+#endif
 #endif
 
 #define TX_TIMEOUT      (1*HZ)
@@ -863,7 +873,7 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_AS_FASTPATH
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
 	/* Creating multilple queues for avoiding lock in xmit function.*/
 	num_tx_qs = (num_tx_qs < 2) ? 2 : num_tx_qs;
 #endif
@@ -2420,7 +2430,13 @@ static int gfar_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	unsigned int nr_frags, nr_txbds, fcb_len = 0;
 
 #ifdef CONFIG_AS_FASTPATH
+#ifdef CONFIG_PPC
 	return gfar_asf_start_xmit(skb, dev);
+#else
+	if (devfp_tx_hook && (skb->pkt_type != PACKET_FASTROUTE))
+		if (devfp_tx_hook(skb, dev) == AS_FP_STOLEN)
+			return 0;
+#endif
 #endif
 
 	rq = skb->queue_mapping;
@@ -2895,7 +2911,7 @@ static struct sk_buff *gfar_alloc_skb(struct net_device *dev)
 	struct gfar_private *priv = netdev_priv(dev);
 	struct sk_buff *skb;
 
-#ifndef CONFIG_AS_FASTPATH
+#if !defined(CONFIG_AS_FASTPATH) || defined(CONFIG_ARM)
 	skb = netdev_alloc_skb(dev, priv->rx_buffer_size + RXBUF_ALIGNMENT);
 #else
 	skb = netdev_alloc_skb(dev, priv->rx_buffer_size + RXBUF_ALIGNMENT +
@@ -2963,7 +2979,7 @@ static irqreturn_t gfar_transmit(int irq, void *grp_id)
 	unsigned long flags;
 	u32 imask;
 
-#ifdef CONFIG_AS_FASTPATH
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
 	return gfar_enable_tx_queue(irq, grp_id);
 #endif
 
@@ -3043,6 +3059,25 @@ static void gfar_process_frame(struct net_device *dev, struct sk_buff *skb,
 	if (dev->features & NETIF_F_RXCSUM)
 		gfar_rx_checksum(skb, fcb);
 
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_ARM)
+	if (devfp_rx_hook) {
+		/* Drop the packet silently if IP Checksum is not correct */
+		if ((be16_to_cpu(fcb->flags) & RXFCB_CIP) &&
+				(be16_to_cpu(fcb->flags) & RXFCB_EIP)) {
+			dev_kfree_skb_any(skb);
+			return;
+		}
+
+		if (dev->features & NETIF_F_HW_VLAN_CTAG_RX &&
+				be16_to_cpu(fcb->flags) & RXFCB_VLN)
+			__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q),
+					be16_to_cpu(fcb->vlctl));
+
+		skb->dev = dev;
+		if (devfp_rx_hook(skb, dev) == AS_FP_STOLEN)
+			return;
+	}
+#endif
 	/* Tell the skb what kind of packet this is */
 	skb->protocol = eth_type_trans(skb, dev);
 
@@ -3083,7 +3118,7 @@ int gfar_clean_rx_ring(struct gfar_priv_rx_q *rx_queue, int rx_work_limit)
 	int howmany = 0;
 	struct gfar_private *priv = netdev_priv(dev);
 
-#ifdef CONFIG_AS_FASTPATH
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
 	return gfar_asf_clean_rx_ring(rx_queue, rx_work_limit);
 #endif
 

@@ -55,6 +55,27 @@
 #include <linux/circ_buf.h>
 #endif
 
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_ARM)
+#define AS_FP_PROCEED  1
+#define AS_FP_STOLEN   2
+
+typedef        int (*devfp_hook_t)(struct sk_buff *skb, struct net_device *dev);
+extern devfp_hook_t   devfp_rx_hook;
+extern devfp_hook_t   devfp_tx_hook;
+
+static inline int devfp_register_rx_hook(devfp_hook_t hook)
+{
+	devfp_rx_hook = hook;
+	return 0;
+}
+
+static inline int devfp_register_tx_hook(devfp_hook_t hook)
+{
+	devfp_tx_hook = hook;
+	return 0;
+}
+#endif
+
 struct ethtool_flow_spec_container {
 	struct ethtool_rx_flow_spec fs;
 	struct list_head list;
@@ -80,7 +101,7 @@ struct ethtool_rx_list {
 /* Number of bytes to align the rx bufs to */
 #define RXBUF_ALIGNMENT 64
 
-#ifdef CONFIG_AS_FASTPATH
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
 /* Headroom required for IPSec processing in ASF */
 #define EXTRA_HEADROOM 128
 #endif
@@ -1719,7 +1740,7 @@ static inline void gfar_rx_checksum(struct sk_buff *skb, struct rxfcb *fcb)
 
 static inline void gfar_align_skb(struct sk_buff *skb)
 {
-#ifdef CONFIG_AS_FASTPATH
+#if defined(CONFIG_AS_FASTPATH) && defined(CONFIG_PPC)
 	/* Reserving the extra headroom required for ASF IPSec processing */
 	skb_reserve(skb, EXTRA_HEADROOM);
 #endif
