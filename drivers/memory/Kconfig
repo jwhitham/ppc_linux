@@ -53,6 +53,7 @@ config TEGRA30_MC
 config FSL_IFC
 	bool "Freescale Integrated Flash Controller"
 	depends on FSL_SOC
+	default y
 	help
 	  This driver is for the Integrated Flash Controller(IFC) module
 	  available in Freescale SoCs. This controller allows to handle
