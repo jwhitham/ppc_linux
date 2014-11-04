@@ -324,6 +324,7 @@ static int qoriq_cpufreq_verify(struct cpufreq_policy *policy)
 	return cpufreq_frequency_table_verify(policy, table);
 }
 
+#if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
 /*
  * t4240 specific data struct used by a workaround for errata:
  * A-008083: Dynamic frequency switch (DFS) can hang SoC
@@ -380,6 +381,7 @@ static void t4240_work_fn(struct work_struct *unused)
  */
 static DECLARE_WORK(t4240_dfs_work, t4240_work_fn);
 
+#endif
 static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 		unsigned int target_freq, unsigned int relation)
 {
@@ -388,6 +390,7 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 	struct clk *parent;
 	int ret;
 	struct cpu_data *data = per_cpu(cpu_data, policy->cpu);
+#if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
 	int workaround = 0;
 
 	/*
@@ -400,6 +403,7 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 			(cpumask_equal(cpu_core_mask(boot_cpuid),
 				cpu_core_mask(policy->cpu)) == 0))
 		workaround = 1;
+#endif
 
 	cpufreq_frequency_table_target(policy, data->table,
 			target_freq, relation, &new);
@@ -415,14 +419,17 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 
 	parent = of_clk_get(data->parent, data->table[new].driver_data);
 
+#if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
 	if (t4240_workaround == 1) {
 		freqs.new = freqs.old;
 		ret = -1;
 	}
+#endif
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
 	mutex_unlock(&cpufreq_lock);
 
+#if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
 	if (workaround == 1) {
 		spin_lock(&t4dfs.lock);
 		t4dfs.parent = parent;
@@ -431,6 +438,7 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 		spin_unlock(&t4dfs.lock);
 		schedule_work(&t4240_dfs_work);
 	}
+#endif
 	return ret;
 }
 
@@ -484,12 +492,20 @@ static int __init qoriq_cpufreq_init(void)
 
 	of_node_put(np);
 
+#ifdef CONFIG_PPC
 	np = of_find_compatible_node(NULL, NULL, "fsl,t4240-clockgen");
 	if (np) {
+#ifndef CONFIG_HOTPLUG_CPU
+		pr_info("HOTPLUG_CPU needs to be defined on T4240 platform\n");
+		of_node_put(np);
+		return -ENODEV;
+#else
 		t4240_workaround = 1;
 		spin_lock_init(&t4dfs.lock);
 		of_node_put(np);
+#endif
 	}
+#endif
 
 	ret = cpufreq_register_driver(&qoriq_cpufreq_driver);
 	if (!ret)
