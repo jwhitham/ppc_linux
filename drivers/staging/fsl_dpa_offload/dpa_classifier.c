@@ -3896,8 +3896,10 @@ static struct dpa_cls_hm_node *try_compatible_node(const struct dpa_cls_hm *hm)
 		 * compatible for aggregation:
 		 */
 		if ((hm->update_params.op_flags & update_flags) &&
-			(hm_node->params.u.hdr.fieldUpdate))
+			(hm_node->params.u.hdr.fieldUpdate)) {
 			hm_node = NULL;
+			break;
+		}
 
 		/*
 		 * If in the previous HM node the custom header replace
@@ -3928,8 +3930,11 @@ static struct dpa_cls_hm_node *try_compatible_node(const struct dpa_cls_hm *hm)
 			 * not compatible for aggregation:
 			 */
 			if ((hm->vlan_params.egress.num_tags) &&
-				(hm_node->params.u.hdr.insrt))
+				(hm_node->params.u.hdr.insrt)) {
 				hm_node = NULL;
+				break;
+			}
+
 			/*
 			 * If in the previous HM node the update operation is
 			 * already used and we need to do VLAN update, then it
