@@ -2063,6 +2063,7 @@ static int copy_key_descriptor_compatcpy(
 		if (key.size == 0 || key.size > DPA_OFFLD_MAXENTRYKEYSIZE) {
 			log_err("Key size should be between %d and %d.\n", 1,
 				DPA_OFFLD_MAXENTRYKEYSIZE);
+			kfree(kparam);
 			return -EINVAL;
 		}
 	}
