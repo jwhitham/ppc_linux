@@ -59,6 +59,7 @@ ENTRY(ls1_do_deepsleep)
 	isb
 
 	/* jump to sram code using physical address */
+ THUMB( orr r0, r0, #1 )
 	bx	r0
 ENDPROC(ls1_do_deepsleep)
 	.popsection
@@ -123,6 +124,7 @@ ENTRY(ls1_sram_code_size)
 	.word	. - ls1_start_fsm
 
 /* the bootloader will jump to here after wakeup from deep sleep  */
+	.arm
 	.align L1_CACHE_SHIFT
 ENTRY(ls1_deepsleep_resume)
  THUMB(	adr	r6, BSYM(1f)	)
