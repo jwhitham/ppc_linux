@@ -320,9 +320,6 @@ bool rcpm_v2_cpu_ready(unsigned int cpu, int state)
 	unsigned int hw_cpu;
 	u32 mask;
 	bool ret = false;
-	const struct cpumask *cluster_mask;
-	u32 cpu_on_cluster = 0;
-	int tmp_cpu = 0;
 
 	hw_cpu = get_hard_smp_processor_id(cpu);
 
@@ -360,16 +357,8 @@ bool rcpm_v2_cpu_ready(unsigned int cpu, int state)
 			ret = true;
 		break;
 	case E500_PM_PCL10:
-		cluster_mask = cpu_cluster_mask(boot_cpuid);
-		tmp_cpu += cpumask_weight(cluster_mask);
-
-		while (cpu >= tmp_cpu) {
-			cpu_on_cluster++;
-			cluster_mask = cpu_cluster_mask(tmp_cpu);
-			tmp_cpu += cpumask_weight(cluster_mask);
-		}
-
-		mask = 1 << cpu_on_cluster;
+		/* PCL10 state is only supported on e6500 for now. */
+		mask = 1 << (hw_cpu / THREAD_IN_CLUSTER);
 
 		if (in_be32(&rcpm_v2_regs->clpcl10sr) & mask)
 			ret = true;

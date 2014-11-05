@@ -4,6 +4,8 @@
 #include <linux/init.h>
 
 #ifdef CONFIG_SMP
+#define THREAD_IN_CLUSTER	8
+
 DECLARE_PER_CPU(cpumask_t, cpu_cluster_map);
 static inline struct cpumask *cpu_cluster_mask(int cpu)
 {
