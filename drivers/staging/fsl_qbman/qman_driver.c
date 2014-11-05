@@ -855,6 +855,10 @@ __init int qman_init(void)
 	list_for_each_entry(pcfg, &unshared_pcfgs, list) {
 		pcfg->public_cfg.is_shared = 0;
 		p = init_pcfg(pcfg);
+		if (!p) {
+			pr_crit("Unable to configure portals\n");
+			return 0;
+		}
 	}
 	list_for_each_entry(pcfg, &shared_pcfgs, list) {
 		pcfg->public_cfg.is_shared = 1;

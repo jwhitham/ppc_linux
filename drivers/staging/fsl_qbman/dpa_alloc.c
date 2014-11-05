@@ -500,6 +500,8 @@ done:
 		*result = base;
 	} else {
 		spin_unlock_irq(&alloc->lock);
+		kfree(margin_left);
+		kfree(margin_right);
 	}
 
 err:

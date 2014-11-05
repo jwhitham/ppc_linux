@@ -468,6 +468,10 @@ __init int bman_init(void)
 	list_for_each_entry(pcfg, &unshared_pcfgs, list) {
 		pcfg->public_cfg.is_shared = 0;
 		p = init_pcfg(pcfg);
+		if (!p) {
+			pr_crit("Unable to initialize bman portal\n");
+			return 0;
+		}
 	}
 	/* Step 5. */
 	list_for_each_entry(pcfg, &shared_pcfgs, list) {

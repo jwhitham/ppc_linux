@@ -547,6 +547,10 @@ struct qman_portal *qman_create_portal(
 		/* special handling, drain just in case it's a few FQRNIs */
 		if (drain_mr_fqrni(__p)) {
 			const struct qm_mr_entry *e = qm_mr_current(__p);
+			/*
+			 * Message ring cannot be empty no need to check
+			 * qm_mr_current returned successfully
+			 */
 			pr_err("Qman MR unclean, MR VERB 0x%x, "
 			       "rc 0x%x\n, addr 0x%x",
 			       e->verb, e->ern.rc, e->ern.fd.addr_lo);
@@ -585,6 +589,8 @@ fail_mr:
 fail_dqrr:
 	qm_eqcr_finish(__p);
 fail_eqcr:
+	if (portal->alloced)
+		kfree(portal);
 	return NULL;
 }
 
@@ -3706,10 +3712,16 @@ int qman_ceetm_channel_claim(struct qm_ceetm_channel **channel,
 	struct qm_mcc_ceetm_mapping_shaper_tcfc_config config_opts;
 	static u8 map;
 
-	if (lni->dcp_idx == qm_dc_portal_fman0)
+	if (lni->dcp_idx == qm_dc_portal_fman0) {
 		ret = qman_alloc_ceetm0_channel(&channel_idx);
-	if (lni->dcp_idx == qm_dc_portal_fman1)
+	} else if (lni->dcp_idx == qm_dc_portal_fman1) {
 		ret = qman_alloc_ceetm1_channel(&channel_idx);
+	} else {
+		pr_err("dcp_idx %u does not correspond to a known fman in this driver\n",
+			lni->dcp_idx);
+		return -EINVAL;
+	}
+
 	if (ret) {
 		pr_err("The is no channel available for LNI#%d\n", lni->idx);
 		return -ENODEV;
@@ -3750,6 +3762,14 @@ int qman_ceetm_channel_release(struct qm_ceetm_channel *channel)
 		return -EBUSY;
 	}
 
+	/* channel->dcp_idx corresponds to known fman validation */
+	if ((channel->dcp_idx != qm_dc_portal_fman0) &&
+	    (channel->dcp_idx != qm_dc_portal_fman1)) {
+		pr_err("dcp_idx %u does not correspond to a known fman in this driver\n",
+			channel->dcp_idx);
+		return -EINVAL;
+	}
+
 	config_opts.cid = CEETM_COMMAND_CHANNEL_SHAPER | channel->idx;
 	config_opts.dcpid = channel->dcp_idx;
 	memset(&config_opts.shaper_config, 0,
@@ -3759,10 +3779,15 @@ int qman_ceetm_channel_release(struct qm_ceetm_channel *channel)
 		return -EINVAL;
 	}
 
-	if (channel->dcp_idx == qm_dc_portal_fman0)
+	if (channel->dcp_idx == qm_dc_portal_fman0) {
 		qman_release_ceetm0_channelid(channel->idx);
-	if (channel->dcp_idx == qm_dc_portal_fman1)
+	} else if (channel->dcp_idx == qm_dc_portal_fman1) {
 		qman_release_ceetm1_channelid(channel->idx);
+	} else {
+		pr_err("dcp_idx %u does not correspond to a known fman in this driver\n",
+			channel->dcp_idx);
+		return -EINVAL;
+	}
 	list_del(&channel->node);
 	kfree(channel);
 
@@ -4518,10 +4543,16 @@ int qman_ceetm_lfq_claim(struct qm_ceetm_lfq **lfq,
 	int ret = 0;
 	struct qm_mcc_ceetm_lfqmt_config lfqmt_config;
 
-	if (cq->parent->dcp_idx == qm_dc_portal_fman0)
+	if (cq->parent->dcp_idx == qm_dc_portal_fman0) {
 		ret = qman_alloc_ceetm0_lfqid(&lfqid);
-	if (cq->parent->dcp_idx == qm_dc_portal_fman1)
+	} else if (cq->parent->dcp_idx == qm_dc_portal_fman1) {
 		ret = qman_alloc_ceetm1_lfqid(&lfqid);
+	} else {
+		pr_err("dcp_idx %u does not correspond to a known fman in this driver\n",
+			cq->parent->dcp_idx);
+		return -EINVAL;
+	}
+
 	if (ret) {
 		pr_err("There is no lfqid avalaible for CQ#%d!\n", cq->idx);
 		return -ENODEV;
@@ -4551,10 +4582,15 @@ EXPORT_SYMBOL(qman_ceetm_lfq_claim);
 
 int qman_ceetm_lfq_release(struct qm_ceetm_lfq *lfq)
 {
-	if (lfq->parent->dcp_idx == qm_dc_portal_fman0)
+	if (lfq->parent->dcp_idx == qm_dc_portal_fman0) {
 		qman_release_ceetm0_lfqid(lfq->idx);
-	if (lfq->parent->dcp_idx == qm_dc_portal_fman1)
+	} else if (lfq->parent->dcp_idx == qm_dc_portal_fman1) {
 		qman_release_ceetm1_lfqid(lfq->idx);
+	} else {
+		pr_err("dcp_idx %u does not correspond to a known fman in this driver\n",
+			lfq->parent->dcp_idx);
+		return -EINVAL;
+	}
 	list_del(&lfq->node);
 	kfree(lfq);
 	return 0;
@@ -4618,7 +4654,7 @@ int qman_ceetm_ccg_claim(struct qm_ceetm_ccg **ccg,
 {
 	struct qm_ceetm_ccg *p;
 
-	if ((idx < 0) || (idx > 15)) {
+	if (idx > 15) {
 		pr_err("The given ccg index is out of range\n");
 		return -EINVAL;
 	}

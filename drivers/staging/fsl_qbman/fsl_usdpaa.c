@@ -759,6 +759,9 @@ static unsigned long usdpaa_get_unmapped_area(struct file *file,
 	   will be correctly aligned */
 	len = largest_page_size(len);
 
+	if (!len)
+		return -EINVAL;
+
 	addr = USDPAA_MEM_ROUNDUP(addr, len);
 	vma = find_vma(current->mm, addr);
 	/* Keep searching until we reach the end of currently-used virtual
@@ -908,7 +911,8 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 	int frag_count = 0;
 	unsigned long next_addr = PAGE_SIZE, populate;
 
-	if (i->len && i->len % PAGE_SIZE)
+	/* error checking to ensure values copied from user space are valid */
+	if (!i->len || (i->len % PAGE_SIZE))
 		return -EINVAL;
 
 	map = kmalloc(sizeof(*map), GFP_KERNEL);
@@ -1039,8 +1043,14 @@ do_map:
 				       struct mem_fragment, list);
 	}
 	if (i->did_create) {
+		size_t name_len = 0;
 		start_frag->flags = i->flags;
 		strncpy(start_frag->name, i->name, USDPAA_DMA_NAME_MAX);
+		name_len = strnlen(start_frag->name, USDPAA_DMA_NAME_MAX);
+		if (name_len >= USDPAA_DMA_NAME_MAX) {
+			ret = -EFAULT;
+			goto out;
+		}
 		start_frag->map_len = i->len;
 		start_frag->has_locking = i->has_locking;
 		init_waitqueue_head(&start_frag->wq);
@@ -1188,6 +1198,8 @@ map_match:
 	spin_unlock(&mem_lock);
 	up_read(&current->mm->mmap_sem);
 
+	if (!map)
+		return -EFAULT;
 	if (!map->root_frag->has_locking)
 		return -ENODEV;
 	return wait_event_interruptible(map->root_frag->wq, test_lock(map));
