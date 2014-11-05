@@ -241,9 +241,6 @@ static void ls1_enter_deepsleep(void)
 {
 	u32 tmp;
 
-	/* disable QE device to make deep sleep work  */
-	iowrite32be(0x00000001, ls1_pm_base.dcfg + 0x70);
-
 	/* save DDR data */
 	ls1_save_ddr(ls1_pm_base.scfg);
 
