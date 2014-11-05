@@ -194,7 +194,7 @@ typedef enum
 
 /* Ports defines */
 #define FM_MAX_NUM_OF_1G_MACS	5
-#define FM_MAX_NUM_OF_10G_MACS	0
+#define FM_MAX_NUM_OF_10G_MACS	1
 #define FM_MAX_NUM_OF_MACS	(FM_MAX_NUM_OF_1G_MACS + FM_MAX_NUM_OF_10G_MACS)
 #define FM_MAX_NUM_OF_OH_PORTS	4
 #else

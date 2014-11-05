@@ -38,11 +38,11 @@ config FMAN_V3L
 	default n
 	---help---
 	  There are two FMAN V3 version: FMAN_V3H and FMAN_V3L.
-	  T1040, T1042, T1020, T1022 belong to FMAN_V3L, there
+	  T1040, T1042, T1020, T1022, T1023, T1024 belong to FMAN_V3L, there
 	  are 4 Offline/Host Command Ports (O/H n) in FMAN_V3L.
 	  But there are 6 Offline/Host Command Ports (O/H n) in
 	  FMAN_V3H.
-	  Say "Y" if chips are T1040, T1042, T1020, T1022 family.
+	  Say "Y" if chips are T1040, T1042, T1020, T1022, T1023, T1024 family.
 
 config FMAN_MIB_CNT_OVF_IRQ_EN
 	bool "Enable the dTSEC MIB counters overflow interrupt"
