@@ -268,8 +268,8 @@ static int ls_pcie_pm_resume(struct device *dev)
 		usleep_range(100, 1000);
 		count++;
 		if (count >= 200) {
-			dev_err(dev, "phy link never came up\n");
-			return -ENODEV;
+			dev_info(dev, "No Link\n");
+			return 0;
 		}
 	}
 
