@@ -273,7 +273,7 @@ static const struct of_device_id qoriq_clk_ids[] __initconst = {
 	{}
 };
 
-static struct platform_driver qoriq_corenet_clk_driver __initdata = {
+static struct platform_driver qoriq_corenet_clk_driver = {
 	.driver = {
 		.name = "qoriq_corenet_clock",
 		.owner = THIS_MODULE,
