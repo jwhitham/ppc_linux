@@ -405,15 +405,13 @@ static void init_cpu_cluster_map(void)
 {
 	struct device_node *l2_cache, *np;
 	int cpu, i;
-	char buf[20];
-	ptrdiff_t len = PTR_ALIGN(buf + PAGE_SIZE - 1, PAGE_SIZE) - buf;
 
-	for_each_cpu(cpu, cpu_present_mask) {
+	for_each_cpu(cpu, cpu_online_mask) {
 		l2_cache = cpu_to_l2cache(cpu);
 		if (!l2_cache)
 			continue;
 
-		for_each_cpu(i, cpu_present_mask) {
+		for_each_cpu(i, cpu_online_mask) {
 			np = cpu_to_l2cache(i);
 			if (!np)
 				continue;
@@ -424,7 +422,6 @@ static void init_cpu_cluster_map(void)
 			of_node_put(np);
 		}
 		of_node_put(l2_cache);
-		cpumask_scnprintf(buf, len-2, cpu_cluster_mask(cpu));
 	}
 }
 
