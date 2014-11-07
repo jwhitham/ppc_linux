@@ -244,12 +244,11 @@ static void rcpm_v2_cpu_exit_state(int cpu, int state)
 
 static void rcpm_v2_cluster_enter_state(int cpu, int state)
 {
-	u32 cpu_on_cluster, cluster_mask;
-	const struct cpumask *cpumask;
+	int hw_cpu;
+	u32 cluster_mask;
 
-	cpumask = cpu_cluster_mask(cpu);
-	cpu_on_cluster = cpu / cpumask_weight(cpumask);
-	cluster_mask = 1 << cpu_on_cluster;
+	hw_cpu = get_hard_smp_processor_id(cpu);
+	cluster_mask = 1 << (hw_cpu / THREAD_IN_CLUSTER);
 
 	switch (state) {
 	case E500_PM_PCL10:
@@ -264,12 +263,11 @@ static void rcpm_v2_cluster_enter_state(int cpu, int state)
 
 static void rcpm_v2_cluster_exit_state(int cpu, int state)
 {
-	u32 cpu_on_cluster, cluster_mask;
-	const struct cpumask *cpumask;
+	int hw_cpu;
+	u32 cluster_mask;
 
-	cpumask = cpu_cluster_mask(cpu);
-	cpu_on_cluster = cpu / cpumask_weight(cpumask);
-	cluster_mask = 1 << cpu_on_cluster;
+	hw_cpu = get_hard_smp_processor_id(cpu);
+	cluster_mask = 1 << (hw_cpu / THREAD_IN_CLUSTER);
 
 	switch (state) {
 	case E500_PM_PCL10:
