@@ -741,6 +741,7 @@
 				     <GIC_SPI 181 IRQ_TYPE_LEVEL_HIGH>; /* PME interrupt */
 			interrupt-names = "intr", "msi", "pme";
 			fsl,pcie-scfg = <&scfg 0>;
+			num-atus = <6>;
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
@@ -766,6 +767,7 @@
 				     <GIC_SPI 182 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "intr", "msi", "pme";
 			fsl,pcie-scfg = <&scfg 1>;
+			num-atus = <6>;
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
