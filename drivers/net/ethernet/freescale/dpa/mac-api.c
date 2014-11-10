@@ -99,6 +99,8 @@ macdev2enetinterface(const struct mac_device *mac_dev)
 		return _100[mac_dev->phy_if];
 	case SPEED_1000:
 		return _1000[mac_dev->phy_if];
+	case SPEED_2500:
+		return e_ENET_MODE_SGMII_2500;
 	case SPEED_10000:
 		return e_ENET_MODE_XGMII_10000;
 	default:

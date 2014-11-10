@@ -58,6 +58,7 @@ enum enet_speed {
 	E_ENET_SPEED_10		= 10,	/**< 10 Mbps */
 	E_ENET_SPEED_100	= 100,	/**< 100 Mbps */
 	E_ENET_SPEED_1000	= 1000,	/**< 1000 Mbps = 1 Gbps */
+	E_ENET_SPEED_2500	= 2500,	/**< 2500 Mbps = 2.5 Gbps */
 	E_ENET_SPEED_10000	= 10000	/**< 10000 Mbps = 10 Gbps */
 };
 

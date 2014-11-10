@@ -93,6 +93,8 @@ static void SetupSgmiiInternalPhy(t_Memac *p_Memac, uint8_t phyAddr)
 
     /* SGMII mode + AN enable */
     tmpReg16 = PHY_SGMII_IF_MODE_AN | PHY_SGMII_IF_MODE_SGMII;
+    if ((p_Memac->enetMode) == e_ENET_MODE_SGMII_2500)
+        tmpReg16 = PHY_SGMII_CR_PHY_RESET | PHY_SGMII_IF_MODE_SGMII;
     MEMAC_MII_WritePhyReg(p_Memac, phyAddr, 0x14, tmpReg16);
 
     /* Device ability according to SGMII specification */
