@@ -20,6 +20,7 @@ Required properties:
 	numbers.
 - num-lanes: number of lanes to use
 - reset-gpio: gpio pin number of power good signal
+- num-atus: number of ATUs. The default value is 2 if not present
 
 Example:
 
