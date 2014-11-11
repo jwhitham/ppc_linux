@@ -288,11 +288,6 @@ static void ls1_enter_deepsleep(void)
 	/* disable deep sleep signals in FPGA */
 	tmp = ioread8(ls1_pm_base.fpga + QIXIS_PWR_CTL2);
 	iowrite8(tmp & ~QIXIS_PWR_CTL2_PCTL, ls1_pm_base.fpga + QIXIS_PWR_CTL2);
-
-#define DCFG_CCSR_SCRATCHRW1	0x200
-	/* prepare for booting secondary cores */
-	iowrite32be(virt_to_phys(secondary_startup),
-		    ls1_pm_base.dcfg + DCFG_CCSR_SCRATCHRW1);
 }
 
 static int ls1_suspend_enter(suspend_state_t state)
