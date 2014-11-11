@@ -261,29 +261,8 @@ static int ls_pcie_pm_suspend(struct device *dev)
 static int ls_pcie_pm_resume(struct device *dev)
 {
 	struct ls_pcie *pcie = dev_get_drvdata(dev);
-	int count = 0;
-	u32 val;
 
-	while (!ls_pcie_link_up(&pcie->pp)) {
-		usleep_range(100, 1000);
-		count++;
-		if (count >= 200) {
-			dev_info(dev, "No Link\n");
-			return 0;
-		}
-	}
-
-	if (of_device_is_compatible(pcie->dev->of_node, "fsl,ls1021a-pcie")) {
-		/*
-		 * LS1021A Workaround for internal TKT228622
-		 * to fix the INTx hang issue
-		 */
-		val = ioread32(pcie->dbi + PCIE_STRFMR1);
-		val &= 0xffff;
-		iowrite32(val, pcie->dbi + PCIE_STRFMR1);
-
-		ls1021a_pcie_msi_fixup(&pcie->pp);
-	}
+	ls_pcie_host_init(&pcie->pp);
 
 	return 0;
 };
