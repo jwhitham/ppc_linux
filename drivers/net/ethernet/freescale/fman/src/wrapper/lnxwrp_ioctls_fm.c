@@ -1992,10 +1992,9 @@ invalid_port_id:
                 compat_copy_fm_pcd_cc_tbl_get_miss(compat_param, &param, COMPAT_K_TO_US);
                 if (copy_to_user((ioc_compat_fm_pcd_cc_tbl_get_miss_params_t*) compat_ptr(arg),
                             compat_param,
-                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t))){
-                    XX_Free(compat_param);
+                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)))
                     RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
-                }
+
                 XX_Free(compat_param);
             }
             else
@@ -2067,10 +2066,9 @@ invalid_port_id:
                 compat_copy_fm_pcd_cc_tbl_get_miss(compat_param, &param, COMPAT_K_TO_US);
                 if (copy_to_user((ioc_compat_fm_pcd_cc_tbl_get_miss_params_t*) compat_ptr(arg),
                             compat_param,
-                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t))){
-                    XX_Free(compat_param);
+                            sizeof(ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)))
                     RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
-                }
+
                 XX_Free(compat_param);
             }
             else
@@ -2261,7 +2259,6 @@ invalid_port_id:
                 else
                 {
                     XX_Free(compat_param);
-                    XX_Free(param);
                     err = E_INVALID_VALUE;
                     break;
                 }
@@ -3245,21 +3242,18 @@ t_Error LnxwrpFmIOCTL(t_LnxWrpFmDev *p_LnxWrpFmDev, unsigned int cmd, unsigned l
             {
                 if (copy_to_user((ioc_fm_revision_info_t *)compat_ptr(arg),
                             param,
-                            sizeof(ioc_fm_revision_info_t))){
-                    XX_Free(param);
+                            sizeof(ioc_fm_revision_info_t)))
                     RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
-                 }
             }
             else
 #endif
             {
                 if (copy_to_user((ioc_fm_revision_info_t *)arg,
                             param,
-                            sizeof(ioc_fm_revision_info_t))){
-                    XX_Free(param);
+                            sizeof(ioc_fm_revision_info_t)))
                     RETURN_ERROR(MINOR, E_READ_FAILED, NO_MSG);
-                }
             }
+
             XX_Free(param);
             break;
         }

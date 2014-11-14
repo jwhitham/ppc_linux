@@ -237,9 +237,7 @@ early_param(FSL_FM_RX_EXTRA_HEADROOM_BOOTARG, fm_set_rx_extra_headroom);
 static irqreturn_t fm_irq(int irq, void *_dev)
 {
     t_LnxWrpFmDev       *p_LnxWrpFmDev = (t_LnxWrpFmDev *)_dev;
-#ifdef CONFIG_PM_SLEEP
     t_Fm               *p_Fm = (t_Fm*)p_LnxWrpFmDev->h_Dev;
-#endif
     if (!p_LnxWrpFmDev || !p_LnxWrpFmDev->h_Dev)
         return IRQ_NONE;
 

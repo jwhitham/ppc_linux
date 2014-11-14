@@ -242,7 +242,7 @@ typedef uint32_t fmPcdEngines_t; /**< options as defined below: */
 #pragma pack(push,1)
 #endif /* defined(__MWERKS__) && ... */
 
-typedef struct
+typedef _Packed struct
 {
     volatile uint32_t   fmbm_rcfg;      /**< Rx Configuration */
     volatile uint32_t   fmbm_rst;       /**< Rx Status */
@@ -303,9 +303,9 @@ typedef struct
     volatile uint32_t   fmbm_rdcfg[0x3];/**< Rx Debug-*/
     volatile uint32_t   fmbm_rgpr;      /**< Rx General Purpose Register. */
     volatile uint32_t   reserved8[0x3a];/**< (0x310-0x3FF) */
-} t_FmPortRxBmiRegs;
+} _PackedType t_FmPortRxBmiRegs;
 
-typedef struct
+typedef _Packed struct
 {
     volatile uint32_t   fmbm_tcfg;      /**< Tx Configuration */
     volatile uint32_t   fmbm_tst;       /**< Tx Status */
@@ -344,9 +344,9 @@ typedef struct
     volatile uint32_t   fmbm_tdcfg[0x3];/**< Tx Debug-*/
     volatile uint32_t   fmbm_tgpr;      /**< O/H General Purpose Register */
     volatile uint32_t   reserved5[0x3a];/**< (0x310-0x3FF) */
-} t_FmPortTxBmiRegs;
+} _PackedType t_FmPortTxBmiRegs;
 
-typedef struct
+typedef _Packed struct
 {
     volatile uint32_t   fmbm_ocfg;      /**< O/H Configuration  */
     volatile uint32_t   fmbm_ost;       /**< O/H Status */
@@ -402,16 +402,16 @@ typedef struct
     volatile uint32_t   fmbm_odcfg[0x3];/**< O/H Debug (only 1 in P1023) */
     volatile uint32_t   fmbm_ogpr;      /**< O/H General Purpose Register. */
     volatile uint32_t   reserved7[0x3a];/**< (0x310 0x3FF) */
-} t_FmPortOhBmiRegs;
+} _PackedType t_FmPortOhBmiRegs;
 
-typedef union
+typedef _Packed union
 {
     t_FmPortRxBmiRegs rxPortBmiRegs;
     t_FmPortTxBmiRegs txPortBmiRegs;
     t_FmPortOhBmiRegs ohPortBmiRegs;
-} u_FmPortBmiRegs;
+} _PackedType u_FmPortBmiRegs;
 
-typedef struct
+typedef _Packed struct
 {
     volatile uint32_t   reserved1[2];   /**<   0xn024 - 0x02B */
     volatile uint32_t   fmqm_pndn;      /**<   PortID n Dequeue NIA Register */
@@ -419,9 +419,9 @@ typedef struct
     volatile uint32_t   fmqm_pndtfc;    /**<   PortID n Dequeue Total Frame Counter */
     volatile uint32_t   fmqm_pndfdc;    /**<   PortID n Dequeue FQID from Default Counter */
     volatile uint32_t   fmqm_pndcc;     /**<   PortID n Dequeue Confirm Counter */
-} t_FmPortNonRxQmiRegs;
+} _PackedType t_FmPortNonRxQmiRegs;
 
-typedef struct
+typedef _Packed struct
 {
     volatile uint32_t   fmqm_pnc;       /**<   PortID n Configuration Register */
     volatile uint32_t   fmqm_pns;       /**<   PortID n Status Register */
@@ -430,19 +430,19 @@ typedef struct
     volatile uint32_t   fmqm_pnen;      /**<   PortID n Enqueue NIA Register */
     volatile uint32_t   fmqm_pnetfc;    /**<   PortID n Enqueue Total Frame Counter */
     t_FmPortNonRxQmiRegs    nonRxQmiRegs;  /**<   Registers for Tx Hc & Op ports */
-} t_FmPortQmiRegs;
+} _PackedType t_FmPortQmiRegs;
 
-typedef struct
+typedef _Packed struct
 {
-     struct
+    _Packed struct
     {
         volatile uint32_t   softSeqAttach;  /**<   Soft Sequence Attachment */
         volatile uint32_t   lcv;            /**<   Line-up Enable Confirmation Mask */
-    } hdrs[FM_PCD_PRS_NUM_OF_HDRS];
+    } _PackedType hdrs[FM_PCD_PRS_NUM_OF_HDRS];
     volatile uint8_t    reserved0[0x378];
     volatile uint32_t   pcac;               /**<   Parse Internal Memory Configuration Access Control Register */
     volatile uint32_t   pctpid;             /**<   Parse Internal Memory Configured TPID Register */
-} t_FmPortPrsRegs;
+} _PackedType t_FmPortPrsRegs;
 
 /**************************************************************************//*
  @Description   Basic buffer descriptor (BD) structure
@@ -735,6 +735,7 @@ typedef _Packed struct
 #define BD_RX_OV                                0x00010000
 
 #define BD_RX_ERRORS                            (BD_RX_CRE | BD_RX_FTL | BD_RX_FTS | BD_RX_OV)
+#define BD_ERROR_PASS_FRAME                     BD_RX_ERRORS
 
 #define FM_IM_SIZEOF_BD                         sizeof(t_FmImBd)
 

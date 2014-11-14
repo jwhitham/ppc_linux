@@ -68,13 +68,13 @@
 } e_SourceTdOption;
 */
 
-typedef struct
+typedef _Packed struct
 {
     volatile uint32_t type;
     volatile uint32_t frGroupPointer;
     volatile uint32_t operationCode;
     volatile uint32_t reserved;
-} t_FrmReplicGroupSourceAd;
+} _PackedType t_FrmReplicGroupSourceAd;
 
 typedef struct t_FmPcdFrmReplicMember
 {

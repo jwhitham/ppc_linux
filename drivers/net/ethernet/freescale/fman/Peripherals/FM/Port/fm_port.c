@@ -101,7 +101,7 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
                 RETURN_ERROR(MAJOR, E_INVALID_VALUE,
                              ("intContext.size is larger than start margins"));
 
-            if ((p_Params->liodnOffset != (uint16_t)DPAA_LIODN_DONT_OVERRIDE)
+            if ((p_Params->liodnOffset != DPAA_LIODN_DONT_OVERRIDE)
                     && (p_Params->liodnOffset & ~FM_LIODN_OFFSET_MASK))
                 RETURN_ERROR(
                         MAJOR,
@@ -887,7 +887,6 @@ static t_Error BmiPortCheckAndGetCounterType(
         case (e_FM_PORT_COUNTERS_FIFO_UTIL):
         case (e_FM_PORT_COUNTERS_RX_PAUSE_ACTIVATION):
             /* performance counters - may be read when disabled */
-            *p_IsStats = FALSE;
             break;
         case (e_FM_PORT_COUNTERS_FRAME):
         case (e_FM_PORT_COUNTERS_DISCARD_FRAME):
@@ -900,7 +899,6 @@ static t_Error BmiPortCheckAndGetCounterType(
         case (e_FM_PORT_COUNTERS_LENGTH_ERR):
         case (e_FM_PORT_COUNTERS_UNSUPPRTED_FORMAT):
         case (e_FM_PORT_COUNTERS_WRED_DISCARD):
-            *p_IsStats = TRUE;
             if (!(GET_UINT32(*p_Reg) & BMI_COUNTERS_EN))
                 RETURN_ERROR(MINOR, E_INVALID_STATE,
                              ("Requested counter was not enabled"));
@@ -914,55 +912,67 @@ static t_Error BmiPortCheckAndGetCounterType(
     {
         case (e_FM_PORT_COUNTERS_CYCLE):
             *p_PerfType = E_FMAN_PORT_PERF_CNT_CYCLE;
+            *p_IsStats = FALSE;
             break;
         case (e_FM_PORT_COUNTERS_TASK_UTIL):
             *p_PerfType = E_FMAN_PORT_PERF_CNT_TASK_UTIL;
             break;
         case (e_FM_PORT_COUNTERS_QUEUE_UTIL):
             *p_PerfType = E_FMAN_PORT_PERF_CNT_QUEUE_UTIL;
+            *p_IsStats = FALSE;
             break;
         case (e_FM_PORT_COUNTERS_DMA_UTIL):
             *p_PerfType = E_FMAN_PORT_PERF_CNT_DMA_UTIL;
+            *p_IsStats = FALSE;
             break;
         case (e_FM_PORT_COUNTERS_FIFO_UTIL):
             *p_PerfType = E_FMAN_PORT_PERF_CNT_FIFO_UTIL;
+            *p_IsStats = FALSE;
             break;
         case (e_FM_PORT_COUNTERS_RX_PAUSE_ACTIVATION):
             *p_PerfType = E_FMAN_PORT_PERF_CNT_RX_PAUSE;
+            *p_IsStats = FALSE;
             break;
         case (e_FM_PORT_COUNTERS_FRAME):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_FRAME;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_DISCARD_FRAME):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_DISCARD;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_DEALLOC_BUF):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_DEALLOC_BUF;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_RX_BAD_FRAME):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_RX_BAD_FRAME;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_RX_LARGE_FRAME):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_RX_LARGE_FRAME;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_RX_OUT_OF_BUFFERS_DISCARD):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_RX_OUT_OF_BUF;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_RX_FILTER_FRAME):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_FILTERED_FRAME;
             break;
         case (e_FM_PORT_COUNTERS_RX_LIST_DMA_ERR):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_DMA_ERR;
+            *p_IsStats = TRUE;
             break;
         case (e_FM_PORT_COUNTERS_WRED_DISCARD):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_WRED_DISCARD;
-            break;
+            *p_IsStats = TRUE;
         case (e_FM_PORT_COUNTERS_LENGTH_ERR):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_LEN_ERR;
-            break;
+            *p_IsStats = TRUE;
         case (e_FM_PORT_COUNTERS_UNSUPPRTED_FORMAT):
             *p_StatsType = E_FMAN_PORT_STATS_CNT_UNSUPPORTED_FORMAT;
-            break;
+            *p_IsStats = TRUE;
         default:
             break;
     }
@@ -996,10 +1006,10 @@ static t_Error AdditionalPrsParams(t_FmPort *p_FmPort,
             case (HEADER_TYPE_MPLS):
                 if (p_prsOpts->mplsPrsOptions.labelInterpretationEnable)
                     tmpReg |= PRS_HDR_MPLS_LBL_INTER_EN;
-                hdrNum = GetPrsHdrNum(p_prsOpts->mplsPrsOptions.nextParse);
+                GET_PRS_HDR_NUM(hdrNum, p_prsOpts->mplsPrsOptions.nextParse);
                 if (hdrNum == ILLEGAL_HDR_NUM)
                     RETURN_ERROR(MAJOR, E_INVALID_VALUE, NO_MSG);
-                Ipv4HdrNum = GetPrsHdrNum(HEADER_TYPE_IPv4);
+                GET_PRS_HDR_NUM(Ipv4HdrNum, HEADER_TYPE_IPv4);
                 if (hdrNum < Ipv4HdrNum)
                     RETURN_ERROR(MAJOR, E_INVALID_VALUE,
                                  ("Header must be equal or higher than IPv4"));
@@ -1341,7 +1351,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
         {
 #endif /* (DPAA_VERSION >= 11) */
             /* if PRS is used it is always first */
-        	hdrNum = GetPrsHdrNum(p_PcdParams->p_PrsParams->firstPrsHdr);
+            GET_PRS_HDR_NUM(hdrNum, p_PcdParams->p_PrsParams->firstPrsHdr);
             if (hdrNum == ILLEGAL_HDR_NUM)
                 RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Unsupported header."));
 #if (DPAA_VERSION >= 11)
@@ -1411,47 +1421,47 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
             switch (p_FmPort->optArray[i])
             {
                 case (ETH_BROADCAST):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_ETH);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_ETH)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_ETH_BC_SHIFT;
                     break;
                 case (ETH_MULTICAST):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_ETH);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_ETH)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_ETH_MC_SHIFT;
                     break;
                 case (VLAN_STACKED):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_VLAN);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_VLAN)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_VLAN_STACKED_SHIFT;
                     break;
                 case (MPLS_STACKED):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_MPLS);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_MPLS)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_MPLS_STACKED_SHIFT;
                     break;
                 case (IPV4_BROADCAST_1):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv4);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv4)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV4_1_BC_SHIFT;
                     break;
                 case (IPV4_MULTICAST_1):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv4);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv4)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV4_1_MC_SHIFT;
                     break;
                 case (IPV4_UNICAST_2):
-					hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv4);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv4)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV4_2_UC_SHIFT;
                     break;
                 case (IPV4_MULTICAST_BROADCAST_2):
-					hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv4);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv4)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV4_2_MC_BC_SHIFT;
                     break;
                 case (IPV6_MULTICAST_1):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv6)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV6_1_MC_SHIFT;
                     break;
                 case (IPV6_UNICAST_2):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv6)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV6_2_UC_SHIFT;
                     break;
                 case (IPV6_MULTICAST_2):
-                    hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
+                    GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv6)
                     tmpHxs[hdrNum] |= (i + 1) << PRS_HDR_IPV6_2_MC_SHIFT;
                     break;
             }
@@ -1459,11 +1469,6 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
         if (FmPcdNetEnvIsHdrExist(p_FmPort->h_FmPcd, p_FmPort->netEnvId,
                                   HEADER_TYPE_UDP_ENCAP_ESP))
         {
-            if (p_PcdParams->p_PrsParams->numOfHdrsWithAdditionalParams == FM_PCD_PRS_NUM_OF_HDRS)
-                RETURN_ERROR(
-                         MINOR, E_INVALID_VALUE,
-                         ("If HEADER_TYPE_UDP_ENCAP_ESP is used, numOfHdrsWithAdditionalParams may be up to FM_PCD_PRS_NUM_OF_HDRS - 1"));
-
             p_PcdParams->p_PrsParams->additionalParams[p_PcdParams->p_PrsParams->numOfHdrsWithAdditionalParams].hdr =
                     HEADER_TYPE_UDP;
             p_PcdParams->p_PrsParams->additionalParams[p_PcdParams->p_PrsParams->numOfHdrsWithAdditionalParams].swPrsEnable =
@@ -1472,28 +1477,28 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
         }
 
         /* set MPLS default next header - HW reset workaround  */
-        hdrNum = GetPrsHdrNum(HEADER_TYPE_MPLS);
+        GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_MPLS)
         tmpHxs[hdrNum] |= PRS_HDR_MPLS_LBL_INTER_EN;
-        L3HdrNum = GetPrsHdrNum(HEADER_TYPE_USER_DEFINED_L3);
+        GET_PRS_HDR_NUM(L3HdrNum, HEADER_TYPE_USER_DEFINED_L3);
         tmpHxs[hdrNum] |= (uint32_t)L3HdrNum << PRS_HDR_MPLS_NEXT_HDR_SHIFT;
 
         /* for GRE, disable errors */
-        greHdrNum = GetPrsHdrNum(HEADER_TYPE_GRE);
+        GET_PRS_HDR_NUM(greHdrNum, HEADER_TYPE_GRE);
         tmpHxs[greHdrNum] |= PRS_HDR_ERROR_DIS;
 
         /* For UDP remove PAD from L4 checksum calculation */
-        hdrNum = GetPrsHdrNum(HEADER_TYPE_UDP);
+        GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_UDP);
         tmpHxs[hdrNum] |= PRS_HDR_UDP_PAD_REMOVAL;
         /* For TCP remove PAD from L4 checksum calculation */
-        hdrNum = GetPrsHdrNum(HEADER_TYPE_TCP);
+        GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_TCP);
         tmpHxs[hdrNum] |= PRS_HDR_TCP_PAD_REMOVAL;
 
         /* config additional params for specific headers */
         for (i = 0; i < p_PcdParams->p_PrsParams->numOfHdrsWithAdditionalParams;
                 i++)
         {
-        	hdrNum =
-        	  GetPrsHdrNum(p_PcdParams->p_PrsParams->additionalParams[i].hdr);
+            GET_PRS_HDR_NUM( hdrNum,
+                            p_PcdParams->p_PrsParams->additionalParams[i].hdr);
             if (hdrNum == ILLEGAL_HDR_NUM)
                 RETURN_ERROR(MAJOR, E_INVALID_VALUE, NO_MSG);
             if (hdrNum == NO_HDR_NUM)
@@ -1512,7 +1517,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
         if (p_FmPort->h_IpReassemblyManip)
         {
             /* link to sw parser code for IP Frag - only if no other code is applied. */
-            hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv4);
+            GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv4)
             if (!(tmpHxs[hdrNum] & PRS_HDR_SW_PRS_EN))
                 tmpHxs[hdrNum] |= (PRS_HDR_SW_PRS_EN
                         | OFFLOAD_SW_PATCH_IPv4_LABEL);
@@ -1525,7 +1530,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
                         && (p_FmPort->portType
                                 == e_FM_PORT_TYPE_OH_OFFLINE_PARSING)))
         {
-        	hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
+            GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv6)
             if (!(tmpHxs[hdrNum] & PRS_HDR_SW_PRS_EN))
                 tmpHxs[hdrNum] |= (PRS_HDR_SW_PRS_EN
                         | OFFLOAD_SW_PATCH_IPv6_LABEL);
@@ -1536,7 +1541,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
                         HEADER_TYPE_UDP_LITE))
         {
             /* link to sw parser code for udp lite - only if no other code is applied. */
-        	hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
+            GET_PRS_HDR_NUM(hdrNum, HEADER_TYPE_IPv6)
             if (!(tmpHxs[hdrNum] & PRS_HDR_SW_PRS_EN))
             tmpHxs[hdrNum] |= (PRS_HDR_SW_PRS_EN | UDP_LITE_SW_PATCH_LABEL);
         }
@@ -1646,7 +1651,7 @@ static t_Error DeletePcd(t_FmPort *p_FmPort)
     /* "cut" PCD out of the port's flow - go to BMI */
     /* WRITE_UINT32(*p_BmiNia, (p_FmPort->savedBmiNia & BMI_RFNE_FDCS_MASK) | (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME)); */
 
-    if (p_FmPort->pcdEngines & FM_PCD_PRS)
+    if (p_FmPort->pcdEngines | FM_PCD_PRS)
     {
         WRITE_UINT32(*p_BmiPrsStartOffset, 0);
 
@@ -2216,8 +2221,8 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
     FM_GetRevision(p_FmPort->h_Fm, &p_FmPort->fmRevInfo);
 
     /* calculate global portId number */
-    p_FmPort->hardwarePortId = SwPortIdToHwPortId(p_FmPort->portType,
-                             	 	 	 	 	  p_FmPortParams->portId);
+    SW_PORT_ID_TO_HW_PORT_ID(p_FmPort->hardwarePortId, p_FmPort->portType,
+                             p_FmPortParams->portId);
 
     if (p_FmPort->fmRevInfo.majorRev >= 6)
     {
@@ -2308,29 +2313,49 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
 
     p_FmPort->maxFrameLength = DEFAULT_PORT_maxFrameLength;
     /* resource distribution. */
-
-    if ((p_FmPort->portType == e_FM_PORT_TYPE_OH_HOST_COMMAND) &&
-        (p_FmPortParams->portId != FM_OH_PORT_ID))
-
+#ifdef FM_NO_GUARANTEED_RESET_VALUES
+    if (1) /* if (p_FmPort->fmRevInfo.majorRev < 6) */
     {
-        /* Overwrite HC defaults */
-        p_FmPort->fifoBufs.num      = DEFAULT_PORT_numOfFifoBufs(p_FmPort->portType)*BMI_FIFO_UNITS;
-        p_FmPort->fifoBufs.extra    = DEFAULT_PORT_extraNumOfFifoBufs*BMI_FIFO_UNITS;
-	p_FmPort->openDmas.num = DEFAULT_PORT_numOfOpenDmas(p_FmPort->portType);
-        p_FmPort->openDmas.extra    = DEFAULT_PORT_extraNumOfOpenDmas(p_FmPort->portType);
-	p_FmPort->tasks.num = DEFAULT_PORT_numOfTasks(p_FmPort->portType);
-	p_FmPort->tasks.extra = DEFAULT_PORT_extraNumOfTasks(p_FmPort->portType);
-     }
-    else
-    {
-        p_FmPort->fifoBufs.num                                      = 0;
-        p_FmPort->fifoBufs.extra                                    = 0;
-        p_FmPort->openDmas.num                                      = 0;
-        p_FmPort->openDmas.extra                                    = 0;
-        p_FmPort->tasks.num                                         = 0;
-        p_FmPort->tasks.extra                                       = 0;
+        p_FmPort->fifoBufs.num = DEFAULT_PORT_numOfFifoBufs(p_FmPort->portType)
+                * BMI_FIFO_UNITS;
+        p_FmPort->fifoBufs.extra = DEFAULT_PORT_extraNumOfFifoBufs
+                * BMI_FIFO_UNITS;
+        p_FmPort->openDmas.num = DEFAULT_PORT_numOfOpenDmas(p_FmPort->portType);
+        p_FmPort->openDmas.extra =
+                DEFAULT_PORT_extraNumOfOpenDmas(p_FmPort->portType);
+        p_FmPort->tasks.num = DEFAULT_PORT_numOfTasks(p_FmPort->portType);
+        p_FmPort->tasks.extra = DEFAULT_PORT_extraNumOfTasks(p_FmPort->portType);
     }
-
+    else
+#endif /* FM_NO_GUARANTEED_RESET_VALUES */
+    {
+        if ((p_FmPort->portType == e_FM_PORT_TYPE_OH_HOST_COMMAND)
+                && (p_FmPortParams->portId != FM_OH_PORT_ID))
+        {
+            /* Overwrite HC defaults */
+            p_FmPort->fifoBufs.num =
+                    DEFAULT_PORT_numOfFifoBufs(p_FmPort->portType)
+                            * BMI_FIFO_UNITS;
+            p_FmPort->fifoBufs.extra = DEFAULT_PORT_extraNumOfFifoBufs
+                    * BMI_FIFO_UNITS;
+            p_FmPort->openDmas.num =
+                    DEFAULT_PORT_numOfOpenDmas(p_FmPort->portType);
+            p_FmPort->openDmas.extra =
+                    DEFAULT_PORT_extraNumOfOpenDmas(p_FmPort->portType);
+            p_FmPort->tasks.num = DEFAULT_PORT_numOfTasks(p_FmPort->portType);
+            p_FmPort->tasks.extra =
+                    DEFAULT_PORT_extraNumOfTasks(p_FmPort->portType);
+        }
+        else
+        {
+            p_FmPort->fifoBufs.num = 0;
+            p_FmPort->fifoBufs.extra = 0;
+            p_FmPort->openDmas.num = 0;
+            p_FmPort->openDmas.extra = 0;
+            p_FmPort->tasks.num = 0;
+            p_FmPort->tasks.extra = 0;
+        }
+    }
 
 #ifdef FM_HEAVY_TRAFFIC_SEQUENCER_HANG_ERRATA_FMAN_A006981
     if ((p_FmPort->fmRevInfo.majorRev == 6)
@@ -2354,16 +2379,27 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
             p_FmPort->p_FmPortDriverParam->enBufPoolDepletion = FALSE;
             p_FmPort->p_FmPortDriverParam->frmDiscardOverride =
                     DEFAULT_PORT_frmDiscardOverride;
-
+#ifdef FM_NO_GUARANTEED_RESET_VALUES
+            if (1) /* if (p_FmPort->fmRevInfo.majorRev < 6) */
+            {
+                p_FmPort->p_FmPortDriverParam->rxFifoPriElevationLevel =
+                        DEFAULT_PORT_rxFifoPriElevationLevel;
+                p_FmPort->p_FmPortDriverParam->rxFifoThreshold =
+                        DEFAULT_PORT_rxFifoThreshold;
+            }
+            else
+#endif /* FM_NO_GUARANTEED_RESET_VALUES */
+            {
                 tmpReg =
                         GET_UINT32(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rfp);
-			p_FmPort->p_FmPortDriverParam->rxFifoPriElevationLevel =
+                p_FmPort->p_FmPortDriverParam->rxFifoPriElevationLevel =
                         (((tmpReg & BMI_RX_FIFO_PRI_ELEVATION_MASK)
                                 >> BMI_RX_FIFO_PRI_ELEVATION_SHIFT) + 1)
                                 * BMI_FIFO_UNITS;
                 p_FmPort->p_FmPortDriverParam->rxFifoThreshold = (((tmpReg
                         & BMI_RX_FIFO_THRESHOLD_MASK)
                         >> BMI_RX_FIFO_THRESHOLD_SHIFT) + 1) * BMI_FIFO_UNITS;
+            }
 
             p_FmPort->p_FmPortDriverParam->bufMargins.endMargins =
                     DEFAULT_PORT_BufMargins_endMargins;
@@ -2385,17 +2421,33 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
                          tmpReg);
 #endif /* FM_WRONG_RESET_VALUES_ERRATA_FMAN_A005127 */
         case (e_FM_PORT_TYPE_TX_10G):
+#ifdef FM_NO_GUARANTEED_RESET_VALUES
+            if (1) /* if (p_FmPort->fmRevInfo.majorRev < 6) */
+            {
+                p_FmPort->p_FmPortDriverParam->txFifoMinFillLevel =
+                        DEFAULT_PORT_txFifoMinFillLevel;
+                p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
+                        (uint8_t)(
+                                (p_FmPort->portType == e_FM_PORT_TYPE_TX) ? DEFAULT_PORT_fifoDeqPipelineDepth_1G :
+                                        DEFAULT_PORT_fifoDeqPipelineDepth_10G);
+                p_FmPort->p_FmPortDriverParam->txFifoLowComfLevel =
+                        DEFAULT_PORT_txFifoLowComfLevel;
+            }
+            else
+#endif /* FM_NO_GUARANTEED_RESET_VALUES */
+            {
                 tmpReg =
                         GET_UINT32(p_FmPort->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tfp);
                 p_FmPort->p_FmPortDriverParam->txFifoMinFillLevel = ((tmpReg
                         & BMI_TX_FIFO_MIN_FILL_MASK)
                         >> BMI_TX_FIFO_MIN_FILL_SHIFT) * BMI_FIFO_UNITS;
-			p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
+                p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
                         (uint8_t)(((tmpReg & BMI_FIFO_PIPELINE_DEPTH_MASK)
                                 >> BMI_FIFO_PIPELINE_DEPTH_SHIFT) + 1);
                 p_FmPort->p_FmPortDriverParam->txFifoLowComfLevel = (((tmpReg
                         & BMI_TX_LOW_COMF_MASK) >> BMI_TX_LOW_COMF_SHIFT) + 1)
                         * BMI_FIFO_UNITS;
+            }
 
             p_FmPort->p_FmPortDriverParam->deqType = DEFAULT_PORT_deqType;
             p_FmPort->p_FmPortDriverParam->deqPrefetchOption =
@@ -2424,6 +2476,13 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
             p_FmPort->p_FmPortDriverParam->deqByteCnt =
                     DEFAULT_PORT_deqByteCnt_1G;
 
+#ifdef FM_NO_GUARANTEED_RESET_VALUES
+            if (1) /* if (p_FmPort->fmRevInfo.majorRev < 6) */
+                p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
+                        DEFAULT_PORT_fifoDeqPipelineDepth_OH;
+            else
+#endif /* FM_NO_GUARANTEED_RESET_VALUES */
+            {
                 tmpReg =
                         GET_UINT32(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_ofp);
                 p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
@@ -2433,9 +2492,10 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
                         && (p_FmPortParams->portId != FM_OH_PORT_ID))
                 {
                     /* Overwrite HC defaults */
-			p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
-					DEFAULT_PORT_fifoDeqPipelineDepth_OH;
+                    p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth =
+                            DEFAULT_PORT_fifoDeqPipelineDepth_OH;
                 }
+            }
 
 #ifndef FM_FRAME_END_PARAMS_FOR_OP
             if (p_FmPort->fmRevInfo.majorRev < 6)
@@ -2684,6 +2744,18 @@ t_Error FM_PORT_Init(t_Handle h_FmPort)
                     | ((uint64_t)(fmParams.fmMuramPhysBaseAddr.high) << 32));
     p_FmPort->h_FmMuram = FmGetMuramHandle(p_FmPort->h_Fm);
 
+#ifndef FM_NO_GUARANTEED_RESET_VALUES
+    if (p_FmPort->fmRevInfo.majorRev >= 6)
+    {
+        p_FmPort->tasks.num = fmParams.numOfTasks;
+        p_FmPort->tasks.extra = fmParams.numOfExtraTasks;
+        p_FmPort->openDmas.num = fmParams.numOfOpenDmas;
+        p_FmPort->openDmas.extra = fmParams.numOfExtraOpenDmas;
+        p_FmPort->fifoBufs.num = fmParams.sizeOfFifo;
+        p_FmPort->fifoBufs.extra = fmParams.extraSizeOfFifo;
+    }
+#endif /* FM_NO_GUARANTEED_RESET_VALUES */
+
     errCode = InitLowLevelDriver(p_FmPort);
     if (errCode != E_OK)
         RETURN_ERROR(MAJOR, errCode, NO_MSG);
@@ -2766,7 +2838,6 @@ t_Error FM_PORT_Free(t_Handle h_FmPort)
 
     FmPortDriverParamFree(p_FmPort);
 
-    memset(&fmParams, 0, sizeof(fmParams));
     fmParams.hardwarePortId = p_FmPort->hardwarePortId;
     fmParams.portType = (e_FmPortType)p_FmPort->portType;
     fmParams.deqPipelineDepth =
@@ -3063,7 +3134,7 @@ t_Error FM_PORT_ConfigSyncReq(t_Handle h_FmPort, bool syncReq)
     SANITY_CHECK_RETURN_ERROR(p_FmPort->p_FmPortDriverParam, E_INVALID_HANDLE);
 
     if ((p_FmPort->portType == e_FM_PORT_TYPE_TX_10G)
-            || (p_FmPort->portType == e_FM_PORT_TYPE_TX))
+            && (p_FmPort->portType == e_FM_PORT_TYPE_TX))
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
                      ("Not available for Tx ports"));
 
@@ -3079,9 +3150,9 @@ t_Error FM_PORT_ConfigFrmDiscardOverride(t_Handle h_FmPort, bool override)
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(p_FmPort->p_FmPortDriverParam, E_INVALID_HANDLE);
     if ((p_FmPort->portType == e_FM_PORT_TYPE_TX_10G)
-            || (p_FmPort->portType == e_FM_PORT_TYPE_TX))
+            && (p_FmPort->portType == e_FM_PORT_TYPE_TX))
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
-                     ("Not available for Tx ports"));
+                     ("not available for Tx ports"));
 
     p_FmPort->p_FmPortDriverParam->dfltCfg.discard_override = override;
 
@@ -3515,7 +3586,6 @@ t_Error FM_PORT_Disable(t_Handle h_FmPort)
 {
     t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
     int err;
-
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
 
@@ -3530,9 +3600,9 @@ t_Error FM_PORT_Disable(t_Handle h_FmPort)
         err = E_OK;
     }
     else if (err != 0)
-        {
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("fman_port_disable"));
-        }
+    {
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("fman_port_disable"));
+    }
 
     p_FmPort->enabled = FALSE;
 
@@ -3716,12 +3786,14 @@ t_Error FM_PORT_SetPfcPrioritiesMappingToQmanWQ(t_Handle h_FmPort, uint8_t prio,
 t_Error FM_PORT_SetFrameQueueCounters(t_Handle h_FmPort, bool enable)
 {
     t_FmPort *p_FmPort = (t_FmPort*)h_FmPort;
+    int err;
 
     SANITY_CHECK_RETURN_ERROR(p_FmPort, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
 
-    fman_port_set_queue_cnt_mode(&p_FmPort->port, enable);
-
+    err = fman_port_set_queue_cnt_mode(&p_FmPort->port, enable);
+    if (err != 0)
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("fman_port_set_perf_cnt_mode"));
     return E_OK;
 }
 
@@ -4026,7 +4098,6 @@ uint32_t FM_PORT_GetCounter(t_Handle h_FmPort, e_FmPortCounters counter)
                 return 0;
             }
             bmiCounter = FALSE;
-            break;
         case (e_FM_PORT_COUNTERS_ENQ_TOTAL):
             bmiCounter = FALSE;
             break;
@@ -4076,7 +4147,8 @@ uint32_t FM_PORT_GetCounter(t_Handle h_FmPort, e_FmPortCounters counter)
                 queueType = E_FMAN_PORT_DEQ_CONFIRM;
                 break;
             default:
-                RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Requested counter is not available"));
+                REPORT_ERROR(MINOR, E_INVALID_STATE, ("Requested counter is not available"));
+                return 0;
         }
 
         return fman_port_get_qmi_counter(&p_FmPort->port, queueType);
@@ -4274,7 +4346,7 @@ t_Error FM_PORT_VSPAlloc(t_Handle h_FmPort, t_FmPortVSPAllocParams *p_VSPParams)
     SANITY_CHECK_RETURN_ERROR(p_VSPParams->numOfProfiles, E_INVALID_VALUE);
     /*dfltRelativeId should be in the range of numOfProfiles*/
     SANITY_CHECK_RETURN_ERROR(
-            p_VSPParams->dfltRelativeId < p_VSPParams->numOfProfiles,
+            IN_RANGE(0, p_VSPParams->dfltRelativeId, (p_VSPParams->numOfProfiles - 1)),
             E_INVALID_VALUE);
     /*p_FmPort should be from Rx type or OP*/
     SANITY_CHECK_RETURN_ERROR(
@@ -4535,7 +4607,7 @@ t_Error FM_PORT_PcdPlcrModifyInitialProfile(t_Handle h_FmPort,
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION, ("Invalid profile"));
     }
 
-    tmpReg |= (uint32_t)(NIA_ENG_PLCR | NIA_PLCR_ABSOLUTE | absoluteProfileId);
+    tmpReg = (uint32_t)(NIA_ENG_PLCR | NIA_PLCR_ABSOLUTE | absoluteProfileId);
 
     if (p_FmPort->pcdEngines & FM_PCD_PRS) /* e_FM_PCD_SUPPORT_PRS_AND_PLCR */
     {
@@ -4831,7 +4903,6 @@ t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
                                     p_PcdParams->p_CcParams->h_CcTree,
                                     p_PcdParams->h_NetEnv,
                                     p_FmPort->h_IpReassemblyManip, TRUE);
-#if (DPAA_VERSION >= 11)
         else
             if (p_FmPort->h_CapwapReassemblyManip)
                 err = FmPcdCcTreeAddCPR(p_FmPort->h_FmPcd,
@@ -4839,8 +4910,6 @@ t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
                                         p_PcdParams->h_NetEnv,
                                         p_FmPort->h_CapwapReassemblyManip,
                                         TRUE);
-#endif /* (DPAA_VERSION >= 11) */
-
         if (err != E_OK)
         {
             if (p_FmPort->h_ReassemblyTree)
@@ -4927,6 +4996,8 @@ t_Error FM_PORT_SetPCD(t_Handle h_FmPort, t_FmPortPcdParams *p_PcdParam)
                 ASSERT_COND(p_ParamsPage);
                 WRITE_UINT32(p_ParamsPage->postBmiFetchNia,
                              p_FmPort->savedBmiNia);
+                XX_Print("p_ParamsPage->postBmiFetchNia 0x%x\n",
+                         GET_UINT32(p_ParamsPage->postBmiFetchNia));
             }
 #endif /* (DPAA_VERSION >= 11) */
 
@@ -5318,7 +5389,7 @@ t_Error FM_PORT_PcdPrsModifyStartOffset(t_Handle h_FmPort,
     }
 
     /* set the first header */
-    hdrNum = GetPrsHdrNum(p_FmPcdPrsStart->firstPrsHdr);
+    GET_PRS_HDR_NUM(hdrNum, p_FmPcdPrsStart->firstPrsHdr);
     if ((hdrNum == ILLEGAL_HDR_NUM) || (hdrNum == NO_HDR_NUM))
     {
         RELEASE_LOCK(p_FmPort->lock);
@@ -5357,31 +5428,31 @@ t_Error FM_PORT_DumpRegs(t_Handle h_FmPort)
     switch (p_FmPort->portType)
     {
         case (e_FM_PORT_TYPE_OH_OFFLINE_PARSING):
-            strcpy(arr, "OFFLINE-PARSING");
-            flag = 0;
-            break;
+        strcpy(arr, "OFFLINE-PARSING");
+        flag = 0;
+        break;
         case (e_FM_PORT_TYPE_OH_HOST_COMMAND):
-            strcpy(arr, "HOST-COMMAND");
-            flag = 0;
-            break;
+        strcpy(arr, "HOST-COMMAND");
+        flag = 0;
+        break;
         case (e_FM_PORT_TYPE_RX):
-            strcpy(arr, "RX");
-            flag = 1;
-            break;
+        strcpy(arr, "RX");
+        flag = 1;
+        break;
         case (e_FM_PORT_TYPE_RX_10G):
-            strcpy(arr, "RX-10G");
-            flag = 1;
-            break;
+        strcpy(arr, "RX-10G");
+        flag = 1;
+        break;
         case (e_FM_PORT_TYPE_TX):
-            strcpy(arr, "TX");
-            flag = 2;
-            break;
+        strcpy(arr, "TX");
+        flag = 2;
+        break;
         case (e_FM_PORT_TYPE_TX_10G):
-            strcpy(arr, "TX-10G");
-            flag = 2;
-            break;
+        strcpy(arr, "TX-10G");
+        flag = 2;
+        break;
         default:
-            return ERROR_CODE(E_INVALID_VALUE);
+        return ERROR_CODE(E_INVALID_VALUE);
     }
 
     DUMP_TITLE(NULL,
@@ -5390,192 +5461,190 @@ t_Error FM_PORT_DumpRegs(t_Handle h_FmPort)
 
     err = FmDumpPortRegs(p_FmPort->h_Fm, p_FmPort->hardwarePortId);
     if (err)
-        RETURN_ERROR(MAJOR, err, NO_MSG);
+    RETURN_ERROR(MAJOR, err, NO_MSG);
 
     DUMP_TITLE(p_FmPort->p_FmPortBmiRegs, ("Bmi Port Regs"));
 
     switch (flag)
     {
         case (0):
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocfg);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ost);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oda);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oicp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofdne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofca);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofpne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opso);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_occb);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oim);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofed);
 
-            DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oprai), ("fmbm_oprai"));
-            DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_PRS_RESULT_NUM_OF_WORDS)
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocfg);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ost);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oda);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oicp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofdne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofca);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofpne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opso);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_occb);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oim);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofed);
+
+        DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oprai), ("fmbm_oprai"));
+        DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_PRS_RESULT_NUM_OF_WORDS)
+        {
+            DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oprai[i]), sizeof(uint32_t));
+        }
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofqid );
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oefqid);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofsdm );
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofsem );
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofene );
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_orlmts);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_orlmt);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocmne);
+        {
+#ifndef FM_NO_OP_OBSERVED_POOLS
+            if (p_FmPort->fmRevInfo.majorRev == 4)
             {
-                DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oprai[i]), sizeof(uint32_t));
-            }
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofqid );
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oefqid);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofsdm );
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofsem );
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofene );
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_orlmts);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_orlmt);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocmne);
-            {
-    #ifndef FM_NO_OP_OBSERVED_POOLS
-                if (p_FmPort->fmRevInfo.majorRev == 4)
+                DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oebmpi, ("fmbm_oebmpi"));
+
+                DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_OBSERVED_EXT_POOLS)
                 {
-                    DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oebmpi, ("fmbm_oebmpi"));
-
-                    DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_OBSERVED_EXT_POOLS)
-                    {
-                        DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oebmpi[i], sizeof(uint32_t));
-                    }
-                    DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocgm);
+                    DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_oebmpi[i], sizeof(uint32_t));
                 }
-    #endif /* !FM_NO_OP_OBSERVED_POOLS */
+                DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ocgm);
             }
+#endif /* !FM_NO_OP_OBSERVED_POOLS */
+        }
 
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ostc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofrc );
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofdc );
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofledc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofufdc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_offc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofwdc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofldec);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_obdc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opcp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_occn);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_otuc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oduc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofuc);
-            DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_odcfg), ("fmbm_odcfg"));
-            DUMP_SUBSTRUCT_ARRAY(i, 3)
-            {
-                DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_odcfg[i]), sizeof(uint32_t));
-            }
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ogpr);
-            break;
-
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ostc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofrc );
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofdc );
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofledc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofufdc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_offc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofwdc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofldec);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_opcp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_occn);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_otuc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_oduc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ofuc);
+        DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_odcfg), ("fmbm_odcfg"));
+        DUMP_SUBSTRUCT_ARRAY(i, 3)
+        {
+            DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs.fmbm_odcfg[i]), sizeof(uint32_t));
+        }
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->ohPortBmiRegs,fmbm_ogpr);
+        break;
         case (1):
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rcfg);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rst);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rda);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_reth);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfed);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_ricp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rebm);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfca);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfpne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpso);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpp);
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rcfg);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rst);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rda);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_reth);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfed);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_ricp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rebm);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfca);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfpne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpso);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpp);
 
-            DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rprai), ("fmbm_rprai"));
-            DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_PRS_RESULT_NUM_OF_WORDS)
-            {
-                DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rprai[i]), sizeof(uint32_t));
-            }
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfqid);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_refqid);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfsdm);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfsem);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfene);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rcmne);
-            DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_ebmpi, ("fmbm_ebmpi"));
-            DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_EXT_POOLS)
-            {
-                DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_ebmpi[i], sizeof(uint32_t));
-            }
-            DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_acnt, ("fmbm_acnt"));
-            DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_EXT_POOLS)
-            {
-                DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_acnt[i], sizeof(uint32_t));
-            }
-            DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rcgm, ("fmbm_rcgm"));
-            DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_NUM_OF_CONGESTION_GRPS/32)
-            {
-                DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rcgm[i], sizeof(uint32_t));
-            }
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rmpd);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rstc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfrc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfbc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rlfc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rffc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfcd);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfldec);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rodc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpcp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rccn);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rtuc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rrquc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rduc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfuc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpac);
-            DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rdcfg), ("fmbm_rdcfg"));
-            DUMP_SUBSTRUCT_ARRAY(i, 3)
-            {
-                DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rdcfg[i]), sizeof(uint32_t));
-            }
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rgpr);
-            break;
-
+        DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rprai), ("fmbm_rprai"));
+        DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_PRS_RESULT_NUM_OF_WORDS)
+        {
+            DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rprai[i]), sizeof(uint32_t));
+        }
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfqid);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_refqid);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfsdm);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfsem);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfene);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rcmne);
+        DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_ebmpi, ("fmbm_ebmpi"));
+        DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_EXT_POOLS)
+        {
+            DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_ebmpi[i], sizeof(uint32_t));
+        }
+        DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_acnt, ("fmbm_acnt"));
+        DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_MAX_NUM_OF_EXT_POOLS)
+        {
+            DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_acnt[i], sizeof(uint32_t));
+        }
+        DUMP_TITLE(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rcgm, ("fmbm_rcgm"));
+        DUMP_SUBSTRUCT_ARRAY(i, FM_PORT_NUM_OF_CONGESTION_GRPS/32)
+        {
+            DUMP_MEMORY(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rcgm[i], sizeof(uint32_t));
+        }
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rmpd);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rstc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfrc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfbc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rlfc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rffc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfcd);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfldec);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rodc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpcp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rccn);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rtuc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rrquc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rduc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rfuc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rpac);
+        DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rdcfg), ("fmbm_rdcfg"));
+        DUMP_SUBSTRUCT_ARRAY(i, 3)
+        {
+            DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs.fmbm_rdcfg[i]), sizeof(uint32_t));
+        }
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->rxPortBmiRegs,fmbm_rgpr);
+        break;
         case (2):
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcfg);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tst);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tda);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfed);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_ticp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfdne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfca);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcfqid);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfeqid);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfene);
-    #if (DPAA_VERSION >= 11)
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfne);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcmne);
-    #endif /* (DPAA_VERSION >= 11) */
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_trlmts);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_trlmt);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tstc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfrc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfdc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfledc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfufdc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tbdc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tpc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tpcp);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tccn);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_ttuc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_ttcquc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tduc);
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfuc);
-            DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tdcfg), ("fmbm_tdcfg"));
-            DUMP_SUBSTRUCT_ARRAY(i, 3)
-            {
-                DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tdcfg[i]), sizeof(uint32_t));
-            }
-            DUMP_SUBTITLE(("\n"));
-            DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tgpr);
-            break;
+
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcfg);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tst);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tda);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfed);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_ticp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfdne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfca);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcfqid);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfeqid);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfene);
+#if (DPAA_VERSION >= 11)
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfne);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tcmne);
+#endif /* (DPAA_VERSION >= 11) */
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_trlmts);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_trlmt);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tstc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfrc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfdc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfledc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfufdc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tpc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tpcp);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tccn);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_ttuc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_ttcquc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tduc);
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tfuc);
+        DUMP_TITLE(&(p_FmPort->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tdcfg), ("fmbm_tdcfg"));
+        DUMP_SUBSTRUCT_ARRAY(i, 3)
+        {
+            DUMP_MEMORY(&(p_FmPort->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tdcfg[i]), sizeof(uint32_t));
+        }
+        DUMP_SUBTITLE(("\n"));
+        DUMP_VAR(&p_FmPort->p_FmPortBmiRegs->txPortBmiRegs,fmbm_tgpr);
+        break;
 
         default:
         RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Invalid flag"));
@@ -5947,7 +6016,7 @@ static t_Error DsarCheckParams(t_FmPortDsarParams *params,
 {
     bool macInit = FALSE;
     uint8_t mac[6];
-    int i = 0;
+    int i;
 
     // check table sizes
     if (params->p_AutoResArpInfo
@@ -6018,13 +6087,16 @@ static t_Error DsarCheckParams(t_FmPortDsarParams *params,
                     E_INVALID_VALUE,
                     ("DSAR: tcp filter table size exceeds the configured maximum size."));
     }
-    /* check only 1 MAC address is configured (this is what ucode currently supports) */
+    // check only 1 MAC address is configured (this is what ucode currently supports)
     if (params->p_AutoResArpInfo && params->p_AutoResArpInfo->tableSize)
     {
-        memcpy(mac, params->p_AutoResArpInfo->p_AutoResTable[0].mac, 6);
-        i = 1;
-        macInit = TRUE;
-
+        i = 0;
+        if (!macInit)
+        {
+            memcpy(mac, params->p_AutoResArpInfo->p_AutoResTable[0].mac, 6);
+            i = 1;
+            macInit = TRUE;
+        }
         for (; i < params->p_AutoResArpInfo->tableSize; i++)
             if (memcmp(mac, params->p_AutoResArpInfo->p_AutoResTable[i].mac, 6))
                 RETURN_ERROR(
@@ -6092,6 +6164,7 @@ static t_Error DsarCheckParams(t_FmPortDsarParams *params,
         {
             memcpy(mac, params->p_AutoResNdpInfo->p_AutoResTableTmp[0].mac, 6);
             i = 1;
+            macInit = TRUE;
         }
         for (; i < params->p_AutoResNdpInfo->tableSizeTmp; i++)
             if (memcmp(mac, params->p_AutoResNdpInfo->p_AutoResTableTmp[i].mac,
@@ -6190,7 +6263,7 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
 	if (params->p_AutoResArpInfo->enableConflictDetection)
 	        WRITE_UINT16(ArpDescriptor->control, 1);
 	else
-        WRITE_UINT16(ArpDescriptor->control, 0);
+	        WRITE_UINT16(ArpDescriptor->control, 0);
         if (params->p_AutoResArpInfo->tableSize)
         {
             t_FmPortDsarArpEntry* arp_entry = params->p_AutoResArpInfo->p_AutoResTable;
@@ -6275,7 +6348,7 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
 	if (params->p_AutoResNdpInfo->enableConflictDetection)
 	        WRITE_UINT16(NDDescriptor->control, 1);
 	else
-        WRITE_UINT16(NDDescriptor->control, 0);
+	        WRITE_UINT16(NDDescriptor->control, 0);
         if (params->p_AutoResNdpInfo->tableSizeAssigned + params->p_AutoResNdpInfo->tableSizeTmp)
         {
             t_FmPortDsarNdpEntry* ndp_entry = params->p_AutoResNdpInfo->p_AutoResTableAssigned;
@@ -6531,7 +6604,7 @@ t_Error FM_PORT_EnterDsarFinal(t_Handle h_DsarRxPort, t_Handle h_DsarTxPort)
 		XX_Print("FM: Sleeping\n");
 //	FM_ChangeClock(p_FmPort->h_Fm, p_FmPort->hardwarePortId);
 
-    return E_OK;
+	return E_OK;
 }
 
 EXPORT_SYMBOL(FM_PORT_EnterDsarFinal);

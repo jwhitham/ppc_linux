@@ -127,7 +127,7 @@ switch (exception){                                                 \
 #endif /* defined(__MWERKS__) && ... */
 
 
-typedef struct {
+typedef _Packed struct {
 /* General Configuration and Status Registers */
     volatile uint32_t fmpl_gcr;         /* 0x000 FMPL_GCR  - FM Policer General Configuration */
     volatile uint32_t fmpl_gsr;         /* 0x004 FMPL_GSR  - FM Policer Global Status Register */
@@ -158,7 +158,7 @@ typedef struct {
     volatile uint32_t fmpl_dpmr;        /* 0x200 FMPL_DPMR - FM Policer Default Mapping Register */
     volatile uint32_t fmpl_pmr[63];     /*+default 0x204-0x2FF FMPL_PMR1 - FMPL_PMR63, - FM Policer Profile Mapping Registers.
                                            (for port-ID 1-11, only for supported Port-ID registers) */
-} t_FmPcdPlcrRegs;
+} _PackedType t_FmPcdPlcrRegs;
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
 #pragma pack(pop)
@@ -238,11 +238,11 @@ typedef struct {
 #endif
 } t_FmPcdKgScheme;
 
-typedef union {
+typedef _Packed union {
     struct fman_kg_scheme_regs schemeRegs;
     struct fman_kg_pe_regs portRegs;
     struct fman_kg_cp_regs clsPlanRegs;
-} u_FmPcdKgIndirectAccessRegs;
+} _PackedType u_FmPcdKgIndirectAccessRegs;
 
 typedef struct {
     struct fman_kg_regs *p_FmPcdKgRegs;

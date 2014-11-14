@@ -216,7 +216,7 @@ static void GetInfoRateReg(e_FmPcdPlcrRateMode  rateMode,
 
 /* .......... */
 
-static void CalcRates(uint32_t                              bitFor1Micro,
+static void CalcRates(t_Handle                              h_FmPcd,
                       t_FmPcdPlcrNonPassthroughAlgParams    *p_NonPassthroughAlgParam,
                       uint32_t                              *cir,
                       uint32_t                              *cbs,
@@ -224,12 +224,14 @@ static void CalcRates(uint32_t                              bitFor1Micro,
                       uint32_t                              *pbs_ebs,
                       uint32_t                              *fpp)
 {
+    t_FmPcd     *p_FmPcd = (t_FmPcd*)h_FmPcd;
     uint64_t    integer, fraction;
-    uint32_t    temp, tsuInTenthNanos;
+    uint32_t    temp, tsuInTenthNanos, bitFor1Micro;
     uint8_t     fppShift=0;
 
+    bitFor1Micro = FmGetTimeStampScale(p_FmPcd->h_Fm);  /* TimeStamp per nano seconds units */
     /* we want the tsu to count 10 nano for better precision normally tsu is 3.9 nano, now we will get 39 */
-    tsuInTenthNanos = (uint32_t)(1000*10/(1 << bitFor1Micro));
+    tsuInTenthNanos = (uint32_t)(1000*10/(1<<bitFor1Micro));
 
     /* we choose the faster rate to calibrate fpp */
     /* The meaning of this step:
@@ -335,13 +337,9 @@ static t_Error BuildProfileRegs(t_FmPcd                     *p_FmPcd,
                                 t_FmPcdPlcrProfileRegs      *p_PlcrRegs)
 {
     t_Error                 err = E_OK;
-    uint32_t                pemode, gnia, ynia, rnia, bitFor1Micro;
+    uint32_t                pemode, gnia, ynia, rnia;
 
     ASSERT_COND(p_FmPcd);
-
-    bitFor1Micro = FmGetTimeStampScale(p_FmPcd->h_Fm);
-    if (bitFor1Micro == 0)
-    RETURN_ERROR(MAJOR, E_NOT_AVAILABLE, ("Timestamp scale"));
 
 /* Set G, Y, R Nia */
     err = SetProfileNia(p_FmPcd, p_ProfileParams->nextEngineOnGreen,  &(p_ProfileParams->paramsOnGreen), &gnia);
@@ -487,7 +485,7 @@ cont_rfc:
             {
                 uint32_t cir=0, cbs=0, pir_eir=0, pbs_ebs=0, fpp=0;
 
-                CalcRates(bitFor1Micro, &p_ProfileParams->nonPassthroughAlgParams, &cir, &cbs, &pir_eir, &pbs_ebs, &fpp);
+                CalcRates(p_FmPcd, &p_ProfileParams->nonPassthroughAlgParams, &cir, &cbs, &pir_eir, &pbs_ebs, &fpp);
 
                 /*  Set Committed Information Rate (CIR) */
                 p_PlcrRegs->fmpl_pecir = cir;
@@ -1564,6 +1562,7 @@ t_Error FM_PCD_PlcrDumpRegs(t_Handle h_FmPcd)
     DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_rypcnt);
     DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_tpcnt);
     DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_flmcnt);
+
     DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_serc);
     DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_upcr);
     DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_dpmr);
@@ -1626,12 +1625,7 @@ t_Handle FM_PCD_PlcrProfileSet(t_Handle     h_FmPcd,
                                                     p_ProfileParams->id.newParams.h_FmPort,
                                                     p_ProfileParams->id.newParams.relativeProfileId,
                                                     &absoluteProfileId);
-        if (err)
-        {
-             REPORT_ERROR(MAJOR, err, NO_MSG);
-             return NULL;
-        }
- 
+
          if (absoluteProfileId >= FM_PCD_PLCR_NUM_ENTRIES)
          {
              REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("profileId too Big "));

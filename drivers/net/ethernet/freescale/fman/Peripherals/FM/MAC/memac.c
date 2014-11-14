@@ -998,16 +998,13 @@ static t_Error MemacFree(t_Handle h_Memac)
 
     SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
 
+    FreeInitResources(p_Memac);
+
     if (p_Memac->p_MemacDriverParam)
     {
-        /* Called after config */
         XX_Free(p_Memac->p_MemacDriverParam);
         p_Memac->p_MemacDriverParam = NULL;
     }
-    else
-        /* Called after init */
-        FreeInitResources(p_Memac);
-
     XX_Free(p_Memac);
 
     return E_OK;
@@ -1098,11 +1095,11 @@ t_Handle MEMAC_Config(t_FmMacParams *p_FmMacParam)
     InitFmMacControllerDriver(&p_Memac->fmMacControllerDriver);
 
     /* Allocate memory for the mEMAC driver parameters data structure */
-    p_MemacDriverParam = (struct memac_cfg *)XX_Malloc(sizeof(struct memac_cfg));
+    p_MemacDriverParam = (struct memac_cfg *) XX_Malloc(sizeof(struct memac_cfg));
     if (!p_MemacDriverParam)
     {
         REPORT_ERROR(MAJOR, E_NO_MEMORY, ("mEMAC driver parameters"));
-        XX_Free(p_Memac);
+        MemacFree(p_Memac);
         return NULL;
     }
     memset(p_MemacDriverParam, 0, sizeof(struct memac_cfg));

@@ -55,26 +55,24 @@
 
 #define DUMP_Print          XX_Print
 #define DUMP_MAX_LEVELS     6
-#define DUMP_IDX_LEN        6
 #define DUMP_MAX_STR        64
 
 
 #define _CREATE_DUMP_SUBSTR(phrase) \
     dumpTmpLevel = 0; dumpSubStr[0] = '\0'; \
-    snprintf(dumpTmpStr, DUMP_MAX_STR, "%s", #phrase); \
+    sprintf(dumpTmpStr, "%s", #phrase); \
     p_DumpToken = strtok(dumpTmpStr, (dumpIsArr[0] ? "[" : ".")); \
-    while ((p_DumpToken != NULL) && (dumpTmpLevel < DUMP_MAX_LEVELS)) \
+    while (p_DumpToken != NULL) \
     { \
-        strlcat(dumpSubStr, p_DumpToken, DUMP_MAX_STR); \
+        strcat(dumpSubStr, p_DumpToken); \
         if (dumpIsArr[dumpTmpLevel]) \
         { \
-            strlcat(dumpSubStr, dumpIdxStr[dumpTmpLevel], DUMP_MAX_STR); \
+            strcat(dumpSubStr, dumpIdxStr[dumpTmpLevel]); \
             p_DumpToken = strtok(NULL, "."); \
         } \
-        if ((p_DumpToken != NULL) && \
-            ((p_DumpToken = strtok(NULL, (dumpIsArr[++dumpTmpLevel] ? "[" : "."))) != NULL)) \
-            strlcat(dumpSubStr, ".", DUMP_MAX_STR); \
-    }
+        if ((p_DumpToken = strtok(NULL, (dumpIsArr[++dumpTmpLevel] ? "[" : "."))) != 0) \
+            strcat(dumpSubStr, "."); \
+    }\
 
 
 /**************************************************************************//**
@@ -101,11 +99,11 @@
                 starts.
 *//***************************************************************************/
 #define DECLARE_DUMP \
-    char    dumpIdxStr[DUMP_MAX_LEVELS + 1][DUMP_IDX_LEN] = { "", }; \
+    char    dumpIdxStr[DUMP_MAX_LEVELS + 1][6] = { "", }; \
     char    dumpSubStr[DUMP_MAX_STR] = ""; \
     char    dumpTmpStr[DUMP_MAX_STR] = ""; \
     char    *p_DumpToken = NULL; \
-    int     dumpArrIdx = 0, dumpArrSize = 0, dumpLevel = 0, dumpTmpLevel = 0; \
+    int     dumpArrIdx = 0, dumpArrSize = 0, dumpVarSize = 0, dumpLevel = 0, dumpTmpLevel = 0; \
     uint8_t dumpIsArr[DUMP_MAX_LEVELS + 1] = { 0 }; \
     /* Prevent warnings if not all used */ \
     UNUSED(dumpIdxStr[0][0]); \
@@ -114,6 +112,7 @@
     UNUSED(p_DumpToken); \
     UNUSED(dumpArrIdx); \
     UNUSED(dumpArrSize); \
+    UNUSED(dumpVarSize); \
     UNUSED(dumpLevel); \
     UNUSED(dumpTmpLevel); \
     UNUSED(dumpIsArr[0]);
@@ -165,8 +164,8 @@
 *//***************************************************************************/
 #define DUMP_SUBSTRUCT_ARRAY(idx, cnt) \
     for (idx=0, dumpIsArr[dumpLevel++] = 1; \
-         (idx < cnt) && (dumpLevel > 0) && snprintf(dumpIdxStr[dumpLevel-1], DUMP_IDX_LEN, "[%d]", idx); \
-         idx++, ((idx < cnt) || (dumpIsArr[--dumpLevel] = 0)))
+         (idx < cnt) && sprintf(dumpIdxStr[dumpLevel-1], "[%d]", idx); \
+         idx++, ((idx < cnt) || ((dumpIsArr[--dumpLevel] = 0) == 0)))
 
 
 /**************************************************************************//**
@@ -190,8 +189,19 @@
         void            *addr = (void *)&((st)->phrase); \
         physAddress_t   physAddr = XX_VirtToPhys(addr); \
         _CREATE_DUMP_SUBSTR(phrase); \
-        DUMP_Print("0x%010llX: 0x%08x%8s\t%s\r\n", \
-                   physAddr, GET_UINT32(*(uint32_t*)addr), "", dumpSubStr); \
+        dumpVarSize = sizeof((st)->phrase); \
+        switch (dumpVarSize) \
+        { \
+            case 1:  DUMP_Print("0x%010llX: 0x%02x%14s\t%s\r\n", \
+                                physAddr, GET_UINT8(*(uint8_t*)addr), "", dumpSubStr); break; \
+            case 2:  DUMP_Print("0x%010llX: 0x%04x%12s\t%s\r\n", \
+                                physAddr, GET_UINT16(*(uint16_t*)addr), "", dumpSubStr); break; \
+            case 4:  DUMP_Print("0x%010llX: 0x%08x%8s\t%s\r\n", \
+                                physAddr, GET_UINT32(*(uint32_t*)addr), "", dumpSubStr); break; \
+            case 8:  DUMP_Print("0x%010llX: 0x%016llx\t%s\r\n", \
+                                physAddr, GET_UINT64(*(uint64_t*)addr), dumpSubStr); break; \
+            default: DUMP_Print("Bad size %d (" #st "->" #phrase ")\r\n", dumpVarSize); \
+        } \
     } while (0)
 
 
@@ -213,13 +223,36 @@
         physAddress_t physAddr; \
         _CREATE_DUMP_SUBSTR(phrase); \
         dumpArrSize = ARRAY_SIZE((st)->phrase); \
-        for (dumpArrIdx=0; dumpArrIdx < dumpArrSize; dumpArrIdx++) { \
-            physAddr = XX_VirtToPhys((void *)&((st)->phrase[dumpArrIdx])); \
-            DUMP_Print("0x%010llX: 0x%08x%8s\t%s[%d]\r\n", \
-                       physAddr, GET_UINT32((st)->phrase[dumpArrIdx]), "", dumpSubStr, dumpArrIdx); \
+        dumpVarSize = sizeof((st)->phrase[0]); \
+        switch (dumpVarSize) \
+        { \
+            case 1: \
+                for (dumpArrIdx=0; dumpArrIdx < dumpArrSize; dumpArrIdx++) { \
+                    physAddr = XX_VirtToPhys((void *)&((st)->phrase[dumpArrIdx])); \
+                    DUMP_Print("0x%010llX: 0x%02x%14s\t%s[%d]\r\n", \
+                               physAddr, GET_UINT8((st)->phrase[dumpArrIdx]), "", dumpSubStr, dumpArrIdx); \
+                } break; \
+            case 2: \
+                for (dumpArrIdx=0; dumpArrIdx < dumpArrSize; dumpArrIdx++) { \
+                    physAddr = XX_VirtToPhys((void *)&((st)->phrase[dumpArrIdx])); \
+                    DUMP_Print("0x%010llX: 0x%04x%12s\t%s[%d]\r\n", \
+                               physAddr, GET_UINT16((st)->phrase[dumpArrIdx]), "", dumpSubStr, dumpArrIdx); \
+                } break; \
+            case 4: \
+                for (dumpArrIdx=0; dumpArrIdx < dumpArrSize; dumpArrIdx++) { \
+                    physAddr = XX_VirtToPhys((void *)&((st)->phrase[dumpArrIdx])); \
+                    DUMP_Print("0x%010llX: 0x%08x%8s\t%s[%d]\r\n", \
+                               physAddr, GET_UINT32((st)->phrase[dumpArrIdx]), "", dumpSubStr, dumpArrIdx); \
+                } break; \
+            case 8: \
+                for (dumpArrIdx=0; dumpArrIdx < dumpArrSize; dumpArrIdx++) { \
+                    physAddr = XX_VirtToPhys((void *)&((st)->phrase[dumpArrIdx])); \
+                    DUMP_Print("0x%010llX: 0x%016llx\t%s[%d]\r\n", \
+                               physAddr, GET_UINT64((st)->phrase[dumpArrIdx]), dumpSubStr, dumpArrIdx); \
+                } break; \
+            default: DUMP_Print("Bad size %d (" #st "->" #phrase "[0])\r\n", dumpVarSize); \
         } \
     } while (0)
-
 
 
 #endif /* DEBUG_ERRORS > 0 */

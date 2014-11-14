@@ -114,7 +114,7 @@ static e_FmPcdKgExtractDfltSelect GetGenericSwDefault(t_FmPcdKgExtractDflt swDef
             for (i=0 ; i<numOfSwDefaults ; i++)
                 if (swDefaults[i].type == e_FM_PCD_KG_GENERIC_NOT_FROM_DATA)
                     return swDefaults[i].dfltSelect;
-            break;
+            ASSERT_COND(FALSE);
         case (KG_SCH_GEN_SHIM1):
         case (KG_SCH_GEN_SHIM2):
         case (KG_SCH_GEN_IP_PID_NO_V):
@@ -133,7 +133,7 @@ static e_FmPcdKgExtractDfltSelect GetGenericSwDefault(t_FmPcdKgExtractDflt swDef
             for (i=0 ; i<numOfSwDefaults ; i++)
                 if (swDefaults[i].type == e_FM_PCD_KG_GENERIC_FROM_DATA_NO_V)
                     return swDefaults[i].dfltSelect;
-            break;
+
         case (KG_SCH_GEN_START_OF_FRM):
         case (KG_SCH_GEN_ETH):
         case (KG_SCH_GEN_SNAP):
@@ -160,12 +160,9 @@ static e_FmPcdKgExtractDfltSelect GetGenericSwDefault(t_FmPcdKgExtractDflt swDef
             for (i=0 ; i<numOfSwDefaults ; i++)
                 if (swDefaults[i].type == e_FM_PCD_KG_GENERIC_FROM_DATA)
                     return swDefaults[i].dfltSelect;
-            break;
         default:
-            break;
+            return e_FM_PCD_KG_DFLT_ILLEGAL;
     }
-
-    return e_FM_PCD_KG_DFLT_ILLEGAL;
 }
 
 static uint8_t GetGenCode(e_FmPcdExtractFrom src, uint8_t *p_Offset)
@@ -304,7 +301,6 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
         {
             case (HEADER_TYPE_NONE):
                 ASSERT_COND(FALSE);
-                break;
             case (HEADER_TYPE_ETH):
                 switch (field.eth)
                 {
@@ -314,7 +310,6 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
                         REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
                         return 0;
                 }
-                break;
             case (HEADER_TYPE_VLAN):
                 switch (field.vlan)
                 {
@@ -326,7 +321,6 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
                         REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal VLAN header index"));
                         return 0;
                 }
-                break;
             case (HEADER_TYPE_MPLS):
             case (HEADER_TYPE_IPSEC_AH):
             case (HEADER_TYPE_IPSEC_ESP):
@@ -343,27 +337,24 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
             case (HEADER_TYPE_DCCP):
             case (HEADER_TYPE_USER_DEFINED_L4):
                 REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
-                return 0;
             default:
-                break;
-
+                REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Header not supported"));
+                return 0;
         }
         else
             switch (hdr)
             {
                 case (HEADER_TYPE_NONE):
                     ASSERT_COND(FALSE);
-                    break;
                 case (HEADER_TYPE_ETH):
-                    switch (field.eth)
-                    {
-                        case (NET_HEADER_FIELD_ETH_TYPE):
-                            return KG_SCH_GEN_ETH_TYPE_NO_V;
-                        default:
-                            REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
-                            return 0;
-                    }
-                    break;
+                switch (field.eth)
+                {
+                    case (NET_HEADER_FIELD_ETH_TYPE):
+                        return KG_SCH_GEN_ETH_TYPE_NO_V;
+                    default:
+                        REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
+                        return 0;
+                }
                 case (HEADER_TYPE_VLAN):
                     switch (field.vlan)
                     {
@@ -375,7 +366,6 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
                             REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal VLAN header index"));
                             return 0;
                     }
-                    break;
                 case (HEADER_TYPE_IPv4):
                     switch (field.ipv4)
                     {
@@ -385,7 +375,6 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
                             REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
                             return 0;
                     }
-                    break;
                 case (HEADER_TYPE_IPv6):
                    switch (field.ipv6)
                     {
@@ -395,7 +384,6 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
                             REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
                             return 0;
                     }
-                    break;
                 case (HEADER_TYPE_MPLS):
                 case (HEADER_TYPE_LLC_SNAP):
                 case (HEADER_TYPE_PPPoE):
@@ -412,10 +400,9 @@ static t_GenericCodes GetGenFieldCode(e_NetHeaderType hdr, t_FmPcdFields field, 
                     REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
                     return 0;
                 default:
-                    break;
+                    REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Header not supported"));
+                    return 0;
             }
-    REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Header not supported"));
-    return 0;
 }
 
 static t_KnownFieldsMasks GetKnownProtMask(t_FmPcd *p_FmPcd, e_NetHeaderType hdr, e_FmPcdHdrIndex index, t_FmPcdFields field)
@@ -426,7 +413,6 @@ static t_KnownFieldsMasks GetKnownProtMask(t_FmPcd *p_FmPcd, e_NetHeaderType hdr
     {
         case (HEADER_TYPE_NONE):
             ASSERT_COND(FALSE);
-            break;
         case (HEADER_TYPE_ETH):
             switch (field.eth)
             {
@@ -672,12 +658,9 @@ static t_KnownFieldsMasks GetKnownProtMask(t_FmPcd *p_FmPcd, e_NetHeaderType hdr
                     return 0;
             }
         default:
-            break;
-
+            REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
+            return 0;
     }
-
-    REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Extraction not supported"));
-    return 0;
 }
 
 
@@ -1237,6 +1220,8 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                         p_SchemeRegs->kgse_ppc = ppcTmp;
                     }
                 }
+                else
+                    ppcTmp = KG_SCH_PP_NO_GEN;
             }
             break;
         case (e_FM_PCD_DONE):
@@ -1257,6 +1242,7 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
     {
         p_SchemeRegs->kgse_om |= KG_SCH_OM_VSPE;
 
+        tmpReg = 0;
         if (p_SchemeParams->storageProfile.direct)
         {
             profileId = p_SchemeParams->storageProfile.profileSelect.directRelativeProfileId;
@@ -1430,12 +1416,14 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                                         case (NET_HEADER_FIELD_UDP_ENCAP_ESP_SPI):
                                             p_Extract->extractByHdr.type = e_FM_PCD_EXTRACT_FROM_HDR;
                                             p_Extract->extractByHdr.hdr = FmPcdGetAliasHdr(p_FmPcd, p_Scheme->netEnvId, HEADER_TYPE_UDP_ENCAP_ESP);
+                                            p_Extract->extractByHdr.extractByHdrType.fromField.size = p_Extract->extractByHdr.extractByHdrType.fromField.size;
                                             /*p_Extract->extractByHdr.extractByHdrType.fromField.offset += ESP_SPI_OFFSET;*/
                                             p_Extract->extractByHdr.ignoreProtocolValidation = TRUE;
                                             break;
                                         case (NET_HEADER_FIELD_UDP_ENCAP_ESP_SEQUENCE_NUM):
                                             p_Extract->extractByHdr.type = e_FM_PCD_EXTRACT_FROM_HDR;
                                             p_Extract->extractByHdr.hdr = FmPcdGetAliasHdr(p_FmPcd, p_Scheme->netEnvId, HEADER_TYPE_UDP_ENCAP_ESP);
+                                            p_Extract->extractByHdr.extractByHdrType.fromField.size = p_Extract->extractByHdr.extractByHdrType.fromField.size;
                                             p_Extract->extractByHdr.extractByHdrType.fromField.offset += ESP_SEQ_NUM_OFFSET;
                                             p_Extract->extractByHdr.ignoreProtocolValidation = TRUE;
                                             break;
@@ -1504,18 +1492,17 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                                 }
                                 else
                                     generic = TRUE;
+
                             }
                             else
                                 generic = TRUE;
                             if (generic)
                             {
                                 /* tmp - till we cover more headers under generic */
-                                XX_Free(p_LocalExtractsArray);
                                 RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Full header selection not supported"));
                             }
                             break;
                         default:
-                            XX_Free(p_LocalExtractsArray);
                             RETURN_ERROR(MAJOR, E_INVALID_SELECTION, NO_MSG);
                     }
                     break;
@@ -1536,24 +1523,15 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
             {
                 /* set generic register fields */
                 if (currGenId >= FM_KG_NUM_OF_GENERIC_REGS)
-                {
-                    XX_Free(p_LocalExtractsArray);
                     RETURN_ERROR(MAJOR, E_FULL, ("Generic registers are fully used"));
-                }
                 if (!code)
-                {
-                    XX_Free(p_LocalExtractsArray);
                     RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, NO_MSG);
-                }
 
                 genTmp = KG_SCH_GEN_VALID;
                 genTmp |= (uint32_t)(code << KG_SCH_GEN_HT_SHIFT);
                 genTmp |= offset;
                 if ((size > MAX_KG_SCH_SIZE) || (size < 1))
-                {
-                    XX_Free(p_LocalExtractsArray);
-                    RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal extraction (size out of range)"));
-                }
+                      RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("Illegal extraction (size out of range)"));
                 genTmp |= (uint32_t)((size - 1) << KG_SCH_GEN_SIZE_SHIFT);
                 swDefault = GetGenericSwDefault(swDefaults, numOfSwDefaults, code);
                 if (swDefault == e_FM_PCD_KG_DFLT_ILLEGAL)
@@ -1575,11 +1553,8 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
         maskTmp = 0xFFFFFFFF;
         /*  configure kgse_bmch, kgse_bmcl and kgse_fqb */
 
-        if (p_KeyAndHash->numOfUsedMasks > FM_PCD_KG_NUM_OF_EXTRACT_MASKS)
-        {
-            XX_Free(p_LocalExtractsArray);
+        if (p_KeyAndHash->numOfUsedMasks >= FM_PCD_KG_NUM_OF_EXTRACT_MASKS)
             RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Only %d masks supported", FM_PCD_KG_NUM_OF_EXTRACT_MASKS));
-        }
         for ( i=0 ;i<p_KeyAndHash->numOfUsedMasks ; i++)
         {
             /* Get the relative id of the extract (for known 0-0x1f, for generic 0-7) */
@@ -1614,15 +1589,9 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
 
         /*  configure kgse_hc  */
         if (p_KeyAndHash->hashShift > MAX_HASH_SHIFT)
-        {
-            XX_Free(p_LocalExtractsArray);
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("hashShift must not be larger than %d", MAX_HASH_SHIFT));
-        }
+             RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("hashShift must not be larger than %d", MAX_HASH_SHIFT));
         if (p_KeyAndHash->hashDistributionFqidsShift > MAX_DIST_FQID_SHIFT)
-        {
-            XX_Free(p_LocalExtractsArray);
-            RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("hashDistributionFqidsShift must not be larger than %d", MAX_DIST_FQID_SHIFT));
-        }
+             RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("hashDistributionFqidsShift must not be larger than %d", MAX_DIST_FQID_SHIFT));
 
         tmpReg = 0;
 
@@ -1635,10 +1604,7 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
                     (!!(p_SchemeRegs->kgse_ekfc & KG_SCH_KN_IPSRC1) != !!(p_SchemeRegs->kgse_ekfc & KG_SCH_KN_IPDST1)) ||
                     (!!(p_SchemeRegs->kgse_ekfc & KG_SCH_KN_IPSRC2) != !!(p_SchemeRegs->kgse_ekfc & KG_SCH_KN_IPDST2)) ||
                     (!!(p_SchemeRegs->kgse_ekfc & KG_SCH_KN_L4PSRC) != !!(p_SchemeRegs->kgse_ekfc & KG_SCH_KN_L4PDST)))
-            {
-                XX_Free(p_LocalExtractsArray);
                 RETURN_ERROR(MAJOR, E_INVALID_STATE, ("symmetricHash set but src/dest extractions missing"));
-            }
             tmpReg |= KG_SCH_HASH_CONFIG_SYM;
         }
         p_SchemeRegs->kgse_hc = tmpReg;
@@ -1684,6 +1650,8 @@ static t_Error BuildSchemeRegs(t_FmPcdKgScheme            *p_Scheme,
             }
         }
         XX_Free(p_LocalExtractsArray);
+        p_LocalExtractsArray = NULL;
+
     }
     else
     {
@@ -2033,7 +2001,7 @@ void FmPcdKgDestroyClsPlanGrp(t_Handle h_FmPcd, uint8_t grpId)
     memset(&p_FmPcd->p_FmPcdKg->clsPlanGrps[grpId], 0, sizeof(t_FmPcdKgClsPlanGrp));
 }
 
-t_Error FmPcdKgBuildBindPortToSchemes(t_Handle h_FmPcd, t_FmPcdKgInterModuleBindPortToSchemes *p_BindPort, uint32_t *p_SpReg, bool add)
+t_Error FmPcdKgBuildBindPortToSchemes(t_Handle h_FmPcd , t_FmPcdKgInterModuleBindPortToSchemes *p_BindPort, uint32_t *p_SpReg, bool add)
 {
     t_FmPcd                 *p_FmPcd = (t_FmPcd*)h_FmPcd;
     uint32_t                j, schemesPerPortVector = 0;
@@ -2085,9 +2053,7 @@ t_Error FmPcdKgBuildBindPortToSchemes(t_Handle h_FmPcd, t_FmPcdKgInterModuleBind
                 the match vector and the grpBits (= ccUnits) */
                 if ((p_Scheme->matchVector != SCHEME_ALWAYS_DIRECT) || p_Scheme->ccUnits)
                 {
-                    uint8_t netEnvId;
                     walking1Mask = 0x80000000;
-                    netEnvId = (p_Scheme->netEnvId == ILLEGAL_NETENV)? p_BindPort->netEnvId:p_Scheme->netEnvId;
                     tmp = (p_Scheme->matchVector == SCHEME_ALWAYS_DIRECT)? 0:p_Scheme->matchVector;
                     tmp |= p_Scheme->ccUnits;
                     while (tmp)
@@ -2095,7 +2061,7 @@ t_Error FmPcdKgBuildBindPortToSchemes(t_Handle h_FmPcd, t_FmPcdKgInterModuleBind
                         if (tmp & walking1Mask)
                         {
                             tmp &= ~walking1Mask;
-                            if (!PcdNetEnvIsUnitWithoutOpts(p_FmPcd, netEnvId, walking1Mask))
+                            if (!PcdNetEnvIsUnitWithoutOpts(p_FmPcd, p_Scheme->netEnvId, walking1Mask))
                                 RETURN_ERROR(MAJOR, E_INVALID_STATE, ("Port (without clsPlan) may not be bound to requested scheme - uses clsPlan options"));
                         }
                         walking1Mask >>= 1;
