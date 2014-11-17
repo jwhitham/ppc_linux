@@ -124,7 +124,7 @@
 		ethernet@8 {/* 10G */
 			compatible = "fsl,t2080-dpa-ethernet-shared", "fsl,dpa-ethernet-shared";
 			fsl,bman-buffer-pools = <&bp17>;
-			fsl,qman-frame-queues-rx = <0x5c 1 0x5d 1 0x2000 3>;
+			fsl,qman-frame-queues-rx = <0x70 1 0x71 1 0x2000 3>;
                         fsl,qman-frame-queues-tx = <0 1 0 1 0x3000 8>;
 		};
 		ethernet@9 {/* 10G */
