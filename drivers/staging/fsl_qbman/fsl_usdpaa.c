@@ -523,6 +523,10 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 	struct qm_portal *portal_array[qman_portal_max];
 	int portal_count = 0;
 
+	/* Ensure the release operation cannot be migrated to another
+	   CPU as CPU specific variables may be needed during cleanup */
+	migrate_disable();
+
 	/* The following logic is used to recover resources that were not
 	   correctly released by the process that is closing the FD.
 	   Step 1: syncronize the HW with the qm_portal/bm_portal structures
@@ -558,12 +562,15 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 		qm_alloced_portal = qm_get_unused_portal();
 		if (!qm_alloced_portal) {
 			pr_crit("No QMan portal avalaible for cleanup\n");
+			migrate_enable();
 			return -1;
 		}
 		qm_cleanup_portal = kmalloc(sizeof(struct qm_portal),
 					    GFP_KERNEL);
-		if (!qm_cleanup_portal)
+		if (!qm_cleanup_portal) {
+			migrate_enable();
 			return -ENOMEM;
+		}
 		init_qm_portal(qm_alloced_portal, qm_cleanup_portal);
 		portal_array[portal_count] = qm_cleanup_portal;
 		++portal_count;
@@ -572,12 +579,15 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 		bm_alloced_portal = bm_get_unused_portal();
 		if (!bm_alloced_portal) {
 			pr_crit("No BMan portal avalaible for cleanup\n");
+			migrate_enable();
 			return -1;
 		}
 		bm_cleanup_portal = kmalloc(sizeof(struct bm_portal),
 					    GFP_KERNEL);
-		if (!bm_cleanup_portal)
+		if (!bm_cleanup_portal) {
+			migrate_enable();
 			return -ENOMEM;
+		}
 		init_bm_portal(bm_alloced_portal, bm_cleanup_portal);
 	}
 
@@ -653,6 +663,7 @@ static int usdpaa_release(struct inode *inode, struct file *filp)
 	}
 
 	kfree(ctx);
+	migrate_enable();
 	return 0;
 }
 
