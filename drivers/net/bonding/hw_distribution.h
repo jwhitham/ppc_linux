@@ -76,11 +76,11 @@
 	pr_info("LAG:[CPU %d ln %d fn %s] - " fmt, smp_processor_id(), \
 			__LINE__, __func__, ##arg)
 #else
-#define hw_lag_dbg(fmt, arg...)
+#define hw_lag_dbg(fmt, arg...) do {} while (0)
 #endif
 
 struct oh_port_priv {
-	unsigned int	oh_channel_id;
+	uint16_t oh_channel_id;
 	struct	dpa_oh_config_s	*oh_config;
 	struct	dpa_fq	*pcd_fqs[SLAVES_PER_BOND];
 	struct	dpa_fq *oh_defq, *oh_errq;

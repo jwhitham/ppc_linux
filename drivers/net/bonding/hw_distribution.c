@@ -259,7 +259,7 @@ ssize_t bonding_show_oh_enable(struct device *d,
 		struct device_attribute *attr, char *buf)
 {
 
-	int res = 0;
+	int res = 0, ret;
 	struct bonding *bond = to_bond(d);
 	uint16_t channel;
 	unsigned long fman_dcpid, oh_offset, cell_index;
@@ -280,9 +280,10 @@ ssize_t bonding_show_oh_enable(struct device *d,
 	if (res)
 		buf[res-1] = '\n'; /* eat the leftover space */
 
-	if ((bond->params.ohp->oh_en) &&
-		(!export_oh_port_info_to_ceetm(bond, &channel,
-			&fman_dcpid, &oh_offset, &cell_index)))
+	ret = export_oh_port_info_to_ceetm(bond, &channel, &fman_dcpid,
+			&oh_offset, &cell_index);
+
+	if (!ret && bond->params.ohp->oh_en)
 		hw_lag_dbg("offline port channel:%d\n", channel);
 
 	return res;
@@ -516,7 +517,7 @@ struct sk_buff *oh_cleanup_tx_fd(const struct qm_fd *fd)
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, dma_dir);
 
 	/* retrieve skb back pointer */
-	DPA_READ_SKB_PTR(skb, skbh, phys_to_virt(addr), 0);
+	DPA_READ_SKB_PTR(skb, skbh, phys_to_virt((unsigned long)addr), 0);
 	nr_frags = skb_shinfo(skb)->nr_frags;
 
 	if (fd->format == qm_fd_sg) {
@@ -551,7 +552,7 @@ static void dump_parser_result(const struct qm_fd *fd)
 	void *vaddr;
 	const fm_prs_result_t *parse_results;
 
-	vaddr = phys_to_virt(addr);
+	vaddr = phys_to_virt((unsigned long)addr);
 	DPA_BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 
 	parse_results = (const fm_prs_result_t *)(vaddr +
@@ -584,7 +585,8 @@ static void show_dbg_info(const struct qm_fd *fd, const char *func_name,
 		struct sk_buff *skb)
 {
 #ifdef CONFIG_HW_LAG_DEBUG
-	u32 pad, fd_status;
+	u32 fd_status;
+	unsigned long pad;
 	dma_addr_t addr;
 	struct ethhdr *eth;
 	struct iphdr  *iph;
@@ -598,7 +600,7 @@ static void show_dbg_info(const struct qm_fd *fd, const char *func_name,
 
 	/* find out the pad */
 	skb_addr = virt_to_phys(skb->head);
-	pad = addr - skb_addr;
+	pad = (unsigned long)addr - skb_addr;
 
 	/* The skb is currently pointed at head + headroom. The packet
 	 * starts at skb->head + pad + fd offset.
@@ -756,7 +758,7 @@ oh_ingress_tx_default_dqrr(struct qman_portal		*portal,
 	netdev = ((struct dpa_fq *)fq)->net_dev;
 	if (!netdev) {
 		pr_err("error netdev == NULL.\n");
-		skbh = (struct sk_buff **)phys_to_virt(addr);
+		skbh = (struct sk_buff **)phys_to_virt((unsigned long)addr);
 		dev_kfree_skb(*skbh);
 		return qman_cb_dqrr_consume;
 	}
@@ -793,7 +795,7 @@ oh_ingress_tx_default_dqrr(struct qman_portal		*portal,
 
 	/* find out the pad */
 	skb_addr = virt_to_phys(skb->head);
-	pad = addr - skb_addr;
+	pad = (u32)(addr - skb_addr);
 
 	countptr = __this_cpu_ptr(bp->percpu_count);
 	(*countptr)--;
@@ -961,7 +963,7 @@ static int oh_add_channel(void *__arg)
 	int cpu;
 	struct qman_portal *portal;
 	const cpumask_t *cpus = qman_affine_cpus();
-	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u32)(unsigned long)__arg);
+	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u16)(unsigned long)__arg);
 
 	for_each_cpu(cpu, cpus) {
 		portal = (struct qman_portal *)qman_get_affine_portal(cpu);
@@ -989,12 +991,6 @@ static int init_oh_errq_defq(struct device *dev,
 	errno = qman_alloc_pool(&channel);
 	if (errno) {
 		pr_err("error on getting pool channel.\n");
-		return errno;
-	}
-
-	if (channel < 0) {
-		errno = channel;
-		pr_err("error on dpa_get_channel().\n");
 		return errno;
 	}
 
@@ -1437,8 +1433,8 @@ int get_oh_info(void)
 				return -EINVAL;
 			}
 
-			hw_lag_dbg("Found port id %ud, in node %s\n",
-					*p_port_id, dpa_oh_node->full_name);
+			hw_lag_dbg("Found port id %u, in node %s\n",
+				   *p_port_id, dpa_oh_node->full_name);
 			BUG_ON(lenp % sizeof(*p_port_id));
 
 			/* Read channel id for the queues */
@@ -1457,7 +1453,7 @@ int get_oh_info(void)
 			BUG_ON(!oh_of_dev);
 			oh_dev = &oh_of_dev->dev;
 			of_dev = of_find_device_by_node(dpa_oh_node);
-			BUG_ON(!oh_of_dev);
+			BUG_ON(!of_dev);
 			dpa_oh_dev = &of_dev->dev;
 			poh[i].of_dev = of_dev;
 			poh[i].oh_of_dev = oh_of_dev;
@@ -1468,7 +1464,7 @@ int get_oh_info(void)
 			poh[i].cell_index = *p_port_id;
 			poh[i].oh_config = dev_get_drvdata(dpa_oh_dev);
 			poh[i].p_oh_port_handle = p_oh_port_handle;
-			poh[i].oh_channel_id = *p_channel_id;
+			poh[i].oh_channel_id = (uint16_t)*p_channel_id;
 			oh_port = poh[i].oh_config->oh_port;
 			fm_port_get_buff_layout_ext_params(oh_port, &params);
 			poh[i].bpid = params.pool_param[0].id;
@@ -1809,8 +1805,8 @@ int oh_tx_csum_enable(struct sk_buff *skb,
 			   parse_result->l3r, parse_result->l4r);
 
 		/* At index 0 is IPOffset_1 as defined in the Parse Results */
-		parse_result->ip_off[0] = skb_network_offset(skb);
-		parse_result->l4_off = skb_transport_offset(skb);
+		parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
+		parse_result->l4_off = (uint8_t)skb_transport_offset(skb);
 
 		/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
 		fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DTC;
@@ -1906,8 +1902,8 @@ return_error:
 			   parse_result->l3r, parse_result->l4r);
 
 		/* At index 0 is IPOffset_1 as defined in the Parse Results */
-		parse_result->ip_off[0] = skb_network_offset(skb);
-		parse_result->l4_off = skb_transport_offset(skb);
+		parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
+		parse_result->l4_off = (uint8_t)skb_transport_offset(skb);
 
 		/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
 		fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DCL4C;
@@ -1999,7 +1995,7 @@ int __hot dpa_oh_tx(struct sk_buff *skb, struct bonding *bond,
 	fd.format = qm_fd_contig;
 	fd.length20 = skb->len;
 	fd.offset = priv->tx_headroom;
-	fd.addr_hi = upper_32_bits(addr);
+	fd.addr_hi = (u8)upper_32_bits(addr);
 	fd.addr_lo = lower_32_bits(addr);
 	/* fd.cmd |= FM_FD_CMD_FCO; */
 	fd.bpid = bp->bpid;
@@ -2079,7 +2075,8 @@ static int get_dpa_slave_info(struct slave *slave, uint16_t *tx_channel)
 	if (!is_dpa_eth_port(slave->dev) || !(priv->mac_dev))
 		return BOND_OH_ERROR;
 
-	*tx_channel = fm_get_tx_port_channel(priv->mac_dev->port_dev[TX]);
+	*tx_channel = (uint16_t)fm_get_tx_port_channel(
+				priv->mac_dev->port_dev[TX]);
 
 	return BOND_OH_SUCCESS;
 }
@@ -2092,7 +2089,8 @@ int get_dpa_slave_info_ex(struct slave *slave, uint16_t *tx_channel,
 	if (!is_dpa_eth_port(slave->dev) || !(priv->mac_dev))
 		return BOND_OH_ERROR;
 
-	*tx_channel	= fm_get_tx_port_channel(priv->mac_dev->port_dev[TX]);
+	*tx_channel	= (uint16_t)fm_get_tx_port_channel(
+				    priv->mac_dev->port_dev[TX]);
 	*egress_fq	= priv->egress_fqs[0];
 	*first_fqid	= priv->egress_fqs[0]->fqid;
 
