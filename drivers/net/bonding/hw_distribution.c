@@ -1575,77 +1575,41 @@ int get_dcp_id_from_dpa_eth_port(struct net_device *netdev)
  * Get all information of the offline port which is being used
  * by a bundle, such as fman_dcpid, offline port offset, cell index,
  * offline port channel. This API is required by CEETM Qos.
- * Regarding fman dpcid, till sdk1.6, there is one fman in p1023, the
- * offset is 0x1000000, for other dpaa socs, the offset of fman0 is
- * 0x400000, the offset of fman1 is 0x500000, hence for current socs,
- * the offset of fman0 <=0x4000000, 0x400000 < fman1 <=0x500000.
- * return BOND_OH_SUCCESS when got all information, otherwise return
- * Non-Zero.
  */
-#define FMAN0_MAX_OFFSET 0x400000
-#define FMAN1_MAX_OFFSET 0x500000
 int export_oh_port_info_to_ceetm(struct bonding *bond, uint16_t *channel,
 		unsigned long *fman_dcpid, unsigned long *oh_offset,
 		unsigned long *cell_index)
 {
-	/**
-	 * split str: "/soc@ffe000000/fman@400000/port@84000", then get
-	 * the fman@ part and port@ part from them. regex is good enough
-	 * as below:
-	 * ret = sscanf((char *) p, "%*[^@]@%*[^@]@%[^/]/port@%s", s1, s2);
-	 * but the kernel version does not support the method.
-	 */
-	int errno;
-	char s1[16] = {0}, s2[16] = {0};
-	char *p, *p1;
+	struct oh_port_priv *p = bond->params.ohp;
+	char tmp[] = "cell-index";
 
-	if (!bond->params.ohp) {
+	if (!p) {
 		pr_err("The bundle has not binded an offline port.\n");
-		return 1;
+		return BOND_OH_ERROR;
 	}
 
-	if (!bond->params.ohp->oh_en) {
+	if (!p->oh_en) {
 		pr_err("The offline is disabled, to enable it, use sysfs.\n");
-		return 2;
+		return BOND_OH_ERROR;
 	}
 
-	if (!bond->params.ohp->oh_node) {
+	if (!p->oh_node) {
 		pr_err("The offline node error.\n");
-		return 3;
+		return BOND_OH_ERROR;
 	}
 
-	p = strstr(bond->params.ohp->oh_node->full_name, "fman@");
-	p += strlen("fman@");
-	p1 = strstr(p, "/port@");
-
-	memcpy(s1, p, p1 - p);
-
-	p = strstr(p, "/port@");
-	p += strlen("/port@");
-
-	errno = sscanf((const char *) p, "%s", s2);
-	if (errno != 1) {
-		pr_err("parser error while process offline port node\n");
-		return 4;
+	if (of_property_read_u32(p->oh_node, "reg", (u32 *)oh_offset)) {
+		pr_err("Errors on getting offline port offset.\n");
+		return BOND_OH_ERROR;
 	}
 
-	errno = kstrtoul(s1, 16, fman_dcpid) | kstrtoul(s2, 16, oh_offset);
-	if (errno) {
-		pr_err("error on kstrtoul fman_dcpid, of_offset\n");
-		return 5;
-	}
-	if (*fman_dcpid <= FMAN0_MAX_OFFSET) {
-		*fman_dcpid = 0;
-	} else if ((*fman_dcpid > FMAN0_MAX_OFFSET) &&
-			(*fman_dcpid <= FMAN1_MAX_OFFSET)) {
-		*fman_dcpid = 1;
-	} else {
-		pr_err("error on calculating fman dcpid, new soc appears.\n");
-		return 6;
+	if (of_property_read_u32(p->oh_node->parent, tmp, (u32 *)fman_dcpid)) {
+		pr_err("Errors on getting fman_dcpid.\n");
+		return BOND_OH_ERROR;
 	}
 
-	*channel = bond->params.ohp->oh_channel_id;
-	*cell_index = bond->params.ohp->cell_index;
+	*channel = (uint16_t)p->oh_channel_id;
+	*cell_index = p->cell_index;
 
 	hw_lag_dbg("This oh port mapped to bond has channel:0x%0x\n", *channel);
 	hw_lag_dbg("fman_dcpid:0x%0lx, oh_offset:0x%0lx, cell-index:%0lx\n",
