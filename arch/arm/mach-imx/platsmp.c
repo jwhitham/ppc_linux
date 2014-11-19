@@ -42,6 +42,7 @@ u32 g_diag_reg;
 static void __iomem *scu_base;
 static void __iomem *dcfg_base;
 static void __iomem *scfg_base;
+static void __iomem *dcsr_rcpm2_base;
 static u32 secondary_pre_boot_entry;
 
 static struct map_desc scu_io_desc __initdata = {
@@ -160,8 +161,25 @@ static int ls1021a_secondary_iomap(void)
 		goto scfg_err;
 	}
 
+	np = of_find_compatible_node(NULL, NULL, "fsl,ls1021a-dcsr-rcpm");
+	if (!np) {
+		pr_err("%s: failed to find dcsr node.\n", __func__);
+		ret = -EINVAL;
+		goto dcsr_err;
+	}
+
+	dcsr_rcpm2_base = of_iomap(np, 1);
+	of_node_put(np);
+	if (!dcsr_rcpm2_base) {
+		pr_err("%s: failed to map dcsr.\n", __func__);
+		ret = -ENOMEM;
+		goto dcsr_err;
+	}
+
 	return 0;
 
+dcsr_err:
+	iounmap(scfg_base);
 scfg_err:
 	iounmap(dcfg_base);
 dcfg_err:
@@ -186,7 +204,7 @@ static int ls1021a_reset_secondary(unsigned int cpu)
 {
 	u32 tmp;
 
-	if (!scfg_base || !dcfg_base)
+	if (!scfg_base || !dcfg_base || !dcsr_rcpm2_base)
 		return -ENOMEM;
 
 	writel_relaxed(secondary_pre_boot_entry,
@@ -200,6 +218,15 @@ static int ls1021a_reset_secondary(unsigned int cpu)
 	iowrite32be(0x80000000, scfg_base + SCFG_CORESRENCR);
 	iowrite32be(0x80000000, scfg_base +
 				SCFG_CORE0_SFT_RST + STRIDE_4B * cpu);
+	mdelay(6);
+
+	/* LS1021a errata. after reset, core state machine registers
+	 * need to force release manually.
+	 */
+	iowrite32be(0x00000080, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG1);
+	iowrite32be(0x00000080, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG2);
+	iowrite32be(0, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG1);
+	iowrite32be(0, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG2);
 
 	/* Release secondary core */
 	iowrite32be(1 << cpu, dcfg_base + DCFG_CCSR_BRR);
