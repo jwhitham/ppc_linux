@@ -1048,10 +1048,6 @@ struct gfar {
 	u8	res23c[248];
 	u32	attr;		/* 0x.bf8 - Attributes Register */
 	u32	attreli;	/* 0x.bfc - Attributes Extract Length and Extract Index Register */
-#if defined CONFIG_FSL_GIANFAR_1588
-	u8	res24[512];
-	struct gfar_regs_1588 regs_1588;
-#else
 	u32	rqprm0;	/* 0x.c00 - Receive queue parameters register 0 */
 	u32	rqprm1;	/* 0x.c04 - Receive queue parameters register 1 */
 	u32	rqprm2;	/* 0x.c08 - Receive queue parameters register 2 */
@@ -1077,9 +1073,13 @@ struct gfar {
 	u8	res24g[4];
 	u32	rfbptr7; /* 0x.c7c - Last free RxBD pointer for ring 7 */
 	u8	res24h[4];
+#if defined CONFIG_FSL_GIANFAR_1588
+	u8	res24x[380];
+	struct gfar_regs_1588 regs_1588;
+#else
 	u8	res24x[556];
-
 #endif
+
 	u32	isrg0;		/* 0x.eb0 - Interrupt steering group 0 register */
 	u32	isrg1;		/* 0x.eb4 - Interrupt steering group 1 register */
 	u32	isrg2;		/* 0x.eb8 - Interrupt steering group 2 register */
