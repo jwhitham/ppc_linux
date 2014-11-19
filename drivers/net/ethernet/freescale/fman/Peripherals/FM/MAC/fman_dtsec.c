@@ -261,7 +261,6 @@ UNUSED(fm_rev_maj);UNUSED(fm_rev_min);
 	/***************MACCFG2***********************/
 
 	/***************IPGIFG************************/
-	tmp = 0;
 	tmp = (((cfg->non_back_to_back_ipg1 <<
 		IPGIFG_NON_BACK_TO_BACK_IPG_1_SHIFT)
 		& IPGIFG_NON_BACK_TO_BACK_IPG_1)
@@ -457,7 +456,7 @@ int fman_dtsec_adjust_link(struct dtsec_regs *regs,
 		enum enet_speed speed, bool full_dx)
 {
 	uint32_t		tmp;
-	
+
 	UNUSED(iface_mode);
 
 	if ((speed == E_ENET_SPEED_1000) && !full_dx)

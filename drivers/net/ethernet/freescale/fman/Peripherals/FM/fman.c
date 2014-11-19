@@ -186,7 +186,8 @@ void fman_enable_time_stamp(struct fman_fpm_regs *fpm_rg,
 	 * we do not div back, since we write this value as a fraction
 	 * see spec */
 
-	frac = ((ts_freq << 16) - (intgr << 16) * fm_clk_freq) / fm_clk_freq;
+	frac = (((uint64_t)ts_freq << 16) - ((uint64_t)intgr << 16) * fm_clk_freq)
+		/ fm_clk_freq;
 	/* we check remainder of the division in order to round up if not int */
 	if (((ts_freq << 16) - (intgr << 16)*fm_clk_freq) % fm_clk_freq)
 		frac++;
@@ -822,7 +823,7 @@ int fman_fpm_init(struct fman_fpm_regs *fpm_rg, struct fman_cfg *cfg)
 	/* RAM ECC -  enable and clear events*/
 	/* first we need to clear all parser memory,
 	 * as it is uninitialized and may cause ECC errors */
-	tmp_reg = 0;
+
 	/* event bits */
 	tmp_reg = (FPM_RAM_MURAM_ECC | FPM_RAM_IRAM_ECC);
 	/* Rams enable not effected by RCR bit, but by a COP configuration */
@@ -913,12 +914,12 @@ int fman_qmi_init(struct fman_qmi_regs *qmi_rg, struct fman_cfg *cfg)
 	iowrite32be(tmp_reg, &qmi_rg->fmqm_eien);
 
 	if (cfg->tnum_aging_period) {
-		/* tnumAgingPeriod is in units of usec, p_FmClockFreq in Mhz */
+		/* tnum_aging_period is in units of usec, p_FmClockFreq in Mhz */
 		period_in_fm_clocks = (uint16_t)
 				(cfg->tnum_aging_period * cfg->clk_freq);
-		/* periodInFmClocks must be a 64 multiply */
+		/* period_in_fm_clocks must be a 64 multiply */
 		remainder = (uint8_t)(period_in_fm_clocks % 64);
-		if (remainder > 64)
+		if (remainder)
 			tmp_reg = (uint32_t)((period_in_fm_clocks / 64) + 1);
 		else{
 			tmp_reg = (uint32_t)(period_in_fm_clocks / 64);

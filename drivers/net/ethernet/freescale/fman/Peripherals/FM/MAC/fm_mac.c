@@ -51,8 +51,16 @@
 t_Handle FM_MAC_Config (t_FmMacParams *p_FmMacParam)
 {
     t_FmMacControllerDriver *p_FmMacControllerDriver;
+    uint16_t                fmClkFreq;
 
     SANITY_CHECK_RETURN_VALUE(p_FmMacParam, E_INVALID_HANDLE, NULL);
+
+    fmClkFreq = FmGetClockFreq(p_FmMacParam->h_Fm);
+    if (fmClkFreq == 0)
+    {
+        REPORT_ERROR(MAJOR, E_INVALID_STATE, ("Can't get clock for MAC!"));
+        return NULL;
+    }
 
 #if (DPAA_VERSION == 10)
     if (ENET_SPEED_FROM_MODE(p_FmMacParam->enetMode) < e_ENET_SPEED_10000)
@@ -75,11 +83,7 @@ t_Handle FM_MAC_Config (t_FmMacParams *p_FmMacParam)
     p_FmMacControllerDriver->macId          = p_FmMacParam->macId;
     p_FmMacControllerDriver->resetOnInit    = DEFAULT_resetOnInit;
 
-    if ((p_FmMacControllerDriver->clkFreq = FmGetClockFreq(p_FmMacControllerDriver->h_Fm)) == 0)
-    {
-        REPORT_ERROR(MAJOR, E_INVALID_STATE, ("Can't get clock for MAC!"));
-        return NULL;
-    }
+    p_FmMacControllerDriver->clkFreq        = fmClkFreq;
 
     return (t_Handle)p_FmMacControllerDriver;
 }

@@ -1201,8 +1201,6 @@ int fm_port_dump_regs_bmi(void *h_dev, char *buf, int nn)
 		FM_DMP_SUBTITLE(buf, n, "\n");
 		FM_DMP_V32(buf, n, &p_bmi->txPortBmiRegs, fmbm_tgpr);
 		break;
-	default:
-		return -EINVAL;
 	}
 
 	FM_DMP_SUBTITLE(buf, n, "\n");

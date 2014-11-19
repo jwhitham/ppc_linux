@@ -39,6 +39,7 @@
 #include "std_ext.h"
 #include "string_ext.h"
 #include "error_ext.h"
+#include "memcpy_ext.h"
 #include "fm_muram_ext.h"
 
 #include "fm_port.h"
@@ -140,7 +141,7 @@ t_Error FmPortImRx(t_FmPort *p_FmPort)
     uint32_t                bdStatus;
     volatile uint8_t        buffPos;
     uint16_t                length;
-    uint16_t                errors/*, reportErrors*/;
+    uint16_t                errors;
     uint8_t                 *p_CurData, *p_Data;
     uint32_t                flags;
 
@@ -168,7 +169,6 @@ t_Error FmPortImRx(t_FmPort *p_FmPort)
         if (p_FmPort->im.firstBdOfFrameId == IM_ILEGAL_BD_ID)
             p_FmPort->im.firstBdOfFrameId = p_FmPort->im.currBdId;
 
-        errors = 0;
         p_CurData = BdBufferGet(p_FmPort->im.rxPool.f_PhysToVirt, BD_GET(p_FmPort->im.currBdId));
         h_CurrUserPriv = p_FmPort->im.p_BdShadow[p_FmPort->im.currBdId];
         length = (uint16_t)((bdStatus & BD_L) ?
@@ -199,9 +199,8 @@ t_Error FmPortImRx(t_FmPort *p_FmPort)
         WRITE_UINT16(p_FmPort->im.p_FmPortImPram->rxQd.offsetOut, (uint16_t)(p_FmPort->im.currBdId<<4));
         /* Pass the buffer if one of the conditions is true:
         - There are no errors
-        - This is a part of a larger frame ( the application has already received some buffers )
-        - There is an error, but it was defined to be passed anyway. */
-        if ((buffPos != SINGLE_BUF) || !errors || (errors & (uint16_t)(BD_ERROR_PASS_FRAME>>16)))
+        - This is a part of a larger frame ( the application has already received some buffers ) */
+        if ((buffPos != SINGLE_BUF) || !errors)
         {
             if (p_FmPort->im.f_RxStore(p_FmPort->h_App,
                                        p_CurData,

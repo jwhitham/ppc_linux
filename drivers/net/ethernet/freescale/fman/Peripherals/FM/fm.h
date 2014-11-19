@@ -157,44 +157,6 @@ switch (exception){                                         \
         break;                                                                                      \
     }
 
-#define FMAN_EXCEPTION_TRANS(fsl_exception, _exception) \
-    switch (_exception) {\
-        case  e_FM_EX_DMA_BUS_ERROR:                    \
-            fsl_exception =  E_FMAN_EX_DMA_BUS_ERROR; break;    \
-        case  e_FM_EX_DMA_READ_ECC:                    \
-            fsl_exception =  E_FMAN_EX_DMA_READ_ECC; break;        \
-        case  e_FM_EX_DMA_SYSTEM_WRITE_ECC:                \
-            fsl_exception =  E_FMAN_EX_DMA_SYSTEM_WRITE_ECC; break;    \
-        case  e_FM_EX_DMA_FM_WRITE_ECC:                    \
-            fsl_exception =  E_FMAN_EX_DMA_FM_WRITE_ECC; break;    \
-        case  e_FM_EX_FPM_STALL_ON_TASKS:                \
-            fsl_exception =  E_FMAN_EX_FPM_STALL_ON_TASKS; break;    \
-        case  e_FM_EX_FPM_SINGLE_ECC:                    \
-            fsl_exception =  E_FMAN_EX_FPM_SINGLE_ECC; break;    \
-        case  e_FM_EX_FPM_DOUBLE_ECC:                    \
-            fsl_exception =  E_FMAN_EX_FPM_DOUBLE_ECC; break;    \
-        case  e_FM_EX_QMI_SINGLE_ECC:                    \
-            fsl_exception =  E_FMAN_EX_QMI_SINGLE_ECC; break;    \
-        case  e_FM_EX_QMI_DOUBLE_ECC:                    \
-            fsl_exception =  E_FMAN_EX_QMI_DOUBLE_ECC; break;    \
-        case  e_FM_EX_QMI_DEQ_FROM_UNKNOWN_PORTID:            \
-            fsl_exception =  E_FMAN_EX_QMI_DEQ_FROM_UNKNOWN_PORTID; break; \
-        case  e_FM_EX_BMI_LIST_RAM_ECC:                    \
-            fsl_exception =  E_FMAN_EX_BMI_LIST_RAM_ECC; break;    \
-        case  e_FM_EX_BMI_STORAGE_PROFILE_ECC:                    \
-            fsl_exception =  E_FMAN_EX_BMI_STORAGE_PROFILE_ECC; break;    \
-        case  e_FM_EX_BMI_STATISTICS_RAM_ECC:                \
-            fsl_exception =  E_FMAN_EX_BMI_STATISTICS_RAM_ECC; break; \
-        case  e_FM_EX_BMI_DISPATCH_RAM_ECC:                \
-            fsl_exception =  E_FMAN_EX_BMI_DISPATCH_RAM_ECC; break;    \
-        case  e_FM_EX_IRAM_ECC:                        \
-            fsl_exception =  E_FMAN_EX_IRAM_ECC; break;        \
-        case  e_FM_EX_MURAM_ECC:                    \
-            fsl_exception =  E_FMAN_EX_MURAM_ECC; break;        \
-        default: \
-            fsl_exception =  E_FMAN_EX_DMA_BUS_ERROR; break;    \
-    }
-
 #define FMAN_CACHE_OVERRIDE_TRANS(fsl_cache_override, _cache_override) \
     switch (_cache_override){ \
         case  e_FM_DMA_NO_CACHE_OR:                    \
@@ -471,18 +433,19 @@ switch (exception){                                         \
 #if defined(__MWERKS__) && !defined(__GNUC__)
 #pragma pack(push,1)
 #endif /* defined(__MWERKS__) && ... */
-typedef _Packed struct
+
+typedef struct
 {
     volatile uint32_t   iadd;           /**< FM IRAM instruction address register */
     volatile uint32_t   idata;          /**< FM IRAM instruction data register */
     volatile uint32_t   itcfg;          /**< FM IRAM timing config register */
     volatile uint32_t   iready;         /**< FM IRAM ready register */
-    volatile uint8_t    res[0x80000-0x10];
-} _PackedType t_FMIramRegs;
+    volatile uint32_t   res[0x1FFFC];
+} t_FMIramRegs;
 
 /* Trace buffer registers -
    each FM Controller has its own trace buffer residing at FM_MM_TRB(fmCtrlIndex) offset */
-typedef _Packed struct t_FmTrbRegs
+typedef struct t_FmTrbRegs
 {
     volatile uint32_t   tcrh;
     volatile uint32_t   tcrl;
@@ -509,11 +472,12 @@ typedef _Packed struct t_FmTrbRegs
     volatile uint32_t   tsnum2;
     volatile uint32_t   tsnum3;
     volatile uint32_t   tsnum4;
-} _PackedType t_FmTrbRegs;
+} t_FmTrbRegs;
 
 #if defined(__MWERKS__) && !defined(__GNUC__)
 #pragma pack(pop)
 #endif /* defined(__MWERKS__) && ... */
+
 /**************************************************************************//**
  @Description       General defines
 *//***************************************************************************/

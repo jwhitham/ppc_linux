@@ -549,7 +549,7 @@ t_Error FM_VSP_Init(t_Handle h_FmVsp)
     ASSERT_COND(p_FmVspEntry->p_FmSpRegsBase);
     ASSERT_COND(fm_vsp_params.int_context);
     ASSERT_COND(fm_vsp_params.buf_margins);
-    ASSERT_COND(IN_RANGE(0, absoluteProfileId, FM_VSP_MAX_NUM_OF_ENTRIES));
+    ASSERT_COND((absoluteProfileId <= FM_VSP_MAX_NUM_OF_ENTRIES));
 
     /* Set all registers related to VSP */
     fman_vsp_init(p_FmVspEntry->p_FmSpRegsBase, absoluteProfileId, &fm_vsp_params,FM_PORT_MAX_NUM_OF_EXT_POOLS, BM_MAX_NUM_OF_POOLS, FM_MAX_NUM_OF_PFC_PRIORITIES);

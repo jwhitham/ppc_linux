@@ -485,7 +485,6 @@ static t_Error BuildHmct(t_FmPcdManip *p_Manip,
                         uint8_t prsArrayOffset;
                         t_Error err = E_OK;
 
-                        UNUSED(err);
                         tmpReg = (uint32_t)(HMCD_OPCODE_RMV_TILL)
                                 << HMCD_OC_SHIFT;
 
@@ -504,11 +503,7 @@ static t_Error BuildHmct(t_FmPcdManip *p_Manip,
                         RETURN_ERROR(MINOR, E_NOT_SUPPORTED,
                                      ("manip header remove by hdr type!"));
                 }
-
             }
-            else
-                RETURN_ERROR(MINOR, E_NOT_SUPPORTED,
-                             ("manip header remove type!"));
 
         WRITE_UINT32(*p_TmpHmct, tmpReg);
         /* save a pointer to the "last" indication word */
@@ -708,9 +703,6 @@ static t_Error BuildHmct(t_FmPcdManip *p_Manip,
 
                 }
             }
-            else
-                RETURN_ERROR(MINOR, E_NOT_SUPPORTED,
-                             ("manip header insert type!"));
     }
 
     if (p_FmPcdManipParams->u.hdr.fieldUpdate)
@@ -1044,10 +1036,6 @@ static t_Error BuildHmct(t_FmPcdManip *p_Manip,
             else
                 XX_Free(((t_FmPcdManip *)p_FmPcdManipParams->h_NextManip)->h_Ad);
             ((t_FmPcdManip *)p_FmPcdManipParams->h_NextManip)->h_Ad = NULL;
-
-            /* advance pointer */
-            p_TmpHmct += MANIP_GET_HMCT_SIZE(p_FmPcdManipParams->h_NextManip)
-                    / 4;
         }
     }
     else
@@ -1286,8 +1274,6 @@ static t_Error CreateManipActionBackToOrig(
 {
     uint8_t *p_WholeHmct = NULL, *p_TmpHmctPtr, *p_TmpDataPtr;
     t_FmPcdManip *p_CurManip = p_Manip;
-
-    UNUSED(p_WholeHmct);
 
     /* Build the new table in the shadow */
     if (!MANIP_IS_UNIFIED(p_Manip))
@@ -1820,6 +1806,9 @@ t_Error FmPcdRegisterReassmPort(t_Handle h_FmPcd, t_Handle h_ReasmCommonPramTbl)
     ASSERT_COND(h_ReasmCommonPramTbl);
 
     bitFor1Micro = FmGetTimeStampScale(p_FmPcd->h_Fm);
+    if (bitFor1Micro == 0)
+        RETURN_ERROR(MAJOR, E_NOT_AVAILABLE, ("Timestamp scale"));
+
     bitFor1Micro = 32 - bitFor1Micro;
     LOG2(FM_PCD_MANIP_REASM_TIMEOUT_THREAD_THRESH, log2num);
     tsbs = bitFor1Micro - log2num;
@@ -1857,10 +1846,14 @@ t_Error FmPcdRegisterReassmPort(t_Handle h_FmPcd, t_Handle h_ReasmCommonPramTbl)
 
 static t_Error CreateReassCommonTable(t_FmPcdManip *p_Manip)
 {
-    uint32_t tmpReg32 = 0, i;
+    uint32_t tmpReg32 = 0, i, bitFor1Micro;
     uint64_t tmpReg64, size;
     t_FmPcd *p_FmPcd = (t_FmPcd *)p_Manip->h_FmPcd;
     t_Error err = E_OK;
+
+    bitFor1Micro = FmGetTimeStampScale(p_FmPcd->h_Fm);
+    if (bitFor1Micro == 0)
+        RETURN_ERROR(MAJOR, E_NOT_AVAILABLE, ("Timestamp scale"));
 
     /* Allocation of the Reassembly Common Parameters table. This table is located in the
      MURAM. Its size is 64 bytes and its base address should be 8-byte aligned. */
@@ -1969,7 +1962,7 @@ static t_Error CreateReassCommonTable(t_FmPcdManip *p_Manip)
 
     /* Sets the Expiration Delay */
     tmpReg32 = 0;
-    tmpReg32 |= (((uint32_t)(1 << FmGetTimeStampScale(p_FmPcd->h_Fm)))
+    tmpReg32 |= (((uint32_t)(1 << bitFor1Micro))
             * p_Manip->reassmParams.timeoutThresholdForReassmProcess);
     WRITE_UINT32(p_Manip->reassmParams.p_ReassCommonTbl->expirationDelay,
                  tmpReg32);
@@ -2036,7 +2029,7 @@ static t_Error CreateReassTable(t_FmPcdManip *p_Manip, e_NetHeaderType hdr)
             keySize = 4;
             break;
         default:
-            break;
+            RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("header type"));
     }
     keySize += 2; /* 2 bytes reserved for RFDIndex */
 #if (DPAA_VERSION >= 11)
@@ -2200,32 +2193,6 @@ static t_Error UpdateInitReasm(t_Handle h_FmPcd, t_Handle h_PcdParams,
                 & (NUM_OF_TASKS | NUM_OF_EXTRA_TASKS | DISCARD_MASK | FM_REV))
             RETURN_ERROR(MAJOR, E_INVALID_STATE,
                          ("offset of the data wasn't configured previously"));
-    }
-    else
-        if (validate)
-        {
-            if ((!(p_Manip->shadowUpdateParams
-                    & (NUM_OF_TASKS | NUM_OF_EXTRA_TASKS | DISCARD_MASK)))
-                    || ((p_Manip->updateParams
-                            & (NUM_OF_TASKS | NUM_OF_EXTRA_TASKS | DISCARD_MASK))))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_STATE,
-                        ("in this stage parameters from Port has be updated"));
-
-            fmPortGetSetCcParams.setCcParams.type = 0;
-            fmPortGetSetCcParams.getCcParams.type = p_Manip->shadowUpdateParams;
-            if ((err = FmPortGetSetCcParams(h_FmPort, &fmPortGetSetCcParams))
-                    != E_OK)
-                RETURN_ERROR(MAJOR, err, NO_MSG);
-            if (fmPortGetSetCcParams.getCcParams.type
-                    & (NUM_OF_TASKS | NUM_OF_EXTRA_TASKS | DISCARD_MASK))
-                RETURN_ERROR(
-                        MAJOR, E_INVALID_STATE,
-                        ("offset of the data wasn't configured previously"));
-        }
-
-    if (p_Manip->updateParams)
-    {
         if (p_Manip->updateParams
                 & (NUM_OF_TASKS | NUM_OF_EXTRA_TASKS | DISCARD_MASK))
         {
@@ -3032,18 +2999,19 @@ static t_Error CapwapReassembly(t_CapwapReassemblyParams *p_ManipParams,
     uint8_t log2Num;
     uint8_t numOfSets;
     uint32_t j = 0;
+    uint32_t bitFor1Micro;
 
     SANITY_CHECK_RETURN_ERROR(p_Manip->h_Ad, E_INVALID_HANDLE);
     SANITY_CHECK_RETURN_ERROR(p_FmPcd->h_Hc, E_INVALID_HANDLE);
 
     if (!p_FmPcd->h_Hc)
-    RETURN_ERROR(MAJOR, E_INVALID_VALUE,("hc port has to be initialized in this mode"));
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE,("hc port has to be initialized in this mode"));
     if (!POWER_OF_2(p_ManipParams->timeoutRoutineRequestTime))
-    RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("timeoutRoutineRequestTime has to be power of 2"));
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("timeoutRoutineRequestTime has to be power of 2"));
     if (!POWER_OF_2(p_ManipParams->maxNumFramesInProcess))
-    RETURN_ERROR(MAJOR, E_INVALID_VALUE,("maxNumFramesInProcess has to be power of 2"));
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE,("maxNumFramesInProcess has to be power of 2"));
     if (!p_ManipParams->timeoutRoutineRequestTime && p_ManipParams->timeoutThresholdForReassmProcess)
-    DBG(WARNING, ("if timeoutRoutineRequestTime 0,  timeoutThresholdForReassmProcess is uselessly"));
+        DBG(WARNING, ("if timeoutRoutineRequestTime 0,  timeoutThresholdForReassmProcess is uselessly"));
     if (p_ManipParams->numOfFramesPerHashEntry == e_FM_PCD_MANIP_FOUR_WAYS_HASH)
     {
         if ((p_ManipParams->maxNumFramesInProcess < 4) ||
@@ -3057,13 +3025,17 @@ static t_Error CapwapReassembly(t_CapwapReassemblyParams *p_ManipParams,
         RETURN_ERROR(MAJOR,E_INVALID_VALUE, ("In the case of numOfFramesPerHashEntry = e_FM_PCD_MANIP_FOUR_WAYS_HASH maxNumFramesInProcess has to be in the range 8-2048"));
     }
 
+    bitFor1Micro = FmGetTimeStampScale(p_FmPcd->h_Fm);
+    if (bitFor1Micro == 0)
+        RETURN_ERROR(MAJOR, E_NOT_AVAILABLE, ("Timestamp scale"));
+
     p_Manip->updateParams |= (NUM_OF_TASKS | OFFSET_OF_PR | OFFSET_OF_DATA | HW_PORT_ID);
 
     p_Manip->h_Frag = (t_Handle)FM_MURAM_AllocMem(p_FmPcd->h_FmMuram,
             FM_PCD_MANIP_CAPWAP_REASM_TABLE_SIZE,
             FM_PCD_MANIP_CAPWAP_REASM_TABLE_ALIGN);
     if (!p_Manip->h_Frag)
-    RETURN_ERROR(MAJOR, E_NO_MEMORY, ("MURAM alloc CAPWAP reassembly parameters table"));
+        RETURN_ERROR(MAJOR, E_NO_MEMORY, ("MURAM alloc CAPWAP reassembly parameters table"));
 
     IOMemSet32(p_Manip->h_Frag, 0, FM_PCD_MANIP_CAPWAP_REASM_TABLE_SIZE);
 
@@ -3075,7 +3047,7 @@ static t_Error CapwapReassembly(t_CapwapReassemblyParams *p_ManipParams,
             FM_PCD_MANIP_CAPWAP_REASM_TABLE_ALIGN);
 
     if (!p_Manip->capwapFragParams.p_AutoLearnHashTbl)
-    RETURN_ERROR(MAJOR, E_NO_MEMORY,("MURAM alloc for CAPWAP automatic learning hash table"));
+        RETURN_ERROR(MAJOR, E_NO_MEMORY,("MURAM alloc for CAPWAP automatic learning hash table"));
 
     IOMemSet32(p_Manip->capwapFragParams.p_AutoLearnHashTbl, 0, (uint32_t)(p_ManipParams->maxNumFramesInProcess * 2 * FM_PCD_MANIP_CAPWAP_REASM_AUTO_LEARNING_HASH_ENTRY_SIZE));
 
@@ -3085,9 +3057,9 @@ static t_Error CapwapReassembly(t_CapwapReassemblyParams *p_ManipParams,
 
     tmpReg32 = 0;
     if (p_ManipParams->timeOutMode == e_FM_PCD_MANIP_TIME_OUT_BETWEEN_FRAMES)
-    tmpReg32 |= FM_PCD_MANIP_CAPWAP_REASM_TIME_OUT_BETWEEN_FRAMES;
+        tmpReg32 |= FM_PCD_MANIP_CAPWAP_REASM_TIME_OUT_BETWEEN_FRAMES;
     if (p_ManipParams->haltOnDuplicationFrag)
-    tmpReg32 |= FM_PCD_MANIP_CAPWAP_REASM_HALT_ON_DUPLICATE_FRAG;
+        tmpReg32 |= FM_PCD_MANIP_CAPWAP_REASM_HALT_ON_DUPLICATE_FRAG;
     if (p_ManipParams->numOfFramesPerHashEntry == e_FM_PCD_MANIP_EIGHT_WAYS_HASH)
     {
         i = 8;
@@ -3103,8 +3075,8 @@ static t_Error CapwapReassembly(t_CapwapReassemblyParams *p_ManipParams,
     WRITE_UINT32(((t_CapwapReasmPram *)p_Table)->mode, tmpReg32);
 
     for (j=0; j<p_ManipParams->maxNumFramesInProcess*2; j++)
-    if (((j / i) % 2)== 0)
-    WRITE_UINT32(*(uint32_t *)PTR_MOVE(p_Manip->capwapFragParams.p_AutoLearnHashTbl, j * FM_PCD_MANIP_CAPWAP_REASM_AUTO_LEARNING_HASH_ENTRY_SIZE), 0x80000000);
+        if (((j / i) % 2)== 0)
+            WRITE_UINT32(*(uint32_t *)PTR_MOVE(p_Manip->capwapFragParams.p_AutoLearnHashTbl, j * FM_PCD_MANIP_CAPWAP_REASM_AUTO_LEARNING_HASH_ENTRY_SIZE), 0x80000000);
 
     tmpReg32 = 0x00008000;
     tmpReg32 |= (uint32_t)poolId << 16;
@@ -3118,7 +3090,7 @@ static t_Error CapwapReassembly(t_CapwapReassemblyParams *p_ManipParams,
 
     p_Manip->capwapFragParams.fqidForTimeOutFrames = p_ManipParams->fqidForTimeOutFrames;
     p_Manip->capwapFragParams.timeoutRoutineRequestTime = p_ManipParams->timeoutRoutineRequestTime;
-    p_Manip->capwapFragParams.bitFor1Micro = FmGetTimeStampScale(p_FmPcd->h_Fm);
+    p_Manip->capwapFragParams.bitFor1Micro = bitFor1Micro;
 
     tmpReg32 = 0;
     tmpReg32 |= (((uint32_t)1<<p_Manip->capwapFragParams.bitFor1Micro) * p_ManipParams->timeoutThresholdForReassmProcess);
@@ -3449,7 +3421,7 @@ static t_Error FillReassmManipParams(t_FmPcdManip *p_Manip, e_NetHeaderType hdr)
                     - (p_FmPcd->physicalMuramBase));
             break;
         default:
-            break;
+            RETURN_ERROR(MAJOR, E_NOT_SUPPORTED, ("header type"));
     }
 
     WRITE_UINT32(p_Ad->ccAdBase, tmpReg32);
@@ -4037,7 +4009,6 @@ static void setCapwapReassmSchemeParams(t_FmPcd* p_FmPcd,
                                         t_FmPcdKgSchemeParams *p_Scheme,
                                         t_Handle h_CcTree, uint8_t groupId)
 {
-    uint32_t j;
     uint8_t res;
 
     /* Configures scheme's network environment parameters */
@@ -4356,18 +4327,18 @@ static t_Handle ManipOrStatsSetNode(t_Handle h_FmPcd, t_Handle *p_Params,
                                          (t_FmPcdManipParams *)p_Params);
 #if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
     else
-    err = CheckStatsParamsAndSetType(p_Manip, (t_FmPcdStatsParams *)p_Params);
+        err = CheckStatsParamsAndSetType(p_Manip, (t_FmPcdStatsParams *)p_Params);
 #else /* not (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
     else
     {
         REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Statistics node!"));
+        XX_Free(p_Manip);
         return NULL;
     }
 #endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
     if (err)
     {
-        REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("INVALID HEADER MANIPULATION TYPE"));
-        ReleaseManipHandler(p_Manip, p_FmPcd);
+        REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("Invalid header manipulation type"));
         XX_Free(p_Manip);
         return NULL;
     }
@@ -4488,7 +4459,6 @@ static t_Error FmPcdManipInitUpdate(t_Handle h_FmPcd, t_Handle h_PcdParams,
     SANITY_CHECK_RETURN_ERROR(h_Manip, E_INVALID_HANDLE);
 
     UNUSED(level);
-    UNUSED(h_FmPcd);
     UNUSED(h_FmTree);
 
     switch (p_Manip->opcode)
@@ -4635,14 +4605,15 @@ t_Error FmPcdManipCheckParamsForCcNextEngine(
         uint32_t *requiredAction)
 {
     t_FmPcdManip *p_Manip;
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
     t_Error err = E_OK;
+#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))*/
     bool pointFromCc = TRUE;
 
     SANITY_CHECK_RETURN_ERROR(p_FmPcdCcNextEngineParams, E_NULL_POINTER);
     SANITY_CHECK_RETURN_ERROR(p_FmPcdCcNextEngineParams->h_Manip,
                               E_NULL_POINTER);
 
-    UNUSED(err);
     p_Manip = (t_FmPcdManip *)(p_FmPcdCcNextEngineParams->h_Manip);
     *requiredAction = 0;
 
@@ -4652,46 +4623,36 @@ t_Error FmPcdManipCheckParamsForCcNextEngine(
         {
 #if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
             case (HMAN_OC_CAPWAP_INDEXED_STATS):
-            if (p_FmPcdCcNextEngineParams->nextEngine != e_FM_PCD_DONE)
-            RETURN_ERROR(
-                    MAJOR,
-                    E_INVALID_STATE,
-                    ("For this type of header manipulation has to be nextEngine e_FM_PCD_DONE"));
-            if (p_FmPcdCcNextEngineParams->params.enqueueParams.overrideFqid)
-            p_Manip->cnia = TRUE;
+                if (p_FmPcdCcNextEngineParams->nextEngine != e_FM_PCD_DONE)
+                    RETURN_ERROR(MAJOR,	E_INVALID_STATE, ("For this type of header manipulation has to be nextEngine e_FM_PCD_DONE"));
+                if (p_FmPcdCcNextEngineParams->params.enqueueParams.overrideFqid)
+                    p_Manip->cnia = TRUE;
             case (HMAN_OC_CAPWAP_RMV_DTLS_IF_EXIST):
-            *requiredAction = UPDATE_NIA_ENQ_WITHOUT_DMA;
+                *requiredAction = UPDATE_NIA_ENQ_WITHOUT_DMA;
             case (HMAN_OC_RMV_N_OR_INSRT_INT_FRM_HDR):
-            p_Manip->ownerTmp++;
-            break;
+                p_Manip->ownerTmp++;
+                break;
             case (HMAN_OC_INSRT_HDR_BY_TEMPL_N_OR_FRAG_AFTER):
-            if ((p_FmPcdCcNextEngineParams->nextEngine != e_FM_PCD_DONE)
+                if ((p_FmPcdCcNextEngineParams->nextEngine != e_FM_PCD_DONE)
                     && !p_FmPcdCcNextEngineParams->params.enqueueParams.overrideFqid)
-            RETURN_ERROR(
-                    MAJOR,
-                    E_INVALID_STATE,
-                    ("For this type of header manipulation has to be nextEngine e_FM_PCD_DONE with fqidForCtrlFlow FALSE"));
-            p_Manip->ownerTmp++;
-            break;
+                    RETURN_ERROR(
+                        MAJOR,
+                        E_INVALID_STATE,
+                        ("For this type of header manipulation has to be nextEngine e_FM_PCD_DONE with fqidForCtrlFlow FALSE"));
+                p_Manip->ownerTmp++;
+                break;
             case (HMAN_OC_MV_INT_FRAME_HDR_FROM_FRM_TO_BUFFER_PREFFIX):
-            if ((p_FmPcdCcNextEngineParams->nextEngine != e_FM_PCD_CC)
-                    && (FmPcdCcGetParseCode(
-                                    p_FmPcdCcNextEngineParams->params.ccParams.h_CcNode)
-                            != CC_PC_GENERIC_IC_HASH_INDEXED))
-            RETURN_ERROR(
-                    MAJOR,
-                    E_INVALID_STATE,
-                    ("For this type of header manipulation next engine has to be CC and action = e_FM_PCD_ACTION_INDEXED_LOOKUP"));
-            err =
-            UpdateManipIc(
-                    p_FmPcdCcNextEngineParams->h_Manip,
-                    FmPcdCcGetOffset(
-                            p_FmPcdCcNextEngineParams->params.ccParams.h_CcNode));
-            if (err)
-            RETURN_ERROR(MAJOR, err, NO_MSG);
-            *requiredAction = UPDATE_NIA_ENQ_WITHOUT_DMA;
-            break;
-#endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
+                if ((p_FmPcdCcNextEngineParams->nextEngine != e_FM_PCD_CC)
+                    && (FmPcdCcGetParseCode(p_FmPcdCcNextEngineParams->params.ccParams.h_CcNode)
+                        != CC_PC_GENERIC_IC_HASH_INDEXED))
+                    RETURN_ERROR(MAJOR, E_INVALID_STATE, ("For this type of header manipulation next engine has to be CC and action = e_FM_PCD_ACTION_INDEXED_LOOKUP"));
+                err = UpdateManipIc(p_FmPcdCcNextEngineParams->h_Manip,
+                                    FmPcdCcGetOffset(p_FmPcdCcNextEngineParams->params.ccParams.h_CcNode));
+                if (err)
+                    RETURN_ERROR(MAJOR, err, NO_MSG);
+                *requiredAction = UPDATE_NIA_ENQ_WITHOUT_DMA;
+                break;
+ #endif /* (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10)) */
             case (HMAN_OC_IP_FRAGMENTATION):
             case (HMAN_OC_IP_REASSEMBLY):
 #if (DPAA_VERSION >= 11)

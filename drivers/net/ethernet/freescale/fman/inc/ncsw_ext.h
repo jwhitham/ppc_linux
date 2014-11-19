@@ -40,11 +40,11 @@
 #ifndef __NCSW_EXT_H
 #define __NCSW_EXT_H
 
+
 #include "memcpy_ext.h"
 
-
-#define WRITE_BLOCK                 IOMemSet32
-#define COPY_BLOCK                  Mem2IOCpy32
+#define WRITE_BLOCK                 IOMemSet32   /* include memcpy_ext.h */
+#define COPY_BLOCK                  Mem2IOCpy32  /* include memcpy_ext.h */
 
 #define PTR_TO_UINT(_ptr)           ((uintptr_t)(_ptr))
 #define UINT_TO_PTR(_val)           ((void*)(uintptr_t)(_val))
@@ -52,8 +52,10 @@
 #define PTR_MOVE(_ptr, _offset)     (void*)((uint8_t*)(_ptr) + (_offset))
 
 
-#define WRITE_UINT8_UINT24(arg, data08, data24) WRITE_UINT32(arg,((uint32_t)(data08)<<24)|((uint32_t)(data24)&0x00FFFFFF))
-#define WRITE_UINT24_UINT8(arg, data24, data08) WRITE_UINT32(arg,((uint32_t)(data24)<< 8)|((uint32_t)(data08)&0x000000FF))
+#define WRITE_UINT8_UINT24(arg, data08, data24) \
+    WRITE_UINT32(arg,((uint32_t)(data08)<<24)|((uint32_t)(data24)&0x00FFFFFF))
+#define WRITE_UINT24_UINT8(arg, data24, data08) \
+    WRITE_UINT32(arg,((uint32_t)(data24)<< 8)|((uint32_t)(data08)&0x000000FF))
 
 /* Little-Endian access macros */
 
@@ -94,7 +96,7 @@
 /* Miscellaneous macros */
 /*----------------------*/
 
-#define UNUSED(X) (X=X)
+#define UNUSED(_x)		((void)(_x))
 
 #define KILOBYTE            0x400UL                 /* 1024 */
 #define MEGABYTE            (KILOBYTE * KILOBYTE)   /* 1024*1024 */

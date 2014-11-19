@@ -241,7 +241,6 @@ typedef struct {
     uint32_t            type;
     uint8_t             prOffset;
     uint16_t            dataOffset;
-  //  uint8_t             poolIndex;
     uint8_t             internalBufferOffset;
     uint8_t             numOfTasks;
     uint8_t             numOfExtraTasks;
@@ -513,35 +512,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
         REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("Illegal 10G_TX_PORT port id"))
 #endif
 
-
-#define SW_PORT_ID_TO_HW_PORT_ID(_port, _type, _relativePortId)         \
-switch (_type) {                                                        \
-    case (e_FM_PORT_TYPE_OH_OFFLINE_PARSING):                           \
-    case (e_FM_PORT_TYPE_OH_HOST_COMMAND):                              \
-        CHECK_PORT_ID_OH_PORTS(_relativePortId);                        \
-        _port = (uint8_t)(BASE_OH_PORTID + (_relativePortId));          \
-        break;                                                          \
-    case (e_FM_PORT_TYPE_RX):                                           \
-        CHECK_PORT_ID_1G_RX_PORTS(_relativePortId);                     \
-        _port = (uint8_t)(BASE_1G_RX_PORTID + (_relativePortId));       \
-        break;                                                          \
-    case (e_FM_PORT_TYPE_RX_10G):                                       \
-        CHECK_PORT_ID_10G_RX_PORTS(_relativePortId);                    \
-        _port = (uint8_t)(BASE_10G_RX_PORTID + (_relativePortId));      \
-        break;                                                          \
-    case (e_FM_PORT_TYPE_TX):                                           \
-        CHECK_PORT_ID_1G_TX_PORTS(_relativePortId);                     \
-        _port = (uint8_t)(BASE_1G_TX_PORTID + (_relativePortId));       \
-        break;                                                          \
-    case (e_FM_PORT_TYPE_TX_10G):                                       \
-        CHECK_PORT_ID_10G_TX_PORTS(_relativePortId);                    \
-        _port = (uint8_t)(BASE_10G_TX_PORTID + (_relativePortId));      \
-        break;                                                          \
-    default:                                                            \
-        REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("Illegal port type"));    \
-        _port = 0;                                                      \
-        break;                                                          \
-}
+uint8_t SwPortIdToHwPortId(e_FmPortType _type, uint8_t _relativePortId);
 
 #define HW_PORT_ID_TO_SW_PORT_ID(_relativePortId, hardwarePortId)                   \
 {   if (((hardwarePortId) >= BASE_OH_PORTID) &&                                     \
@@ -615,33 +586,33 @@ typedef struct {
                                              ((hdr) == HEADER_TYPE_USER_DEFINED_SHIM2))
 #define IS_SPECIAL_HEADER(hdr)              ((hdr) == HEADER_TYPE_MACSEC)
 
-#define GET_PRS_HDR_NUM(num, hdr)                           \
-switch (hdr)                                                \
-{   case (HEADER_TYPE_ETH):              num = 0;  break;   \
-    case (HEADER_TYPE_LLC_SNAP):         num = 1;  break;   \
-    case (HEADER_TYPE_VLAN):             num = 2;  break;   \
-    case (HEADER_TYPE_PPPoE):            num = 3;  break;   \
-    case (HEADER_TYPE_PPP):              num = 3;  break;   \
-    case (HEADER_TYPE_MPLS):             num = 4;  break;   \
-    case (HEADER_TYPE_IPv4):             num = 5;  break;   \
-    case (HEADER_TYPE_IPv6):             num = 6;  break;   \
-    case (HEADER_TYPE_GRE):              num = 7;  break;   \
-    case (HEADER_TYPE_MINENCAP):         num = 8;  break;   \
-    case (HEADER_TYPE_USER_DEFINED_L3):  num = 9;  break;   \
-    case (HEADER_TYPE_TCP):              num = 10; break;   \
-    case (HEADER_TYPE_UDP):              num = 11; break;   \
-    case (HEADER_TYPE_IPSEC_AH):                            \
-    case (HEADER_TYPE_IPSEC_ESP):        num = 12; break;   \
-    case (HEADER_TYPE_SCTP):             num = 13; break;   \
-    case (HEADER_TYPE_DCCP):             num = 14; break;   \
-    case (HEADER_TYPE_USER_DEFINED_L4):  num = 15; break;   \
-    case (HEADER_TYPE_USER_DEFINED_SHIM1):                  \
-    case (HEADER_TYPE_USER_DEFINED_SHIM2):                  \
-    case (HEADER_TYPE_MACSEC):                              \
-        num = NO_HDR_NUM; break;                            \
-    default:                                                \
-        REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Unsupported header for parser"));\
-        num = ILLEGAL_HDR_NUM; break;                       \
+static __inline__ uint8_t GetPrsHdrNum(e_NetHeaderType hdr)
+{
+	 switch (hdr)
+	 {   case (HEADER_TYPE_ETH):              return 0;
+	     case (HEADER_TYPE_LLC_SNAP):         return 1;
+	     case (HEADER_TYPE_VLAN):             return 2;
+	     case (HEADER_TYPE_PPPoE):            return 3;
+	     case (HEADER_TYPE_PPP):              return 3;
+	     case (HEADER_TYPE_MPLS):             return 4;
+	     case (HEADER_TYPE_IPv4):             return 5;
+	     case (HEADER_TYPE_IPv6):             return 6;
+	     case (HEADER_TYPE_GRE):              return 7;
+	     case (HEADER_TYPE_MINENCAP):         return 8;
+	     case (HEADER_TYPE_USER_DEFINED_L3):  return 9;
+	     case (HEADER_TYPE_TCP):              return 10;
+	     case (HEADER_TYPE_UDP):              return 11;
+	     case (HEADER_TYPE_IPSEC_AH):
+	     case (HEADER_TYPE_IPSEC_ESP):        return 12;
+	     case (HEADER_TYPE_SCTP):             return 13;
+	     case (HEADER_TYPE_DCCP):             return 14;
+	     case (HEADER_TYPE_USER_DEFINED_L4):  return 15;
+	     case (HEADER_TYPE_USER_DEFINED_SHIM1):
+	     case (HEADER_TYPE_USER_DEFINED_SHIM2):
+	     case (HEADER_TYPE_MACSEC):           return NO_HDR_NUM;
+	     default:
+	         return ILLEGAL_HDR_NUM;
+	 }
 }
 
 #define FM_PCD_MAX_NUM_OF_OPTIONS(clsPlanEntries)   ((clsPlanEntries==256)? 8:((clsPlanEntries==128)? 7: ((clsPlanEntries==64)? 6: ((clsPlanEntries==32)? 5:0))))
