@@ -512,7 +512,7 @@ static __inline__ bool TRY_LOCK(t_Handle h_Spinlock, volatile bool *p_Flag)
         REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("Illegal 10G_TX_PORT port id"))
 #endif
 
-uint8_t SwPortIdToHwPortId(e_FmPortType _type, uint8_t _relativePortId);
+uint8_t SwPortIdToHwPortId(e_FmPortType type, uint8_t relativePortId, uint8_t majorRev, uint8_t minorRev);
 
 #define HW_PORT_ID_TO_SW_PORT_ID(_relativePortId, hardwarePortId)                   \
 {   if (((hardwarePortId) >= BASE_OH_PORTID) &&                                     \

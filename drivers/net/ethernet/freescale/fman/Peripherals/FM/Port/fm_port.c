@@ -521,7 +521,7 @@ static t_Error VerifySizeOfFifo(t_FmPort *p_FmPort)
     /* Verify the size  */
     if (p_FmPort->fifoBufs.num < minFifoSizeRequired)
         DBG(INFO,
-	    ("FIFO size is %d and should be enlarged to %d bytes",p_FmPort->fifoBufs.num, minFifoSizeRequired));
+           ("FIFO size is %d and should be enlarged to %d bytes",p_FmPort->fifoBufs.num, minFifoSizeRequired));
     else if (p_FmPort->fifoBufs.num < optFifoSizeForB2B)
         DBG(INFO,
 	    ("For back-to-back frames processing, FIFO size is %d and needs to enlarge to %d bytes", p_FmPort->fifoBufs.num, optFifoSizeForB2B));
@@ -2218,7 +2218,9 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
 
     /* calculate global portId number */
     p_FmPort->hardwarePortId = SwPortIdToHwPortId(p_FmPort->portType,
-                                    p_FmPortParams->portId);
+                                    p_FmPortParams->portId,
+                                    p_FmPort->fmRevInfo.majorRev,
+                                    p_FmPort->fmRevInfo.minorRev);
 
     if (p_FmPort->fmRevInfo.majorRev >= 6)
     {

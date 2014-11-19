@@ -51,6 +51,7 @@
 #include <linux/cdev.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <asm/mpc85xx.h>
 
 #include "sprint_ext.h"
 #include "fm_common.h"
@@ -81,6 +82,8 @@ do {\
 	} \
 } while (0)
 
+#define IS_T1023_T1024	(SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1024 || \
+			SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1023)
 
 static volatile int hcFrmRcv/* = 0 */;
 static spinlock_t lock;
@@ -355,6 +358,8 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 		}
 		p_LnxWrpFmPortDev = &p_LnxWrpFmDev->txPorts[*uint32_prop +
 			FM_MAX_NUM_OF_1G_TX_PORTS];
+		if (IS_T1023_T1024)
+			p_LnxWrpFmPortDev = &p_LnxWrpFmDev->txPorts[*uint32_prop];
 
 		p_LnxWrpFmPortDev->id = *uint32_prop;
 		p_LnxWrpFmPortDev->settings.param.portId =
@@ -397,6 +402,9 @@ static t_LnxWrpFmPortDev *ReadFmPortDevTreeNode(struct platform_device
 		}
 		p_LnxWrpFmPortDev = &p_LnxWrpFmDev->rxPorts[*uint32_prop +
 			FM_MAX_NUM_OF_1G_RX_PORTS];
+
+		if (IS_T1023_T1024)
+			p_LnxWrpFmPortDev = &p_LnxWrpFmDev->rxPorts[*uint32_prop];
 
 		p_LnxWrpFmPortDev->id = *uint32_prop;
 		p_LnxWrpFmPortDev->settings.param.portId =
@@ -685,9 +693,11 @@ static t_Error CheckNSetFmPortAdvArgs (t_LnxWrpFmPortDev *p_LnxWrpFmPortDev)
         if (p_LnxWrpFmPortDev->settings.param.portType != e_FM_PORT_TYPE_OH_OFFLINE_PARSING)
         {
             portId = fmVspParams.portParams.portId;
-            if (p_LnxWrpFmPortDev->settings.param.portType == e_FM_PORT_TYPE_RX_10G)
-                portId += FM_MAX_NUM_OF_1G_RX_PORTS;
-            portVSPAllocParams.h_FmTxPort =
+            if (p_LnxWrpFmPortDev->settings.param.portType == e_FM_PORT_TYPE_RX_10G){
+		if (!(IS_T1023_T1024))
+                    portId += FM_MAX_NUM_OF_1G_RX_PORTS;
+	    }
+	    portVSPAllocParams.h_FmTxPort =
                 p_LnxWrpFmDev->txPorts[portId].h_Dev;
             fmVspParams.liodnOffset =
                 p_LnxWrpFmDev->rxPorts[portId].settings.param.specificParams.rxParams.liodnOffset;
@@ -1260,6 +1270,14 @@ static int /*__devinit*/ fm_port_probe(struct platform_device *of_dev)
 		p_LnxWrpFmPortDev->minor =
 			p_LnxWrpFmPortDev->id + FM_MAX_NUM_OF_1G_RX_PORTS +
 			DEV_FM_RX_PORTS_MINOR_BASE;
+		if (IS_T1023_T1024) {
+			Sprint(p_LnxWrpFmPortDev->name, "%s-port-rx%d",
+				p_LnxWrpFmDev->name,
+				p_LnxWrpFmPortDev->id);
+			p_LnxWrpFmPortDev->minor =
+				p_LnxWrpFmPortDev->id +
+				DEV_FM_RX_PORTS_MINOR_BASE;
+		}
 	} else if (p_LnxWrpFmPortDev->settings.param.portType ==
 		 e_FM_PORT_TYPE_TX) {
 		Sprint(p_LnxWrpFmPortDev->name, "%s-port-tx%d",
@@ -1274,6 +1292,14 @@ static int /*__devinit*/ fm_port_probe(struct platform_device *of_dev)
 		p_LnxWrpFmPortDev->minor =
 			p_LnxWrpFmPortDev->id + FM_MAX_NUM_OF_1G_TX_PORTS +
 			DEV_FM_TX_PORTS_MINOR_BASE;
+		if (IS_T1023_T1024) {
+			Sprint(p_LnxWrpFmPortDev->name, "%s-port-tx%d",
+				p_LnxWrpFmDev->name,
+				p_LnxWrpFmPortDev->id);
+			p_LnxWrpFmPortDev->minor =
+				p_LnxWrpFmPortDev->id +
+				DEV_FM_TX_PORTS_MINOR_BASE;
+		}
 	} else if (p_LnxWrpFmPortDev->settings.param.portType ==
 		 e_FM_PORT_TYPE_OH_HOST_COMMAND) {
 		Sprint(p_LnxWrpFmPortDev->name, "%s-port-oh%d",

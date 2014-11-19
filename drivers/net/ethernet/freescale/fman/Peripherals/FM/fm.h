@@ -332,7 +332,7 @@ switch (exception){                                         \
 #else  /* (DPAA_VERSION < 11) */
 /* Defaults are registers' reset values */
 #define DEFAULT_totalFifoSize(major, minor)	\
-    (((major == 6) && (minor == 1)) ? (142*KILOBYTE) : (295*KILOBYTE))
+    (((major == 6) && ((minor == 1) || (minor == 4))) ? (142*KILOBYTE) : (295*KILOBYTE))
 
 #define DEFAULT_totalNumOfTasks             124
 

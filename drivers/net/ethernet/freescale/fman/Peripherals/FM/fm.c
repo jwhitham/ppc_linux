@@ -297,6 +297,7 @@ static void    DmaErrEvent(t_Fm *p_Fm)
     {
         com_id = fman_get_dma_com_id(dma_rg);
         hardwarePortId = (uint8_t)(((com_id & DMA_TRANSFER_PORTID_MASK) >> DMA_TRANSFER_PORTID_SHIFT));
+        ASSERT_COND(IN_RANGE(1, hardwarePortId, 63));
         HW_PORT_ID_TO_SW_PORT_ID(relativePortId, hardwarePortId);
         tnum = (uint8_t)((com_id & DMA_TRANSFER_TNUM_MASK) >> DMA_TRANSFER_TNUM_SHIFT);
         liodn = (uint16_t)(com_id & DMA_TRANSFER_LIODN_MASK);
@@ -1211,8 +1212,14 @@ t_Error Fm10GTxEccWorkaround(t_Handle h_Fm, uint8_t macId)
     SANITY_CHECK_RETURN_ERROR((macId == 0), E_NOT_SUPPORTED);
     SANITY_CHECK_RETURN_ERROR(IsFmanCtrlCodeLoaded(p_Fm), E_INVALID_STATE);
 
-    rxHardwarePortId = SwPortIdToHwPortId(e_FM_PORT_TYPE_RX_10G, macId);
-    txHardwarePortId = SwPortIdToHwPortId(e_FM_PORT_TYPE_TX_10G, macId);
+    rxHardwarePortId = SwPortIdToHwPortId(e_FM_PORT_TYPE_RX_10G,
+                                    macId,
+                                    p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
+    txHardwarePortId = SwPortIdToHwPortId(e_FM_PORT_TYPE_TX_10G,
+                                    macId,
+                                    p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
     if ((p_Fm->p_FmStateStruct->portsTypes[rxHardwarePortId] != e_FM_PORT_TYPE_DUMMY) ||
         (p_Fm->p_FmStateStruct->portsTypes[txHardwarePortId] != e_FM_PORT_TYPE_DUMMY))
         RETURN_ERROR(MAJOR, E_INVALID_STATE,
@@ -1511,7 +1518,10 @@ t_Error FmVSPAllocForPort (t_Handle        h_Fm,
         RETURN_ERROR(MINOR, E_FULL, ("No profiles."));
     }
 
-    hardwarePortId = SwPortIdToHwPortId(portType, portId);
+    hardwarePortId = SwPortIdToHwPortId(portType,
+                                    portId,
+                                    p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
     HW_PORT_ID_TO_SW_PORT_INDX(swPortIndex, hardwarePortId);
 
     p_Fm->p_FmSp->portsMapping[swPortIndex].numOfProfiles = numOfVSPs;
@@ -1536,7 +1546,10 @@ t_Error FmVSPFreeForPort(t_Handle        h_Fm,
 
     SANITY_CHECK_RETURN_ERROR(p_Fm, E_INVALID_HANDLE);
 
-    hardwarePortId = SwPortIdToHwPortId(portType, portId);
+    hardwarePortId = SwPortIdToHwPortId(portType,
+                                    portId,
+                                    p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
     HW_PORT_ID_TO_SW_PORT_INDX(swPortIndex, hardwarePortId);
 
     numOfVSPs = (uint8_t)p_Fm->p_FmSp->portsMapping[swPortIndex].numOfProfiles;
@@ -2874,7 +2887,10 @@ t_Error FmVSPCheckRelativeProfile(t_Handle        h_Fm,
     ASSERT_COND(h_Fm);
     p_Fm = (t_Fm*)h_Fm;
 
-    hardwarePortId = SwPortIdToHwPortId(portType, portId);
+    hardwarePortId = SwPortIdToHwPortId(portType,
+                                    portId,
+                                    p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
     ASSERT_COND(hardwarePortId);
     HW_PORT_ID_TO_SW_PORT_INDX(swPortIndex, hardwarePortId);
 
@@ -2907,7 +2923,10 @@ t_Error FmVSPGetAbsoluteProfileId(t_Handle        h_Fm,
     if (err != E_OK)
         return err;
 
-    hardwarePortId = SwPortIdToHwPortId(portType, portId);
+    hardwarePortId = SwPortIdToHwPortId(portType,
+                                    portId,
+                                    p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
     ASSERT_COND(hardwarePortId);
     HW_PORT_ID_TO_SW_PORT_INDX(swPortIndex, hardwarePortId);
 
@@ -3148,7 +3167,7 @@ static __inline__ enum fman_exceptions FmanExceptionTrans(e_FmExceptions excepti
         }
 }
 
-uint8_t SwPortIdToHwPortId(e_FmPortType type, uint8_t relativePortId)
+uint8_t SwPortIdToHwPortId(e_FmPortType type, uint8_t relativePortId, uint8_t majorRev, uint8_t minorRev)
 {
 	switch (type)
 	{
@@ -3160,14 +3179,36 @@ uint8_t SwPortIdToHwPortId(e_FmPortType type, uint8_t relativePortId)
 			CHECK_PORT_ID_1G_RX_PORTS(relativePortId);
 			return (uint8_t)(BASE_1G_RX_PORTID + (relativePortId));
 		case (e_FM_PORT_TYPE_RX_10G):
-			CHECK_PORT_ID_10G_RX_PORTS(relativePortId);
-			return (uint8_t)(BASE_10G_RX_PORTID + (relativePortId));
+                       /* The 10G port in T1024 (FMan Version 6.4) is the first port.
+                        * This is the reason why the 1G port offset is used.
+                        */
+                       if (majorRev == 6 && minorRev == 4)
+                       {
+                               CHECK_PORT_ID_1G_RX_PORTS(relativePortId);
+                               return (uint8_t)(BASE_1G_RX_PORTID + (relativePortId));
+                       }
+                       else
+                       {
+                               CHECK_PORT_ID_10G_RX_PORTS(relativePortId);
+                               return (uint8_t)(BASE_10G_RX_PORTID + (relativePortId));
+                       }
 		case (e_FM_PORT_TYPE_TX):
 			CHECK_PORT_ID_1G_TX_PORTS(relativePortId);
 			return (uint8_t)(BASE_1G_TX_PORTID + (relativePortId));
 		case (e_FM_PORT_TYPE_TX_10G):
-			CHECK_PORT_ID_10G_TX_PORTS(relativePortId);
-			return (uint8_t)(BASE_10G_TX_PORTID + (relativePortId));
+                       /* The 10G port in T1024 (FMan Version 6.4) is the first port.
+                        * This is the reason why the 1G port offset is used.
+                        */
+                       if (majorRev == 6 && minorRev == 4)
+                       {
+                               CHECK_PORT_ID_1G_TX_PORTS(relativePortId);
+                               return (uint8_t)(BASE_1G_TX_PORTID + (relativePortId));
+                       }
+                       else
+                       {
+                               CHECK_PORT_ID_10G_TX_PORTS(relativePortId);
+                               return (uint8_t)(BASE_10G_TX_PORTID + (relativePortId));
+                       }
 		default:
 			REPORT_ERROR(MAJOR, E_INVALID_VALUE, ("Illegal port type"));
 			return 0;
@@ -4436,7 +4477,9 @@ t_Error FM_SetPortsBandwidth(t_Handle h_Fm, t_FmPortsBandwidthParams *p_PortsBan
         /* find the location of this port within the register */
         hardwarePortId =
             SwPortIdToHwPortId(p_PortsBandwidth->portsBandwidths[i].type,
-                               p_PortsBandwidth->portsBandwidths[i].relativePortId);
+                               p_PortsBandwidth->portsBandwidths[i].relativePortId,
+                               p_Fm->p_FmStateStruct->revInfo.majorRev,
+                               p_Fm->p_FmStateStruct->revInfo.minorRev);
 
         ASSERT_COND(IN_RANGE(1, hardwarePortId, 63));
         weights[hardwarePortId] = weight;
