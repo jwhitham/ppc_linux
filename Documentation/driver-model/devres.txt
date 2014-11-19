@@ -288,6 +288,10 @@ CLOCK
   devm_clk_get()
   devm_clk_put()
 
+PER-CPU MEM
+  devm_alloc_percpu()
+  devm_free_percpu()
+
 PINCTRL
   devm_pinctrl_get()
   devm_pinctrl_put()
