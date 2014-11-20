@@ -428,10 +428,10 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	priv->tx_headroom = DPA_DEFAULT_TX_HEADROOM;
 
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+	priv->percpu_priv = devm_alloc_percpu(dev, *priv->percpu_priv);
 
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
+		dev_err(dev, "devm_alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
@@ -452,8 +452,6 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	return 0;
 
 netdev_init_failed:
-	if (net_dev)
-		free_percpu(priv->percpu_priv);
 alloc_percpu_failed:
 fq_alloc_failed:
 	if (net_dev)

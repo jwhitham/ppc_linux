@@ -771,7 +771,7 @@ dpa_priv_bp_probe(struct device *dev)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
+	dpa_bp->percpu_count = devm_alloc_percpu(dev, *dpa_bp->percpu_count);
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 
 	dpa_bp->seed_cb = dpa_bp_priv_seed;
@@ -1044,10 +1044,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	}
 #endif
 
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+	priv->percpu_priv = devm_alloc_percpu(dev, *priv->percpu_priv);
 
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
+		dev_err(dev, "devm_alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
@@ -1080,11 +1080,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 netdev_init_failed:
 napi_add_failed:
 	dpa_private_napi_del(net_dev);
-	free_percpu(priv->percpu_priv);
+alloc_percpu_failed:
 #ifdef CONFIG_FMAN_PFC
 pfc_mapping_failed:
 #endif
-alloc_percpu_failed:
 	dpa_fq_free(dev, &priv->dpa_fq_list);
 fq_alloc_failed:
 	qman_release_cgrid(priv->ingress_cgr.cgrid);
@@ -1098,7 +1097,6 @@ get_channel_failed:
 	dpa_bp_free(priv, priv->dpa_bp);
 bp_create_failed:
 fq_probe_failed:
-	devm_kfree(dev, buf_layout);
 alloc_failed:
 mac_probe_failed:
 	dev_set_drvdata(dev, NULL);

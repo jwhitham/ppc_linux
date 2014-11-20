@@ -976,7 +976,8 @@ static int dpa_generic_rx_bp_probe(struct platform_device *_of_dev,
 			goto _return_of_node_put;
 		}
 
-		bp[i].percpu_count = alloc_percpu(*(bp[i].percpu_count));
+		bp[i].percpu_count = devm_alloc_percpu(dev,
+						       *bp[i].percpu_count);
 	}
 
 	buf_layout = devm_kzalloc(dev, sizeof(*buf_layout), GFP_KERNEL);
@@ -1042,7 +1043,7 @@ int dpa_generic_tx_bp_probe(struct platform_device *_of_dev,
 	}
 
 	bp->size = dpa_bp_size(buf_layout);
-	bp->percpu_count = alloc_percpu(*bp->percpu_count);
+	bp->percpu_count = devm_alloc_percpu(dev, *bp->percpu_count);
 	bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 
 	*draining_tx_bp = bp;
@@ -1365,7 +1366,6 @@ static int dpa_generic_remove(struct platform_device *of_dev)
 #endif
 
 	dpa_private_napi_del(net_dev);
-	free_percpu(priv->percpu_priv);
 
 	/* TODO: this is for private dirver also; make generic */
 #if 0
@@ -1465,9 +1465,9 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 	priv->mac_dev = NULL;
 
 
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+	priv->percpu_priv = devm_alloc_percpu(dev, *priv->percpu_priv);
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
+		dev_err(dev, "devm_alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
@@ -1495,8 +1495,6 @@ static int dpa_generic_eth_probe(struct platform_device *_of_dev)
 netdev_init_failed:
 napi_add_failed:
 	dpa_generic_napi_del(netdev);
-	if (netdev)
-		free_percpu(priv->percpu_priv);
 alloc_percpu_failed:
 	if (netdev)
 		dpa_fq_free(dev, &priv->dpa_fq_list);
