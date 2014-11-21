@@ -333,9 +333,9 @@ static int fsl_ifc_resume(struct device *dev)
 	ver = ifc_in32(&ctrl->regs->ifc_rev);
 	ncfgr = ifc_in32(&ifc->ifc_nand.ncfgr);
 	if (ver >= FSL_IFC_V1_3_0) {
-		ifc_out32(&ifc->ifc_nand.ncfgr,
-					ncfgr | IFC_NAND_SRAM_INIT_EN);
 
+		ifc_out32(ncfgr | IFC_NAND_SRAM_INIT_EN,
+					&ifc->ifc_nand.ncfgr);
 		/* wait for  SRAM_INIT bit to be clear or timeout */
 		status = spin_event_timeout(
 					!(ifc_in32(&ifc->ifc_nand.ncfgr)
