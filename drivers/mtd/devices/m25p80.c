@@ -248,11 +248,42 @@ static int m25p_remove(struct spi_device *spi)
 	return mtd_device_unregister(&flash->mtd);
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int m25p_suspend(struct device *dev)
+{
+	struct m25p *flash = dev_get_drvdata(dev);
+	struct spi_nor *nor = &flash->spi_nor;
+
+	/* Wait till previous write/erase is done. */
+	if (nor->wait_till_ready)
+		return nor->wait_till_ready(nor);
+
+	return 0;
+}
+
+static int m25p_resume(struct device *dev)
+{
+	struct m25p *flash = dev_get_drvdata(dev);
+	struct spi_device *spi = flash->spi;
+	struct spi_nor *nor = &flash->spi_nor;
+	enum read_mode mode = SPI_NOR_NORMAL;
+
+	if (spi->mode & SPI_RX_QUAD)
+		mode = SPI_NOR_QUAD;
+	else if (spi->mode & SPI_RX_DUAL)
+		mode = SPI_NOR_DUAL;
+
+	return spi_nor_scan(nor, spi_get_device_id(spi), mode);
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static SIMPLE_DEV_PM_OPS(m25p_pm_ops, m25p_suspend, m25p_resume);
 
 static struct spi_driver m25p80_driver = {
 	.driver = {
 		.name	= "m25p80",
 		.owner	= THIS_MODULE,
+		.pm	= &m25p_pm_ops,
 	},
 	.id_table	= spi_nor_ids,
 	.probe	= m25p_probe,
