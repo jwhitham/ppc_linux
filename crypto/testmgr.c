@@ -179,7 +179,9 @@ static void testmgr_free_buf(char *buf[XBUFSIZE])
 		free_page((unsigned long)buf[i]);
 }
 
-static int wait_async_op(struct tcrypt_result *tr, int ret)
+static int do_one_async_hash_op(struct ahash_request *req,
+				struct tcrypt_result *tr,
+				int ret)
 {
 	if (ret == -EINPROGRESS || ret == -EBUSY) {
 		ret = wait_for_completion_interruptible(&tr->completion);
@@ -263,26 +265,30 @@ static int __test_hash(struct crypto_ahash *tfm, struct hash_testvec *template,
 
 		ahash_request_set_crypt(req, sg, result, template[i].psize);
 		if (use_digest) {
-			ret = wait_async_op(&tresult, crypto_ahash_digest(req));
+			ret = do_one_async_hash_op(req, &tresult,
+						   crypto_ahash_digest(req));
 			if (ret) {
 				pr_err("alg: hash: digest failed on test %d "
 				       "for %s: ret=%d\n", j, algo, -ret);
 				goto out;
 			}
 		} else {
-			ret = wait_async_op(&tresult, crypto_ahash_init(req));
+			ret = do_one_async_hash_op(req, &tresult,
+						   crypto_ahash_init(req));
 			if (ret) {
 				pr_err("alt: hash: init failed on test %d "
 				       "for %s: ret=%d\n", j, algo, -ret);
 				goto out;
 			}
-			ret = wait_async_op(&tresult, crypto_ahash_update(req));
+			ret = do_one_async_hash_op(req, &tresult,
+						   crypto_ahash_update(req));
 			if (ret) {
 				pr_err("alt: hash: update failed on test %d "
 				       "for %s: ret=%d\n", j, algo, -ret);
 				goto out;
 			}
-			ret = wait_async_op(&tresult, crypto_ahash_final(req));
+			ret = do_one_async_hash_op(req, &tresult,
+						   crypto_ahash_final(req));
 			if (ret) {
 				pr_err("alt: hash: final failed on test %d "
 				       "for %s: ret=%d\n", j, algo, -ret);
