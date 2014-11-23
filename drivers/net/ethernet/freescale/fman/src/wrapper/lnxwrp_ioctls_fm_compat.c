@@ -806,7 +806,9 @@ void compat_copy_fm_port_pcd(
         _fm_cpt_dbg(compat," param->p_kg_params=%p  \n", param->p_kg_params);
         _fm_cpt_dbg(compat," param->p_plcr_params=%p  \n", param->p_plcr_params);
         _fm_cpt_dbg(compat," param->p_ip_reassembly_manip=%p  \n", param->p_ip_reassembly_manip);
-
+#if (DPAA_VERSION >= 11)
+        _fm_cpt_dbg(compat," param->p_capwap_reassembly_manip=%p  \n", param->p_capwap_reassembly_manip);
+#endif
         param->pcd_support = compat_param->pcd_support;
         param->net_env_id = compat_pcd_id2ptr(compat_param->net_env_id);
 
@@ -817,6 +819,9 @@ void compat_copy_fm_port_pcd(
         if (param->p_plcr_params)
             param->p_plcr_params->plcr_profile_id = compat_pcd_id2ptr(compat_port_pcd_plcr_params->plcr_profile_id);
         param->p_ip_reassembly_manip = compat_pcd_id2ptr(compat_param->p_ip_reassembly_manip);
+#if (DPAA_VERSION >= 11)
+        param->p_capwap_reassembly_manip = compat_pcd_id2ptr(compat_param->p_capwap_reassembly_manip);
+#endif
     }
 }
 

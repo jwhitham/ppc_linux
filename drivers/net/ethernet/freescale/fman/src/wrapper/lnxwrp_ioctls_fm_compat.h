@@ -416,10 +416,30 @@ typedef struct ioc_compat_fm_pcd_manip_hdr_insrt_specific_l2_params_t {
     compat_uptr_t                           p_data;
 } ioc_compat_fm_pcd_manip_hdr_insrt_specific_l2_params_t;
 
+typedef struct ioc_compat_fm_pcd_manip_hdr_insrt_t {
+    uint8_t       size;          /**< size of inserted section */
+    compat_uptr_t p_data;        /**< data to be inserted */
+} ioc_compat_fm_pcd_manip_hdr_insrt_t;
+
+#if (DPAA_VERSION >= 11)
+typedef struct ioc_compat_fm_pcd_manip_hdr_insrt_ip_params_t {
+    bool    calc_l4_checksum; /**< Calculate L4 checksum. */
+    ioc_fm_pcd_manip_hdr_qos_mapping_mode   mapping_mode; /**< TODO */
+    uint8_t last_pid_offset;     /**< the offset of the last Protocol within
+                                 the inserted header */
+    uint16_t  id;           /**< 16 bit New IP ID */
+    ioc_compat_fm_pcd_manip_hdr_insrt_t insrt; /**< size and data to be inserted. */
+} ioc_compat_fm_pcd_manip_hdr_insrt_ip_params_t;
+#endif /* (DPAA_VERSION >= 11) */
+
 typedef struct ioc_compat_fm_pcd_manip_hdr_insrt_by_hdr_params_t {
     ioc_fm_pcd_manip_hdr_insrt_by_hdr_type                      type;
     union {
        ioc_compat_fm_pcd_manip_hdr_insrt_specific_l2_params_t   specific_l2_params;
+#if (DPAA_VERSION >= 11)
+        ioc_compat_fm_pcd_manip_hdr_insrt_ip_params_t          ip_params;
+        ioc_compat_fm_pcd_manip_hdr_insrt_t             insrt;
+#endif /* (DPAA_VERSION >= 11) */
     } u;
 } ioc_compat_fm_pcd_manip_hdr_insrt_by_hdr_params_t;
 
@@ -428,8 +448,8 @@ typedef struct ioc_compat_fm_pcd_manip_hdr_insrt_params_t {
     union {
         ioc_compat_fm_pcd_manip_hdr_insrt_by_hdr_params_t   by_hdr;
         ioc_compat_fm_pcd_manip_hdr_insrt_generic_params_t  generic;
-#ifdef FM_CAPWAP_SUPPORT
-#error CAPWAP not supported!
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
+#error "FM_CAPWAP_SUPPORT feature not supported!"
         ioc_fm_pcd_manip_hdr_insrt_by_template_params_t     by_template;
 #endif /* FM_CAPWAP_SUPPORT */
     } u;
@@ -456,7 +476,7 @@ typedef struct ioc_compat_fm_pcd_manip_params_t {
         ioc_fm_pcd_manip_special_offload_params_t special_offload;
     } u;
     compat_uptr_t                                 p_next_manip;
-#ifdef FM_CAPWAP_SUPPORT
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 #error "FM_CAPWAP_SUPPORT feature not supported!"
     bool                                          frag_or_reasm;
     ioc_fm_pcd_manip_frag_or_reasm_params_t       frag_or_reasm_params;

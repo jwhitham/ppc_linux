@@ -327,6 +327,20 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     /* fm_pcd_ext.h == fm_pcd_ioctls.h */
     /*ioc_fm_pcd_counters_params_t  : NOT USED */
     /*ioc_fm_pcd_exception_params_t : private */
+#if (DPAA_VERSION >= 11)
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_capwap_params_t) == sizeof(t_FmPcdManipFragCapwapParams));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_reassem_capwap_params_t) == sizeof(t_FmPcdManipReassemCapwapParams));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_hdr_insrt_by_hdr_params_t) == sizeof(t_FmPcdManipHdrInsrtByHdrParams));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_hdr_insrt_ip_params_t) == sizeof(t_FmPcdManipHdrInsrtIpParams));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_hdr_insrt_t) == sizeof(t_FmPcdManipHdrInsrt));
+    ASSERT_COND(sizeof(ioc_fm_manip_hdr_info_t) == sizeof(t_FmManipHdrInfo));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_hdr_rmv_by_hdr_params_t) == sizeof(t_FmPcdManipHdrRmvByHdrParams));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_special_offload_capwap_params_t) == sizeof(t_FmPcdManipSpecialOffloadCapwapParams));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_capwap_stats_t) == sizeof(t_FmPcdManipFragCapwapStats));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_reassem_capwap_stats_t) == sizeof(t_FmPcdManipReassemCapwapStats));
+    ASSERT_COND(sizeof(ioc_fm_pcd_manip_frag_params_t) == sizeof(t_FmPcdManipFragParams));
+#endif /* (DPAA_VERSION >= 11) */
+
     ASSERT_COND(sizeof(ioc_fm_pcd_prs_label_params_t) == sizeof(t_FmPcdPrsLabelParams));
     ASSERT_COND(sizeof(ioc_fm_pcd_prs_sw_params_t) == sizeof(t_FmPcdPrsSwParams));
     /*ioc_fm_pcd_kg_dflt_value_params_t : private */
@@ -384,8 +398,6 @@ void LnxWrpPCDIOCTLTypeChecking(void)
     ASSERT_COND(sizeof(TODO) == sizeof(t_FmPcdManipHdrInsrtByTemplateParams));
     ASSERT_COND(sizeof(TODO) == sizeof(t_CapwapFragmentationParams));
     ASSERT_COND(sizeof(TODO) == sizeof(t_CapwapReassemblyParams));
-    ASSERT_COND(sizeof(TODO) == sizeof(t_FmPcdManipFragOrReasmParams));
-    ASSERT_COND(sizeof(TODO) == sizeof(t_FmPcdManipHdrRmvByHdrParams));
 */
 #endif
 
@@ -3702,7 +3714,9 @@ t_Error LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd
                     port_pcd_params->p_kg_params           = compat_ptr(compat_port_pcd_params->p_kg_params);
                     port_pcd_params->p_plcr_params         = compat_ptr(compat_port_pcd_params->p_plcr_params);
                     port_pcd_params->p_ip_reassembly_manip = compat_ptr(compat_port_pcd_params->p_ip_reassembly_manip);
-
+#if (DPAA_VERSION >= 11)
+                    port_pcd_params->p_capwap_reassembly_manip = compat_ptr(compat_port_pcd_params->p_capwap_reassembly_manip);
+#endif
                     /* the prs member is the same, no compat structure...memcpy only */
                     if (port_pcd_params->p_prs_params)
                     {

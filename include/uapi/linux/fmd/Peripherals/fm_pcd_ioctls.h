@@ -708,7 +708,7 @@ typedef enum ioc_fm_pcd_action {
 typedef enum ioc_fm_pcd_manip_hdr_insrt_type {
     e_IOC_FM_PCD_MANIP_INSRT_GENERIC,                   /**< Insert according to offset & size */
     e_IOC_FM_PCD_MANIP_INSRT_BY_HDR,                    /**< Insert according to protocol */
-#ifdef FM_CAPWAP_SUPPORT
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
     e_IOC_FM_PCD_MANIP_INSRT_BY_TEMPLATE                /**< Insert template to start of frame */
 #endif /* FM_CAPWAP_SUPPORT */
 } ioc_fm_pcd_manip_hdr_insrt_type;
@@ -846,7 +846,7 @@ typedef enum ioc_fm_pcd_manip_reassem_ways_number {
     e_IOC_FM_PCD_MANIP_EIGHT_WAYS_HASH      /**< Eight ways hash */
 } ioc_fm_pcd_manip_reassem_ways_number;
 
-#ifdef FM_CAPWAP_SUPPORT
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 /**************************************************************************//**
  @Description   Enumeration type for selecting type of statistics mode
 *//***************************************************************************/
@@ -929,6 +929,7 @@ typedef union ioc_fm_pcd_fields_u {
     ioc_header_field_ipv4_t             ipv4;           /**< IPv4                   */
     ioc_header_field_ipv6_t             ipv6;           /**< IPv6                   */
     ioc_header_field_udp_t              udp;            /**< UDP                    */
+    ioc_header_field_udp_lite_t         udp_lite;       /**< UDP_Lite               */
     ioc_header_field_tcp_t              tcp;            /**< TCP                    */
     ioc_header_field_sctp_t             sctp;           /**< SCTP                   */
     ioc_header_field_dccp_t             dccp;           /**< DCCP                   */
@@ -1908,10 +1909,10 @@ typedef struct ioc_fm_pcd_manip_hdr_rmv_generic_params_t {
 /**************************************************************************//**
  @Description   Parameters for defining insertion manipulation
 *//***************************************************************************/
-typedef struct fm_pcd_manip_hdr_insrt_t {
+typedef struct ioc_fm_pcd_manip_hdr_insrt_t {
     uint8_t size;           /**< size of inserted section */
     uint8_t *p_data;        /**< data to be inserted */
-} fm_pcd_manip_hdr_insrt_t;
+} ioc_fm_pcd_manip_hdr_insrt_t;
 
 /**************************************************************************//**
  @Description   Parameters for defining generic insertion manipulation
@@ -2052,14 +2053,14 @@ typedef struct ioc_fm_pcd_manip_hdr_insrt_specific_l2_params_t {
 /**************************************************************************//**
  @Description   Parameters for defining IP insertion manipulation
 *//***************************************************************************/
-typedef struct fm_pcd_manip_hdr_insrt_ip_params_t {
+typedef struct ioc_fm_pcd_manip_hdr_insrt_ip_params_t {
     bool    calc_l4_checksum; /**< Calculate L4 checksum. */
     ioc_fm_pcd_manip_hdr_qos_mapping_mode   mapping_mode; /**< TODO */
     uint8_t last_pid_offset;     /**< the offset of the last Protocol within
                                  the inserted header */
     uint16_t  id;           /**< 16 bit New IP ID */
-    fm_pcd_manip_hdr_insrt_t insrt; /**< size and data to be inserted. */
-} fm_pcd_manip_hdr_insrt_ip_params_t;
+    ioc_fm_pcd_manip_hdr_insrt_t insrt; /**< size and data to be inserted. */
+} ioc_fm_pcd_manip_hdr_insrt_ip_params_t;
 #endif /* (DPAA_VERSION >= 11) */
 
 /**************************************************************************//**
@@ -2072,8 +2073,8 @@ typedef struct ioc_fm_pcd_manip_hdr_insrt_by_hdr_params_t {
                                                             /**< Used when type = e_IOC_FM_PCD_MANIP_INSRT_BY_HDR_SPECIFIC_L2:
                                                                  Selects which L2 headers to remove */
 #if (DPAA_VERSION >= 11)
-        fm_pcd_manip_hdr_insrt_ip_params_t          ip_params;  /**< Used when type = e_FM_PCD_MANIP_INSRT_BY_HDR_IP */
-        fm_pcd_manip_hdr_insrt_t                    insrt;     /**< Used when type is one of e_FM_PCD_MANIP_INSRT_BY_HDR_UDP,
+        ioc_fm_pcd_manip_hdr_insrt_ip_params_t      ip_params;  /**< Used when type = e_FM_PCD_MANIP_INSRT_BY_HDR_IP */
+        ioc_fm_pcd_manip_hdr_insrt_t                insrt;     /**< Used when type is one of e_FM_PCD_MANIP_INSRT_BY_HDR_UDP,
                                                                 e_FM_PCD_MANIP_INSRT_BY_HDR_UDP_LITE, or
                                                                 e_FM_PCD_MANIP_INSRT_BY_HDR_CAPWAP */
 #endif /* (DPAA_VERSION >= 11) */
@@ -2090,7 +2091,7 @@ typedef struct ioc_fm_pcd_manip_hdr_insrt_params_t {
                                                                      relevant if 'type' = e_IOC_FM_PCD_MANIP_INSRT_BY_HDR */
         ioc_fm_pcd_manip_hdr_insrt_generic_params_t     generic;/**< Parameters for defining generic header insertion manipulation,
                                                                      relevant if type = e_IOC_FM_PCD_MANIP_INSRT_GENERIC */
-#ifdef FM_CAPWAP_SUPPORT
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
         ioc_fm_pcd_manip_hdr_insrt_by_template_params_t by_template;
                                                                 /**< Parameters for defining header insertion manipulation by template,
                                                                      relevant if 'type' = e_IOC_FM_PCD_MANIP_INSRT_BY_TEMPLATE */
@@ -2176,8 +2177,7 @@ typedef struct ioc_fm_pcd_manip_params_t {
     void                                            *p_next_manip;/**< Handle to another (previously defined) manipulation node;
                                                                  Allows concatenation of manipulation actions
                                                                  This parameter is optional and may be NULL. */
-#ifdef FM_CAPWAP_SUPPORT
-#error "FM_CAPWAP_SUPPORT feature not supported!"
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
     bool                                            frag_or_reasm;/**< TRUE, if defined fragmentation/reassembly manipulation */
     ioc_fm_pcd_manip_frag_or_reasm_params_t         frag_or_reasm_params;/**< Parameters for fragmentation/reassembly manipulation,
                                                                             relevant if frag_or_reasm = TRUE */
@@ -2229,7 +2229,7 @@ typedef struct ioc_fm_pcd_manip_frag_ip_stats_t {
 /**************************************************************************//**
  @Description   Structure for retrieving CAPWAP reassembly statistics
 *//***************************************************************************/
-typedef struct fm_pcd_manip_reassem_capwap_stats_t {
+typedef struct ioc_fm_pcd_manip_reassem_capwap_stats_t {
     uint32_t    timeout;                    /**< Counts the number of timeout occurrences */
     uint32_t    rfd_pool_busy;                /**< Counts the number of failed attempts to allocate
                                                  a Reassembly Frame Descriptor */
@@ -2250,19 +2250,19 @@ typedef struct fm_pcd_manip_reassem_capwap_stats_t {
                                                  exceeds 16 */
     uint32_t    exceed_max_reassembly_frame_len;/**< ounts the number of times that a successful reassembled frame
                                                  length exceeds MaxReassembledFrameLength value */
-} fm_pcd_manip_reassem_capwap_stats_t;
+} ioc_fm_pcd_manip_reassem_capwap_stats_t;
 
 /**************************************************************************//**
  @Description   Structure for retrieving CAPWAP fragmentation statistics
 *//***************************************************************************/
-typedef struct fm_pcd_manip_frag_capwap_stats_t {
+typedef struct ioc_fm_pcd_manip_frag_capwap_stats_t {
     uint32_t    total_frames;            /**< Number of frames that passed through the manipulation node */
     uint32_t    fragmented_frames;       /**< Number of frames that were fragmented */
     uint32_t    generated_fragments;     /**< Number of fragments that were generated */
 #if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
     uint8_t     sg_allocation_failure;    /**< Number of allocation failure of s/g buffers */
 #endif /* (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0)) */
-} fm_pcd_manip_frag_capwap_stats_t;
+} ioc_fm_pcd_manip_frag_capwap_stats_t;
 #endif /* (DPAA_VERSION >= 11) */
 
 /**************************************************************************//**
@@ -2272,7 +2272,7 @@ typedef struct ioc_fm_pcd_manip_reassem_stats_t {
     union {
         ioc_fm_pcd_manip_reassem_ip_stats_t  ip_reassem;  /**< Structure for IP reassembly statistics */
 #if (DPAA_VERSION >= 11)
-        fm_pcd_manip_reassem_capwap_stats_t  capwap_reassem;  /**< Structure for CAPWAP reassembly statistics */
+        ioc_fm_pcd_manip_reassem_capwap_stats_t  capwap_reassem;  /**< Structure for CAPWAP reassembly statistics */
 #endif /* (DPAA_VERSION >= 11) */
     } u;
 } ioc_fm_pcd_manip_reassem_stats_t;
@@ -2284,7 +2284,7 @@ typedef struct ioc_fm_pcd_manip_frag_stats_t {
     union {
         ioc_fm_pcd_manip_frag_ip_stats_t     ip_frag;     /**< Structure for IP fragmentation statistics */
 #if (DPAA_VERSION >= 11)
-        fm_pcd_manip_frag_capwap_stats_t capwap_frag; /**< Structure for CAPWAP fragmentation statistics */
+        ioc_fm_pcd_manip_frag_capwap_stats_t capwap_frag; /**< Structure for CAPWAP fragmentation statistics */
 #endif /* (DPAA_VERSION >= 11) */
     } u;
 } ioc_fm_pcd_manip_frag_stats_t;
@@ -2921,8 +2921,7 @@ typedef struct ioc_fm_pcd_cc_tbl_get_miss_params_t {
 
 #endif
 
-#ifdef FM_CAPWAP_SUPPORT
-#warning "CAPWAP IOCTL not implemented"
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
 /**************************************************************************//**
  @Function      FM_PCD_StatisticsSetNode
 

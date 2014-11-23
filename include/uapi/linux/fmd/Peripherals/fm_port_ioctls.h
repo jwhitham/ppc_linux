@@ -104,8 +104,8 @@ typedef enum ioc_fm_port_pcd_support {
     , e_IOC_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR     /**< Use Parser, Keygen and Policer */
     , e_IOC_FM_PORT_PCD_SUPPORT_PRS_AND_CC              /**< Use Parser and Coarse Classification */
     , e_IOC_FM_PORT_PCD_SUPPORT_PRS_AND_CC_AND_PLCR     /**< Use Parser and Coarse Classification and Policer */
-#ifdef FM_CAPWAP_SUPPORT
     , e_IOC_FM_PORT_PCD_SUPPORT_CC_ONLY                 /**< Use only Coarse Classification */
+#if (defined(FM_CAPWAP_SUPPORT) && (DPAA_VERSION == 10))
     , e_IOC_FM_PORT_PCD_SUPPORT_CC_AND_KG               /**< Use Coarse Classification,and Keygen */
     , e_IOC_FM_PORT_PCD_SUPPORT_CC_AND_KG_AND_PLCR      /**< Use Coarse Classification, Keygen and Policer */
 #endif /* FM_CAPWAP_SUPPORT */
