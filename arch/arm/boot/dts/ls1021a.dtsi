@@ -604,6 +604,8 @@
 			interrupt-parent = <&gic>;
 			model = "eTSEC";
 			fsl,dma-endian-le;
+			fsl,magic-packet;
+			fsl,wake-on-filer;
 			fsl,num_rx_queues = <0x1>;
 			fsl,num_tx_queues = <0x1>;
 			local-mac-address = [ 00 00 00 00 00 00 ];
