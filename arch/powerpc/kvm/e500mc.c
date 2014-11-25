@@ -101,6 +101,7 @@ void inval_ea_on_host(struct kvm_vcpu *vcpu, gva_t ea, int pid, int sas,
 		sas | (sind << MAS6_SIND_SHIFT));
 	asm volatile("tlbilx 3, 0, %[ea]\n" : :
 					[ea] "r" (ea));
+	mtspr(SPRN_MAS5, 0);
 	local_irq_restore(flags);
 }
 
