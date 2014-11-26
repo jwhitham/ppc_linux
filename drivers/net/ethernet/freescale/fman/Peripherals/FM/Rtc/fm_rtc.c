@@ -629,7 +629,7 @@ t_Error FM_RTC_SetCurrentTime(t_Handle h_FmRtc, uint64_t ts)
     SANITY_CHECK_RETURN_ERROR(!p_Rtc->p_RtcDriverParam, E_INVALID_STATE);
 
     ts = ts/p_Rtc->clockPeriodNanoSec;
-    fman_rtc_set_timer(p_Rtc->p_MemMap, (unsigned long)ts);
+    fman_rtc_set_timer(p_Rtc->p_MemMap, (int64_t)ts);
 
     return E_OK;
 }
