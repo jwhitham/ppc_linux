@@ -85,6 +85,7 @@ static void m25p80_write(struct spi_nor *nor, loff_t to, size_t len,
 	int cmd_sz = m25p_cmdsz(nor);
 
 	spi_message_init(&m);
+	m.addr_width = flash->spi_nor.addr_width;
 
 	if (nor->program_opcode == SPINOR_OP_AAI_WP && nor->sst_write_second)
 		cmd_sz = 1;
@@ -140,6 +141,7 @@ static int m25p80_read(struct spi_nor *nor, loff_t from, size_t len,
 		return ret;
 
 	spi_message_init(&m);
+	m.addr_width = flash->spi_nor.addr_width;
 	memset(t, 0, (sizeof t));
 
 	flash->command[0] = nor->read_opcode;
