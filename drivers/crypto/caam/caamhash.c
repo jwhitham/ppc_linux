@@ -645,11 +645,8 @@ static void ahash_done(struct device *jrdev, u32 *desc, u32 err,
 
 	edesc = (struct ahash_edesc *)((char *)desc -
 		 offsetof(struct ahash_edesc, hw_desc));
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-
-		dev_err(jrdev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(jrdev, err);
 
 	ahash_unmap(jrdev, edesc, req, digestsize);
 	kfree(edesc);
@@ -683,11 +680,8 @@ static void ahash_done_bi(struct device *jrdev, u32 *desc, u32 err,
 
 	edesc = (struct ahash_edesc *)((char *)desc -
 		 offsetof(struct ahash_edesc, hw_desc));
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-
-		dev_err(jrdev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(jrdev, err);
 
 	ahash_unmap_ctx(jrdev, edesc, req, ctx->ctx_len, DMA_BIDIRECTIONAL);
 	kfree(edesc);
@@ -721,11 +715,8 @@ static void ahash_done_ctx_src(struct device *jrdev, u32 *desc, u32 err,
 
 	edesc = (struct ahash_edesc *)((char *)desc -
 		 offsetof(struct ahash_edesc, hw_desc));
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-
-		dev_err(jrdev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(jrdev, err);
 
 	ahash_unmap_ctx(jrdev, edesc, req, digestsize, DMA_TO_DEVICE);
 	kfree(edesc);
@@ -759,11 +750,8 @@ static void ahash_done_ctx_dst(struct device *jrdev, u32 *desc, u32 err,
 
 	edesc = (struct ahash_edesc *)((char *)desc -
 		 offsetof(struct ahash_edesc, hw_desc));
-	if (err) {
-		char tmp[CAAM_ERROR_STR_MAX];
-
-		dev_err(jrdev, "%08x: %s\n", err, caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(jrdev, err);
 
 	ahash_unmap_ctx(jrdev, edesc, req, ctx->ctx_len, DMA_FROM_DEVICE);
 	kfree(edesc);
