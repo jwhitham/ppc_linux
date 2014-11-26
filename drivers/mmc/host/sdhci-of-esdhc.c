@@ -80,7 +80,9 @@ static u16 esdhc_readw(struct sdhci_host *host, int reg)
 #if defined CONFIG_PPC_OF
 	/* T4240-R1.0-R2.0 had a incorrect vendor version and spec version */
 	if ((reg == SDHCI_HOST_VERSION) &&
-			((SVR_SOC_VER(svr) == SVR_T4240) &&
+			(((SVR_SOC_VER(svr) == SVR_T4240) ||
+			  (SVR_SOC_VER(svr) == SVR_T4160) ||
+			  (SVR_SOC_VER(svr) == SVR_T4080)) &&
 			 (SVR_REV(svr) <= 0x20)))
 		ret = (VENDOR_V_23 << SDHCI_VENDOR_VER_SHIFT) | SDHCI_SPEC_200;
 #endif
@@ -217,7 +219,9 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 			return;
 
 #if defined CONFIG_PPC_OF
-		if (SVR_SOC_VER(svr) == SVR_T4240) {
+		if (SVR_SOC_VER(svr) == SVR_T4240 ||
+				SVR_SOC_VER(svr) == SVR_T4160 ||
+				SVR_SOC_VER(svr) == SVR_T4080) {
 			u8 vol;
 
 			vol = sdhci_32bs_readb(host, reg);
@@ -281,6 +285,7 @@ static void esdhci_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 	 */
 	if (!(((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_T4160) && (SVR_REV(svr) == 0x10)) ||
+		((SVR_SOC_VER(svr) == SVR_T4080) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x10)) ||
 		((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x20)) ||
 		((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
@@ -447,6 +452,8 @@ static void esdhc_of_platform_init(struct sdhci_host *host)
 	    ((SVR_SOC_VER(svr) == SVR_T4240) && (SVR_REV(svr) == 0x20)) ||
 	    ((SVR_SOC_VER(svr) == SVR_T4160) && (SVR_REV(svr) == 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_T4160) && (SVR_REV(svr) == 0x20)) ||
+	    ((SVR_SOC_VER(svr) == SVR_T4080) && (SVR_REV(svr) == 0x10)) ||
+	    ((SVR_SOC_VER(svr) == SVR_T4080) && (SVR_REV(svr) == 0x20)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x10)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4860) && (SVR_REV(svr) == 0x20)) ||
 	    ((SVR_SOC_VER(svr) == SVR_B4420) && (SVR_REV(svr) == 0x10)) ||
