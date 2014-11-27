@@ -294,6 +294,8 @@ static __init int parse_mem_property(struct device_node *node, const char *name,
 	} else if (zero) {
 		/* map as cacheable, non-guarded */
 		void __iomem *tmpp = ioremap_prot(*addr, *sz, 0);
+		if (!tmpp)
+			return -ENOMEM;
 		memset_io(tmpp, 0, *sz);
 		vaddr = (unsigned long)tmpp;
 		flush_dcache_range(vaddr, vaddr + *sz);
@@ -506,6 +508,8 @@ u32 bm_pool_free_buffers(u32 bpid)
 #ifdef CONFIG_SYSFS
 
 #define DRV_NAME "fsl-bman"
+#define SBEC_MAX_ID 1
+#define SBEC_MIN_ID 0
 
 static ssize_t show_fbpr_fpc(struct device *dev,
 	struct device_attribute *dev_attr, char *buf)
@@ -519,7 +523,7 @@ static ssize_t show_pool_count(struct device *dev,
 	u32 data;
 	int i;
 
-	if (!sscanf(dev_attr->attr.name, "%d", &i))
+	if (!sscanf(dev_attr->attr.name, "%d", &i) || (i >= bman_pool_max))
 		return -EINVAL;
 	data = bm_in(POOL_CONTENT(i));
 	return snprintf(buf, PAGE_SIZE, "%d\n", data);
@@ -537,6 +541,8 @@ static ssize_t show_sbec(struct device *dev,
 	int i;
 
 	if (!sscanf(dev_attr->attr.name, "sbec_%d", &i))
+		return -EINVAL;
+	if (i < SBEC_MIN_ID || i > SBEC_MAX_ID)
 		return -EINVAL;
 	return snprintf(buf, PAGE_SIZE, "%u\n", bm_in(SBEC(i)));
 };

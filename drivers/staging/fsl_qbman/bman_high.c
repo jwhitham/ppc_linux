@@ -820,6 +820,8 @@ static noinline struct bm_rcr_entry *wait_rel_start(struct bman_portal **p,
 	pool = NULL;
 #endif
 	if (flags & BMAN_RELEASE_FLAG_WAIT_INT)
+		/* NB: return NULL if signal occurs before completion. Signal
+		 * can occur during return. Caller must check for signal */
 		wait_event_interruptible(affine_queue,
 			(rcr = __wait_rel_start(p, pool, irqflags, flags)));
 	else
@@ -883,6 +885,8 @@ static inline int __bman_release(struct bman_pool *pool,
 	if (unlikely((flags & BMAN_RELEASE_FLAG_WAIT) &&
 			(flags & BMAN_RELEASE_FLAG_WAIT_SYNC))) {
 		if (flags & BMAN_RELEASE_FLAG_WAIT_INT)
+			/* NB: return success even if signal occurs before
+			 * condition is true. pvb_commit guarantees success */
 			wait_event_interruptible(affine_queue,
 					(p->rcri_owned != pool));
 		else

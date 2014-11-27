@@ -474,6 +474,8 @@ static __init int parse_mem_property(struct device_node *node, const char *name,
 	} else if (zero) {
 		/* map as cacheable, non-guarded */
 		void __iomem *tmpp = ioremap_prot(*addr, *sz, 0);
+		if (!tmpp)
+			return -ENOMEM;
 		memset_io(tmpp, 0, *sz);
 		vaddr = (unsigned long)tmpp;
 		flush_dcache_range(vaddr, vaddr + *sz);
@@ -490,6 +492,7 @@ static __init int parse_mem_property(struct device_node *node, const char *name,
 static int __init fsl_qman_init(struct device_node *node)
 {
 	struct resource res;
+	resource_size_t len;
 	u32 __iomem *regs;
 	const char *s;
 	int ret, standby = 0;
@@ -512,7 +515,10 @@ static int __init fsl_qman_init(struct device_node *node)
 		BUG_ON(ret);
 	}
 	/* Global configuration */
-	regs = ioremap(res.start, res.end - res.start + 1);
+	len = resource_size(&res);
+	if (len != (unsigned long)len)
+		return -EINVAL;
+	regs = ioremap(res.start, (unsigned long)len);
 	qm = qm_create(regs);
 	qm_node = node;
 	qm_get_version(qm, &id, &major, &minor, &cfg);
@@ -872,6 +878,8 @@ EXPORT_SYMBOL(qman_ceetm_get_xsfdr);
 #ifdef CONFIG_SYSFS
 
 #define DRV_NAME	"fsl-qman"
+#define DCP_MAX_ID	3
+#define DCP_MIN_ID	0
 
 static ssize_t show_pfdr_fpc(struct device *dev,
 	struct device_attribute *dev_attr, char *buf)
@@ -887,6 +895,8 @@ static ssize_t show_dlm_avg(struct device *dev,
 
 	if (!sscanf(dev_attr->attr.name, "dcp%d_dlm_avg", &i))
 		return -EINVAL;
+	if (i < DCP_MIN_ID || i > DCP_MAX_ID)
+		return -EINVAL;
 	data = qm_in(DCP_DLM_AVG(i));
 	return snprintf(buf, PAGE_SIZE, "%d.%08d\n", data>>8,
 			(data & 0x000000ff)*390625);
@@ -899,6 +909,8 @@ static ssize_t set_dlm_avg(struct device *dev,
 	int i;
 
 	if (!sscanf(dev_attr->attr.name, "dcp%d_dlm_avg", &i))
+		return -EINVAL;
+	if (i < DCP_MIN_ID || i > DCP_MAX_ID)
 		return -EINVAL;
 	if (kstrtoul(buf, 0, &val)) {
 		dev_dbg(dev, "invalid input %s\n", buf);
@@ -966,6 +978,8 @@ static ssize_t show_err_isr(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "0x%08x\n", qm_in(ERR_ISR));
 };
 
+#define SBEC_MAX_ID	14
+#define SBEC_MIN_ID	0
 
 static ssize_t show_sbec(struct device *dev,
 	struct device_attribute *dev_attr, char *buf)
@@ -973,6 +987,8 @@ static ssize_t show_sbec(struct device *dev,
 	int i;
 
 	if (!sscanf(dev_attr->attr.name, "sbec_%d", &i))
+		return -EINVAL;
+	if (i < SBEC_MIN_ID || i > SBEC_MAX_ID)
 		return -EINVAL;
 	return snprintf(buf, PAGE_SIZE, "%u\n", qm_in(SBEC(i)));
 };

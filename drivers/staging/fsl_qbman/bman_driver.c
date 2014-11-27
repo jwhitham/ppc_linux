@@ -108,6 +108,7 @@ static struct bm_portal_config * __init parse_pcfg(struct device_node *node)
 	struct bm_portal_config *pcfg;
 	const u32 *index;
 	int irq, ret;
+	resource_size_t len;
 
 	pcfg = kmalloc(sizeof(*pcfg), GFP_KERNEL);
 	if (!pcfg) {
@@ -176,9 +177,13 @@ static struct bm_portal_config * __init parse_pcfg(struct device_node *node)
 	pcfg->public_cfg.index = *index;
 	bman_depletion_fill(&pcfg->public_cfg.mask);
 
+	len = resource_size(&pcfg->addr_phys[DPA_PORTAL_CE]);
+	if (len != (unsigned long)len)
+		goto err;
+
 	pcfg->addr_virt[DPA_PORTAL_CE] = ioremap_prot(
 				pcfg->addr_phys[DPA_PORTAL_CE].start,
-				resource_size(&pcfg->addr_phys[DPA_PORTAL_CE]),
+				(unsigned long)len,
 				0);
 	pcfg->addr_virt[DPA_PORTAL_CI] = ioremap_prot(
 				pcfg->addr_phys[DPA_PORTAL_CI].start,

@@ -1251,9 +1251,13 @@ map_match:
 static int portal_mmap(struct file *fp, struct resource *res, void **ptr)
 {
 	unsigned long longret = 0, populate;
+	resource_size_t len;
 
 	down_write(&current->mm->mmap_sem);
-	longret = do_mmap_pgoff(fp, PAGE_SIZE, resource_size(res),
+	len = resource_size(res);
+	if (len != (unsigned long)len)
+		return -EINVAL;
+	longret = do_mmap_pgoff(fp, PAGE_SIZE, (unsigned long)len,
 				PROT_READ | PROT_WRITE, MAP_SHARED,
 				res->start >> PAGE_SHIFT, &populate);
 	up_write(&current->mm->mmap_sem);
