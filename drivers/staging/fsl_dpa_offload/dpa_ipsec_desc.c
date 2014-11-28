@@ -1935,10 +1935,9 @@ static void split_key_done(struct device *dev, u32 *desc, u32 err,
 {
 	register atomic_t *done = context;
 
-	if (err) {
-		char tmp[256];
-		dev_err(dev, "%s\n", caam_jr_strstatus(tmp, err));
-	}
+	if (err)
+		caam_jr_strstatus(dev, err);
+
 	atomic_set(done, 1);
 }
 
