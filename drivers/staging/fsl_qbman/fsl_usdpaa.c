@@ -766,14 +766,13 @@ static unsigned long usdpaa_get_unmapped_area(struct file *file,
 
 	if (len % PAGE_SIZE)
 		return -EINVAL;
-	/* Need to align to largest pagesize to ensure all pages
-	   will be correctly aligned */
-	len = largest_page_size(len);
-
 	if (!len)
 		return -EINVAL;
 
-	addr = USDPAA_MEM_ROUNDUP(addr, len);
+	/* Need to align the address to the largest pagesize of the mapping
+	 * because the MMU requires the virtual address to have the same
+	 * alignment as the physical address */
+	addr = USDPAA_MEM_ROUNDUP(addr, largest_page_size(len));
 	vma = find_vma(current->mm, addr);
 	/* Keep searching until we reach the end of currently-used virtual
 	 * address-space or we find a big enough gap. */
@@ -781,7 +780,7 @@ static unsigned long usdpaa_get_unmapped_area(struct file *file,
 		if ((addr + len) < vma->vm_start)
 			return addr;
 
-		addr = USDPAA_MEM_ROUNDUP(vma->vm_end, len);
+		addr = USDPAA_MEM_ROUNDUP(vma->vm_end,  largest_page_size(len));
 		vma = vma->vm_next;
 	}
 	if ((TASK_SIZE - len) < addr)
