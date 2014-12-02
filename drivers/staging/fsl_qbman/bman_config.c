@@ -678,6 +678,12 @@ static int bman_pm_suspend_noirq(struct device *dev)
 	bm_err_isr_disable_write(bm, 0xffffffff);
 	bm_err_isr_status_clear(bm, 0xffffffff);
 
+	if (bman_ip_rev < BMAN_REV21) {
+#ifdef CONFIG_PM_DEBUG
+		pr_info("Bman version doesn't have STATE_IDLE\n");
+#endif
+		return 0;
+	}
 	idle_state = bm_in(STATE_IDLE);
 	if (!(idle_state & 0x1)) {
 		pr_err("Bman not idle 0x%x aborting\n", idle_state);
