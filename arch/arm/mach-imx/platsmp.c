@@ -218,7 +218,7 @@ static int ls1021a_reset_secondary(unsigned int cpu)
 	iowrite32be(0x80000000, scfg_base + SCFG_CORESRENCR);
 	iowrite32be(0x80000000, scfg_base +
 				SCFG_CORE0_SFT_RST + STRIDE_4B * cpu);
-	mdelay(6);
+	mdelay(15);
 
 	/* LS1021a errata. after reset, core state machine registers
 	 * need to force release manually.
