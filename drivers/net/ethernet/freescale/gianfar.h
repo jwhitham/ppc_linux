@@ -496,7 +496,12 @@ extern const char gfar_driver_version[];
 #define ATTR_BUFSTASH		0x00004000
 
 #define ATTR_SNOOPING		0x000000c0
+
+#ifdef CONFIG_SOC_LS1021A
+#define ATTR_INIT_SETTINGS      0
+#else
 #define ATTR_INIT_SETTINGS      ATTR_SNOOPING
+#endif
 
 #define ATTRELI_INIT_SETTINGS   0x0
 #define ATTRELI_EL_MASK		0x3fff0000
