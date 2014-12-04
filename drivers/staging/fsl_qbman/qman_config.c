@@ -816,7 +816,7 @@ int qman_ceetm_set_prescaler(enum qm_dc_portal portal)
 		return -ENODEV;
 
 	temp = 0x400000 * 100;
-	temp /= CONFIG_QMAN_CEETM_UPDATE_PERIOD;
+	do_div(temp, CONFIG_QMAN_CEETM_UPDATE_PERIOD);
 	temp *= 10000000;
 	pres = (u16)(temp / qman_clk);
 
