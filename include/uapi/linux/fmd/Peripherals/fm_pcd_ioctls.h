@@ -2339,11 +2339,40 @@ typedef struct ioc_fm_pcd_cc_key_statistics_t {
 } ioc_fm_pcd_cc_key_statistics_t;
 
 
-typedef struct ioc_fm_pcd_cc_tbl_get_miss_params_t {
+typedef struct ioc_fm_pcd_cc_tbl_get_stats_t {
     void                            *id;
-    ioc_fm_pcd_cc_key_statistics_t  miss_statistics;
-} ioc_fm_pcd_cc_tbl_get_miss_params_t;
+    uint16_t                        key_index;
+    ioc_fm_pcd_cc_key_statistics_t  statistics;
+} ioc_fm_pcd_cc_tbl_get_stats_t;
 
+/**************************************************************************//**
+ @Function      FM_PCD_MatchTableGetKeyStatistics
+
+ @Description   This routine may be used to get statistics counters of specific key
+                in a CC Node.
+
+                If 'e_FM_PCD_CC_STATS_MODE_FRAME' and
+                'e_FM_PCD_CC_STATS_MODE_BYTE_AND_FRAME' were set for this node,
+                these counters reflect how many frames passed that were matched
+                this key; The total frames count will be returned in the counter
+                of the first range (as only one frame length range was defined).
+                If 'e_FM_PCD_CC_STATS_MODE_RMON' was set for this node, the total
+                frame count will be separated to frame length counters, based on
+                provided frame length ranges.
+
+ @Param[in]     h_CcNode        A handle to the node
+ @Param[in]     keyIndex        Key index for adding
+ @Param[out]    p_KeyStatistics Key statistics counters
+
+ @Return        The specific key statistics.
+
+ @Cautions      Allowed only following FM_PCD_MatchTableSet().
+*//***************************************************************************/
+
+#if defined(CONFIG_COMPAT)
+#define FM_PCD_IOC_MATCH_TABLE_GET_KEY_STAT_COMPAT   _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(12), ioc_compat_fm_pcd_cc_tbl_get_stats_t)
+#endif
+#define FM_PCD_IOC_MATCH_TABLE_GET_KEY_STAT  _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(12), ioc_fm_pcd_cc_tbl_get_stats_t)
 
 /**************************************************************************//**
  @Function      FM_PCD_MatchTableGetMissStatistics
@@ -2367,9 +2396,9 @@ typedef struct ioc_fm_pcd_cc_tbl_get_miss_params_t {
 *//***************************************************************************/
 
 #if defined(CONFIG_COMPAT)
-#define FM_PCD_IOC_MATCH_TABLE_GET_MISS_STAT_COMPAT   _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(12), ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)
+#define FM_PCD_IOC_MATCH_TABLE_GET_MISS_STAT_COMPAT   _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(13), ioc_compat_fm_pcd_cc_tbl_get_stats_t)
 #endif
-#define FM_PCD_IOC_MATCH_TABLE_GET_MISS_STAT  _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(12), ioc_fm_pcd_cc_tbl_get_miss_params_t)
+#define FM_PCD_IOC_MATCH_TABLE_GET_MISS_STAT  _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(13), ioc_fm_pcd_cc_tbl_get_stats_t)
 
 /**************************************************************************//**
  @Function      FM_PCD_HashTableGetMissStatistics
@@ -2391,9 +2420,9 @@ typedef struct ioc_fm_pcd_cc_tbl_get_miss_params_t {
 *//***************************************************************************/
 
 #if defined(CONFIG_COMPAT)
-#define FM_PCD_IOC_HASH_TABLE_GET_MISS_STAT_COMPAT   _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(13), ioc_compat_fm_pcd_cc_tbl_get_miss_params_t)
+#define FM_PCD_IOC_HASH_TABLE_GET_MISS_STAT_COMPAT   _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(14), ioc_compat_fm_pcd_cc_tbl_get_stats_t)
 #endif
-#define FM_PCD_IOC_HASH_TABLE_GET_MISS_STAT  _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(13), ioc_fm_pcd_cc_tbl_get_miss_params_t)
+#define FM_PCD_IOC_HASH_TABLE_GET_MISS_STAT  _IOWR(FM_IOC_TYPE_BASE, FM_PCD_IOC_NUM(14), ioc_fm_pcd_cc_tbl_get_stats_t)
 
 
 /**************************************************************************//**
