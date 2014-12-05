@@ -2647,7 +2647,7 @@ static void init_aead_job(u32 *sh_desc, dma_addr_t ptr,
 		in_options = 0;
 	} else {
 		src_dma = edesc->sec4_sg_dma;
-		sec4_sg_index += (edesc->assoc_nents ? : 1) + 1 +
+		sec4_sg_index += edesc->assoc_nents + 1 +
 				 (edesc->src_nents ? : 1);
 		in_options = LDST_SGF;
 	}
@@ -2660,7 +2660,7 @@ static void init_aead_job(u32 *sh_desc, dma_addr_t ptr,
 			dst_dma = sg_dma_address(req->src);
 		} else {
 			dst_dma = src_dma + sizeof(struct sec4_sg_entry) *
-				  ((edesc->assoc_nents ? : 1) + 1);
+				  (edesc->assoc_nents + 1);
 			out_options = LDST_SGF;
 		}
 	} else {
@@ -2917,7 +2917,7 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	unsigned int authsize = ctx->authsize;
 	bool is_gcm = false;
 
-	assoc_nents = sg_count(req->assoc, req->assoclen, &assoc_chained);
+	assoc_nents = __sg_count(req->assoc, req->assoclen, &assoc_chained);
 
 	if (unlikely(req->dst != req->src)) {
 		int extralen;
@@ -2936,9 +2936,9 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 					(encrypt ? authsize : 0),
 				     &src_chained);
 	}
-
-	sgc = dma_map_sg_chained(jrdev, req->assoc, assoc_nents ? : 1,
-				 DMA_TO_DEVICE, assoc_chained);
+	if (req->assoclen)
+		sgc = dma_map_sg_chained(jrdev, req->assoc, assoc_nents,
+					DMA_TO_DEVICE, assoc_chained);
 	if (likely(req->src == req->dst)) {
 		sgc = dma_map_sg_chained(jrdev, req->src, src_nents ? : 1,
 					 DMA_BIDIRECTIONAL, src_chained);
@@ -2966,16 +2966,15 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	 * All other - expected input sequence: AAD, IV, text
 	 */
 	if (is_gcm)
-		all_contig = (!assoc_nents &&
+		all_contig = ((assoc_nents == 1) &&
 			      iv_dma + ivsize == sg_dma_address(req->assoc) &&
 			      !src_nents && sg_dma_address(req->assoc) +
 			      req->assoclen == sg_dma_address(req->src));
 	else
-		all_contig = (!assoc_nents && sg_dma_address(req->assoc) +
+		all_contig = ((assoc_nents == 1) && sg_dma_address(req->assoc) +
 			      req->assoclen == iv_dma && !src_nents &&
 			      iv_dma + ivsize == sg_dma_address(req->src));
 	if (!all_contig) {
-		assoc_nents = assoc_nents ? : 1;
 		src_nents = src_nents ? : 1;
 		sec4_sg_len = assoc_nents + 1 + src_nents;
 	}
@@ -3006,7 +3005,7 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 
 	sec4_sg_index = 0;
 	if (!all_contig) {
-		if (!is_gcm) {
+		if (!is_gcm && assoc_nents) {
 			sg_to_sec4_sg(req->assoc,
 				      assoc_nents,
 				      edesc->sec4_sg + sec4_sg_index,
@@ -3018,7 +3017,7 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 				   iv_dma, ivsize, 0);
 		sec4_sg_index += 1;
 
-		if (is_gcm) {
+		if (is_gcm && assoc_nents) {
 			sg_to_sec4_sg(req->assoc,
 				      assoc_nents,
 				      edesc->sec4_sg + sec4_sg_index,
