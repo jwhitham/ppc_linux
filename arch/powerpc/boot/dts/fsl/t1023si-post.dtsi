@@ -458,7 +458,7 @@ sata@220000 {
 /include/ "qoriq-qman3.dtsi"
 /include/ "qoriq-bman1.dtsi"
 /include/ "qoriq-fman3l-0.dtsi"
-/include/ "qoriq-fman3-0-1g-0.dtsi"
+/include/ "qoriq-fman3-0-10-mac1.dtsi"
 /include/ "qoriq-fman3-0-1g-1.dtsi"
 /include/ "qoriq-fman3-0-1g-2.dtsi"
 /include/ "qoriq-fman3-0-1g-3.dtsi"
