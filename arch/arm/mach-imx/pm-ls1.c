@@ -81,6 +81,7 @@ static u8 ddr_buff[DDR_BUF_SIZE] __aligned(64);
 static struct ls1_pm_baseaddr ls1_pm_base;
 /* supported sleep modes by the present platform */
 static unsigned int sleep_modes;
+static suspend_state_t ls1_pm_state;
 
 static void ls1_pm_iomap(void)
 {
@@ -330,14 +331,18 @@ static int ls1_suspend_valid(suspend_state_t state)
 
 static int ls1_suspend_begin(suspend_state_t state)
 {
-	ls1_pm_iomap();
+	ls1_pm_state = state;
+
+	if (ls1_pm_state == PM_SUSPEND_MEM)
+		ls1_pm_iomap();
 
 	return 0;
 }
 
 static void ls1_suspend_end(void)
 {
-	ls1_pm_uniomap();
+	if (ls1_pm_state == PM_SUSPEND_MEM)
+		ls1_pm_uniomap();
 }
 
 static const struct platform_suspend_ops ls1_suspend_ops = {
