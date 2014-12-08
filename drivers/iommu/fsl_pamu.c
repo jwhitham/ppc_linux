@@ -34,6 +34,7 @@
 #include <asm/fsl_guts.h>
 #include <asm/fsl_kibo.h>
 #include <asm/mpc85xx.h>
+#include <asm/reg.h>
 #include <linux/syscore_ops.h>
 
 #include "fsl_pamu.h"
@@ -678,23 +679,12 @@ static u32 get_dsp_l2_stash_id(u32 vcpu)
 
 static bool has_erratum_a007907(void)
 {
-	u32 svr = mfspr(SPRN_SVR);
+	u32 pvr = mfspr(SPRN_PVR);
 
-	switch (SVR_SOC_VER(svr)) {
-	case SVR_B4860:
-	case SVR_B4420:
-	case SVR_T4240:
-	case SVR_T4160:
-	case SVR_T4080:
-		return SVR_REV(svr) <= 0x20;
+	if (PVR_VER(pvr) == PVR_VER_E6500 && PVR_REV(pvr) <= 0x20)
+		return true;
 
-	case SVR_T2080:
-	case SVR_T2081:
-		return SVR_REV(svr) == 0x10;
-
-	default:
-		return false;
-	};
+	return false;
 }
 
 /**
