@@ -498,7 +498,8 @@ static int memac_init_phy(struct net_device *net_dev,
 {
 	struct phy_device       *phy_dev;
 
-	if (macdev2enetinterface(mac_dev) == e_ENET_MODE_XGMII_10000) {
+	if ((macdev2enetinterface(mac_dev) == e_ENET_MODE_XGMII_10000) ||
+	    (macdev2enetinterface(mac_dev) == e_ENET_MODE_SGMII_2500)){
 		if (!mac_dev->phy_node) {
 			mac_dev->phy_dev = NULL;
 			return 0;

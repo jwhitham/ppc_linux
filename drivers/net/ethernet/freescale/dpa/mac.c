@@ -73,7 +73,7 @@ static const char phy_str[][11] = {
 	[PHY_INTERFACE_MODE_RGMII_TXID]	= "rgmii-txid",
 	[PHY_INTERFACE_MODE_RTBI]	= "rtbi",
 	[PHY_INTERFACE_MODE_XGMII]	= "xgmii",
-	[PHY_INTERFACE_MODE_SGMII_2500]	= "sgmii_2500"
+	[PHY_INTERFACE_MODE_SGMII_2500]	= "sgmii-2500"
 };
 
 static phy_interface_t __pure __attribute__((nonnull)) str2phy(const char *str)
@@ -339,7 +339,7 @@ static int __cold mac_probe(struct platform_device *_of_dev)
 		mac_dev->if_support &= ~(SUPPORTED_10baseT_Half |
 					SUPPORTED_100baseT_Half);
 
-	if (strstr(char_prop, "sgmii_2500"))
+	if (strstr(char_prop, "sgmii-2500"))
 		mac_dev->if_support &= ~(SUPPORTED_10baseT_Half |
 					SUPPORTED_100baseT_Half);
 
