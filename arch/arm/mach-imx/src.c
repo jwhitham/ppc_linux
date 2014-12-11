@@ -30,8 +30,6 @@
 #define BP_SRC_SCR_CORE1_RST		14
 #define BP_SRC_SCR_CORE1_ENABLE		22
 
-#define CCSR_TWAITSR0         0x04C
-
 static void __iomem *src_base;
 static DEFINE_SPINLOCK(scr_lock);
 
@@ -114,25 +112,6 @@ void imx_set_cpu_arg(int cpu, u32 arg)
 {
 	cpu = cpu_logical_map(cpu);
 	writel_relaxed(arg, src_base + SRC_GPR1 + cpu * 8 + 4);
-}
-
-u32 ls1_get_cpu_arg(int cpu)
-{
-	struct device_node *np;
-	void __iomem *ls1_rcpm_base;
-
-	np = of_find_compatible_node(NULL, NULL, "fsl,qoriq-rcpm-2.1");
-	if (!np) {
-		pr_err("%s(): Can not find the RCPM node.\n", __func__);
-		return -ENODEV;
-	}
-
-	ls1_rcpm_base = of_iomap(np, 0);
-	of_node_put(np);
-	WARN_ON(!ls1_rcpm_base);
-
-	cpu = cpu_logical_map(cpu);
-	return ioread32be(ls1_rcpm_base + CCSR_TWAITSR0) & (1 << cpu);
 }
 
 void imx_src_prepare_restart(void)
