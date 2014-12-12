@@ -43,8 +43,7 @@ void fsl_set_power_except(struct device *dev, int on)
 	int ret;
 
 	ret = of_property_read_u32_array(dev->of_node, "sleep", value, 2);
-
-	if (ret && !strncmp(dev_name(dev), "usb", 3)) {
+	if (ret) {
 		/* search fman mac node */
 		phandle_prop = of_get_property(dev->of_node, "fsl,fman-mac",
 					       NULL);
@@ -63,6 +62,7 @@ void fsl_set_power_except(struct device *dev, int on)
 	qoriq_pm_ops->set_ip_power(on, pw_mask);
 
 	return;
+
 err:
 	dev_err(dev, "Can not set wakeup sources\n");
 	return;
