@@ -958,7 +958,7 @@ static const struct qman_fq oh_egress_ernq = {
 	.cb = { .ern = lag_public_egress_ern}
 };
 
-static int oh_add_channel(void *__arg)
+static int op_add_channel(void *__arg)
 {
 	int cpu;
 	struct qman_portal *portal;
@@ -973,18 +973,10 @@ static int oh_add_channel(void *__arg)
 	return 0;
 }
 
-static int init_oh_errq_defq(struct device *dev,
-		uint32_t fqid_err, uint32_t fqid_def,
-		struct dpa_fq **oh_errq, struct dpa_fq **oh_defq,
-		uint16_t *priv_channel)
+static int op_alloc_pool_channel(uint16_t *priv_channel)
 {
 	int errno;
-	struct dpa_fq *errq, *defq;
-	/* These two vaules come from DPA-Eth driver */
-	uint8_t wq_errq = 2, wq_defq = 1;
 	u32 channel;
-	struct qm_mcc_initfq initfq;
-	struct qm_fqd fqd;
 	struct task_struct *kth;
 
 	/* Get a channel */
@@ -998,12 +990,29 @@ static int init_oh_errq_defq(struct device *dev,
 	 * and add this pool channel to each's dequeue mask.
 	 */
 
-	kth = kthread_run(oh_add_channel, (void *)(unsigned long)channel,
-			  "oh_add_channel");
+	kth = kthread_run(op_add_channel, (void *)(unsigned long)channel,
+			  "op_add_channel");
 	if (!kth) {
 		pr_warn("run kthread faild...\n");
 		return -ENOMEM;
 	}
+
+	*priv_channel = (uint16_t)channel;
+
+	return 0;
+}
+
+static int init_oh_errq_defq(struct device *dev,
+		uint32_t fqid_err, uint32_t fqid_def,
+		struct dpa_fq **oh_errq, struct dpa_fq **oh_defq,
+		uint16_t channel)
+{
+	int errno;
+	struct dpa_fq *errq, *defq;
+	/* These two vaules come from DPA-Eth driver */
+	uint8_t wq_errq = 2, wq_defq = 1;
+	struct qm_mcc_initfq initfq;
+	struct qm_fqd fqd;
 
 	/* Allocate memories for Tx ErrQ and Tx DefQ of oh port */
 	errq = devm_kzalloc(dev, sizeof(struct dpa_fq), GFP_KERNEL);
@@ -1036,7 +1045,6 @@ static int init_oh_errq_defq(struct device *dev,
 		return errno;
 	}
 
-	*priv_channel = (uint16_t)channel;
 	/* Set the FQs init options then init the FQs */
 	initfq.we_mask = QM_INITFQ_WE_DESTWQ;
 	initfq.fqd.dest.channel = (uint16_t)channel;
@@ -1485,12 +1493,23 @@ int get_oh_info(void)
 				return -EINVAL;
 			}
 
+			if (!poh[i].p_oh_rcv_channel) {
+				uint16_t ch;
+				errno = op_alloc_pool_channel(&ch);
+				if (errno) {
+					pr_err("Get pool channel error.\n");
+					return errno;
+				} else {
+					poh[i].p_oh_rcv_channel = ch;
+				}
+			}
+
 			errno = init_oh_errq_defq(poh[i].dpa_oh_dev,
 					poh[i].oh_config->error_fqid,
 					poh[i].oh_config->default_fqid,
 					&poh[i].oh_errq,
 					&poh[i].oh_defq,
-					&poh[i].p_oh_rcv_channel);
+					poh[i].p_oh_rcv_channel);
 			if (errno != BOND_OH_SUCCESS) {
 				pr_err("error when probe errq or defq.\n");
 				return errno;
