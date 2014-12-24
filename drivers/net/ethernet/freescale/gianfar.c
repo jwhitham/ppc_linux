@@ -601,22 +601,6 @@ static void gfar_ints_enable(struct gfar_private *priv)
 	}
 }
 
-void lock_tx_qs(struct gfar_private *priv)
-{
-	int i;
-
-	for (i = 0; i < priv->num_tx_queues; i++)
-		spin_lock(&priv->tx_queue[i]->txlock);
-}
-
-void unlock_tx_qs(struct gfar_private *priv)
-{
-	int i;
-
-	for (i = 0; i < priv->num_tx_queues; i++)
-		spin_unlock(&priv->tx_queue[i]->txlock);
-}
-
 static int gfar_alloc_tx_queues(struct gfar_private *priv)
 {
 	int i;
