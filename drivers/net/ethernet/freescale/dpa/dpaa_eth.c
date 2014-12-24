@@ -721,8 +721,7 @@ void dpa_private_napi_del(struct net_device *net_dev)
 }
 EXPORT_SYMBOL(dpa_private_napi_del);
 
-static int dpa_private_netdev_init(struct device_node *dpa_node,
-				struct net_device *net_dev)
+static int dpa_private_netdev_init(struct net_device *net_dev)
 {
 	int i;
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
@@ -757,7 +756,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	/* Advertise GRO support */
 	net_dev->features |= NETIF_F_GRO;
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
+	return dpa_netdev_init(net_dev, mac_addr, tx_timeout);
 }
 
 static struct dpa_bp * __cold
@@ -1062,7 +1061,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		goto napi_add_failed;
 
-	err = dpa_private_netdev_init(dpa_node, net_dev);
+	err = dpa_private_netdev_init(net_dev);
 
 	if (err < 0)
 		goto netdev_init_failed;

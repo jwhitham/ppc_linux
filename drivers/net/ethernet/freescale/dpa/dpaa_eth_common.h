@@ -128,10 +128,9 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks);
 extern struct dpaa_eth_hooks_s dpaa_eth_hooks;
 #endif
 
-int dpa_netdev_init(struct device_node *dpa_node,
-		struct net_device *net_dev,
-		const uint8_t *mac_addr,
-		uint16_t tx_timeout);
+int dpa_netdev_init(struct net_device *net_dev,
+		    const uint8_t *mac_addr,
+		    uint16_t tx_timeout);
 int __cold dpa_start(struct net_device *net_dev);
 int __cold dpa_stop(struct net_device *net_dev);
 void __cold dpa_timeout(struct net_device *net_dev);

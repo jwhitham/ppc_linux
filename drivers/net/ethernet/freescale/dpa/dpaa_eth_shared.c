@@ -596,7 +596,7 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 		NETIF_F_LLTX);
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr, shared_tx_timeout);
+	return dpa_netdev_init(net_dev, mac_addr, shared_tx_timeout);
 }
 
 #ifdef CONFIG_PM

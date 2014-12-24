@@ -223,7 +223,7 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 		net_dev->mem_start = mac_dev->res->start;
 		net_dev->mem_end = mac_dev->res->end;
 
-		return dpa_netdev_init(dpa_node, net_dev, mac_dev->addr,
+		return dpa_netdev_init(net_dev, mac_dev->addr,
 				macless_tx_timeout);
 	} else {
 		/* Get the MAC address from device tree */
@@ -235,7 +235,7 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 			return -EINVAL;
 		}
 
-		return dpa_netdev_init(dpa_node, net_dev, mac_addr,
+		return dpa_netdev_init(net_dev, mac_addr,
 				macless_tx_timeout);
 	}
 }
