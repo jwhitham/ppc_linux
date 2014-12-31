@@ -553,6 +553,9 @@ netEnvParams_err:
 int release_pcd_mem(struct bonding *bond)
 {
 
+	if (!bond->params.ohp)
+		return BOND_OH_SUCCESS;
+
 	kfree(bond->params.ohp->prsParam);
 	kfree(bond->params.ohp->kgParam);
 	kfree(bond->params.ohp->pcdParam);
