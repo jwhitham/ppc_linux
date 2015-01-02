@@ -350,11 +350,15 @@ static bool is_dpa_eth_port(struct net_device *netdev)
 
 bool are_all_slaves_linkup(struct bonding *bond)
 {
-	struct slave *slave;
+	struct slave *s;
 
-	bond_for_each_slave(bond, slave)
-		if (!(IS_UP(slave->dev)))
+	bond_for_each_slave(bond, s) {
+		hw_lag_dbg("This slave:%s link status is up:%s\n",
+			   s->dev->name, IS_UP(s->dev) ? "true" : "false");
+
+		if (!(IS_UP(s->dev)))
 			return false;
+	}
 
 	return true;
 }
