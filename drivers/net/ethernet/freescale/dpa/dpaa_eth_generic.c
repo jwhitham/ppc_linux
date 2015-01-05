@@ -1253,7 +1253,7 @@ static int dpa_generic_fq_init(struct dpa_fq *dpa_fq, int disable_buff_dealloc)
 			initfq.fqd.context_a.stashing.annotation_cl = 1;
 			initfq.fqd.context_a.stashing.context_cl =
 				DIV_ROUND_UP(sizeof(struct qman_fq), 64);
-		};
+		}
 
 		_errno = qman_init_fq(fq, QMAN_INITFQ_FLAG_SCHED, &initfq);
 		if (_errno < 0) {
