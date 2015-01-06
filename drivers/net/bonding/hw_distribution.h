@@ -48,7 +48,7 @@
 #include "fm_cc.h"
 #include "crc64.h"
 
-#define OHFRIENDNAMSIZ	10	/* fman0-oh@1, ...  fman1-oh@6 */
+#define OHFRIENDNAMSIZ	11	/* fman0-oh@1, ...  fman1-oh@6 */
 #define OHNODENAMSIZ	24	/* /fsl,dpaa/dpa-fman0-oh@1 */
 #define BOND_OH_SUCCESS	0
 #define BOND_OH_ERROR	-1
