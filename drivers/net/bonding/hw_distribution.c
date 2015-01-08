@@ -336,13 +336,15 @@ ssize_t bonding_store_oh_enable(struct device *d,
  */
 static bool is_dpa_eth_port(struct net_device *netdev)
 {
+	int ret;
 	struct device *dev = (struct device *) &(netdev->dev);
 
-	if ((strlen(dev_driver_string(dev->parent)) >= 7) &&
-		strncmp(dev_driver_string(dev->parent), "fsl_dpa", 7) == 0)
-		return true;
-	else
-		return false;
+	if (strlen(dev_driver_string(dev->parent)) >= 7) {
+		ret = strncmp(dev_driver_string(dev->parent), "fsl_dpa", 7);
+		return ret ? false : true;
+	}
+
+	return false;
 }
 
 bool are_all_slaves_linkup(struct bonding *bond)
