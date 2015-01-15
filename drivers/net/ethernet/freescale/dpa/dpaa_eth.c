@@ -1085,11 +1085,11 @@ pfc_mapping_failed:
 #endif
 	dpa_fq_free(dev, &priv->dpa_fq_list);
 fq_alloc_failed:
+	qman_delete_cgr_safe(&priv->ingress_cgr);
 	qman_release_cgrid(priv->ingress_cgr.cgrid);
-	qman_delete_cgr(&priv->ingress_cgr);
 rx_cgr_init_failed:
+	qman_delete_cgr_safe(&priv->cgr_data.cgr);
 	qman_release_cgrid(priv->cgr_data.cgr.cgrid);
-	qman_delete_cgr(&priv->cgr_data.cgr);
 tx_cgr_init_failed:
 add_channel_failed:
 get_channel_failed:
