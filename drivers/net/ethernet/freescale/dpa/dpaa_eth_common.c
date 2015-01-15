@@ -1025,6 +1025,12 @@ int dpa_get_channel(void)
 }
 EXPORT_SYMBOL(dpa_get_channel);
 
+void dpa_release_channel(void)
+{
+	qman_release_pool(rx_pool_channel);
+}
+EXPORT_SYMBOL(dpa_release_channel);
+
 int dpaa_eth_add_channel(void *__arg)
 {
 	const cpumask_t *cpus = qman_affine_cpus();

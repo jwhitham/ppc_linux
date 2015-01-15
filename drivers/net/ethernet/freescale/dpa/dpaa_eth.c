@@ -1170,6 +1170,11 @@ static void __exit __cold dpa_unload(void)
 	dpa_debugfs_module_exit();
 #endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
+	/* Only one channel is used and needs to be relased after all
+	 * interfaces are removed
+	 */
+	dpa_release_channel();
+
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 }
