@@ -1215,6 +1215,8 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 	fq = &dpa_fq->fq_base;
 
 	if (dpa_fq->init) {
+		memset(&initfq, 0, sizeof(initfq));
+
 		initfq.we_mask = QM_INITFQ_WE_FQCTRL;
 		/* FIXME: why would we want to keep an empty FQ in cache? */
 		initfq.fqd.fq_ctrl = QM_FQCTRL_PREFERINCACHE;
@@ -1276,9 +1278,11 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 			/* ContextA: OVOM=1 (use contextA2 bits instead of ICAD)
 			 *	     A2V=1 (contextA A2 field is valid)
 			 *           A0V=1 (contextA A0 field is valid)
+			 *	     B0V=1 (contextB field is valid)
 			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
+			 * ContextB B0(ASPID): 0 (absolute Virtual Storage ID)
 			 */
-				initfq.fqd.context_a.hi = 0x1a000000;
+				initfq.fqd.context_a.hi = 0x1e000000;
 				initfq.fqd.context_a.lo = 0x80000000;
 			}
 		}
