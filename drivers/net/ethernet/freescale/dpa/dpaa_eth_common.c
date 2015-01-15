@@ -514,6 +514,11 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	err = dpa_fq_free(dev, &priv->dpa_fq_list);
 
+	qman_delete_cgr_safe(&priv->ingress_cgr);
+	qman_release_cgrid(priv->ingress_cgr.cgrid);
+	qman_delete_cgr_safe(&priv->cgr_data.cgr);
+	qman_release_cgrid(priv->cgr_data.cgr.cgrid);
+
 	dpa_private_napi_del(net_dev);
 
 	dpa_bp_free(priv, priv->dpa_bp);
