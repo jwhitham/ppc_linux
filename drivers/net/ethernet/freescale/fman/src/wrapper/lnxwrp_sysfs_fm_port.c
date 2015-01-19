@@ -692,6 +692,11 @@ static ssize_t show_fm_port_ipv4_options(struct device *dev,
 	if (!p_LnxWrpFmPortDev->h_Dev) {
 		n = snprintf(buf, PAGE_SIZE, "\tFM Port not configured...\n");
 		return n;
+	} else if (((t_FmPort *)p_LnxWrpFmPortDev->h_Dev)->p_ParamsPage
+					== NULL) {
+		n = snprintf(buf, PAGE_SIZE,
+			"\tPort: FMan-controller params page not set\n");
+		return n;
 	} else {
 		n = snprintf(buf, PAGE_SIZE,
 			"Counter for fragmented pkt with IP header options\n");
