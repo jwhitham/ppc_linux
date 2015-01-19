@@ -5331,18 +5331,16 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 	/* Abort if this SA is not being used */
 	if (!sa_in_use(sa)) {
 		log_err("SA with id %d is not in use\n", sa_id);
-		mutex_unlock(&sa->lock);
 		ret = -ENODEV;
-		goto out;
+		goto sa_get_stats_return;
 	}
 
 	memset(sa_stats, 0, sizeof(*sa_stats));
 
 	if (!sa->enable_stats) {
 		log_err("Statistics are not enabled for SA id %d\n", sa_id);
-		mutex_unlock(&sa->lock);
 		ret = -EPERM;
-		goto out;
+		goto sa_get_stats_return;
 	}
 
 	desc = (uint32_t *)sa->sec_desc->desc;
@@ -5357,9 +5355,8 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 	if (!sa->enable_extended_stats)
 		goto sa_get_stats_return;
 
-	memset(&stats, 0, sizeof(stats));
-
 	if (sa_is_inbound(sa)) { /* Inbound SA */
+		memset(&stats, 0, sizeof(stats));
 		ret = dpa_classif_table_get_entry_stats_by_ref(
 					sa->inbound_sa_td,
 					sa->inbound_hash_entry,
@@ -5367,11 +5364,10 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 		if (ret != 0) {
 			log_err("Failed to acquire total packets counter for inbound SA Id=%d.\n",
 				sa_id);
-			mutex_unlock(&sa->lock);
-			goto out;
-		} else {
-			sa_stats->input_packets	= stats.pkts;
+			goto sa_get_stats_return;
 		}
+
+		sa_stats->input_packets	= stats.pkts;
 	} else { /* Outbound SA */
 		struct dpa_ipsec_policy_entry *out_policy;
 		struct dpa_ipsec_policy_params *policy_params;
@@ -5397,6 +5393,7 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 			 * acquire statistics for the policy and exit
 			 */
 			if (!policy_params->use_dscp) {
+				memset(&stats, 0, sizeof(stats));
 				ret = dpa_classif_table_get_entry_stats_by_ref(
 						td,
 						*out_policy->entry_id,
@@ -5404,24 +5401,24 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 				if (ret != 0) {
 					log_err("Failed to acquire total packets counter for outbound SA Id=%d. Failure occured on outbound policy table %d (td=%d).\n",
 						sa_id, table_idx, td);
-					mutex_unlock(&sa->lock);
-					goto out;
-				} else {
-					sa_stats->input_packets	+= stats.pkts;
 					goto sa_get_stats_return;
 				}
+
+				sa_stats->input_packets	+= stats.pkts;
+				continue;
 			}
 
 			/*
-			 * In case the SA per DSCP feature is enabled, will
-			 * iterate through all DSCP values defined for the
-			 * SA and totalize statistics
+			 * In case the SA per DSCP feature is enabled,
+			 * will iterate through all DSCP values
+			 * defined for the SA and totalize statistics
 			 */
 			do {
+				memset(&stats, 0, sizeof(stats));
 				ret = dpa_classif_table_get_entry_stats_by_ref(
-						td,
-						out_policy->entry_id[dscp_idx],
-						&stats);
+					td,
+					out_policy->entry_id[dscp_idx++],
+					&stats);
 
 				if (ret != 0) {
 					/*
@@ -5429,11 +5426,10 @@ int dpa_ipsec_sa_get_stats(int sa_id, struct dpa_ipsec_sa_stats *sa_stats)
 					 * message and get to the next value
 					 */
 					log_err("Failed to acquire packets counter for outbound SA Id=%d. Failure occured on outbound policy table %d (td=%d).\n",
-							sa_id, table_idx, td);
-				} else {
-					sa_stats->input_packets	+= stats.pkts;
+						sa_id, table_idx, td);
+					goto sa_get_stats_return;
 				}
-				dscp_idx += 1;
+				sa_stats->input_packets	+= stats.pkts;
 			} while (dscp_idx <= sa->dscp_end - sa->dscp_start);
 		}
 	}
