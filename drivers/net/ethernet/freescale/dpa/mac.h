@@ -103,7 +103,8 @@ struct mac_device {
 	int (*set_wol)(struct fm_port *port, struct fm_mac_dev *fm_mac_dev,
 			bool en);
 	int (*dump_mac_regs)(struct mac_device *h_mac, char *buf, int nn);
-
+	int (*dump_mac_rx_stats)(struct mac_device *h_mac, char *buf, int nn);
+	int (*dump_mac_tx_stats)(struct mac_device *h_mac, char *buf, int nn);
 };
 
 struct mac_address {

@@ -169,6 +169,35 @@ static ssize_t dpaa_eth_show_mac_regs(struct device *dev,
 	return n;
 }
 
+static ssize_t dpaa_eth_show_mac_rx_stats(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
+	struct mac_device *mac_dev = priv->mac_dev;
+	int n = 0;
+
+	if (mac_dev)
+		n = fm_mac_dump_rx_stats(mac_dev, buf, n);
+	else
+		return sprintf(buf, "no mac rx stats\n");
+
+	return n;
+}
+
+static ssize_t dpaa_eth_show_mac_tx_stats(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dpa_priv_s *priv = netdev_priv(to_net_dev(dev));
+	struct mac_device *mac_dev = priv->mac_dev;
+	int n = 0;
+
+	if (mac_dev)
+		n = fm_mac_dump_tx_stats(mac_dev, buf, n);
+	else
+		return sprintf(buf, "no mac tx stats\n");
+
+	return n;
+}
 
 #ifdef CONFIG_FSL_DPAA_1588
 static ssize_t dpaa_eth_show_ptp_1588(struct device *dev,
@@ -215,6 +244,8 @@ static struct device_attribute dpaa_eth_attrs[] = {
 	__ATTR(fqids, S_IRUGO, dpaa_eth_show_fqids, NULL),
 	__ATTR(bpids, S_IRUGO, dpaa_eth_show_bpids, NULL),
 	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL),
+	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_rx_stats, NULL),
+	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_tx_stats, NULL),
 #ifdef CONFIG_FSL_DPAA_1588
 	__ATTR(ptp_1588, S_IRUGO | S_IWUSR, dpaa_eth_show_ptp_1588,
 					dpaa_eth_set_ptp_1588),

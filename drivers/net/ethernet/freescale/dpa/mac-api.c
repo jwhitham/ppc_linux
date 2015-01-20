@@ -667,15 +667,134 @@ static int memac_dump_regs(struct mac_device *h_mac, char *buf, int nn)
 	FM_DMP_V32(buf, n, p_mm, lpwake_timer);
 	FM_DMP_V32(buf, n, p_mm, sleep_timer);
 	FM_DMP_V32(buf, n, p_mm, statn_config);
-	FM_DMP_V32(buf, n, p_mm, if_mode);
-	FM_DMP_V32(buf, n, p_mm, if_status);
-	FM_DMP_V32(buf, n, p_mm, hg_config);
-	FM_DMP_V32(buf, n, p_mm, hg_pause_quanta);
-	FM_DMP_V32(buf, n, p_mm, hg_pause_thresh);
-	FM_DMP_V32(buf, n, p_mm, hgrx_pause_status);
-	FM_DMP_V32(buf, n, p_mm, hg_fifos_status);
-	FM_DMP_V32(buf, n, p_mm, rhm);
-	FM_DMP_V32(buf, n, p_mm, thm);
+        FM_DMP_V32(buf, n, p_mm, if_mode);
+        FM_DMP_V32(buf, n, p_mm, if_status);
+        FM_DMP_V32(buf, n, p_mm, hg_config);
+        FM_DMP_V32(buf, n, p_mm, hg_pause_quanta);
+        FM_DMP_V32(buf, n, p_mm, hg_pause_thresh);
+        FM_DMP_V32(buf, n, p_mm, hgrx_pause_status);
+        FM_DMP_V32(buf, n, p_mm, hg_fifos_status);
+        FM_DMP_V32(buf, n, p_mm, rhm);
+        FM_DMP_V32(buf, n, p_mm, thm);
+
+	return n;
+}
+
+static int memac_dump_regs_rx(struct mac_device *h_mac, char *buf, int nn)
+{
+        struct memac_regs       *p_mm = (struct memac_regs *) h_mac->vaddr;
+        int                     n = nn;
+
+        FM_DMP_SUBTITLE(buf, n, "\n");
+        FM_DMP_TITLE(buf, n, p_mm, "FM MAC - MEMAC -%d Rx stats", h_mac->cell_index);
+
+	/* Rx Statistics Counter */
+	FM_DMP_V32(buf, n, p_mm, reoct_l);
+	FM_DMP_V32(buf, n, p_mm, reoct_u);
+	FM_DMP_V32(buf, n, p_mm, roct_l);
+	FM_DMP_V32(buf, n, p_mm, roct_u);
+	FM_DMP_V32(buf, n, p_mm, raln_l);
+	FM_DMP_V32(buf, n, p_mm, raln_u);
+	FM_DMP_V32(buf, n, p_mm, rxpf_l);
+	FM_DMP_V32(buf, n, p_mm, rxpf_u);
+	FM_DMP_V32(buf, n, p_mm, rfrm_l);
+	FM_DMP_V32(buf, n, p_mm, rfrm_u);
+	FM_DMP_V32(buf, n, p_mm, rfcs_l);
+	FM_DMP_V32(buf, n, p_mm, rfcs_u);
+	FM_DMP_V32(buf, n, p_mm, rvlan_l);
+	FM_DMP_V32(buf, n, p_mm, rvlan_u);
+	FM_DMP_V32(buf, n, p_mm, rerr_l);
+	FM_DMP_V32(buf, n, p_mm, rerr_u);
+	FM_DMP_V32(buf, n, p_mm, ruca_l);
+	FM_DMP_V32(buf, n, p_mm, ruca_u);
+	FM_DMP_V32(buf, n, p_mm, rmca_l);
+	FM_DMP_V32(buf, n, p_mm, rmca_u);
+	FM_DMP_V32(buf, n, p_mm, rbca_l);
+	FM_DMP_V32(buf, n, p_mm, rbca_u);
+	FM_DMP_V32(buf, n, p_mm, rdrp_l);
+	FM_DMP_V32(buf, n, p_mm, rdrp_u);
+	FM_DMP_V32(buf, n, p_mm, rpkt_l);
+	FM_DMP_V32(buf, n, p_mm, rpkt_u);
+	FM_DMP_V32(buf, n, p_mm, rund_l);
+	FM_DMP_V32(buf, n, p_mm, rund_u);
+	FM_DMP_V32(buf, n, p_mm, r64_l);
+	FM_DMP_V32(buf, n, p_mm, r64_u);
+	FM_DMP_V32(buf, n, p_mm, r127_l);
+	FM_DMP_V32(buf, n, p_mm, r127_u);
+	FM_DMP_V32(buf, n, p_mm, r255_l);
+	FM_DMP_V32(buf, n, p_mm, r255_u);
+	FM_DMP_V32(buf, n, p_mm, r511_l);
+	FM_DMP_V32(buf, n, p_mm, r511_u);
+	FM_DMP_V32(buf, n, p_mm, r1023_l);
+	FM_DMP_V32(buf, n, p_mm, r1023_u);
+	FM_DMP_V32(buf, n, p_mm, r1518_l);
+	FM_DMP_V32(buf, n, p_mm, r1518_u);
+	FM_DMP_V32(buf, n, p_mm, r1519x_l);
+	FM_DMP_V32(buf, n, p_mm, r1519x_u);
+	FM_DMP_V32(buf, n, p_mm, rovr_l);
+	FM_DMP_V32(buf, n, p_mm, rovr_u);
+	FM_DMP_V32(buf, n, p_mm, rjbr_l);
+	FM_DMP_V32(buf, n, p_mm, rjbr_u);
+	FM_DMP_V32(buf, n, p_mm, rfrg_l);
+	FM_DMP_V32(buf, n, p_mm, rfrg_u);
+	FM_DMP_V32(buf, n, p_mm, rcnp_l);
+	FM_DMP_V32(buf, n, p_mm, rcnp_u);
+	FM_DMP_V32(buf, n, p_mm, rdrntp_l);
+	FM_DMP_V32(buf, n, p_mm, rdrntp_u);
+
+	return n;
+}
+
+static int memac_dump_regs_tx(struct mac_device *h_mac, char *buf, int nn)
+{
+        struct memac_regs       *p_mm = (struct memac_regs *) h_mac->vaddr;
+        int                     n = nn;
+
+        FM_DMP_SUBTITLE(buf, n, "\n");
+        FM_DMP_TITLE(buf, n, p_mm, "FM MAC - MEMAC -%d Tx stats", h_mac->cell_index);
+
+
+	/* Tx Statistics Counter */
+	FM_DMP_V32(buf, n, p_mm, teoct_l);
+	FM_DMP_V32(buf, n, p_mm, teoct_u);
+	FM_DMP_V32(buf, n, p_mm, toct_l);
+	FM_DMP_V32(buf, n, p_mm, toct_u);
+	FM_DMP_V32(buf, n, p_mm, txpf_l);
+	FM_DMP_V32(buf, n, p_mm, txpf_u);
+	FM_DMP_V32(buf, n, p_mm, tfrm_l);
+	FM_DMP_V32(buf, n, p_mm, tfrm_u);
+	FM_DMP_V32(buf, n, p_mm, tfcs_l);
+	FM_DMP_V32(buf, n, p_mm, tfcs_u);
+	FM_DMP_V32(buf, n, p_mm, tvlan_l);
+	FM_DMP_V32(buf, n, p_mm, tvlan_u);
+	FM_DMP_V32(buf, n, p_mm, terr_l);
+	FM_DMP_V32(buf, n, p_mm, terr_u);
+	FM_DMP_V32(buf, n, p_mm, tuca_l);
+	FM_DMP_V32(buf, n, p_mm, tuca_u);
+	FM_DMP_V32(buf, n, p_mm, tmca_l);
+	FM_DMP_V32(buf, n, p_mm, tmca_u);
+	FM_DMP_V32(buf, n, p_mm, tbca_l);
+	FM_DMP_V32(buf, n, p_mm, tbca_u);
+	FM_DMP_V32(buf, n, p_mm, tpkt_l);
+	FM_DMP_V32(buf, n, p_mm, tpkt_u);
+	FM_DMP_V32(buf, n, p_mm, tund_l);
+	FM_DMP_V32(buf, n, p_mm, tund_u);
+	FM_DMP_V32(buf, n, p_mm, t64_l);
+	FM_DMP_V32(buf, n, p_mm, t64_u);
+	FM_DMP_V32(buf, n, p_mm, t127_l);
+	FM_DMP_V32(buf, n, p_mm, t127_u);
+	FM_DMP_V32(buf, n, p_mm, t255_l);
+	FM_DMP_V32(buf, n, p_mm, t255_u);
+	FM_DMP_V32(buf, n, p_mm, t511_l);
+	FM_DMP_V32(buf, n, p_mm, t511_u);
+	FM_DMP_V32(buf, n, p_mm, t1023_l);
+	FM_DMP_V32(buf, n, p_mm, t1023_u);
+	FM_DMP_V32(buf, n, p_mm, t1518_l);
+	FM_DMP_V32(buf, n, p_mm, t1518_u);
+	FM_DMP_V32(buf, n, p_mm, t1519x_l);
+	FM_DMP_V32(buf, n, p_mm, t1519x_u);
+	FM_DMP_V32(buf, n, p_mm, tcnp_l);
+	FM_DMP_V32(buf, n, p_mm, tcnp_u);
 
 	return n;
 }
@@ -689,6 +808,26 @@ int fm_mac_dump_regs(struct mac_device *h_mac, char *buf, int nn)
 	return n;
 }
 EXPORT_SYMBOL(fm_mac_dump_regs);
+
+int fm_mac_dump_rx_stats(struct mac_device *h_mac, char *buf, int nn)
+{
+	int     n = nn;
+
+	if(h_mac->dump_mac_rx_stats)
+		n = h_mac->dump_mac_rx_stats(h_mac, buf, n);
+
+	return n;
+}
+
+int fm_mac_dump_tx_stats(struct mac_device *h_mac, char *buf, int nn)
+{
+	int     n = nn;
+
+	if(h_mac->dump_mac_tx_stats)
+		n = h_mac->dump_mac_tx_stats(h_mac, buf, n);
+
+	return n;
+}
 
 static void __cold setup_dtsec(struct mac_device *mac_dev)
 {
@@ -757,6 +896,8 @@ static void __cold setup_memac(struct mac_device *mac_dev)
 	mac_dev->fm_rtc_set_fiper	= fm_rtc_set_fiper;
 	mac_dev->set_wol		= fm_mac_set_wol;
 	mac_dev->dump_mac_regs		= memac_dump_regs;
+	mac_dev->dump_mac_rx_stats	= memac_dump_regs_rx;
+	mac_dev->dump_mac_tx_stats	= memac_dump_regs_tx;
 }
 
 void (*const mac_setup[])(struct mac_device *mac_dev) = {
