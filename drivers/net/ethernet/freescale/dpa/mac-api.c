@@ -449,7 +449,7 @@ static int dtsec_init_phy(struct net_device *net_dev,
 
 	/* Remove any features not supported by the controller */
 	phy_dev->supported &= mac_dev->if_support;
-	/* Enable the symmetric and asymmetric PAUSE frame advertisments,
+	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */
 	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
@@ -480,7 +480,7 @@ static int xgmac_init_phy(struct net_device *net_dev,
 	}
 
 	phy_dev->supported &= mac_dev->if_support;
-	/* Enable the symmetric and asymmetric PAUSE frame advertisments,
+	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */
 	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
@@ -523,7 +523,7 @@ static int memac_init_phy(struct net_device *net_dev,
 
 	/* Remove any features not supported by the controller */
 	phy_dev->supported &= mac_dev->if_support;
-	/* Enable the symmetric and asymmetric PAUSE frame advertisments,
+	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */
 	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
