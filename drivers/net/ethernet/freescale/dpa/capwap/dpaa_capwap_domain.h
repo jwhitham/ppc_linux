@@ -131,6 +131,7 @@ struct dpaa_capwap_domain {
 	struct dpaa_capwap_domain_fqs *fqs;
 	struct net_device *net_dev; /* Device for CAPWAP Ethernet */
 	uint8_t bpid;
+	size_t bp_size;
 };
 
 static inline struct dpaa_capwap_tunnel *dequeue_tunnel_obj(
@@ -167,7 +168,8 @@ struct dpaa_capwap_domain_fqs *get_domain_fqs(void);
 int op_init(struct t_Port *port, struct net_device *net_dev);
 int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain);
 int capwap_tunnel_drv_init(struct dpaa_capwap_domain *domain);
-uint8_t get_capwap_bpid(struct net_device *net_dev);
+void get_capwap_bp(struct net_device *net_dev,
+		struct dpaa_capwap_domain *capwap_domain);
 int capwap_br_init(struct dpaa_capwap_domain *domain);
 uint16_t get_flow_index(bool is_dtls, bool is_control_tunnel);
 int capwap_kernel_rx_ctl(struct capwap_domain_kernel_rx_ctl *rx_ctl);

@@ -41,12 +41,14 @@
 #include "dpaa_capwap_fq.h"
 #include "dpaa_capwap_domain.h"
 
-uint8_t get_capwap_bpid(struct net_device *net_dev)
+void get_capwap_bp(struct net_device *net_dev,
+		struct dpaa_capwap_domain *capwap_domain)
 {
 	struct dpa_priv_s               *priv;
 
 	priv = netdev_priv(net_dev);
-	return priv->dpa_bp->bpid;
+	capwap_domain->bpid = priv->dpa_bp->bpid;
+	capwap_domain->bp_size = priv->dpa_bp->size;
 }
 
 int op_init(struct t_Port *port, struct net_device *net_dev)

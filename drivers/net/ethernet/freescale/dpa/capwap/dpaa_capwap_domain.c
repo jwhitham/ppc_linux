@@ -430,7 +430,7 @@ int dpaa_capwap_domain_init(struct dpaa_capwap_domain *capwap_domain)
 	}
 
 	capwap_domain->net_dev = net_dev;
-	capwap_domain->bpid = get_capwap_bpid(net_dev);
+	get_capwap_bp(net_dev, capwap_domain);
 
 	err = op_init(&capwap_domain->post_dec_op_port, net_dev);
 	if (err) {
@@ -613,6 +613,8 @@ int add_in_tunnel(struct dpaa_capwap_domain *capwap_domain,
 
 		preheader_initdesc->prehdr.lo.field.pool_id =
 			capwap_domain->bpid;
+		preheader_initdesc->prehdr.lo.field.pool_buffer_size =
+			capwap_domain->bp_size;
 		preheader_initdesc->prehdr.lo.field.offset = 1;
 		preheader_initdesc->prehdr.hi.field.idlen = desc_len;
 
@@ -1014,6 +1016,8 @@ int add_out_tunnel(struct dpaa_capwap_domain *capwap_domain,
 
 		preheader_initdesc->prehdr.lo.field.pool_id =
 			capwap_domain->bpid;
+		preheader_initdesc->prehdr.lo.field.pool_buffer_size =
+			capwap_domain->bp_size;
 		/* 64bytes offset in output fd*/
 		preheader_initdesc->prehdr.lo.field.offset = 2;
 		preheader_initdesc->prehdr.hi.field.idlen = desc_len;
