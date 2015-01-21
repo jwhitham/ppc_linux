@@ -390,8 +390,8 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 	struct clk *parent;
 	int ret;
 	struct cpu_data *data = per_cpu(cpu_data, policy->cpu);
-#if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
 	int workaround = 0;
+#if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
 
 	/*
 	 * workaround should be applied on 2 conditions:
@@ -420,11 +420,17 @@ static int qoriq_cpufreq_target(struct cpufreq_policy *policy,
 	parent = of_clk_get(data->parent, data->table[new].driver_data);
 
 #if (defined(CONFIG_PPC) && defined(CONFIG_HOTPLUG_CPU))
-	if (t4240_workaround == 1) {
+	if (workaround == 1) {
 		freqs.new = freqs.old;
 		ret = -1;
 	}
 #endif
+
+	if (workaround == 0) {
+		ret = clk_set_parent(data->clk, parent);
+		if (ret)
+			ret = -1;
+	}
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
 	mutex_unlock(&cpufreq_lock);
