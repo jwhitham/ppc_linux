@@ -32,7 +32,6 @@
 #include <linux/module.h>
 #include <linux/fsl_qman.h>	/* struct qm_mcr_querycgr */
 #include <linux/debugfs.h>
-#include <asm/debug.h>
 #include "dpaa_debugfs.h"
 #include "dpaa_eth.h" /* struct dpa_priv_s, dpa_percpu_priv_s, dpa_bp */
 
@@ -325,8 +324,7 @@ int dpa_netdev_debugfs_create(struct net_device *net_dev)
 							 net_dev,
 							 &dpa_debugfs_fops);
 	if (unlikely(priv->debugfs_file == NULL)) {
-		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s)",
-				powerpc_debugfs_root->d_iname,
+		netdev_err(net_dev, "debugfs_create_file(%s/%s)",
 				dpa_debugfs_root->d_iname,
 				net_dev->name);
 
@@ -341,8 +339,7 @@ int dpa_netdev_debugfs_create(struct net_device *net_dev)
 							 net_dev,
 							 &dpa_debugfs_lp_fops);
 	if (unlikely(priv->debugfs_loop_file == NULL)) {
-		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s)",
-				powerpc_debugfs_root->d_iname,
+		netdev_err(net_dev, "debugfs_create_file(%s/%s)",
 				dpa_debugfs_root->d_iname,
 				loop_file_name);
 
@@ -368,14 +365,14 @@ int __init dpa_debugfs_module_init(void)
 
 	pr_info(KBUILD_MODNAME ": " DPA_DEBUGFS_DESCRIPTION " (" VERSION ")\n");
 
-	dpa_debugfs_root = debugfs_create_dir(DPA_ETH_DEBUGFS_ROOT,
-					      powerpc_debugfs_root);
+	dpa_debugfs_root = debugfs_create_dir(DPA_ETH_DEBUGFS_ROOT, NULL);
+
 	if (unlikely(dpa_debugfs_root == NULL)) {
 		_errno = -ENOMEM;
 		pr_err(KBUILD_MODNAME ": %s:%hu:%s():\n",
 				   KBUILD_BASENAME".c", __LINE__, __func__);
 		pr_err("\tdebugfs_create_dir(%s/"KBUILD_MODNAME") = %d\n",
-			   powerpc_debugfs_root->d_iname, _errno);
+			   DPA_ETH_DEBUGFS_ROOT, _errno);
 	}
 
 	return _errno;

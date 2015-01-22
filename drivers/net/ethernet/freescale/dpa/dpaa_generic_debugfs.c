@@ -32,7 +32,6 @@
 #include <linux/module.h>
 #include <linux/fsl_qman.h>
 #include <linux/debugfs.h>
-#include <asm/debug.h>
 
 #include "dpaa_eth_generic.h"
 
@@ -236,8 +235,7 @@ int dpa_generic_debugfs_create(struct net_device *net_dev)
 							 net_dev,
 							 &dpa_debugfs_fops);
 	if (unlikely(priv->debugfs_file == NULL)) {
-		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s)",
-				powerpc_debugfs_root->d_iname,
+		netdev_err(net_dev, "debugfs_create_file(%s/%s)",
 				dpa_debugfs_root->d_iname,
 				net_dev->name);
 
@@ -261,13 +259,13 @@ int __init dpa_generic_debugfs_module_init(void)
 	pr_info(KBUILD_MODNAME ": " DPA_DEBUGFS_DESCRIPTION " (" VERSION ")\n");
 
 	dpa_debugfs_root = debugfs_create_dir(DPA_GENERIC_ETH_DEBUGFS_ROOT,
-					      powerpc_debugfs_root);
+			NULL);
 	if (unlikely(dpa_debugfs_root == NULL)) {
 		_errno = -ENOMEM;
 		pr_err(KBUILD_MODNAME ": %s:%hu:%s():\n",
 				   KBUILD_BASENAME".c", __LINE__, __func__);
 		pr_err("\tdebugfs_create_dir(%s/"KBUILD_MODNAME") = %d\n",
-			   powerpc_debugfs_root->d_iname, _errno);
+			   DPA_GENERIC_ETH_DEBUGFS_ROOT, _errno);
 	}
 
 	return _errno;
