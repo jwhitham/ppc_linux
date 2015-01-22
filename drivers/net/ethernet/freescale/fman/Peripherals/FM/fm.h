@@ -306,7 +306,8 @@ switch (exception){                                         \
     (((major == 2) || (major == 5)) ?           \
      (100*KILOBYTE) : ((major == 4) ?           \
      (49*KILOBYTE) : (122*KILOBYTE)))
-#define DEFAULT_totalNumOfTasks             BMI_MAX_NUM_OF_TASKS
+#define DEFAULT_totalNumOfTasks(major, minor)   \
+            BMI_MAX_NUM_OF_TASKS
 
 #define DEFAULT_dmaCommQLow                 ((DMA_THRESH_MAX_COMMQ+1)/2)
 #define DEFAULT_dmaCommQHigh                ((DMA_THRESH_MAX_COMMQ+1)*3/4)
@@ -335,7 +336,9 @@ switch (exception){                                         \
 	(((major == 6) && ((minor == 1) || (minor == 4))) ?	\
 	(156*KILOBYTE) : (295*KILOBYTE))
 
-#define DEFAULT_totalNumOfTasks             124
+/* According to the default value of FMBM_CFG2[TNTSKS] */
+#define DEFAULT_totalNumOfTasks(major, minor)   \
+      (((major == 6) && ((minor == 1) || (minor == 4))) ? 59 : 124)
 
 #define DEFAULT_dmaCommQLow                 0x2A
 #define DEFAULT_dmaCommQHigh                0x3F

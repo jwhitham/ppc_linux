@@ -3401,7 +3401,10 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 #endif /* FM_QMI_NO_DEQ_OPTIONS_SUPPORT */
 
         p_Fm->p_FmStateStruct->totalFifoSize        = 0;
-        p_Fm->p_FmStateStruct->totalNumOfTasks      = DEFAULT_totalNumOfTasks;
+        p_Fm->p_FmStateStruct->totalNumOfTasks      = 
+            DEFAULT_totalNumOfTasks(p_Fm->p_FmStateStruct->revInfo.majorRev,
+                                    p_Fm->p_FmStateStruct->revInfo.minorRev);
+
 #ifdef FM_HAS_TOTAL_DMAS
         p_Fm->p_FmStateStruct->maxNumOfOpenDmas     = BMI_MAX_NUM_OF_DMAS;
 #endif /* FM_HAS_TOTAL_DMAS */
