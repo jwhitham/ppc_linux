@@ -35,6 +35,13 @@
 #define CCSR_SCFG_DPSLPCR	0
 #define CCSR_SCFG_DPSLPCR_VAL	0x1
 #define CCSR_SCFG_PMCINTECR	0x160
+#define CCSR_SCFG_PMCINTECR_LPUART	0x40000000
+#define CCSR_SCFG_PMCINTECR_FTM		0x20000000
+#define CCSR_SCFG_PMCINTECR_GPIO	0x10000000
+#define CCSR_SCFG_PMCINTECR_IRQ0	0x08000000
+#define CCSR_SCFG_PMCINTECR_IRQ1	0x04000000
+#define CCSR_SCFG_PMCINTECR_ETSECRXG0	0x00800000
+#define CCSR_SCFG_PMCINTECR_ETSECRXG1	0x00400000
 #define CCSR_SCFG_PMCINTLECR	0x164
 #define CCSR_SCFG_PMCINTSR	0x168
 #define CCSR_SCFG_SPARECR2	0x504
@@ -50,7 +57,11 @@
 #define CCSR_RCPM_CLPCL10SETR		0x1c4
 #define CCSR_RCPM_CLPCL10SETR_C0	0x1
 #define CCSR_RCPM_IPPDEXPCR0		0x140
+#define CCSR_RCPM_IPPDEXPCR0_ETSEC	0x80000000
+#define CCSR_RCPM_IPPDEXPCR0_GPIO	0x00000040
 #define CCSR_RCPM_IPPDEXPCR1		0x144
+#define CCSR_RCPM_IPPDEXPCR1_LPUART	0x40000000
+#define CCSR_RCPM_IPPDEXPCR1_FLEXTIMER	0x20000000
 
 #define QIXIS_CTL_SYS			0x5
 #define QIXIS_CTL_SYS_EVTSW_MASK	0x0c
@@ -63,6 +74,10 @@
 #define OCRAM_SIZE	0x10000		/* 64K */
 /* use the last page of SRAM */
 #define SRAM_CODE_BASE_PHY	(OCRAM_BASE + OCRAM_SIZE - PAGE_SIZE)
+
+#define SLEEP_ARRAY_SIZE	3
+
+static u32 ippdexpcr0, ippdexpcr1;
 
 struct ls1_pm_baseaddr {
 	void __iomem *epu;
@@ -132,17 +147,35 @@ static void ls1_pm_uniomap(void)
 	iounmap(ls1_pm_base.sram);
 }
 
-
-static void ls1_setup_wakeup_source(void)
+static void ls1_setup_pmc_int(void)
 {
+	u32 pmcintecr;
+
+	pmcintecr = 0;
+	if (ippdexpcr0 & CCSR_RCPM_IPPDEXPCR0_ETSEC)
+		pmcintecr |= CCSR_SCFG_PMCINTECR_ETSECRXG0 |
+				CCSR_SCFG_PMCINTECR_ETSECRXG1;
+
+	if (ippdexpcr0 & CCSR_RCPM_IPPDEXPCR0_GPIO)
+		pmcintecr |= CCSR_SCFG_PMCINTECR_GPIO;
+
+	if (ippdexpcr1 & CCSR_RCPM_IPPDEXPCR1_LPUART)
+		pmcintecr |= CCSR_SCFG_PMCINTECR_LPUART;
+
+	if (ippdexpcr1 & CCSR_RCPM_IPPDEXPCR1_FLEXTIMER)
+		pmcintecr |= CCSR_SCFG_PMCINTECR_FTM;
+
+	/* always set external IRQ pins as wakeup source */
+	pmcintecr |= CCSR_SCFG_PMCINTECR_IRQ0 | CCSR_SCFG_PMCINTECR_IRQ1;
+
 	/* enable wakeup interrupt during deep sleep */
-	iowrite32be(0xfcfc0000, ls1_pm_base.scfg + CCSR_SCFG_PMCINTECR);
+	iowrite32be(pmcintecr, ls1_pm_base.scfg + CCSR_SCFG_PMCINTECR);
 	iowrite32be(0, ls1_pm_base.scfg + CCSR_SCFG_PMCINTLECR);
 	/* clear PMC interrupt status */
 	iowrite32be(0xffffffff, ls1_pm_base.scfg + CCSR_SCFG_PMCINTSR);
 }
 
-static void ls1_clear_wakeup_source(void)
+static void ls1_clear_pmc_int(void)
 {
 	/* disable wakeup interrupt during deep sleep */
 	iowrite32be(0, ls1_pm_base.scfg + CCSR_SCFG_PMCINTECR);
@@ -153,8 +186,8 @@ static void ls1_clear_wakeup_source(void)
 /* set IP powerdown exception, make them work during sleep/deep sleep */
 static void ls1_set_powerdown(void)
 {
-	iowrite32be(0x8000c000, ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR0);
-	iowrite32be(0xf0000000, ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR1);
+	iowrite32be(ippdexpcr0, ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR0);
+	iowrite32be(ippdexpcr1, ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR1);
 }
 
 static void ls1_save_ddr(void *base)
@@ -276,11 +309,11 @@ static void ls1_enter_deepsleep(void)
 	/* copy the last stage code to sram */
 	ls1_copy_sram_code();
 
-	ls1_setup_wakeup_source();
+	ls1_setup_pmc_int();
 
 	cpu_suspend(SRAM_CODE_BASE_PHY, ls1_start_deepsleep);
 
-	ls1_clear_wakeup_source();
+	ls1_clear_pmc_int();
 
 	/* disable Warm Device Reset */
 	ls1_clrsetbits_be32(ls1_pm_base.scfg + CCSR_SCFG_DPSLPCR,
@@ -289,6 +322,39 @@ static void ls1_enter_deepsleep(void)
 	/* disable deep sleep signals in FPGA */
 	tmp = ioread8(ls1_pm_base.fpga + QIXIS_PWR_CTL2);
 	iowrite8(tmp & ~QIXIS_PWR_CTL2_PCTL, ls1_pm_base.fpga + QIXIS_PWR_CTL2);
+}
+
+static void ls1_set_power_except(struct device *dev, int on)
+{
+	int ret;
+	u32 value[SLEEP_ARRAY_SIZE];
+
+	/*
+	 * Get the values in the "sleep" property. There are three values.
+	 * The first points to the RCPM node, the second is the value of
+	 * the ippdexpcr0 register, and the third is the value of
+	 * the ippdexpcr1 register.
+	 */
+	ret = of_property_read_u32_array(dev->of_node, "sleep",
+						value, SLEEP_ARRAY_SIZE);
+	if (ret) {
+		dev_err(dev, "%s: Can not find the \"sleep\" property.\n",
+			__func__);
+		return;
+	}
+
+	ippdexpcr0 |= value[1];
+	ippdexpcr1 |= value[2];
+
+	pr_debug("%s: set %s as a wakeup source", __func__,
+		 dev->of_node->full_name);
+}
+
+static void ls1_set_wakeup_device(struct device *dev, void *enable)
+{
+	/* set each device which can act as wakeup source */
+	if (device_may_wakeup(dev))
+		ls1_set_power_except(dev, *((int *)enable));
 }
 
 static int ls1_suspend_enter(suspend_state_t state)
@@ -332,6 +398,10 @@ static int ls1_suspend_valid(suspend_state_t state)
 static int ls1_suspend_begin(suspend_state_t state)
 {
 	ls1_pm_state = state;
+
+	ippdexpcr0 = 0;
+	ippdexpcr1 = 0;
+	dpm_for_each_dev(NULL, ls1_set_wakeup_device);
 
 	if (ls1_pm_state == PM_SUSPEND_MEM)
 		ls1_pm_iomap();
