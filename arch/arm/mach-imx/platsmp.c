@@ -246,14 +246,6 @@ static int ls1021a_reset_secondary(unsigned int cpu)
 				SCFG_CORE0_SFT_RST + STRIDE_4B * cpu);
 	mdelay(15);
 
-	/* LS1021a errata. after reset, core state machine registers
-	 * need to force release manually.
-	 */
-	iowrite32be(0x00000080, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG1);
-	iowrite32be(0x00000080, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG2);
-	iowrite32be(0, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG1);
-	iowrite32be(0, dcsr_rcpm2_base + DCSR_RCPM2_DEBUG2);
-
 	/* Release secondary core */
 	iowrite32be(1 << cpu, dcfg_base + DCFG_CCSR_BRR);
 
