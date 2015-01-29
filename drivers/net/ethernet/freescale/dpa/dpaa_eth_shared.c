@@ -871,7 +871,7 @@ static struct platform_driver dpa_shared_driver = {
 	.remove		= dpa_remove
 };
 
-int __init __cold dpa_shared_load(void)
+static int __init __cold dpa_shared_load(void)
 {
 	int	 _errno;
 
@@ -893,11 +893,13 @@ int __init __cold dpa_shared_load(void)
 
 	return _errno;
 }
+module_init(dpa_shared_load);
 
-void __exit __cold dpa_shared_unload(void)
+static void __exit __cold dpa_shared_unload(void)
 {
 	pr_debug(KBUILD_MODNAME ": -> %s:%s()\n",
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_shared_driver);
 }
+module_exit(dpa_shared_unload);

@@ -471,7 +471,7 @@ fq_probe_failed:
 	return err;
 }
 
-int __init __cold dpa_macless_load(void)
+static int __init __cold dpa_macless_load(void)
 {
 	int	 _errno;
 
@@ -493,11 +493,13 @@ int __init __cold dpa_macless_load(void)
 
 	return _errno;
 }
+module_init(dpa_macless_load);
 
-void __exit __cold dpa_macless_unload(void)
+static void __exit __cold dpa_macless_unload(void)
 {
 	platform_driver_unregister(&dpa_macless_driver);
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
 }
+module_exit(dpa_macless_unload);
