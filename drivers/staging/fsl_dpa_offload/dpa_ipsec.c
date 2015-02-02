@@ -2807,7 +2807,7 @@ static int copy_sa_params_to_in_sa(struct dpa_ipsec_sa *sa,
 	sa->sec_desc->pdb_dec.options = PDBOPTS_ESP_TUNNEL |
 					PDBOPTS_ESP_OUTFMT;
 
-	if (dpa_ipsec->sec_ver >= SEC_VER_5_3)
+	if (dpa_ipsec->sec_era > 4)
 		sa->sec_desc->pdb_dec.options |= PDBOPTS_ESP_AOFL;
 
 	if (sa_params->use_ext_seq_num) {

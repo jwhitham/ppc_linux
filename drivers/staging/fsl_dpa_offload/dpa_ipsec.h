@@ -187,7 +187,6 @@
 #define NIA_OPCODE_MASK		0x0F
 
 #define SEC_DEF_VER 40 /* like in P4080 */
-#define SEC_VER_5_3 53
 
 /* DPA IPSec Encryption & authentication algorithm identifiers */
 struct ipsec_alg_suite {
@@ -374,7 +373,6 @@ struct dpa_ipsec {
 	int *used_sa_ids;	/* SA IDs used by this DPA IPsec instance     */
 	int num_used_sas;  /* The current number of sa's used by this instance*/
 	int sec_era; /* SEC ERA information */
-	int sec_ver; /* SEC version information */
 	struct device *jrdev; /* Job ring device */
 	atomic_t ref;
 	atomic_t valid;
