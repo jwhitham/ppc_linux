@@ -39,6 +39,24 @@
 #define ESDHCI_PRESENT_STATE	0x24
 #define ESDHC_CLK_STABLE	0x00000008
 
+#define ESDHC_CAPABILITIES_1	0x114
+#define ESDHC_MODE_MASK		0x00000007
+#define ESDHC_MODE_DDR50_SEL	0xfffffffc
+#define ESDHC_MODE_DDR50	0x00000004
+
+#define ESDHC_CLOCK_CONTROL	0x144
+#define ESDHC_CLKLPBK_EXTPIN	0x80000000
+#define ESDHC_CMDCLK_SHIFTED	0x00008000
+
+/* SDHC Adapter Card Type */
+#define ESDHC_ADAPTER_TYPE_1      0x1	/* eMMC Card Rev4.5 */
+#define ESDHC_ADAPTER_TYPE_2      0x2	/* SD/MMC Legacy Card */
+#define ESDHC_ADAPTER_TYPE_3      0x3	/* eMMC Card Rev4.4 */
+#define ESDHC_ADAPTER_TYPE_4      0x4	/* Reserved */
+#define ESDHC_ADAPTER_TYPE_5      0x5	/* MMC Card */
+#define ESDHC_ADAPTER_TYPE_6      0x6	/* SD Card Rev2.0 Rev3.0 */
+#define ESDHC_NO_ADAPTER          0x7	/* No Card is Present*/
+
 /* pltfm-specific */
 #define ESDHC_HOST_CONTROL_LE	0x20
 
@@ -52,6 +70,8 @@
 /* OF-specific */
 #define ESDHC_DMA_SYSCTL	0x40c
 #define ESDHC_DMA_SNOOP		0x00000040
+#define ESDHC_FLUSH_ASYNC_FIFO	0x00040000
+#define ESDHC_USE_PERICLK	0x00080000
 #define ESDHC_INT_DMA_ERROR	0x10000000
 
 #define ESDHC_HOST_CONTROL_RES	0x01

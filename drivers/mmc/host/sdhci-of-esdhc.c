@@ -33,11 +33,29 @@
 static u32 svr;
 #endif
 
+static u32 adapter_type;
+static bool peripheral_clk_available;
+
 static u32 esdhc_readl(struct sdhci_host *host, int reg)
 {
 	u32 ret;
 
-	ret = sdhci_32bs_readl(host, reg);
+	if (reg == SDHCI_CAPABILITIES_1) {
+		ret = sdhci_32bs_readl(host, ESDHC_CAPABILITIES_1);
+		switch (adapter_type) {
+		case ESDHC_ADAPTER_TYPE_3:
+			if (ret & ESDHC_MODE_DDR50) {
+				ret &= ESDHC_MODE_DDR50_SEL;
+				/* enable 1/8V DDR capable */
+				host->mmc->caps |= MMC_CAP_1_8V_DDR;
+			} else
+				ret &= ~ESDHC_MODE_MASK;
+			break;
+		default:
+			ret &= ~ESDHC_MODE_MASK;
+		}
+	} else
+		ret = sdhci_32bs_readl(host, reg);
 	/*
 	 * The bit of ADMA flag in eSDHC is not compatible with standard
 	 * SDHC register, so set fake flag SDHCI_CAN_DO_ADMA2 when ADMA is
@@ -187,8 +205,11 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 	}
 
 	/* Prevent SDHCI core from writing reserved bits (e.g. HISPD). */
-	if (reg == SDHCI_HOST_CONTROL)
+	if (reg == SDHCI_HOST_CONTROL) {
 		val &= ~ESDHC_HOST_CONTROL_RES;
+		val &= ~SDHCI_CTRL_HISPD;
+		val |= (sdhci_32bs_readl(host, reg) & SDHCI_CTRL_HISPD);
+	}
 
 	/*
 	 * If we have this quirk:
@@ -537,6 +558,85 @@ static int esdhc_pltfm_bus_width(struct sdhci_host *host, int width)
 	return 0;
 }
 
+static void esdhc_clock_control(struct sdhci_host *host, bool enable)
+{
+	u32 value;
+	u32 time_out;
+
+	value = sdhci_readl(host, ESDHC_SYSTEM_CONTROL);
+
+	if (enable)
+		value |= ESDHC_CLOCK_CRDEN;
+	else
+		value &= ~ESDHC_CLOCK_CRDEN;
+
+	sdhci_writel(host, value, ESDHC_SYSTEM_CONTROL);
+
+	time_out = 20;
+	value = ESDHC_CLK_STABLE;
+	while (!(sdhci_readl(host, ESDHCI_PRESENT_STATE) & value)) {
+		if (time_out == 0) {
+			pr_err("%s: Internal clock never stabilised.\n",
+				mmc_hostname(host->mmc));
+			break;
+		}
+		time_out--;
+		mdelay(1);
+	}
+}
+
+static int esdhc_set_uhs_signaling(struct sdhci_host *host, unsigned int uhs)
+{
+	u16 ctrl_2;
+	u32 time_out;
+	u32 value;
+
+	ctrl_2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+	/* Select Bus Speed Mode for host */
+	ctrl_2 &= ~SDHCI_CTRL_UHS_MASK;
+	if ((uhs == MMC_TIMING_MMC_HS200) ||
+		(uhs == MMC_TIMING_UHS_SDR104))
+		ctrl_2 |= SDHCI_CTRL_UHS_SDR104;
+	else if (uhs == MMC_TIMING_UHS_SDR12)
+		ctrl_2 |= SDHCI_CTRL_UHS_SDR12;
+	else if (uhs == MMC_TIMING_UHS_SDR25)
+		ctrl_2 |= SDHCI_CTRL_UHS_SDR25;
+	else if (uhs == MMC_TIMING_UHS_SDR50)
+		ctrl_2 |= SDHCI_CTRL_UHS_SDR50;
+	else if (uhs == MMC_TIMING_UHS_DDR50)
+		ctrl_2 |= SDHCI_CTRL_UHS_DDR50;
+
+	if (uhs == MMC_TIMING_UHS_DDR50) {
+		esdhc_clock_control(host, false);
+		sdhci_writew(host, ctrl_2, SDHCI_HOST_CONTROL2);
+		value = sdhci_readl(host, ESDHC_CLOCK_CONTROL);
+		value |= (ESDHC_CLKLPBK_EXTPIN | ESDHC_CMDCLK_SHIFTED);
+		sdhci_writel(host, value, ESDHC_CLOCK_CONTROL);
+		esdhc_clock_control(host, true);
+
+		esdhc_clock_control(host, false);
+		value = sdhci_readl(host, ESDHC_DMA_SYSCTL);
+		value |= ESDHC_FLUSH_ASYNC_FIFO;
+		sdhci_writel(host, value, ESDHC_DMA_SYSCTL);
+		/* Wait max 20 ms */
+		time_out = 20;
+		value = ESDHC_FLUSH_ASYNC_FIFO;
+		while (sdhci_readl(host, ESDHC_DMA_SYSCTL) & value) {
+			if (time_out == 0) {
+				pr_err("%s: FAF bit is auto cleaned failed.\n",
+					mmc_hostname(host->mmc));
+
+				break;
+			}
+			time_out--;
+			mdelay(1);
+		}
+		esdhc_clock_control(host, true);
+	} else
+		sdhci_writew(host, ctrl_2, SDHCI_HOST_CONTROL2);
+	return 0;
+}
+
 static const struct sdhci_ops sdhci_esdhc_ops = {
 	.read_l = esdhc_readl,
 	.read_w = esdhc_readw,
@@ -560,6 +660,7 @@ static const struct sdhci_ops sdhci_esdhc_ops = {
 #endif
 	.adma_workaround = esdhci_of_adma_workaround,
 	.platform_bus_width = esdhc_pltfm_bus_width,
+	.set_uhs_signaling = esdhc_set_uhs_signaling,
 };
 
 static const struct sdhci_pltfm_data sdhci_esdhc_pdata = {
@@ -578,12 +679,26 @@ static void esdhc_get_property(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct sdhci_host *host = platform_get_drvdata(pdev);
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	const __be32 *value;
+	int size;
 
 	sdhci_get_of_property(pdev);
 
 	/* call to generic mmc_of_parse to support additional capabilities */
 	mmc_of_parse(host->mmc);
 	mmc_of_parse_voltage(np, &host->ocr_mask);
+
+	value = of_get_property(np, "adapter-type", &size);
+	if (value && size == sizeof(*value) && *value)
+		adapter_type = be32_to_cpup(value);
+
+	/* If getting a peripheral-frequency, use it instead */
+	value = of_get_property(np, "peripheral-frequency", &size);
+	if (value && size == sizeof(*value) && *value) {
+		pltfm_host->clock = be32_to_cpup(value);
+		peripheral_clk_available = true;
+	} else
+		peripheral_clk_available = false;
 
 	if (of_device_is_compatible(np, "fsl,p2020-esdhc")) {
 		/*
@@ -607,13 +722,23 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
 	int ret;
-
+	u32 value;
 
 	host = sdhci_pltfm_init(pdev, &sdhci_esdhc_pdata, 0);
 	if (IS_ERR(host))
 		return PTR_ERR(host);
 
 	esdhc_get_property(pdev);
+
+	/* Select peripheral clock as the eSDHC clock */
+	if (peripheral_clk_available) {
+		esdhc_clock_control(host, false);
+		value = sdhci_readl(host, ESDHC_DMA_SYSCTL);
+		value |= ESDHC_USE_PERICLK;
+		sdhci_writel(host, value, ESDHC_DMA_SYSCTL);
+		esdhc_clock_control(host, true);
+	}
+
 	ret = sdhci_add_host(host);
 	if (ret)
 		sdhci_pltfm_free(pdev);
