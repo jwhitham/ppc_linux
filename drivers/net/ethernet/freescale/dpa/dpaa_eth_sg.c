@@ -102,6 +102,8 @@ static int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 	struct device *dev = dpa_bp->dev;
 	struct sk_buff *skb, **skbh;
 
+	memset(bmb, 0, sizeof(struct bm_buffer) * 8);
+
 	for (i = 0; i < 8; i++) {
 		/* We'll prepend the skb back-pointer; can't use the DPA
 		 * priv space, because FMan will overwrite it (from offset 0)
