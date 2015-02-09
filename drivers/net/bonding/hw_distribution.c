@@ -1069,20 +1069,6 @@ static int init_oh_errq_defq(struct device *dev,
 		return errno;
 	}
 
-	errno = qman_query_fq(&errq->fq_base, &fqd);
-	hw_lag_dbg("errno of qman_query_fq:0x%08x\n", errno);
-	if (fqd.fq_ctrl != initfq.fqd.fq_ctrl) {
-		pr_err("queried fq_ctrl=%x, should be=%x\n", fqd.fq_ctrl,
-			initfq.fqd.fq_ctrl);
-		panic("fail");
-	}
-	if (memcmp(&fqd.td, &initfq.fqd.td, sizeof(fqd.td))) {
-		pr_err("queried td_thresh=%x:%x, should be=%x:%x\n",
-			fqd.td.exp, fqd.td.mant,
-			initfq.fqd.td.exp, initfq.fqd.td.mant);
-		panic("fail");
-	}
-
 	/* init oh ports default fq */
 	initfq.fqd.dest.wq = wq_defq;
 	errno = qman_init_fq(&defq->fq_base, QMAN_INITFQ_FLAG_SCHED, &initfq);
