@@ -95,6 +95,7 @@ typedef struct
 #define PHY_SGMII_CR_DEF_VAL            0x1140
 #define PHY_SGMII_DEV_ABILITY_SGMII     0x4001
 #define PHY_SGMII_DEV_ABILITY_1000X     0x01A0
+#define PHY_SGMII_IF_SPEED_GIGABIT	0x0008
 #define PHY_SGMII_IF_MODE_AN            0x0002
 #define PHY_SGMII_IF_MODE_SGMII         0x0001
 #define PHY_SGMII_IF_MODE_1000X         0x0000
