@@ -1012,7 +1012,6 @@ static int init_oh_errq_defq(struct device *dev,
 	/* These two vaules come from DPA-Eth driver */
 	uint8_t wq_errq = 2, wq_defq = 1;
 	struct qm_mcc_initfq initfq;
-	struct qm_fqd fqd;
 
 	/* Allocate memories for Tx ErrQ and Tx DefQ of oh port */
 	errq = devm_kzalloc(dev, sizeof(struct dpa_fq), GFP_KERNEL);
