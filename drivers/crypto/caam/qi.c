@@ -185,7 +185,10 @@ static struct qman_fq *create_caam_req_fq(struct device *qidev,
 		dev_err(qidev, "Failed to init session req FQ\n");
 		goto init_req_fq_fail;
 	}
-
+#ifdef DEBUG
+	dev_info(qidev, "Allocated request FQ %u for CPU %u\n",
+		 req_fq->fqid, smp_processor_id());
+#endif
 	return req_fq;
 
 init_req_fq_fail:
@@ -642,7 +645,10 @@ static int alloc_rsp_fq_cpu(struct device *qidev, unsigned int cpu, u32 pool)
 		dev_err(qidev, "Rsp FQ init failed\n");
 		return -ENODEV;
 	}
-
+#ifdef DEBUG
+	dev_info(qidev, "Allocated response FQ %u for CPU %u",
+		 fq->fqid, cpu);
+#endif
 	return 0;
 }
 
@@ -691,6 +697,9 @@ static int alloc_cgrs(struct device *qidev)
 			ret, qipriv.rsp_cgr.cgrid);
 		return ret;
 	}
+#ifdef DEBUG
+	dev_info(qidev, "CAAM to CPU threshold set to %llu\n", val);
+#endif
 	return 0;
 }
 
@@ -713,6 +722,7 @@ static int alloc_rsp_fqs(struct device *qidev)
 		dev_err(qidev, "CAAM pool alloc failed: %d\n", ret);
 		return ret;
 	}
+	dev_info(qidev, "Allocated pool %d\n", pool);
 
 	/*Now create response FQs*/
 	for_each_cpu(i, cpus) {
