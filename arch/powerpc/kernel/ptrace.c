@@ -1772,7 +1772,9 @@ long do_syscall_trace_enter(struct pt_regs *regs)
 
 	user_exit();
 
-	secure_computing_strict(regs->gpr[0]);
+	/* Do the secure computing check first; failures should be fast. */
+	if (secure_computing() == -1)
+		return -1L;
 
 	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
 	    tracehook_report_syscall_entry(regs)) {
