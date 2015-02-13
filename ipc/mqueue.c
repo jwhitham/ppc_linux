@@ -923,17 +923,12 @@ static inline void pipelined_send(struct mqueue_inode_info *info,
 				  struct msg_msg *message,
 				  struct ext_wait_queue *receiver)
 {
-	/*
-	 * Keep them in one critical section for PREEMPT_RT:
-	 */
-	preempt_disable_rt();
 	receiver->msg = message;
 	list_del(&receiver->list);
 	receiver->state = STATE_PENDING;
 	wake_up_process(receiver->task);
 	smp_wmb();
 	receiver->state = STATE_READY;
-	preempt_enable_rt();
 }
 
 /* pipelined_receive() - if there is task waiting in sys_mq_timedsend()
@@ -947,18 +942,13 @@ static inline void pipelined_receive(struct mqueue_inode_info *info)
 		wake_up_interruptible(&info->wait_q);
 		return;
 	}
-	/*
-	 * Keep them in one critical section for PREEMPT_RT:
-	 */
-	preempt_disable_rt();
-	if (!msg_insert(sender->msg, info)) {
-		list_del(&sender->list);
-		sender->state = STATE_PENDING;
-		wake_up_process(sender->task);
-		smp_wmb();
-		sender->state = STATE_READY;
-	}
-	preempt_enable_rt();
+	if (msg_insert(sender->msg, info))
+		return;
+	list_del(&sender->list);
+	sender->state = STATE_PENDING;
+	wake_up_process(sender->task);
+	smp_wmb();
+	sender->state = STATE_READY;
 }
 
 SYSCALL_DEFINE5(mq_timedsend, mqd_t, mqdes, const char __user *, u_msg_ptr,

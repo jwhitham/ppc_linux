@@ -29,9 +29,7 @@ DECLARE_PER_CPU(struct vm_event_state, vm_event_states);
 
 static inline void __count_vm_event(enum vm_event_item item)
 {
-	preempt_disable_rt();
 	__this_cpu_inc(vm_event_states.event[item]);
-	preempt_enable_rt();
 }
 
 static inline void count_vm_event(enum vm_event_item item)
@@ -41,9 +39,7 @@ static inline void count_vm_event(enum vm_event_item item)
 
 static inline void __count_vm_events(enum vm_event_item item, long delta)
 {
-	preempt_disable_rt();
 	__this_cpu_add(vm_event_states.event[item], delta);
-	preempt_enable_rt();
 }
 
 static inline void count_vm_events(enum vm_event_item item, long delta)
@@ -86,6 +82,14 @@ static inline void vm_events_fold_cpu(int cpu)
 #define count_vm_numa_event(x) do {} while (0)
 #define count_vm_numa_events(x, y) do { (void)(y); } while (0)
 #endif /* CONFIG_NUMA_BALANCING */
+
+#ifdef CONFIG_DEBUG_TLBFLUSH
+#define count_vm_tlb_event(x)	   count_vm_event(x)
+#define count_vm_tlb_events(x, y)  count_vm_events(x, y)
+#else
+#define count_vm_tlb_event(x)     do {} while (0)
+#define count_vm_tlb_events(x, y) do { (void)(y); } while (0)
+#endif
 
 #define __count_zone_vm_events(item, zone, delta) \
 		__count_vm_events(item##_NORMAL - ZONE_NORMAL + \

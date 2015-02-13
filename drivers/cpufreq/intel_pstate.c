@@ -550,6 +550,7 @@ static int intel_pstate_init_cpu(unsigned int cpunum)
 
 	cpu = all_cpu_data[cpunum];
 
+	cpu->cpu = cpunum;
 	intel_pstate_get_cpu_pstates(cpu);
 	if (!cpu->pstate.current_pstate) {
 		all_cpu_data[cpunum] = NULL;
@@ -557,7 +558,6 @@ static int intel_pstate_init_cpu(unsigned int cpunum)
 		return -ENODATA;
 	}
 
-	cpu->cpu = cpunum;
 	cpu->pstate_policy =
 		(struct pstate_adjust_policy *)id->driver_data;
 	init_timer_deferrable(&cpu->timer);
@@ -600,6 +600,7 @@ static int intel_pstate_set_policy(struct cpufreq_policy *policy)
 	if (policy->policy == CPUFREQ_POLICY_PERFORMANCE) {
 		limits.min_perf_pct = 100;
 		limits.min_perf = int_tofp(1);
+		limits.max_policy_pct = 100;
 		limits.max_perf_pct = 100;
 		limits.max_perf = int_tofp(1);
 		limits.no_turbo = 0;

@@ -495,8 +495,8 @@ static struct crypto_template *__crypto_lookup_template(const char *name)
 
 struct crypto_template *crypto_lookup_template(const char *name)
 {
-	return try_then_request_module(__crypto_lookup_template(name), "%s",
-				       name);
+	return try_then_request_module(__crypto_lookup_template(name),
+				       "crypto-%s", name);
 }
 EXPORT_SYMBOL_GPL(crypto_lookup_template);
 
@@ -684,13 +684,13 @@ EXPORT_SYMBOL_GPL(crypto_spawn_tfm2);
 
 int crypto_register_notifier(struct notifier_block *nb)
 {
-	return srcu_notifier_chain_register(&crypto_chain, nb);
+	return blocking_notifier_chain_register(&crypto_chain, nb);
 }
 EXPORT_SYMBOL_GPL(crypto_register_notifier);
 
 int crypto_unregister_notifier(struct notifier_block *nb)
 {
-	return srcu_notifier_chain_unregister(&crypto_chain, nb);
+	return blocking_notifier_chain_unregister(&crypto_chain, nb);
 }
 EXPORT_SYMBOL_GPL(crypto_unregister_notifier);
 

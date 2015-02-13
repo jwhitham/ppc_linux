@@ -423,7 +423,7 @@ unsigned long profile_pc(struct pt_regs *regs)
 EXPORT_SYMBOL(profile_pc);
 #endif
 
-#if defined(CONFIG_IRQ_WORK) && !defined(CONFIG_PREEMPT_RT_FULL)
+#ifdef CONFIG_IRQ_WORK
 
 /*
  * 64-bit uses a byte in the PACA, 32-bit uses a per-cpu variable...
@@ -512,7 +512,7 @@ void timer_interrupt(struct pt_regs * regs)
 
 	__get_cpu_var(irq_stat).timer_irqs++;
 
-#if defined(CONFIG_PPC32) && defined(CONFIG_PMAC)
+#if defined(CONFIG_PPC32) && defined(CONFIG_PPC_PMAC)
 	if (atomic_read(&ppc_n_lost_interrupts) != 0)
 		do_IRQ(regs);
 #endif

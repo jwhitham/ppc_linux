@@ -73,7 +73,7 @@ void flush_tsb_user(struct tlb_batch *tb)
 	struct mm_struct *mm = tb->mm;
 	unsigned long nentries, base, flags;
 
-	raw_spin_lock_irqsave(&mm->context.lock, flags);
+	spin_lock_irqsave(&mm->context.lock, flags);
 
 	base = (unsigned long) mm->context.tsb_block[MM_TSB_BASE].tsb;
 	nentries = mm->context.tsb_block[MM_TSB_BASE].tsb_nentries;
@@ -87,17 +87,17 @@ void flush_tsb_user(struct tlb_batch *tb)
 		nentries = mm->context.tsb_block[MM_TSB_HUGE].tsb_nentries;
 		if (tlb_type == cheetah_plus || tlb_type == hypervisor)
 			base = __pa(base);
-		__flush_tsb_one(tb, HPAGE_SHIFT, base, nentries);
+		__flush_tsb_one(tb, REAL_HPAGE_SHIFT, base, nentries);
 	}
 #endif
-	raw_spin_unlock_irqrestore(&mm->context.lock, flags);
+	spin_unlock_irqrestore(&mm->context.lock, flags);
 }
 
 void flush_tsb_user_page(struct mm_struct *mm, unsigned long vaddr)
 {
 	unsigned long nentries, base, flags;
 
-	raw_spin_lock_irqsave(&mm->context.lock, flags);
+	spin_lock_irqsave(&mm->context.lock, flags);
 
 	base = (unsigned long) mm->context.tsb_block[MM_TSB_BASE].tsb;
 	nentries = mm->context.tsb_block[MM_TSB_BASE].tsb_nentries;
@@ -111,10 +111,10 @@ void flush_tsb_user_page(struct mm_struct *mm, unsigned long vaddr)
 		nentries = mm->context.tsb_block[MM_TSB_HUGE].tsb_nentries;
 		if (tlb_type == cheetah_plus || tlb_type == hypervisor)
 			base = __pa(base);
-		__flush_tsb_one_entry(base, vaddr, HPAGE_SHIFT, nentries);
+		__flush_tsb_one_entry(base, vaddr, REAL_HPAGE_SHIFT, nentries);
 	}
 #endif
-	raw_spin_unlock_irqrestore(&mm->context.lock, flags);
+	spin_unlock_irqrestore(&mm->context.lock, flags);
 }
 
 #define HV_PGSZ_IDX_BASE	HV_PGSZ_IDX_8K
@@ -133,7 +133,19 @@ static void setup_tsb_params(struct mm_struct *mm, unsigned long tsb_idx, unsign
 	mm->context.tsb_block[tsb_idx].tsb_nentries =
 		tsb_bytes / sizeof(struct tsb);
 
-	base = TSBMAP_BASE;
+	switch (tsb_idx) {
+	case MM_TSB_BASE:
+		base = TSBMAP_8K_BASE;
+		break;
+#if defined(CONFIG_HUGETLB_PAGE) || defined(CONFIG_TRANSPARENT_HUGEPAGE)
+	case MM_TSB_HUGE:
+		base = TSBMAP_4M_BASE;
+		break;
+#endif
+	default:
+		BUG();
+	}
+
 	tte = pgprot_val(PAGE_KERNEL_LOCKED);
 	tsb_paddr = __pa(mm->context.tsb_block[tsb_idx].tsb);
 	BUG_ON(tsb_paddr & (tsb_bytes - 1UL));
@@ -392,7 +404,7 @@ retry_tsb_alloc:
 	 * the lock and ask all other cpus running this address space
 	 * to run tsb_context_switch() to see the new TSB table.
 	 */
-	raw_spin_lock_irqsave(&mm->context.lock, flags);
+	spin_lock_irqsave(&mm->context.lock, flags);
 
 	old_tsb = mm->context.tsb_block[tsb_index].tsb;
 	old_cache_index =
@@ -407,7 +419,7 @@ retry_tsb_alloc:
 	 */
 	if (unlikely(old_tsb &&
 		     (rss < mm->context.tsb_block[tsb_index].tsb_rss_limit))) {
-		raw_spin_unlock_irqrestore(&mm->context.lock, flags);
+		spin_unlock_irqrestore(&mm->context.lock, flags);
 
 		kmem_cache_free(tsb_caches[new_cache_index], new_tsb);
 		return;
@@ -433,7 +445,7 @@ retry_tsb_alloc:
 	mm->context.tsb_block[tsb_index].tsb = new_tsb;
 	setup_tsb_params(mm, tsb_index, new_size);
 
-	raw_spin_unlock_irqrestore(&mm->context.lock, flags);
+	spin_unlock_irqrestore(&mm->context.lock, flags);
 
 	/* If old_tsb is NULL, we're being invoked for the first time
 	 * from init_new_context().
@@ -459,7 +471,7 @@ int init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 #endif
 	unsigned int i;
 
-	raw_spin_lock_init(&mm->context.lock);
+	spin_lock_init(&mm->context.lock);
 
 	mm->context.sparc64_ctx_val = 0UL;
 
@@ -471,8 +483,6 @@ int init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 	huge_pte_count = mm->context.huge_pte_count;
 	mm->context.huge_pte_count = 0;
 #endif
-
-	mm->context.pgtable_page = NULL;
 
 	/* copy_mm() copies over the parent's mm_struct before calling
 	 * us, so we need to zero out the TSB pointer or else tsb_grow()
@@ -512,23 +522,16 @@ static void tsb_destroy_one(struct tsb_config *tp)
 void destroy_context(struct mm_struct *mm)
 {
 	unsigned long flags, i;
-	struct page *page;
 
 	for (i = 0; i < MM_NUM_TSBS; i++)
 		tsb_destroy_one(&mm->context.tsb_block[i]);
 
-	page = mm->context.pgtable_page;
-	if (page && put_page_testzero(page)) {
-		pgtable_page_dtor(page);
-		free_hot_cold_page(page, 0);
-	}
-
-	raw_spin_lock_irqsave(&ctx_alloc_lock, flags);
+	spin_lock_irqsave(&ctx_alloc_lock, flags);
 
 	if (CTX_VALID(mm->context)) {
 		unsigned long nr = CTX_NRBITS(mm->context);
 		mmu_context_bmap[nr>>6] &= ~(1UL << (nr & 63));
 	}
 
-	raw_spin_unlock_irqrestore(&ctx_alloc_lock, flags);
+	spin_unlock_irqrestore(&ctx_alloc_lock, flags);
 }

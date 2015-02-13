@@ -6,7 +6,7 @@
  *  GK 2/5/95  -  Changed to support mounting root fs via NFS
  *  Added initrd & change_root: Werner Almesberger & Hans Lermen, Feb '96
  *  Moan early if gcc is old, avoiding bogus kernels - Paul Gortmaker, May '96
- *  Simplified starting of init:  Michael A. Griffith <grif@acm.org>
+ *  Simplified starting of init:  Michael A. Griffith <grif@acm.org> 
  */
 
 #define DEBUG		/* Enable initcall_debug */
@@ -74,7 +74,6 @@
 #include <linux/ptrace.h>
 #include <linux/blkdev.h>
 #include <linux/elevator.h>
-#include <linux/posix-timers.h>
 #include <linux/sched_clock.h>
 #include <linux/context_tracking.h>
 #include <linux/random.h>
@@ -508,7 +507,6 @@ asmlinkage void __init start_kernel(void)
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
 	setup_per_cpu_areas();
-	softirq_early_init();
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 
 	build_all_zonelists(NULL, NULL);
@@ -611,6 +609,10 @@ asmlinkage void __init start_kernel(void)
 #ifdef CONFIG_X86
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
+#endif
+#ifdef CONFIG_X86_ESPFIX64
+	/* Should be run before the first non-init thread is created */
+	init_espfix_bsp();
 #endif
 	thread_info_cache_init();
 	cred_init();

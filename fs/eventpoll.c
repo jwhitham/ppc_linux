@@ -505,12 +505,12 @@ static int ep_poll_wakeup_proc(void *priv, void *cookie, int call_nests)
  */
 static void ep_poll_safewake(wait_queue_head_t *wq)
 {
-	int this_cpu = get_cpu_light();
+	int this_cpu = get_cpu();
 
 	ep_call_nested(&poll_safewake_ncalls, EP_MAX_NESTS,
 		       ep_poll_wakeup_proc, NULL, wq, (void *) (long) this_cpu);
 
-	put_cpu_light();
+	put_cpu();
 }
 
 static void ep_remove_wait_queue(struct eppoll_entry *pwq)
@@ -910,7 +910,7 @@ static const struct file_operations eventpoll_fops = {
 void eventpoll_release_file(struct file *file)
 {
 	struct eventpoll *ep;
-	struct epitem *epi;
+	struct epitem *epi, *next;
 
 	/*
 	 * We don't want to get "file->f_lock" because it is not
@@ -926,7 +926,7 @@ void eventpoll_release_file(struct file *file)
 	 * Besides, ep_remove() acquires the lock, so we can't hold it here.
 	 */
 	mutex_lock(&epmutex);
-	list_for_each_entry_rcu(epi, &file->f_ep_links, fllink) {
+	list_for_each_entry_safe(epi, next, &file->f_ep_links, fllink) {
 		ep = epi->ep;
 		mutex_lock_nested(&ep->mtx, 0);
 		ep_remove(ep, epi);
@@ -1852,7 +1852,8 @@ SYSCALL_DEFINE4(epoll_ctl, int, epfd, int, op, int, fd,
 		goto error_tgt_fput;
 
 	/* Check if EPOLLWAKEUP is allowed */
-	if ((epds.events & EPOLLWAKEUP) && !capable(CAP_BLOCK_SUSPEND))
+	if (ep_op_has_event(op) && (epds.events & EPOLLWAKEUP) &&
+			!capable(CAP_BLOCK_SUSPEND))
 		epds.events &= ~EPOLLWAKEUP;
 
 	/*

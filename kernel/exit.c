@@ -74,6 +74,7 @@ static void __unhash_process(struct task_struct *p, bool group_dead)
 		__this_cpu_dec(process_counts);
 	}
 	list_del_rcu(&p->thread_group);
+	list_del_rcu(&p->thread_node);
 }
 
 /*
@@ -145,7 +146,7 @@ static void __exit_signal(struct task_struct *tsk)
 	 * Do this under ->siglock, we can race with another thread
 	 * doing sigqueue_free() if we have SIGQUEUE_PREALLOC signals.
 	 */
-	flush_task_sigqueue(tsk);
+	flush_sigqueue(&tsk->pending);
 	tsk->sighand = NULL;
 	spin_unlock(&sighand->siglock);
 

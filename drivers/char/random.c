@@ -673,12 +673,9 @@ static void add_timer_randomness(struct timer_rand_state *state, unsigned num)
 	preempt_disable();
 	/* if over the trickle threshold, use only 1 in 4096 samples */
 	if (input_pool.entropy_count > trickle_thresh &&
-	    ((__this_cpu_inc_return(trickle_count) - 1) & 0xfff)) {
-		preempt_enable();
-		return;
-	}
+	    ((__this_cpu_inc_return(trickle_count) - 1) & 0xfff))
+		goto out;
 
-	preempt_enable();
 	sample.jiffies = jiffies;
 	sample.cycles = random_get_entropy();
 	sample.num = num;
@@ -719,6 +716,8 @@ static void add_timer_randomness(struct timer_rand_state *state, unsigned num)
 		credit_entropy_bits(&input_pool,
 				    min_t(int, fls(delta>>1), 11));
 	}
+out:
+	preempt_enable();
 }
 
 void add_input_randomness(unsigned int type, unsigned int code,
@@ -739,16 +738,18 @@ EXPORT_SYMBOL_GPL(add_input_randomness);
 
 static DEFINE_PER_CPU(struct fast_pool, irq_randomness);
 
-void add_interrupt_randomness(int irq, int irq_flags, __u64 ip)
+void add_interrupt_randomness(int irq, int irq_flags)
 {
 	struct entropy_store	*r;
 	struct fast_pool	*fast_pool = &__get_cpu_var(irq_randomness);
+	struct pt_regs		*regs = get_irq_regs();
 	unsigned long		now = jiffies;
 	__u32			input[4], cycles = random_get_entropy();
 
 	input[0] = cycles ^ jiffies;
 	input[1] = irq;
-	if (ip) {
+	if (regs) {
+		__u64 ip = instruction_pointer(regs);
 		input[2] = ip;
 		input[3] = ip >> 32;
 	}
@@ -762,11 +763,7 @@ void add_interrupt_randomness(int irq, int irq_flags, __u64 ip)
 	fast_pool->last = now;
 
 	r = nonblocking_pool.initialized ? &input_pool : &nonblocking_pool;
-#ifndef CONFIG_PREEMPT_RT_FULL
 	__mix_pool_bytes(r, &fast_pool->pool, sizeof(fast_pool->pool), NULL);
-#else
-	mix_pool_bytes(r, &fast_pool->pool, sizeof(fast_pool->pool), NULL);
-#endif
 	/*
 	 * If we don't have a valid cycle counter, and we see
 	 * back-to-back timer interrupts, then skip giving credit for
@@ -933,8 +930,8 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 	 * pool while mixing, and hash one final time.
 	 */
 	sha_transform(hash.w, extract, workspace);
-	memset(extract, 0, sizeof(extract));
-	memset(workspace, 0, sizeof(workspace));
+	memzero_explicit(extract, sizeof(extract));
+	memzero_explicit(workspace, sizeof(workspace));
 
 	/*
 	 * In case the hash function has some recognizable output
@@ -957,7 +954,7 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 	}
 
 	memcpy(out, &hash, EXTRACT_SIZE);
-	memset(&hash, 0, sizeof(hash));
+	memzero_explicit(&hash, sizeof(hash));
 }
 
 static ssize_t extract_entropy(struct entropy_store *r, void *buf,
@@ -1005,7 +1002,7 @@ static ssize_t extract_entropy(struct entropy_store *r, void *buf,
 	}
 
 	/* Wipe data just returned from memory */
-	memset(tmp, 0, sizeof(tmp));
+	memzero_explicit(tmp, sizeof(tmp));
 
 	return ret;
 }
@@ -1043,7 +1040,7 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
 	}
 
 	/* Wipe data just returned from memory */
-	memset(tmp, 0, sizeof(tmp));
+	memzero_explicit(tmp, sizeof(tmp));
 
 	return ret;
 }

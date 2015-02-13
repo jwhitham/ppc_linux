@@ -808,20 +808,20 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		if (!pte_file(pte)) {
 			swp_entry_t entry = pte_to_swp_entry(pte);
 
-			if (swap_duplicate(entry) < 0)
-				return entry.val;
+			if (likely(!non_swap_entry(entry))) {
+				if (swap_duplicate(entry) < 0)
+					return entry.val;
 
-			/* make sure dst_mm is on swapoff's mmlist. */
-			if (unlikely(list_empty(&dst_mm->mmlist))) {
-				spin_lock(&mmlist_lock);
-				if (list_empty(&dst_mm->mmlist))
-					list_add(&dst_mm->mmlist,
-						 &src_mm->mmlist);
-				spin_unlock(&mmlist_lock);
-			}
-			if (likely(!non_swap_entry(entry)))
+				/* make sure dst_mm is on swapoff's mmlist. */
+				if (unlikely(list_empty(&dst_mm->mmlist))) {
+					spin_lock(&mmlist_lock);
+					if (list_empty(&dst_mm->mmlist))
+						list_add(&dst_mm->mmlist,
+							 &src_mm->mmlist);
+					spin_unlock(&mmlist_lock);
+				}
 				rss[MM_SWAPENTS]++;
-			else if (is_migration_entry(entry)) {
+			} else if (is_migration_entry(entry)) {
 				page = migration_entry_to_page(entry);
 
 				if (PageAnon(page))
@@ -878,7 +878,7 @@ out_set_pte:
 	return 0;
 }
 
-int copy_pte_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
+static int copy_pte_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		   pmd_t *dst_pmd, pmd_t *src_pmd, struct vm_area_struct *vma,
 		   unsigned long addr, unsigned long end)
 {
@@ -1929,10 +1929,15 @@ int fixup_user_fault(struct task_struct *tsk, struct mm_struct *mm,
 		     unsigned long address, unsigned int fault_flags)
 {
 	struct vm_area_struct *vma;
+	vm_flags_t vm_flags;
 	int ret;
 
 	vma = find_extend_vma(mm, address);
 	if (!vma || address < vma->vm_start)
+		return -EFAULT;
+
+	vm_flags = (fault_flags & FAULT_FLAG_WRITE) ? VM_WRITE : VM_READ;
+	if (!(vm_flags & vma->vm_flags))
 		return -EFAULT;
 
 	ret = handle_mm_fault(mm, vma, address, fault_flags);
@@ -3189,7 +3194,7 @@ static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned lo
 		if (prev && prev->vm_end == address)
 			return prev->vm_flags & VM_GROWSDOWN ? 0 : -ENOMEM;
 
-		expand_downwards(vma, address - PAGE_SIZE);
+		return expand_downwards(vma, address - PAGE_SIZE);
 	}
 	if ((vma->vm_flags & VM_GROWSUP) && address + PAGE_SIZE == vma->vm_end) {
 		struct vm_area_struct *next = vma->vm_next;
@@ -3198,7 +3203,7 @@ static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned lo
 		if (next && next->vm_start == address + PAGE_SIZE)
 			return next->vm_flags & VM_GROWSUP ? 0 : -ENOMEM;
 
-		expand_upwards(vma, address + PAGE_SIZE);
+		return expand_upwards(vma, address + PAGE_SIZE);
 	}
 	return 0;
 }
@@ -3693,7 +3698,7 @@ static int handle_pte_fault(struct mm_struct *mm,
 	pte_t entry;
 	spinlock_t *ptl;
 
-	entry = *pte;
+	entry = ACCESS_ONCE(*pte);
 	if (!pte_present(entry)) {
 		if (pte_none(entry)) {
 			if (vma->vm_ops) {
@@ -3741,32 +3746,6 @@ unlock:
 	pte_unmap_unlock(pte, ptl);
 	return 0;
 }
-
-#ifdef CONFIG_PREEMPT_RT_FULL
-void pagefault_disable(void)
-{
-	migrate_disable();
-	current->pagefault_disabled++;
-	/*
-	 * make sure to have issued the store before a pagefault
-	 * can hit.
-	 */
-	barrier();
-}
-EXPORT_SYMBOL(pagefault_disable);
-
-void pagefault_enable(void)
-{
-	/*
-	 * make sure to issue those last loads/stores before enabling
-	 * the pagefault handler again.
-	 */
-	barrier();
-	current->pagefault_disabled--;
-	migrate_enable();
-}
-EXPORT_SYMBOL(pagefault_enable);
-#endif
 
 /*
  * By the time we get here, we already hold the mm semaphore
@@ -4344,35 +4323,3 @@ void copy_user_huge_page(struct page *dst, struct page *src,
 	}
 }
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE || CONFIG_HUGETLBFS */
-
-#if defined(CONFIG_PREEMPT_RT_FULL) && (USE_SPLIT_PTLOCKS > 0)
-/*
- * Heinous hack, relies on the caller doing something like:
- *
- *   pte = alloc_pages(PGALLOC_GFP, 0);
- *   if (pte)
- *     pgtable_page_ctor(pte);
- *   return pte;
- *
- * This ensures we release the page and return NULL when the
- * lock allocation fails.
- */
-struct page *pte_lock_init(struct page *page)
-{
-	page->ptl = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
-	if (page->ptl) {
-		spin_lock_init(__pte_lockptr(page));
-	} else {
-		__free_page(page);
-		page = NULL;
-	}
-	return page;
-}
-
-void pte_lock_deinit(struct page *page)
-{
-	kfree(page->ptl);
-	page->mapping = NULL;
-}
-
-#endif

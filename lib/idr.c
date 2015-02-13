@@ -37,7 +37,6 @@
 #include <linux/spinlock.h>
 #include <linux/percpu.h>
 #include <linux/hardirq.h>
-#include <linux/locallock.h>
 
 #define MAX_IDR_SHIFT		(sizeof(int) * 8 - 1)
 #define MAX_IDR_BIT		(1U << MAX_IDR_SHIFT)
@@ -251,7 +250,7 @@ static int sub_alloc(struct idr *idp, int *starting_id, struct idr_layer **pa,
 			id = (id | ((1 << (IDR_BITS * l)) - 1)) + 1;
 
 			/* if already at the top layer, we need to grow */
-			if (id >= 1 << (idp->layers * IDR_BITS)) {
+			if (id > idr_max(idp->layers)) {
 				*starting_id = id;
 				return -EAGAIN;
 			}
@@ -390,36 +389,6 @@ int __idr_get_new_above(struct idr *idp, void *ptr, int starting_id, int *id)
 }
 EXPORT_SYMBOL(__idr_get_new_above);
 
-#ifdef CONFIG_PREEMPT_RT_FULL
-static DEFINE_LOCAL_IRQ_LOCK(idr_lock);
-
-static inline void idr_preload_lock(void)
-{
-	local_lock(idr_lock);
-}
-
-static inline void idr_preload_unlock(void)
-{
-	local_unlock(idr_lock);
-}
-
-void idr_preload_end(void)
-{
-	idr_preload_unlock();
-}
-EXPORT_SYMBOL(idr_preload_end);
-#else
-static inline void idr_preload_lock(void)
-{
-	preempt_disable();
-}
-
-static inline void idr_preload_unlock(void)
-{
-	preempt_enable();
-}
-#endif
-
 /**
  * idr_preload - preload for idr_alloc()
  * @gfp_mask: allocation mask to use for preloading
@@ -454,7 +423,7 @@ void idr_preload(gfp_t gfp_mask)
 	WARN_ON_ONCE(in_interrupt());
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
-	idr_preload_lock();
+	preempt_disable();
 
 	/*
 	 * idr_alloc() is likely to succeed w/o full idr_layer buffer and
@@ -466,9 +435,9 @@ void idr_preload(gfp_t gfp_mask)
 	while (__this_cpu_read(idr_preload_cnt) < MAX_IDR_FREE) {
 		struct idr_layer *new;
 
-		idr_preload_unlock();
+		preempt_enable();
 		new = kmem_cache_zalloc(idr_layer_cache, gfp_mask);
-		idr_preload_lock();
+		preempt_disable();
 		if (!new)
 			break;
 
@@ -858,12 +827,10 @@ void *idr_replace(struct idr *idp, void *ptr, int id)
 	if (!p)
 		return ERR_PTR(-EINVAL);
 
-	n = (p->layer+1) * IDR_BITS;
-
-	if (id >= (1 << n))
+	if (id > idr_max(p->layer + 1))
 		return ERR_PTR(-EINVAL);
 
-	n -= IDR_BITS;
+	n = p->layer * IDR_BITS;
 	while ((n > 0) && p) {
 		p = p->ary[(id >> n) & IDR_MASK];
 		n -= IDR_BITS;

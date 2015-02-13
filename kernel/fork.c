@@ -28,6 +28,8 @@
 #include <linux/mman.h>
 #include <linux/mmu_notifier.h>
 #include <linux/fs.h>
+#include <linux/mm.h>
+#include <linux/vmacache.h>
 #include <linux/nsproxy.h>
 #include <linux/capability.h>
 #include <linux/cpu.h>
@@ -94,7 +96,7 @@ int max_threads;		/* tunable limit on nr_threads */
 
 DEFINE_PER_CPU(unsigned long, process_counts) = 0;
 
-DEFINE_RWLOCK(tasklist_lock);  /* outer */
+__cacheline_aligned DEFINE_RWLOCK(tasklist_lock);  /* outer */
 
 #ifdef CONFIG_PROVE_RCU
 int lockdep_tasklist_lock_is_held(void)
@@ -230,9 +232,7 @@ static inline void put_signal_struct(struct signal_struct *sig)
 	if (atomic_dec_and_test(&sig->sigcnt))
 		free_signal_struct(sig);
 }
-#ifdef CONFIG_PREEMPT_RT_BASE
-static
-#endif
+
 void __put_task_struct(struct task_struct *tsk)
 {
 	WARN_ON(!tsk->exit_state);
@@ -247,18 +247,7 @@ void __put_task_struct(struct task_struct *tsk)
 	if (!profile_handoff_task(tsk))
 		free_task(tsk);
 }
-#ifndef CONFIG_PREEMPT_RT_BASE
 EXPORT_SYMBOL_GPL(__put_task_struct);
-#else
-void __put_task_struct_cb(struct rcu_head *rhp)
-{
-	struct task_struct *tsk = container_of(rhp, struct task_struct, put_rcu);
-
-	__put_task_struct(tsk);
-
-}
-EXPORT_SYMBOL_GPL(__put_task_struct_cb);
-#endif
 
 void __init __weak arch_task_cache_init(void) { }
 
@@ -376,7 +365,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 
 	mm->locked_vm = 0;
 	mm->mmap = NULL;
-	mm->mmap_cache = NULL;
+	mm->vmacache_seqnum = 0;
 	mm->map_count = 0;
 	cpumask_clear(mm_cpumask(mm));
 	mm->mm_rb = RB_ROOT;
@@ -610,19 +599,6 @@ void __mmdrop(struct mm_struct *mm)
 	free_mm(mm);
 }
 EXPORT_SYMBOL_GPL(__mmdrop);
-
-#ifdef CONFIG_PREEMPT_RT_BASE
-/*
- * RCU callback for delayed mm drop. Not strictly rcu, but we don't
- * want another facility to make this work.
- */
-void __mmdrop_delayed(struct rcu_head *rhp)
-{
-	struct mm_struct *mm = container_of(rhp, struct mm_struct, delayed_drop);
-
-	__mmdrop(mm);
-}
-#endif
 
 /*
  * Decrement the use count and release all resources for an mm.
@@ -908,6 +884,9 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 	if (!oldmm)
 		return 0;
 
+	/* initialize the new vmacache entries */
+	vmacache_flush(tsk);
+
 	if (clone_flags & CLONE_VM) {
 		atomic_inc(&oldmm->mm_users);
 		mm = oldmm;
@@ -1064,6 +1043,11 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 	sig->nr_threads = 1;
 	atomic_set(&sig->live, 1);
 	atomic_set(&sig->sigcnt, 1);
+
+	/* list_add(thread_node, thread_head) without INIT_LIST_HEAD() */
+	sig->thread_head = (struct list_head)LIST_HEAD_INIT(tsk->thread_node);
+	tsk->thread_node = (struct list_head)LIST_HEAD_INIT(sig->thread_head);
+
 	init_waitqueue_head(&sig->wait_chldexit);
 	sig->curr_target = tsk;
 	init_sigpending(&sig->shared_pending);
@@ -1133,9 +1117,6 @@ void mm_init_owner(struct mm_struct *mm, struct task_struct *p)
  */
 static void posix_cpu_timers_init(struct task_struct *tsk)
 {
-#ifdef CONFIG_PREEMPT_RT_BASE
-	tsk->posix_timer_list = NULL;
-#endif
 	tsk->cputime_expires.prof_exp = 0;
 	tsk->cputime_expires.virt_exp = 0;
 	tsk->cputime_expires.sched_exp = 0;
@@ -1264,7 +1245,6 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	spin_lock_init(&p->alloc_lock);
 
 	init_sigpending(&p->pending);
-	p->sigqueue_cache = NULL;
 
 	p->utime = p->stime = p->gtime = 0;
 	p->utimescaled = p->stimescaled = 0;
@@ -1272,8 +1252,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	p->prev_cputime.utime = p->prev_cputime.stime = 0;
 #endif
 #ifdef CONFIG_VIRT_CPU_ACCOUNTING_GEN
-	raw_spin_lock_init(&p->vtime_lock);
-	seqcount_init(&p->vtime_seq);
+	seqlock_init(&p->vtime_seqlock);
 	p->vtime_snap = 0;
 	p->vtime_snap_whence = VTIME_SLEEPING;
 #endif
@@ -1326,9 +1305,6 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	p->hardirq_context = 0;
 	p->softirq_context = 0;
 #endif
-#ifdef CONFIG_PREEMPT_RT_FULL
-	p->pagefault_disabled = 0;
-#endif
 #ifdef CONFIG_LOCKDEP
 	p->lockdep_depth = 0; /* no locks held yet */
 	p->curr_chain_key = 0;
@@ -1355,7 +1331,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto bad_fork_cleanup_policy;
 	retval = audit_alloc(p);
 	if (retval)
-		goto bad_fork_cleanup_policy;
+		goto bad_fork_cleanup_perf;
 	/* copy all the process information */
 	retval = copy_semundo(clone_flags, p);
 	if (retval)
@@ -1510,6 +1486,8 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 			atomic_inc(&current->signal->sigcnt);
 			list_add_tail_rcu(&p->thread_group,
 					  &p->group_leader->thread_group);
+			list_add_tail_rcu(&p->thread_node,
+					  &p->signal->thread_head);
 		}
 		attach_pid(p, PIDTYPE_PID);
 		nr_threads++;
@@ -1517,7 +1495,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 
 	total_forks++;
 	spin_unlock(&current->sighand->siglock);
+	syscall_tracepoint_update(p);
 	write_unlock_irq(&tasklist_lock);
+
 	proc_fork_connector(p);
 	cgroup_post_fork(p);
 	if (clone_flags & CLONE_THREAD)
@@ -1552,8 +1532,9 @@ bad_fork_cleanup_semundo:
 	exit_sem(p);
 bad_fork_cleanup_audit:
 	audit_free(p);
-bad_fork_cleanup_policy:
+bad_fork_cleanup_perf:
 	perf_event_free_task(p);
+bad_fork_cleanup_policy:
 #ifdef CONFIG_NUMA
 	mpol_put(p->mempolicy);
 bad_fork_cleanup_cgroup:
@@ -1636,10 +1617,12 @@ long do_fork(unsigned long clone_flags,
 	 */
 	if (!IS_ERR(p)) {
 		struct completion vfork;
+		struct pid *pid;
 
 		trace_sched_process_fork(current, p);
 
-		nr = task_pid_vnr(p);
+		pid = get_task_pid(p, PIDTYPE_PID);
+		nr = pid_vnr(pid);
 
 		if (clone_flags & CLONE_PARENT_SETTID)
 			put_user(nr, parent_tidptr);
@@ -1654,12 +1637,14 @@ long do_fork(unsigned long clone_flags,
 
 		/* forking complete and child started to run, tell ptracer */
 		if (unlikely(trace))
-			ptrace_event(trace, nr);
+			ptrace_event_pid(trace, pid);
 
 		if (clone_flags & CLONE_VFORK) {
 			if (!wait_for_vfork_done(p, &vfork))
-				ptrace_event(PTRACE_EVENT_VFORK_DONE, nr);
+				ptrace_event_pid(PTRACE_EVENT_VFORK_DONE, pid);
 		}
+
+		put_pid(pid);
 	} else {
 		nr = PTR_ERR(p);
 	}
@@ -1690,7 +1675,7 @@ SYSCALL_DEFINE0(fork)
 #ifdef __ARCH_WANT_SYS_VFORK
 SYSCALL_DEFINE0(vfork)
 {
-	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, 0,
+	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, 0, 
 			0, NULL, NULL);
 }
 #endif

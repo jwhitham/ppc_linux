@@ -501,8 +501,11 @@ int radeon_driver_open_kms(struct drm_device *dev, struct drm_file *file_priv)
 		radeon_vm_init(rdev, &fpriv->vm);
 
 		r = radeon_bo_reserve(rdev->ring_tmp_bo.bo, false);
-		if (r)
+		if (r) {
+			radeon_vm_fini(rdev, &fpriv->vm);
+			kfree(fpriv);
 			return r;
+		}
 
 		/* map the ib pool buffer read only into
 		 * virtual address space */
@@ -681,6 +684,8 @@ int radeon_get_vblank_timestamp_kms(struct drm_device *dev, int crtc,
 
 	/* Get associated drm_crtc: */
 	drmcrtc = &rdev->mode_info.crtcs[crtc]->base;
+	if (!drmcrtc)
+		return -EINVAL;
 
 	/* Helper routine in DRM core does all the work: */
 	return drm_calc_vbltimestamp_from_scanoutpos(dev, crtc, max_error,

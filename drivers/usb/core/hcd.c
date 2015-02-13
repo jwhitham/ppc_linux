@@ -1677,9 +1677,9 @@ static void __usb_hcd_giveback_urb(struct urb *urb)
 	 * and no one may trigger the above deadlock situation when
 	 * running complete() in tasklet.
 	 */
-	local_irq_save_nort(flags);
+	local_irq_save(flags);
 	urb->complete(urb);
-	local_irq_restore_nort(flags);
+	local_irq_restore(flags);
 
 	atomic_dec(&urb->use_count);
 	if (unlikely(atomic_read(&urb->reject)))
@@ -2053,6 +2053,8 @@ int usb_alloc_streams(struct usb_interface *interface,
 		return -EINVAL;
 	if (dev->speed != USB_SPEED_SUPER)
 		return -EINVAL;
+	if (dev->state < USB_STATE_CONFIGURED)
+		return -ENODEV;
 
 	/* Streams only apply to bulk endpoints. */
 	for (i = 0; i < num_eps; i++)
@@ -2331,7 +2333,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
 	 * when the first handler doesn't use it.  So let's just
 	 * assume it's never used.
 	 */
-	local_irq_save_nort(flags);
+	local_irq_save(flags);
 
 	if (unlikely(HCD_DEAD(hcd) || !HCD_HW_ACCESSIBLE(hcd)))
 		rc = IRQ_NONE;
@@ -2340,7 +2342,7 @@ irqreturn_t usb_hcd_irq (int irq, void *__hcd)
 	else
 		rc = IRQ_HANDLED;
 
-	local_irq_restore_nort(flags);
+	local_irq_restore(flags);
 	return rc;
 }
 EXPORT_SYMBOL_GPL(usb_hcd_irq);

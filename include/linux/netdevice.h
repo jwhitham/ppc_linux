@@ -1214,7 +1214,7 @@ struct net_device {
 	unsigned char		perm_addr[MAX_ADDR_LEN]; /* permanent hw address */
 	unsigned char		addr_assign_type; /* hw address assignment type */
 	unsigned char		addr_len;	/* hardware address length	*/
-	unsigned short		neigh_priv_len;
+	unsigned char		neigh_priv_len;
 	unsigned short          dev_id;		/* Used to differentiate devices
 						 * that share the same link
 						 * layer address
@@ -1930,7 +1930,6 @@ struct softnet_data {
 	unsigned int		dropped;
 	struct sk_buff_head	input_pkt_queue;
 	struct napi_struct	backlog;
-	struct sk_buff_head	tofree_queue;
 
 #ifdef CONFIG_NET_FLOW_LIMIT
 	struct sd_flow_limit __rcu *flow_limit;
@@ -2892,6 +2891,20 @@ extern struct kobj_ns_type_operations net_ns_type_operations;
 extern const char *netdev_drivername(const struct net_device *dev);
 
 extern void linkwatch_run_queue(void);
+
+static inline netdev_features_t netdev_intersect_features(netdev_features_t f1,
+							  netdev_features_t f2)
+{
+	if (f1 & NETIF_F_GEN_CSUM)
+		f1 |= (NETIF_F_ALL_CSUM & ~NETIF_F_GEN_CSUM);
+	if (f2 & NETIF_F_GEN_CSUM)
+		f2 |= (NETIF_F_ALL_CSUM & ~NETIF_F_GEN_CSUM);
+	f1 &= f2;
+	if (f1 & NETIF_F_GEN_CSUM)
+		f1 &= ~(NETIF_F_ALL_CSUM & ~NETIF_F_GEN_CSUM);
+
+	return f1;
+}
 
 static inline netdev_features_t netdev_get_wanted_features(
 	struct net_device *dev)

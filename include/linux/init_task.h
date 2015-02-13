@@ -40,6 +40,7 @@ extern struct fs_struct init_fs;
 
 #define INIT_SIGNALS(sig) {						\
 	.nr_threads	= 1,						\
+	.thread_head	= LIST_HEAD_INIT(init_task.thread_node),	\
 	.wait_chldexit	= __WAIT_QUEUE_HEAD_INITIALIZER(sig.wait_chldexit),\
 	.shared_pending	= { 						\
 		.list = LIST_HEAD_INIT(sig.shared_pending.list),	\
@@ -143,16 +144,9 @@ extern struct task_group root_task_group;
 # define INIT_PERF_EVENTS(tsk)
 #endif
 
-#ifdef CONFIG_PREEMPT_RT_BASE
-# define INIT_TIMER_LIST		.posix_timer_list = NULL,
-#else
-# define INIT_TIMER_LIST
-#endif
-
 #ifdef CONFIG_VIRT_CPU_ACCOUNTING_GEN
 # define INIT_VTIME(tsk)						\
-	.vtime_lock = __RAW_SPIN_LOCK_UNLOCKED(tsk.vtime_lock),	\
-	.vtime_seq = SEQCNT_ZERO,			\
+	.vtime_seqlock = __SEQLOCK_UNLOCKED(tsk.vtime_seqlock),	\
 	.vtime_snap = 0,				\
 	.vtime_snap_whence = VTIME_SYS,
 #else
@@ -214,13 +208,13 @@ extern struct task_group root_task_group;
 	.cpu_timers	= INIT_CPU_TIMERS(tsk.cpu_timers),		\
 	.pi_lock	= __RAW_SPIN_LOCK_UNLOCKED(tsk.pi_lock),	\
 	.timer_slack_ns = 50000, /* 50 usec default slack */		\
-	INIT_TIMER_LIST							\
 	.pids = {							\
 		[PIDTYPE_PID]  = INIT_PID_LINK(PIDTYPE_PID),		\
 		[PIDTYPE_PGID] = INIT_PID_LINK(PIDTYPE_PGID),		\
 		[PIDTYPE_SID]  = INIT_PID_LINK(PIDTYPE_SID),		\
 	},								\
 	.thread_group	= LIST_HEAD_INIT(tsk.thread_group),		\
+	.thread_node	= LIST_HEAD_INIT(init_signals.thread_head),	\
 	INIT_IDS							\
 	INIT_PERF_EVENTS(tsk)						\
 	INIT_TRACE_IRQFLAGS						\

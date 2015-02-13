@@ -359,6 +359,12 @@ static struct vmap_area *alloc_vmap_area(unsigned long size,
 	if (unlikely(!va))
 		return ERR_PTR(-ENOMEM);
 
+	/*
+	 * Only scan the relevant parts containing pointers to other objects
+	 * to avoid false negatives.
+	 */
+	kmemleak_scan_area(&va->rb_node, SIZE_MAX, gfp_mask & GFP_RECLAIM_MASK);
+
 retry:
 	spin_lock(&vmap_area_lock);
 	/*
@@ -790,7 +796,7 @@ static struct vmap_block *new_vmap_block(gfp_t gfp_mask)
 	struct vmap_block *vb;
 	struct vmap_area *va;
 	unsigned long vb_idx;
-	int node, err, cpu;
+	int node, err;
 
 	node = numa_node_id();
 
@@ -828,12 +834,11 @@ static struct vmap_block *new_vmap_block(gfp_t gfp_mask)
 	BUG_ON(err);
 	radix_tree_preload_end();
 
-	cpu = get_cpu_light();
-	vbq = &__get_cpu_var(vmap_block_queue);
+	vbq = &get_cpu_var(vmap_block_queue);
 	spin_lock(&vbq->lock);
 	list_add_rcu(&vb->free_list, &vbq->free);
 	spin_unlock(&vbq->lock);
-	put_cpu_light();
+	put_cpu_var(vmap_block_queue);
 
 	return vb;
 }
@@ -901,7 +906,6 @@ static void *vb_alloc(unsigned long size, gfp_t gfp_mask)
 	struct vmap_block *vb;
 	unsigned long addr = 0;
 	unsigned int order;
-	int cpu = 0;
 
 	BUG_ON(size & ~PAGE_MASK);
 	BUG_ON(size > PAGE_SIZE*VMAP_MAX_ALLOC);
@@ -917,8 +921,7 @@ static void *vb_alloc(unsigned long size, gfp_t gfp_mask)
 
 again:
 	rcu_read_lock();
-	cpu = get_cpu_light();
-	vbq = &__get_cpu_var(vmap_block_queue);
+	vbq = &get_cpu_var(vmap_block_queue);
 	list_for_each_entry_rcu(vb, &vbq->free, free_list) {
 		int i;
 
@@ -942,7 +945,7 @@ next:
 		spin_unlock(&vb->lock);
 	}
 
-	put_cpu_light();
+	put_cpu_var(vmap_block_queue);
 	rcu_read_unlock();
 
 	if (!addr) {
@@ -1649,11 +1652,11 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	clear_vm_uninitialized_flag(area);
 
 	/*
-	 * A ref_count = 3 is needed because the vm_struct and vmap_area
-	 * structures allocated in the __get_vm_area_node() function contain
-	 * references to the virtual address of the vmalloc'ed block.
+	 * A ref_count = 2 is needed because vm_struct allocated in
+	 * __get_vm_area_node() contains a reference to the virtual address of
+	 * the vmalloc'ed block.
 	 */
-	kmemleak_alloc(addr, real_size, 3, gfp_mask);
+	kmemleak_alloc(addr, real_size, 2, gfp_mask);
 
 	return addr;
 
@@ -2682,14 +2685,14 @@ void get_vmalloc_info(struct vmalloc_info *vmi)
 
 	prev_end = VMALLOC_START;
 
-	spin_lock(&vmap_area_lock);
+	rcu_read_lock();
 
 	if (list_empty(&vmap_area_list)) {
 		vmi->largest_chunk = VMALLOC_TOTAL;
 		goto out;
 	}
 
-	list_for_each_entry(va, &vmap_area_list, list) {
+	list_for_each_entry_rcu(va, &vmap_area_list, list) {
 		unsigned long addr = va->va_start;
 
 		/*
@@ -2716,7 +2719,7 @@ void get_vmalloc_info(struct vmalloc_info *vmi)
 		vmi->largest_chunk = VMALLOC_END - prev_end;
 
 out:
-	spin_unlock(&vmap_area_lock);
+	rcu_read_unlock();
 }
 #endif
 

@@ -240,8 +240,16 @@ serial_omap_baud_is_mode16(struct uart_port *port, unsigned int baud)
 {
 	unsigned int n13 = port->uartclk / (13 * baud);
 	unsigned int n16 = port->uartclk / (16 * baud);
-	int baudAbsDiff13 = baud - (port->uartclk / (13 * n13));
-	int baudAbsDiff16 = baud - (port->uartclk / (16 * n16));
+	int baudAbsDiff13;
+	int baudAbsDiff16;
+
+	if (n13 == 0)
+		n13 = 1;
+	if (n16 == 0)
+		n16 = 1;
+
+	baudAbsDiff13 = baud - (port->uartclk / (13 * n13));
+	baudAbsDiff16 = baud - (port->uartclk / (16 * n16));
 	if(baudAbsDiff13 < 0)
 		baudAbsDiff13 = -baudAbsDiff13;
 	if(baudAbsDiff16 < 0)
@@ -1232,10 +1240,13 @@ serial_omap_console_write(struct console *co, const char *s,
 
 	pm_runtime_get_sync(up->dev);
 
-	if (up->port.sysrq || oops_in_progress)
-		locked = spin_trylock_irqsave(&up->port.lock, flags);
+	local_irq_save(flags);
+	if (up->port.sysrq)
+		locked = 0;
+	else if (oops_in_progress)
+		locked = spin_trylock(&up->port.lock);
 	else
-		spin_lock_irqsave(&up->port.lock, flags);
+		spin_lock(&up->port.lock);
 
 	/*
 	 * First save the IER then disable the interrupts
@@ -1264,7 +1275,8 @@ serial_omap_console_write(struct console *co, const char *s,
 	pm_runtime_mark_last_busy(up->dev);
 	pm_runtime_put_autosuspend(up->dev);
 	if (locked)
-		spin_unlock_irqrestore(&up->port.lock, flags);
+		spin_unlock(&up->port.lock);
+	local_irq_restore(flags);
 }
 
 static int __init

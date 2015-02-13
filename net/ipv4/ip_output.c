@@ -79,7 +79,6 @@
 #include <linux/mroute.h>
 #include <linux/netlink.h>
 #include <linux/tcp.h>
-#include <linux/locallock.h>
 
 int sysctl_ip_default_ttl __read_mostly = IPDEFTTL;
 EXPORT_SYMBOL(sysctl_ip_default_ttl);
@@ -149,7 +148,7 @@ int ip_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 	iph->daddr    = (opt && opt->opt.srr ? opt->opt.faddr : daddr);
 	iph->saddr    = saddr;
 	iph->protocol = sk->sk_protocol;
-	ip_select_ident(skb, &rt->dst, sk);
+	ip_select_ident(skb, sk);
 
 	if (opt && opt->opt.optlen) {
 		iph->ihl += opt->opt.optlen>>2;
@@ -387,8 +386,7 @@ packet_routed:
 		ip_options_build(skb, &inet_opt->opt, inet->inet_daddr, rt, 0);
 	}
 
-	ip_select_ident_more(skb, &rt->dst, sk,
-			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
+	ip_select_ident_segs(skb, sk, skb_shinfo(skb)->gso_segs ?: 1);
 
 	skb->priority = sk->sk_priority;
 	skb->mark = sk->sk_mark;
@@ -1330,7 +1328,7 @@ struct sk_buff *__ip_make_skb(struct sock *sk,
 	iph->ttl = ttl;
 	iph->protocol = sk->sk_protocol;
 	ip_copy_addrs(iph, fl4);
-	ip_select_ident(skb, &rt->dst, sk);
+	ip_select_ident(skb, sk);
 
 	if (opt) {
 		iph->ihl += opt->optlen>>2;
@@ -1469,9 +1467,6 @@ static DEFINE_PER_CPU(struct inet_sock, unicast_sock) = {
 	.uc_ttl		= -1,
 };
 
-/* serialize concurrent calls on the same CPU to ip_send_unicast_reply */
-static DEFINE_LOCAL_IRQ_LOCK(unicast_lock);
-
 void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 			   __be32 saddr, const struct ip_reply_arg *arg,
 			   unsigned int len)
@@ -1483,6 +1478,7 @@ void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 	struct sk_buff *nskb;
 	struct sock *sk;
 	struct inet_sock *inet;
+	int err;
 
 	if (ip_options_echo(&replyopts.opt.opt, skb))
 		return;
@@ -1509,7 +1505,7 @@ void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 	if (IS_ERR(rt))
 		return;
 
-	inet = &get_locked_var(unicast_lock, unicast_sock);
+	inet = &get_cpu_var(unicast_sock);
 
 	inet->tos = arg->tos;
 	sk = &inet->sk;
@@ -1519,8 +1515,13 @@ void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 	sock_net_set(sk, net);
 	__skb_queue_head_init(&sk->sk_write_queue);
 	sk->sk_sndbuf = sysctl_wmem_default;
-	ip_append_data(sk, &fl4, ip_reply_glue_bits, arg->iov->iov_base, len, 0,
-		       &ipc, &rt, MSG_DONTWAIT);
+	err = ip_append_data(sk, &fl4, ip_reply_glue_bits, arg->iov->iov_base,
+			     len, 0, &ipc, &rt, MSG_DONTWAIT);
+	if (unlikely(err)) {
+		ip_flush_pending_frames(sk);
+		goto out;
+	}
+
 	nskb = skb_peek(&sk->sk_write_queue);
 	if (nskb) {
 		if (arg->csumoffset >= 0)
@@ -1532,8 +1533,8 @@ void ip_send_unicast_reply(struct net *net, struct sk_buff *skb, __be32 daddr,
 		skb_set_queue_mapping(nskb, skb_get_queue_mapping(skb));
 		ip_push_pending_frames(sk, &fl4);
 	}
-
-	put_locked_var(unicast_lock, unicast_sock);
+out:
+	put_cpu_var(unicast_sock);
 
 	ip_rt_put(rt);
 }

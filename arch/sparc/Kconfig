@@ -26,7 +26,6 @@ config SPARC
 	select HAVE_DMA_ATTRS
 	select HAVE_DMA_API_DEBUG
 	select HAVE_ARCH_JUMP_LABEL if SPARC64
-	select IRQ_FORCED_THREADING
 	select GENERIC_IRQ_SHOW
 	select ARCH_WANT_IPC_PARSE_VERSION
 	select USE_GENERIC_SMP_HELPERS if SMP
@@ -66,6 +65,7 @@ config SPARC64
 	select HAVE_FTRACE_MCOUNT_RECORD
 	select HAVE_SYSCALL_TRACEPOINTS
 	select HAVE_DEBUG_KMEMLEAK
+	select SPARSE_IRQ
 	select RTC_DRV_CMOS
 	select RTC_DRV_BQ4802
 	select RTC_DRV_SUN4V
@@ -76,6 +76,7 @@ config SPARC64
 	select ARCH_HAVE_NMI_SAFE_CMPXCHG
 	select HAVE_C_RECORDMCOUNT
 	select NO_BOOTMEM
+	select ARCH_SUPPORTS_ATOMIC_RMW
 
 config ARCH_DEFCONFIG
 	string
@@ -178,10 +179,12 @@ config NR_CPUS
 source kernel/Kconfig.hz
 
 config RWSEM_GENERIC_SPINLOCK
-	def_bool PREEMPT_RT_FULL
+	bool
+	default y if SPARC32
 
 config RWSEM_XCHGADD_ALGORITHM
-	def_bool !RWSEM_GENERIC_SPINLOCK && !PREEMPT_RT_FULL
+	bool
+	default y if SPARC64
 
 config GENERIC_HWEIGHT
 	bool
@@ -521,10 +524,6 @@ endmenu
 menu "Executable file formats"
 
 source "fs/Kconfig.binfmt"
-
-config EARLY_PRINTK
-	bool
-	default y
 
 config COMPAT
 	bool

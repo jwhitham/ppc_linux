@@ -250,6 +250,9 @@ struct mem_cgroup {
 	/* vmpressure notifications */
 	struct vmpressure vmpressure;
 
+	/* css_online() has been completed */
+	int initialized;
+
 	/*
 	 * the counter to account for mem+swap usage.
 	 */
@@ -1089,9 +1092,23 @@ skip_node:
 	 * skipping css reference should be safe.
 	 */
 	if (next_css) {
-		if ((next_css == &root->css) ||
-		    ((next_css->flags & CSS_ONLINE) && css_tryget(next_css)))
-			return mem_cgroup_from_css(next_css);
+		struct mem_cgroup *memcg = mem_cgroup_from_css(next_css);
+
+		if (next_css == &root->css)
+			return memcg;
+
+		if (css_tryget(next_css)) {
+			if (memcg->initialized) {
+				/*
+				 * Make sure the memcg is initialized:
+				 * mem_cgroup_css_online() orders the the
+				 * initialization against setting the flag.
+				 */
+				smp_rmb();
+				return memcg;
+			}
+			css_put(next_css);
+		}
 
 		prev_css = next_css;
 		goto skip_node;
@@ -1820,13 +1837,18 @@ static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 				break;
 			};
 			points = oom_badness(task, memcg, NULL, totalpages);
-			if (points > chosen_points) {
-				if (chosen)
-					put_task_struct(chosen);
-				chosen = task;
-				chosen_points = points;
-				get_task_struct(chosen);
-			}
+			if (!points || points < chosen_points)
+				continue;
+			/* Prefer thread group leaders for display purposes */
+			if (points == chosen_points &&
+			    thread_group_leader(chosen))
+				continue;
+
+			if (chosen)
+				put_task_struct(chosen);
+			chosen = task;
+			chosen_points = points;
+			get_task_struct(chosen);
 		}
 		css_task_iter_end(&it);
 	}
@@ -2473,7 +2495,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg, bool sync)
 
 	/* Notify other cpus that system-wide "drain" is running */
 	get_online_cpus();
-	curcpu = get_cpu_light();
+	curcpu = get_cpu();
 	for_each_online_cpu(cpu) {
 		struct memcg_stock_pcp *stock = &per_cpu(memcg_stock, cpu);
 		struct mem_cgroup *memcg;
@@ -2490,7 +2512,7 @@ static void drain_all_stock(struct mem_cgroup *root_memcg, bool sync)
 				schedule_work_on(cpu, &stock->work);
 		}
 	}
-	put_cpu_light();
+	put_cpu();
 
 	if (!sync)
 		goto out;
@@ -5643,8 +5665,12 @@ static int mem_cgroup_oom_notify_cb(struct mem_cgroup *memcg)
 {
 	struct mem_cgroup_eventfd_list *ev;
 
+	spin_lock(&memcg_oom_lock);
+
 	list_for_each_entry(ev, &memcg->oom_notify, list)
 		eventfd_signal(ev->eventfd, 1);
+
+	spin_unlock(&memcg_oom_lock);
 	return 0;
 }
 
@@ -6322,6 +6348,16 @@ mem_cgroup_css_online(struct cgroup_subsys_state *css)
 
 	error = memcg_init_kmem(memcg, &mem_cgroup_subsys);
 	mutex_unlock(&memcg_create_mutex);
+
+	if (!error) {
+		/*
+		 * Make sure the memcg is initialized: mem_cgroup_iter()
+		 * orders reading memcg->initialized against its callers
+		 * reading the memcg members.
+		 */
+		smp_wmb();
+		memcg->initialized = 1;
+	}
 	return error;
 }
 

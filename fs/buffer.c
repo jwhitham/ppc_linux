@@ -227,7 +227,7 @@ __find_get_block_slow(struct block_device *bdev, sector_t block)
 	int all_mapped = 1;
 
 	index = block >> (PAGE_CACHE_SHIFT - bd_inode->i_blkbits);
-	page = find_get_page(bd_mapping, index);
+	page = find_get_page_flags(bd_mapping, index, FGP_ACCESSED);
 	if (!page)
 		goto out;
 
@@ -322,7 +322,8 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 	 * decide that the page is now completely done.
 	 */
 	first = page_buffers(page);
-	flags = bh_uptodate_lock_irqsave(first);
+	local_irq_save(flags);
+	bit_spin_lock(BH_Uptodate_Lock, &first->b_state);
 	clear_buffer_async_read(bh);
 	unlock_buffer(bh);
 	tmp = bh;
@@ -335,7 +336,8 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 		}
 		tmp = tmp->b_this_page;
 	} while (tmp != bh);
-	bh_uptodate_unlock_irqrestore(first, flags);
+	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
+	local_irq_restore(flags);
 
 	/*
 	 * If none of the buffers had errors and they are all
@@ -347,7 +349,9 @@ static void end_buffer_async_read(struct buffer_head *bh, int uptodate)
 	return;
 
 still_busy:
-	bh_uptodate_unlock_irqrestore(first, flags);
+	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
+	local_irq_restore(flags);
+	return;
 }
 
 /*
@@ -381,7 +385,8 @@ void end_buffer_async_write(struct buffer_head *bh, int uptodate)
 	}
 
 	first = page_buffers(page);
-	flags = bh_uptodate_lock_irqsave(first);
+	local_irq_save(flags);
+	bit_spin_lock(BH_Uptodate_Lock, &first->b_state);
 
 	clear_buffer_async_write(bh);
 	unlock_buffer(bh);
@@ -393,12 +398,15 @@ void end_buffer_async_write(struct buffer_head *bh, int uptodate)
 		}
 		tmp = tmp->b_this_page;
 	}
-	bh_uptodate_unlock_irqrestore(first, flags);
+	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
+	local_irq_restore(flags);
 	end_page_writeback(page);
 	return;
 
 still_busy:
-	bh_uptodate_unlock_irqrestore(first, flags);
+	bit_spin_unlock(BH_Uptodate_Lock, &first->b_state);
+	local_irq_restore(flags);
+	return;
 }
 EXPORT_SYMBOL(end_buffer_async_write);
 
@@ -1021,7 +1029,8 @@ grow_dev_page(struct block_device *bdev, sector_t block,
 		bh = page_buffers(page);
 		if (bh->b_size == size) {
 			end_block = init_page_buffers(page, bdev,
-						index << sizebits, size);
+						(sector_t)index << sizebits,
+						size);
 			goto done;
 		}
 		if (!try_to_free_buffers(page))
@@ -1042,7 +1051,8 @@ grow_dev_page(struct block_device *bdev, sector_t block,
 	 */
 	spin_lock(&inode->i_mapping->private_lock);
 	link_dev_buffers(page, bh);
-	end_block = init_page_buffers(page, bdev, index << sizebits, size);
+	end_block = init_page_buffers(page, bdev, (sector_t)index << sizebits,
+			size);
 	spin_unlock(&inode->i_mapping->private_lock);
 done:
 	ret = (block < end_block) ? 1 : -ENXIO;
@@ -1358,12 +1368,13 @@ __find_get_block(struct block_device *bdev, sector_t block, unsigned size)
 	struct buffer_head *bh = lookup_bh_lru(bdev, block, size);
 
 	if (bh == NULL) {
+		/* __find_get_block_slow will mark the page accessed */
 		bh = __find_get_block_slow(bdev, block);
 		if (bh)
 			bh_lru_install(bh);
-	}
-	if (bh)
+	} else
 		touch_buffer(bh);
+
 	return bh;
 }
 EXPORT_SYMBOL(__find_get_block);
@@ -1475,16 +1486,27 @@ EXPORT_SYMBOL(set_bh_page);
 /*
  * Called when truncating a buffer on a page completely.
  */
+
+/* Bits that are cleared during an invalidate */
+#define BUFFER_FLAGS_DISCARD \
+	(1 << BH_Mapped | 1 << BH_New | 1 << BH_Req | \
+	 1 << BH_Delay | 1 << BH_Unwritten)
+
 static void discard_buffer(struct buffer_head * bh)
 {
+	unsigned long b_state, b_state_old;
+
 	lock_buffer(bh);
 	clear_buffer_dirty(bh);
 	bh->b_bdev = NULL;
-	clear_buffer_mapped(bh);
-	clear_buffer_req(bh);
-	clear_buffer_new(bh);
-	clear_buffer_delay(bh);
-	clear_buffer_unwritten(bh);
+	b_state = bh->b_state;
+	for (;;) {
+		b_state_old = cmpxchg(&bh->b_state, b_state,
+				      (b_state & ~BUFFER_FLAGS_DISCARD));
+		if (b_state_old == b_state)
+			break;
+		b_state = b_state_old;
+	}
 	unlock_buffer(bh);
 }
 
@@ -2067,6 +2089,7 @@ int generic_write_end(struct file *file, struct address_space *mapping,
 			struct page *page, void *fsdata)
 {
 	struct inode *inode = mapping->host;
+	loff_t old_size = inode->i_size;
 	int i_size_changed = 0;
 
 	copied = block_write_end(file, mapping, pos, len, copied, page, fsdata);
@@ -2086,6 +2109,8 @@ int generic_write_end(struct file *file, struct address_space *mapping,
 	unlock_page(page);
 	page_cache_release(page);
 
+	if (old_size < pos)
+		pagecache_isize_extended(inode, old_size, pos);
 	/*
 	 * Don't mark the inode dirty under page lock. First, it unnecessarily
 	 * makes the holding time of page lock longer. Second, it forces lock
@@ -2303,6 +2328,11 @@ static int cont_expand_zero(struct file *file, struct address_space *mapping,
 		err = 0;
 
 		balance_dirty_pages_ratelimited(mapping);
+
+		if (unlikely(fatal_signal_pending(current))) {
+			err = -EINTR;
+			goto out;
+		}
 	}
 
 	/* page covers the boundary, find the boundary offset */
@@ -3328,7 +3358,6 @@ struct buffer_head *alloc_buffer_head(gfp_t gfp_flags)
 	struct buffer_head *ret = kmem_cache_zalloc(bh_cachep, gfp_flags);
 	if (ret) {
 		INIT_LIST_HEAD(&ret->b_assoc_buffers);
-		buffer_head_init_locks(ret);
 		preempt_disable();
 		__this_cpu_inc(bh_accounting.nr);
 		recalc_bh_state();

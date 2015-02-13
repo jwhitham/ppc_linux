@@ -13,14 +13,6 @@
 
 static unsigned long total_usage;
 
-static void page_cgroup_lock_init(struct page_cgroup *pc, int nr_pages)
-{
-#ifdef CONFIG_PREEMPT_RT_BASE
-	for (; nr_pages; nr_pages--, pc++)
-		spin_lock_init(&pc->pcg_lock);
-#endif
-}
-
 #if !defined(CONFIG_SPARSEMEM)
 
 
@@ -68,7 +60,6 @@ static int __init alloc_node_page_cgroup(int nid)
 		return -ENOMEM;
 	NODE_DATA(nid)->node_page_cgroup = base;
 	total_usage += table_size;
-	page_cgroup_lock_init(base, nr_pages);
 	return 0;
 }
 
@@ -159,8 +150,6 @@ static int __meminit init_section_page_cgroup(unsigned long pfn, int nid)
 		return -ENOMEM;
 	}
 
-	page_cgroup_lock_init(base, PAGES_PER_SECTION);
-
 	/*
 	 * The passed "pfn" may not be aligned to SECTION.  For the calculation
 	 * we need to apply a mask.
@@ -181,6 +170,7 @@ static void free_page_cgroup(void *addr)
 			sizeof(struct page_cgroup) * PAGES_PER_SECTION;
 
 		BUG_ON(PageReserved(page));
+		kmemleak_free(addr);
 		free_pages_exact(addr, table_size);
 	}
 }

@@ -678,9 +678,9 @@ unsigned int ata_sff_data_xfer_noirq(struct ata_device *dev, unsigned char *buf,
 	unsigned long flags;
 	unsigned int consumed;
 
-	local_irq_save_nort(flags);
+	local_irq_save(flags);
 	consumed = ata_sff_data_xfer32(dev, buf, buflen, rw);
-	local_irq_restore_nort(flags);
+	local_irq_restore(flags);
 
 	return consumed;
 }
@@ -719,7 +719,7 @@ static void ata_pio_sector(struct ata_queued_cmd *qc)
 		unsigned long flags;
 
 		/* FIXME: use a bounce buffer */
-		local_irq_save_nort(flags);
+		local_irq_save(flags);
 		buf = kmap_atomic(page);
 
 		/* do the actual data transfer */
@@ -727,7 +727,7 @@ static void ata_pio_sector(struct ata_queued_cmd *qc)
 				       do_write);
 
 		kunmap_atomic(buf);
-		local_irq_restore_nort(flags);
+		local_irq_restore(flags);
 	} else {
 		buf = page_address(page);
 		ap->ops->sff_data_xfer(qc->dev, buf + offset, qc->sect_size,
@@ -864,7 +864,7 @@ next_sg:
 		unsigned long flags;
 
 		/* FIXME: use bounce buffer */
-		local_irq_save_nort(flags);
+		local_irq_save(flags);
 		buf = kmap_atomic(page);
 
 		/* do the actual data transfer */
@@ -872,7 +872,7 @@ next_sg:
 								count, rw);
 
 		kunmap_atomic(buf);
-		local_irq_restore_nort(flags);
+		local_irq_restore(flags);
 	} else {
 		buf = page_address(page);
 		consumed = ap->ops->sff_data_xfer(dev,  buf + offset,
@@ -1333,7 +1333,19 @@ void ata_sff_flush_pio_task(struct ata_port *ap)
 	DPRINTK("ENTER\n");
 
 	cancel_delayed_work_sync(&ap->sff_pio_task);
+
+	/*
+	 * We wanna reset the HSM state to IDLE.  If we do so without
+	 * grabbing the port lock, critical sections protected by it which
+	 * expect the HSM state to stay stable may get surprised.  For
+	 * example, we may set IDLE in between the time
+	 * __ata_sff_port_intr() checks for HSM_ST_IDLE and before it calls
+	 * ata_sff_hsm_move() causing ata_sff_hsm_move() to BUG().
+	 */
+	spin_lock_irq(ap->lock);
 	ap->hsm_task_state = HSM_ST_IDLE;
+	spin_unlock_irq(ap->lock);
+
 	ap->sff_pio_task_link = NULL;
 
 	if (ata_msg_ctl(ap))
@@ -2008,13 +2020,15 @@ static int ata_bus_softreset(struct ata_port *ap, unsigned int devmask,
 
 	DPRINTK("ata%u: bus reset via SRST\n", ap->print_id);
 
-	/* software reset.  causes dev0 to be selected */
-	iowrite8(ap->ctl, ioaddr->ctl_addr);
-	udelay(20);	/* FIXME: flush */
-	iowrite8(ap->ctl | ATA_SRST, ioaddr->ctl_addr);
-	udelay(20);	/* FIXME: flush */
-	iowrite8(ap->ctl, ioaddr->ctl_addr);
-	ap->last_ctl = ap->ctl;
+	if (ap->ioaddr.ctl_addr) {
+		/* software reset.  causes dev0 to be selected */
+		iowrite8(ap->ctl, ioaddr->ctl_addr);
+		udelay(20);	/* FIXME: flush */
+		iowrite8(ap->ctl | ATA_SRST, ioaddr->ctl_addr);
+		udelay(20);	/* FIXME: flush */
+		iowrite8(ap->ctl, ioaddr->ctl_addr);
+		ap->last_ctl = ap->ctl;
+	}
 
 	/* wait the port to become ready */
 	return ata_sff_wait_after_reset(&ap->link, devmask, deadline);
@@ -2214,10 +2228,6 @@ void ata_sff_error_handler(struct ata_port *ap)
 		ap->ops->sff_drain_fifo(qc);
 
 	spin_unlock_irqrestore(ap->lock, flags);
-
-	/* ignore ata_sff_softreset if ctl isn't accessible */
-	if (softreset == ata_sff_softreset && !ap->ioaddr.ctl_addr)
-		softreset = NULL;
 
 	/* ignore built-in hardresets if SCR access is not available */
 	if ((hardreset == sata_std_hardreset ||

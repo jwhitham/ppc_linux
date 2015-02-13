@@ -121,6 +121,7 @@ static void iwl_pcie_apm_config(struct iwl_trans *trans)
 {
 	struct iwl_trans_pcie *trans_pcie = IWL_TRANS_GET_PCIE_TRANS(trans);
 	u16 lctl;
+	u16 cap;
 
 	/*
 	 * HW bug W/A for instability in PCIe bus L0S->L1 transition.
@@ -131,16 +132,17 @@ static void iwl_pcie_apm_config(struct iwl_trans *trans)
 	 *    power savings, even without L1.
 	 */
 	pcie_capability_read_word(trans_pcie->pci_dev, PCI_EXP_LNKCTL, &lctl);
-	if (lctl & PCI_EXP_LNKCTL_ASPM_L1) {
-		/* L1-ASPM enabled; disable(!) L0S */
+	if (lctl & PCI_EXP_LNKCTL_ASPM_L1)
 		iwl_set_bit(trans, CSR_GIO_REG, CSR_GIO_REG_VAL_L0S_ENABLED);
-		dev_info(trans->dev, "L1 Enabled; Disabling L0S\n");
-	} else {
-		/* L1-ASPM disabled; enable(!) L0S */
+	else
 		iwl_clear_bit(trans, CSR_GIO_REG, CSR_GIO_REG_VAL_L0S_ENABLED);
-		dev_info(trans->dev, "L1 Disabled; Enabling L0S\n");
-	}
 	trans->pm_support = !(lctl & PCI_EXP_LNKCTL_ASPM_L0S);
+
+	pcie_capability_read_word(trans_pcie->pci_dev, PCI_EXP_DEVCTL2, &cap);
+	trans->ltr_enabled = cap & PCI_EXP_DEVCTL2_LTR_EN;
+	dev_info(trans->dev, "L1 %sabled - LTR %sabled\n",
+		 (lctl & PCI_EXP_LNKCTL_ASPM_L1) ? "En" : "Dis",
+		 trans->ltr_enabled ? "En" : "Dis");
 }
 
 /*
@@ -345,6 +347,7 @@ static int iwl_pcie_prepare_card_hw(struct iwl_trans *trans)
 {
 	int ret;
 	int t = 0;
+	int iter;
 
 	IWL_DEBUG_INFO(trans, "iwl_trans_prepare_card_hw enter\n");
 
@@ -353,18 +356,23 @@ static int iwl_pcie_prepare_card_hw(struct iwl_trans *trans)
 	if (ret >= 0)
 		return 0;
 
-	/* If HW is not ready, prepare the conditions to check again */
-	iwl_set_bit(trans, CSR_HW_IF_CONFIG_REG,
-		    CSR_HW_IF_CONFIG_REG_PREPARE);
+	for (iter = 0; iter < 10; iter++) {
+		/* If HW is not ready, prepare the conditions to check again */
+		iwl_set_bit(trans, CSR_HW_IF_CONFIG_REG,
+			    CSR_HW_IF_CONFIG_REG_PREPARE);
 
-	do {
-		ret = iwl_pcie_set_hw_ready(trans);
-		if (ret >= 0)
-			return 0;
+		do {
+			ret = iwl_pcie_set_hw_ready(trans);
+			if (ret >= 0)
+				return 0;
 
-		usleep_range(200, 1000);
-		t += 200;
-	} while (t < 150000);
+			usleep_range(200, 1000);
+			t += 200;
+		} while (t < 150000);
+		msleep(25);
+	}
+
+	IWL_DEBUG_INFO(trans, "got NIC after %d iterations\n", iter);
 
 	return ret;
 }
@@ -1394,20 +1402,6 @@ static const struct iwl_trans_ops trans_ops_pcie = {
 	.set_bits_mask = iwl_trans_pcie_set_bits_mask,
 };
 
-#ifdef CONFIG_PREEMPT_RT_BASE
-static irqreturn_t iwl_rt_irq_handler(int irq, void *dev_id)
-{
-	irqreturn_t ret;
-
-	local_bh_disable();
-	ret = iwl_pcie_isr_ict(irq, dev_id);
-	local_bh_enable();
-	if (ret == IRQ_WAKE_THREAD)
-		ret = iwl_pcie_irq_handler(irq, dev_id);
-	return ret;
-}
-#endif
-
 struct iwl_trans *iwl_trans_pcie_alloc(struct pci_dev *pdev,
 				       const struct pci_device_id *ent,
 				       const struct iwl_cfg *cfg)
@@ -1526,14 +1520,9 @@ struct iwl_trans *iwl_trans_pcie_alloc(struct pci_dev *pdev,
 	if (iwl_pcie_alloc_ict(trans))
 		goto out_free_cmd_pool;
 
-#ifdef CONFIG_PREEMPT_RT_BASE
-	err = request_threaded_irq(pdev->irq, NULL, iwl_rt_irq_handler,
-				IRQF_SHARED | IRQF_ONESHOT, DRV_NAME, trans);
-#else
 	err = request_threaded_irq(pdev->irq, iwl_pcie_isr_ict,
 				   iwl_pcie_irq_handler,
 				   IRQF_SHARED, DRV_NAME, trans);
-#endif
 	if (err) {
 		IWL_ERR(trans, "Error allocating IRQ %d\n", pdev->irq);
 		goto out_free_ict;

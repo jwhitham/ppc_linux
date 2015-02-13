@@ -1579,13 +1579,7 @@ static inline void enqueue_entity_load_avg(struct cfs_rq *cfs_rq,
 		}
 		wakeup = 0;
 	} else {
-		/*
-		 * Task re-woke on same cpu (or else migrate_task_rq_fair()
-		 * would have made count negative); we must be careful to avoid
-		 * double-accounting blocked time after synchronizing decays.
-		 */
-		se->avg.last_runnable_update += __synchronize_entity_decay(se)
-							<< 20;
+		__synchronize_entity_decay(se);
 	}
 
 	/* migrated tasks did not contribute to our blocked load */
@@ -1902,7 +1896,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	ideal_runtime = sched_slice(cfs_rq, curr);
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
 	if (delta_exec > ideal_runtime) {
-		resched_task_lazy(rq_of(cfs_rq)->curr);
+		resched_task(rq_of(cfs_rq)->curr);
 		/*
 		 * The current task ran long enough, ensure it doesn't get
 		 * re-elected due to buddy favours.
@@ -1926,7 +1920,7 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 		return;
 
 	if (delta > ideal_runtime)
-		resched_task_lazy(rq_of(cfs_rq)->curr);
+		resched_task(rq_of(cfs_rq)->curr);
 }
 
 static void
@@ -2047,7 +2041,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 	 * validating it and just reschedule.
 	 */
 	if (queued) {
-		resched_task_lazy(rq_of(cfs_rq)->curr);
+		resched_task(rq_of(cfs_rq)->curr);
 		return;
 	}
 	/*
@@ -2237,7 +2231,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq,
 	 * hierarchy can be throttled
 	 */
 	if (!assign_cfs_rq_runtime(cfs_rq) && likely(cfs_rq->curr))
-		resched_task_lazy(rq_of(cfs_rq)->curr);
+		resched_task(rq_of(cfs_rq)->curr);
 }
 
 static __always_inline
@@ -2837,7 +2831,7 @@ static void hrtick_start_fair(struct rq *rq, struct task_struct *p)
 
 		if (delta < 0) {
 			if (rq->curr == p)
-				resched_task_lazy(p);
+				resched_task(p);
 			return;
 		}
 
@@ -3704,7 +3698,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	return;
 
 preempt:
-	resched_task_lazy(curr);
+	resched_task(curr);
 	/*
 	 * Only set the backward buddy when the current task is still
 	 * on the rq. This can happen when a wakeup gets interleaved
@@ -4410,6 +4404,7 @@ static unsigned long scale_rt_power(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 	u64 total, available, age_stamp, avg;
+	s64 delta;
 
 	/*
 	 * Since we're reading these variables without serialization make sure
@@ -4418,7 +4413,11 @@ static unsigned long scale_rt_power(int cpu)
 	age_stamp = ACCESS_ONCE(rq->age_stamp);
 	avg = ACCESS_ONCE(rq->rt_avg);
 
-	total = sched_avg_period() + (rq_clock(rq) - age_stamp);
+	delta = rq_clock(rq) - age_stamp;
+	if (unlikely(delta < 0))
+		delta = 0;
+
+	total = sched_avg_period() + delta;
 
 	if (unlikely(total < avg)) {
 		/* Ensures that power won't end up being negative */
@@ -5979,7 +5978,7 @@ static void task_fork_fair(struct task_struct *p)
 		 * 'current' within the tree based on its new key value.
 		 */
 		swap(curr->vruntime, se->vruntime);
-		resched_task_lazy(rq->curr);
+		resched_task(rq->curr);
 	}
 
 	se->vruntime -= cfs_rq->min_vruntime;
@@ -6004,7 +6003,7 @@ prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
 	 */
 	if (rq->curr == p) {
 		if (p->prio > oldprio)
-			resched_task_lazy(rq->curr);
+			resched_task(rq->curr);
 	} else
 		check_preempt_curr(rq, p, 0);
 }

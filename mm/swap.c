@@ -32,7 +32,6 @@
 #include <linux/gfp.h>
 #include <linux/uio.h>
 #include <linux/hugetlb.h>
-#include <linux/locallock.h>
 
 #include "internal.h"
 
@@ -45,9 +44,6 @@ int page_cluster;
 static DEFINE_PER_CPU(struct pagevec, lru_add_pvec);
 static DEFINE_PER_CPU(struct pagevec, lru_rotate_pvecs);
 static DEFINE_PER_CPU(struct pagevec, lru_deactivate_pvecs);
-
-static DEFINE_LOCAL_IRQ_LOCK(rotate_lock);
-static DEFINE_LOCAL_IRQ_LOCK(swapvec_lock);
 
 /*
  * This path almost never happens for VM activity - pages are normally
@@ -72,7 +68,7 @@ static void __page_cache_release(struct page *page)
 static void __put_single_page(struct page *page)
 {
 	__page_cache_release(page);
-	free_hot_cold_page(page, 0);
+	free_hot_cold_page(page, false);
 }
 
 static void __put_compound_page(struct page *page)
@@ -412,11 +408,11 @@ void rotate_reclaimable_page(struct page *page)
 		unsigned long flags;
 
 		page_cache_get(page);
-		local_lock_irqsave(rotate_lock, flags);
+		local_irq_save(flags);
 		pvec = &__get_cpu_var(lru_rotate_pvecs);
 		if (!pagevec_add(pvec, page))
 			pagevec_move_tail(pvec);
-		local_unlock_irqrestore(rotate_lock, flags);
+		local_irq_restore(flags);
 	}
 }
 
@@ -441,7 +437,7 @@ static void __activate_page(struct page *page, struct lruvec *lruvec,
 		SetPageActive(page);
 		lru += LRU_ACTIVE;
 		add_page_to_lru_list(page, lruvec, lru);
-		trace_mm_lru_activate(page, page_to_pfn(page));
+		trace_mm_lru_activate(page);
 
 		__count_vm_event(PGACTIVATE);
 		update_page_reclaim_stat(lruvec, file, 1);
@@ -467,13 +463,12 @@ static bool need_activate_page_drain(int cpu)
 void activate_page(struct page *page)
 {
 	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
-		struct pagevec *pvec = &get_locked_var(swapvec_lock,
-						       activate_page_pvecs);
+		struct pagevec *pvec = &get_cpu_var(activate_page_pvecs);
 
 		page_cache_get(page);
 		if (!pagevec_add(pvec, page))
 			pagevec_lru_move_fn(pvec, __activate_page, NULL);
-		put_locked_var(swapvec_lock, activate_page_pvecs);
+		put_cpu_var(activate_page_pvecs);
 	}
 }
 
@@ -499,7 +494,7 @@ void activate_page(struct page *page)
 
 static void __lru_cache_activate_page(struct page *page)
 {
-	struct pagevec *pvec = &get_locked_var(swapvec_lock, lru_add_pvec);
+	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
 	int i;
 
 	/*
@@ -521,7 +516,7 @@ static void __lru_cache_activate_page(struct page *page)
 		}
 	}
 
-	put_locked_var(swapvec_lock, lru_add_pvec);
+	put_cpu_var(lru_add_pvec);
 }
 
 /*
@@ -554,26 +549,54 @@ void mark_page_accessed(struct page *page)
 EXPORT_SYMBOL(mark_page_accessed);
 
 /*
- * Queue the page for addition to the LRU via pagevec. The decision on whether
- * to add the page to the [in]active [file|anon] list is deferred until the
- * pagevec is drained. This gives a chance for the caller of __lru_cache_add()
- * have the page added to the active list using mark_page_accessed().
+ * Used to mark_page_accessed(page) that is not visible yet and when it is
+ * still safe to use non-atomic ops
  */
-void __lru_cache_add(struct page *page)
+void init_page_accessed(struct page *page)
 {
-	struct pagevec *pvec = &get_locked_var(swapvec_lock, lru_add_pvec);
+	if (!PageReferenced(page))
+		__SetPageReferenced(page);
+}
+EXPORT_SYMBOL(init_page_accessed);
+
+static void __lru_cache_add(struct page *page)
+{
+	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
 
 	page_cache_get(page);
 	if (!pagevec_space(pvec))
 		__pagevec_lru_add(pvec);
 	pagevec_add(pvec, page);
-	put_locked_var(swapvec_lock, lru_add_pvec);
+	put_cpu_var(lru_add_pvec);
 }
-EXPORT_SYMBOL(__lru_cache_add);
+
+/**
+ * lru_cache_add: add a page to the page lists
+ * @page: the page to add
+ */
+void lru_cache_add_anon(struct page *page)
+{
+	if (PageActive(page))
+		ClearPageActive(page);
+	__lru_cache_add(page);
+}
+
+void lru_cache_add_file(struct page *page)
+{
+	if (PageActive(page))
+		ClearPageActive(page);
+	__lru_cache_add(page);
+}
+EXPORT_SYMBOL(lru_cache_add_file);
 
 /**
  * lru_cache_add - add a page to a page list
  * @page: the page to be added to the LRU.
+ *
+ * Queue the page for addition to the LRU via pagevec. The decision on whether
+ * to add the page to the [in]active [file|anon] list is deferred until the
+ * pagevec is drained. This gives a chance for the caller of lru_cache_add()
+ * have the page added to the active list using mark_page_accessed().
  */
 void lru_cache_add(struct page *page)
 {
@@ -690,9 +713,9 @@ void lru_add_drain_cpu(int cpu)
 		unsigned long flags;
 
 		/* No harm done if a racing interrupt already did this */
-		local_lock_irqsave(rotate_lock, flags);
+		local_irq_save(flags);
 		pagevec_move_tail(pvec);
-		local_unlock_irqrestore(rotate_lock, flags);
+		local_irq_restore(flags);
 	}
 
 	pvec = &per_cpu(lru_deactivate_pvecs, cpu);
@@ -720,19 +743,18 @@ void deactivate_page(struct page *page)
 		return;
 
 	if (likely(get_page_unless_zero(page))) {
-		struct pagevec *pvec = &get_locked_var(swapvec_lock,
-						       lru_deactivate_pvecs);
+		struct pagevec *pvec = &get_cpu_var(lru_deactivate_pvecs);
 
 		if (!pagevec_add(pvec, page))
 			pagevec_lru_move_fn(pvec, lru_deactivate_fn, NULL);
-		put_locked_var(swapvec_lock, lru_deactivate_pvecs);
+		put_cpu_var(lru_deactivate_pvecs);
 	}
 }
 
 void lru_add_drain(void)
 {
-	lru_add_drain_cpu(local_lock_cpu(swapvec_lock));
-	local_unlock_cpu(swapvec_lock);
+	lru_add_drain_cpu(get_cpu());
+	put_cpu();
 }
 
 static void lru_add_drain_per_cpu(struct work_struct *dummy)
@@ -785,7 +807,7 @@ void lru_add_drain_all(void)
  * grabbed the page via the LRU.  If it did, give up: shrink_inactive_list()
  * will free it.
  */
-void release_pages(struct page **pages, int nr, int cold)
+void release_pages(struct page **pages, int nr, bool cold)
 {
 	int i;
 	LIST_HEAD(pages_to_free);
@@ -826,7 +848,7 @@ void release_pages(struct page **pages, int nr, int cold)
 		}
 
 		/* Clear Active bit in case of parallel mark_page_accessed */
-		ClearPageActive(page);
+		__ClearPageActive(page);
 
 		list_add(&page->lru, &pages_to_free);
 	}
@@ -908,7 +930,7 @@ static void __pagevec_lru_add_fn(struct page *page, struct lruvec *lruvec,
 	SetPageLRU(page);
 	add_page_to_lru_list(page, lruvec, lru);
 	update_page_reclaim_stat(lruvec, file, active);
-	trace_mm_lru_insertion(page, page_to_pfn(page), lru, trace_pagemap_flags(page));
+	trace_mm_lru_insertion(page, lru);
 }
 
 /*
@@ -920,6 +942,57 @@ void __pagevec_lru_add(struct pagevec *pvec)
 	pagevec_lru_move_fn(pvec, __pagevec_lru_add_fn, NULL);
 }
 EXPORT_SYMBOL(__pagevec_lru_add);
+
+/**
+ * pagevec_lookup_entries - gang pagecache lookup
+ * @pvec:	Where the resulting entries are placed
+ * @mapping:	The address_space to search
+ * @start:	The starting entry index
+ * @nr_entries:	The maximum number of entries
+ * @indices:	The cache indices corresponding to the entries in @pvec
+ *
+ * pagevec_lookup_entries() will search for and return a group of up
+ * to @nr_entries pages and shadow entries in the mapping.  All
+ * entries are placed in @pvec.  pagevec_lookup_entries() takes a
+ * reference against actual pages in @pvec.
+ *
+ * The search returns a group of mapping-contiguous entries with
+ * ascending indexes.  There may be holes in the indices due to
+ * not-present entries.
+ *
+ * pagevec_lookup_entries() returns the number of entries which were
+ * found.
+ */
+unsigned pagevec_lookup_entries(struct pagevec *pvec,
+				struct address_space *mapping,
+				pgoff_t start, unsigned nr_pages,
+				pgoff_t *indices)
+{
+	pvec->nr = find_get_entries(mapping, start, nr_pages,
+				    pvec->pages, indices);
+	return pagevec_count(pvec);
+}
+
+/**
+ * pagevec_remove_exceptionals - pagevec exceptionals pruning
+ * @pvec:	The pagevec to prune
+ *
+ * pagevec_lookup_entries() fills both pages and exceptional radix
+ * tree entries into the pagevec.  This function prunes all
+ * exceptionals from @pvec without leaving holes, so that it can be
+ * passed on to page-only pagevec operations.
+ */
+void pagevec_remove_exceptionals(struct pagevec *pvec)
+{
+	int i, j;
+
+	for (i = 0, j = 0; i < pagevec_count(pvec); i++) {
+		struct page *page = pvec->pages[i];
+		if (!radix_tree_exceptional_entry(page))
+			pvec->pages[j++] = page;
+	}
+	pvec->nr = j;
+}
 
 /**
  * pagevec_lookup - gang pagecache lookup

@@ -326,50 +326,50 @@ out:
  * softirq as those do not count in task exec_runtime any more.
  */
 static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
-						struct rq *rq)
+					 struct rq *rq, int ticks)
 {
-	cputime_t one_jiffy_scaled = cputime_to_scaled(cputime_one_jiffy);
+	cputime_t scaled = cputime_to_scaled(cputime_one_jiffy);
+	u64 cputime = (__force u64) cputime_one_jiffy;
 	u64 *cpustat = kcpustat_this_cpu->cpustat;
 
 	if (steal_account_process_tick())
 		return;
 
+	cputime *= ticks;
+	scaled *= ticks;
+
 	if (irqtime_account_hi_update()) {
-		cpustat[CPUTIME_IRQ] += (__force u64) cputime_one_jiffy;
+		cpustat[CPUTIME_IRQ] += cputime;
 	} else if (irqtime_account_si_update()) {
-		cpustat[CPUTIME_SOFTIRQ] += (__force u64) cputime_one_jiffy;
+		cpustat[CPUTIME_SOFTIRQ] += cputime;
 	} else if (this_cpu_ksoftirqd() == p) {
 		/*
 		 * ksoftirqd time do not get accounted in cpu_softirq_time.
 		 * So, we have to handle it separately here.
 		 * Also, p->stime needs to be updated for ksoftirqd.
 		 */
-		__account_system_time(p, cputime_one_jiffy, one_jiffy_scaled,
-					CPUTIME_SOFTIRQ);
+		__account_system_time(p, cputime, scaled, CPUTIME_SOFTIRQ);
 	} else if (user_tick) {
-		account_user_time(p, cputime_one_jiffy, one_jiffy_scaled);
+		account_user_time(p, cputime, scaled);
 	} else if (p == rq->idle) {
-		account_idle_time(cputime_one_jiffy);
+		account_idle_time(cputime);
 	} else if (p->flags & PF_VCPU) { /* System time or guest time */
-		account_guest_time(p, cputime_one_jiffy, one_jiffy_scaled);
+		account_guest_time(p, cputime, scaled);
 	} else {
-		__account_system_time(p, cputime_one_jiffy, one_jiffy_scaled,
-					CPUTIME_SYSTEM);
+		__account_system_time(p, cputime, scaled,	CPUTIME_SYSTEM);
 	}
 }
 
 static void irqtime_account_idle_ticks(int ticks)
 {
-	int i;
 	struct rq *rq = this_rq();
 
-	for (i = 0; i < ticks; i++)
-		irqtime_account_process_tick(current, 0, rq);
+	irqtime_account_process_tick(current, 0, rq, ticks);
 }
 #else /* CONFIG_IRQ_TIME_ACCOUNTING */
 static inline void irqtime_account_idle_ticks(int ticks) {}
 static inline void irqtime_account_process_tick(struct task_struct *p, int user_tick,
-						struct rq *rq) {}
+						struct rq *rq, int nr_ticks) {}
 #endif /* CONFIG_IRQ_TIME_ACCOUNTING */
 
 /*
@@ -458,7 +458,7 @@ void account_process_tick(struct task_struct *p, int user_tick)
 		return;
 
 	if (sched_clock_irqtime) {
-		irqtime_account_process_tick(p, user_tick, rq);
+		irqtime_account_process_tick(p, user_tick, rq, 1);
 		return;
 	}
 
@@ -655,45 +655,37 @@ static void __vtime_account_system(struct task_struct *tsk)
 
 void vtime_account_system(struct task_struct *tsk)
 {
-	raw_spin_lock(&tsk->vtime_lock);
-	write_seqcount_begin(&tsk->vtime_seq);
+	write_seqlock(&tsk->vtime_seqlock);
 	__vtime_account_system(tsk);
-	write_seqcount_end(&tsk->vtime_seq);
-	raw_spin_unlock(&tsk->vtime_lock);
+	write_sequnlock(&tsk->vtime_seqlock);
 }
 
 void vtime_gen_account_irq_exit(struct task_struct *tsk)
 {
-	raw_spin_lock(&tsk->vtime_lock);
-	write_seqcount_begin(&tsk->vtime_seq);
+	write_seqlock(&tsk->vtime_seqlock);
 	__vtime_account_system(tsk);
 	if (context_tracking_in_user())
 		tsk->vtime_snap_whence = VTIME_USER;
-	write_seqcount_end(&tsk->vtime_seq);
-	raw_spin_unlock(&tsk->vtime_lock);
+	write_sequnlock(&tsk->vtime_seqlock);
 }
 
 void vtime_account_user(struct task_struct *tsk)
 {
 	cputime_t delta_cpu;
 
-	raw_spin_lock(&tsk->vtime_lock);
-	write_seqcount_begin(&tsk->vtime_seq);
+	write_seqlock(&tsk->vtime_seqlock);
 	delta_cpu = get_vtime_delta(tsk);
 	tsk->vtime_snap_whence = VTIME_SYS;
 	account_user_time(tsk, delta_cpu, cputime_to_scaled(delta_cpu));
-	write_seqcount_end(&tsk->vtime_seq);
-	raw_spin_unlock(&tsk->vtime_lock);
+	write_sequnlock(&tsk->vtime_seqlock);
 }
 
 void vtime_user_enter(struct task_struct *tsk)
 {
-	raw_spin_lock(&tsk->vtime_lock);
-	write_seqcount_begin(&tsk->vtime_seq);
+	write_seqlock(&tsk->vtime_seqlock);
 	__vtime_account_system(tsk);
 	tsk->vtime_snap_whence = VTIME_USER;
-	write_seqcount_end(&tsk->vtime_seq);
-	raw_spin_unlock(&tsk->vtime_lock);
+	write_sequnlock(&tsk->vtime_seqlock);
 }
 
 void vtime_guest_enter(struct task_struct *tsk)
@@ -705,23 +697,19 @@ void vtime_guest_enter(struct task_struct *tsk)
 	 * synchronization against the reader (task_gtime())
 	 * that can thus safely catch up with a tickless delta.
 	 */
-	raw_spin_lock(&tsk->vtime_lock);
-	write_seqcount_begin(&tsk->vtime_seq);
+	write_seqlock(&tsk->vtime_seqlock);
 	__vtime_account_system(tsk);
 	current->flags |= PF_VCPU;
-	write_seqcount_end(&tsk->vtime_seq);
-	raw_spin_unlock(&tsk->vtime_lock);
+	write_sequnlock(&tsk->vtime_seqlock);
 }
 EXPORT_SYMBOL_GPL(vtime_guest_enter);
 
 void vtime_guest_exit(struct task_struct *tsk)
 {
-	raw_spin_lock(&tsk->vtime_lock);
-	write_seqcount_begin(&tsk->vtime_seq);
+	write_seqlock(&tsk->vtime_seqlock);
 	__vtime_account_system(tsk);
 	current->flags &= ~PF_VCPU;
-	write_seqcount_end(&tsk->vtime_seq);
-	raw_spin_unlock(&tsk->vtime_lock);
+	write_sequnlock(&tsk->vtime_seqlock);
 }
 EXPORT_SYMBOL_GPL(vtime_guest_exit);
 
@@ -734,30 +722,24 @@ void vtime_account_idle(struct task_struct *tsk)
 
 void arch_vtime_task_switch(struct task_struct *prev)
 {
-	raw_spin_lock(&prev->vtime_lock);
-	write_seqcount_begin(&prev->vtime_seq);
+	write_seqlock(&prev->vtime_seqlock);
 	prev->vtime_snap_whence = VTIME_SLEEPING;
-	write_seqcount_end(&prev->vtime_seq);
-	raw_spin_unlock(&prev->vtime_lock);
+	write_sequnlock(&prev->vtime_seqlock);
 
-	raw_spin_lock(&current->vtime_lock);
-	write_seqcount_begin(&current->vtime_seq);
+	write_seqlock(&current->vtime_seqlock);
 	current->vtime_snap_whence = VTIME_SYS;
 	current->vtime_snap = sched_clock_cpu(smp_processor_id());
-	write_seqcount_end(&current->vtime_seq);
-	raw_spin_unlock(&current->vtime_lock);
+	write_sequnlock(&current->vtime_seqlock);
 }
 
 void vtime_init_idle(struct task_struct *t, int cpu)
 {
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&t->vtime_lock, flags);
-	write_seqcount_begin(&t->vtime_seq);
+	write_seqlock_irqsave(&t->vtime_seqlock, flags);
 	t->vtime_snap_whence = VTIME_SYS;
 	t->vtime_snap = sched_clock_cpu(cpu);
-	write_seqcount_end(&t->vtime_seq);
-	raw_spin_unlock_irqrestore(&t->vtime_lock, flags);
+	write_sequnlock_irqrestore(&t->vtime_seqlock, flags);
 }
 
 cputime_t task_gtime(struct task_struct *t)
@@ -766,13 +748,13 @@ cputime_t task_gtime(struct task_struct *t)
 	cputime_t gtime;
 
 	do {
-		seq = read_seqcount_begin(&t->vtime_seq);
+		seq = read_seqbegin(&t->vtime_seqlock);
 
 		gtime = t->gtime;
 		if (t->flags & PF_VCPU)
 			gtime += vtime_delta(t);
 
-	} while (read_seqcount_retry(&t->vtime_seq, seq));
+	} while (read_seqretry(&t->vtime_seqlock, seq));
 
 	return gtime;
 }
@@ -795,7 +777,7 @@ fetch_task_cputime(struct task_struct *t,
 		*udelta = 0;
 		*sdelta = 0;
 
-		seq = read_seqcount_begin(&t->vtime_seq);
+		seq = read_seqbegin(&t->vtime_seqlock);
 
 		if (u_dst)
 			*u_dst = *u_src;
@@ -819,7 +801,7 @@ fetch_task_cputime(struct task_struct *t,
 			if (t->vtime_snap_whence == VTIME_SYS)
 				*sdelta = delta;
 		}
-	} while (read_seqcount_retry(&t->vtime_seq, seq));
+	} while (read_seqretry(&t->vtime_seqlock, seq));
 }
 
 

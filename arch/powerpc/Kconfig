@@ -60,11 +60,10 @@ config LOCKDEP_SUPPORT
 
 config RWSEM_GENERIC_SPINLOCK
 	bool
-	default y if PREEMPT_RT_FULL
 
 config RWSEM_XCHGADD_ALGORITHM
 	bool
-	default y if !PREEMPT_RT_FULL
+	default y
 
 config GENERIC_LOCKBREAK
 	bool
@@ -132,7 +131,6 @@ config PPC
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
-	select HAVE_PREEMPT_LAZY
 	select HAVE_MOD_ARCH_SPECIFIC
 	select MODULES_USE_ELF_RELA
 	select CLONE_BACKWARDS
@@ -140,6 +138,7 @@ config PPC
 	select OLD_SIGSUSPEND
 	select OLD_SIGACTION if PPC32
 	select HAVE_DEBUG_STACKOVERFLOW
+	select ARCH_SUPPORTS_ATOMIC_RMW
 
 config EARLY_PRINTK
 	bool
@@ -287,7 +286,7 @@ menu "Kernel options"
 
 config HIGHMEM
 	bool "High memory support"
-	depends on PPC32 && !PREEMPT_RT_FULL
+	depends on PPC32
 
 source kernel/Kconfig.hz
 source kernel/Kconfig.preempt
@@ -397,7 +396,7 @@ config KEXEC
 config CRASH_DUMP
 	bool "Build a kdump crash kernel"
 	depends on PPC64 || 6xx || FSL_BOOKE || (44x && !SMP)
-	select RELOCATABLE if PPC64 || 44x
+	select RELOCATABLE if (PPC64 && !COMPILE_TEST) || 44x
 	select DYNAMIC_MEMSTART if FSL_BOOKE
 	help
 	  Build a kernel suitable for use as a kdump capture kernel.
@@ -987,6 +986,7 @@ endmenu
 if PPC64
 config RELOCATABLE
 	bool "Build a relocatable kernel"
+	depends on !COMPILE_TEST
 	select NONSTATIC_KERNEL
 	help
 	  This builds a kernel image that is capable of running anywhere

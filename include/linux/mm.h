@@ -919,6 +919,14 @@ extern void show_free_areas(unsigned int flags);
 extern bool skip_free_areas_node(unsigned int flags, int nid);
 
 int shmem_zero_setup(struct vm_area_struct *);
+#ifdef CONFIG_SHMEM
+bool shmem_mapping(struct address_space *mapping);
+#else
+static inline bool shmem_mapping(struct address_space *mapping)
+{
+	return false;
+}
+#endif
 
 extern int can_do_mlock(void);
 extern int user_shm_lock(size_t, struct user_struct *);
@@ -1001,6 +1009,7 @@ static inline void unmap_shared_mapping_range(struct address_space *mapping,
 
 extern void truncate_pagecache(struct inode *inode, loff_t new);
 extern void truncate_setsize(struct inode *inode, loff_t newsize);
+void pagecache_isize_extended(struct inode *inode, loff_t from, loff_t to);
 void truncate_pagecache_range(struct inode *inode, loff_t offset, loff_t end);
 int truncate_inode_page(struct address_space *mapping, struct page *page);
 int generic_error_remove_page(struct address_space *mapping, struct page *page);
@@ -1252,58 +1261,26 @@ static inline pmd_t *pmd_alloc(struct mm_struct *mm, pud_t *pud, unsigned long a
  * overflow into the next struct page (as it might with DEBUG_SPINLOCK).
  * When freeing, reset page->mapping so free_pages_check won't complain.
  */
-#ifndef CONFIG_PREEMPT_RT_FULL
-
 #define __pte_lockptr(page)	&((page)->ptl)
-
-static inline struct page *pte_lock_init(struct page *page)
-{
-	spin_lock_init(__pte_lockptr(page));
-	return page;
-}
-
+#define pte_lock_init(_page)	do {					\
+	spin_lock_init(__pte_lockptr(_page));				\
+} while (0)
 #define pte_lock_deinit(page)	((page)->mapping = NULL)
-
-#else /* !PREEMPT_RT_FULL */
-
-/*
- * On PREEMPT_RT_FULL the spinlock_t's are too large to embed in the
- * page frame, hence it only has a pointer and we need to dynamically
- * allocate the lock when we allocate PTE-pages.
- *
- * This is an overall win, since only a small fraction of the pages
- * will be PTE pages under normal circumstances.
- */
-
-#define __pte_lockptr(page)	((page)->ptl)
-
-extern struct page *pte_lock_init(struct page *page);
-extern void pte_lock_deinit(struct page *page);
-
-#endif /* PREEMPT_RT_FULL */
-
 #define pte_lockptr(mm, pmd)	({(void)(mm); __pte_lockptr(pmd_page(*(pmd)));})
 #else	/* !USE_SPLIT_PTLOCKS */
 /*
  * We use mm->page_table_lock to guard all pagetable pages of the mm.
  */
-static inline struct page *pte_lock_init(struct page *page) { return page; }
+#define pte_lock_init(page)	do {} while (0)
 #define pte_lock_deinit(page)	do {} while (0)
 #define pte_lockptr(mm, pmd)	({(void)(pmd); &(mm)->page_table_lock;})
 #endif /* USE_SPLIT_PTLOCKS */
 
-static inline struct page *__pgtable_page_ctor(struct page *page)
+static inline void pgtable_page_ctor(struct page *page)
 {
-	page = pte_lock_init(page);
-	if (page)
-		inc_zone_page_state(page, NR_PAGETABLE);
-	return page;
+	pte_lock_init(page);
+	inc_zone_page_state(page, NR_PAGETABLE);
 }
-
-#define pgtable_page_ctor(page)				\
-do {							\
-	page = __pgtable_page_ctor(page);		\
-} while (0)
 
 static inline void pgtable_page_dtor(struct page *page)
 {
@@ -1655,9 +1632,6 @@ void page_cache_async_readahead(struct address_space *mapping,
 				unsigned long size);
 
 unsigned long max_sane_readahead(unsigned long nr);
-unsigned long ra_submit(struct file_ra_state *ra,
-			struct address_space *mapping,
-			struct file *filp);
 
 /* Generic expand stack which grows the stack according to GROWS{UP,DOWN} */
 extern int expand_stack(struct vm_area_struct *vma, unsigned long address);
@@ -1668,7 +1642,7 @@ extern int expand_downwards(struct vm_area_struct *vma,
 #if VM_GROWSUP
 extern int expand_upwards(struct vm_area_struct *vma, unsigned long address);
 #else
-  #define expand_upwards(vma, address) do { } while (0)
+  #define expand_upwards(vma, address) (0)
 #endif
 
 /* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
