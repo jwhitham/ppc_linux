@@ -16,6 +16,10 @@ fsl-ncsw-MAC-objs	:=  dtsec.o dtsec_mii_acc.o fm_mac.o tgec.o tgec_mii_acc.o \
 			    fman_dtsec.o fman_dtsec_mii_acc.o fman_memac.o \
 			    fman_tgec.o fman_crc32.o
 
-ifeq ($(CONFIG_FMAN_T4240),y)
+ifeq ($(CONFIG_FMAN_V3H),y)
 fsl-ncsw-MAC-objs	+=  memac.o memac_mii_acc.o fman_memac_mii_acc.o
 endif
+ifeq ($(CONFIG_FMAN_V3L),y)
+fsl-ncsw-MAC-objs       +=  memac.o memac_mii_acc.o fman_memac_mii_acc.o
+endif
+

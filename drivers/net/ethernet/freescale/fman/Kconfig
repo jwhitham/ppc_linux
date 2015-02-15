@@ -26,23 +26,20 @@ config FMAN_P3040_P4080_P5020
 config FMAN_P1023
 	bool "P1023"
 
-config FMAN_T4240
-	bool "T4240"
+config FMAN_V3H
+	bool "FmanV3H"
+	---help---
+	  Choose "FmanV3H" for Fman rev3H:
+	  B4860, T4240, T4160, etc
+
+config FMAN_V3L
+	bool "FmanV3L"
+	---help---
+	  Choose "FmanV3L" for Fman rev3L:
+	  T1040, T1042, T1020, T1022, T1023, T1024, etc
 
 endchoice
 endmenu
-
-config FMAN_V3L
-	depends on FMAN_T4240
-	bool "FMAN_V3L like T1040, T1042, T1020, T1022"
-	default n
-	---help---
-	  There are two FMAN V3 version: FMAN_V3H and FMAN_V3L.
-	  T1040, T1042, T1020, T1022, T1023, T1024 belong to FMAN_V3L, there
-	  are 4 Offline/Host Command Ports (O/H n) in FMAN_V3L.
-	  But there are 6 Offline/Host Command Ports (O/H n) in
-	  FMAN_V3H.
-	  Say "Y" if chips are T1040, T1042, T1020, T1022, T1023, T1024 family.
 
 config FMAN_MIB_CNT_OVF_IRQ_EN
 	bool "Enable the dTSEC MIB counters overflow interrupt"
@@ -102,7 +99,7 @@ config FSL_FM_RX_EXTRA_HEADROOM
 
 config FMAN_PFC
 	bool "FMan PFC support (EXPERIMENTAL)"
-	depends on FMAN_T4240 && FSL_FMAN
+	depends on ( FMAN_V3H || FMAN_V3L ) && FSL_FMAN
 	default n
 	---help---
 	  This option enables PFC support on FMan v3 ports.

@@ -11,8 +11,11 @@ endif
 ifeq ("$(CONFIG_FMAN_P1023)", "y")
 ccflags-y +=-include $(FMAN)/p1023_dflags.h
 endif
-ifdef CONFIG_FMAN_T4240
-ccflags-y +=-include $(FMAN)/t4240_dflags.h
+ifdef CONFIG_FMAN_V3H
+ccflags-y +=-include $(FMAN)/fmanv3h_dflags.h
+endif
+ifdef CONFIG_FMAN_V3L
+ccflags-y +=-include $(FMAN)/fmanv3l_dflags.h
 endif
 
 ccflags-y += -I$(DRV_DPA)/
@@ -28,8 +31,11 @@ endif
 ifeq ("$(CONFIG_FMAN_P1023)", "y")
 ccflags-y += -I$(FMAN)/inc/integrations/P1023
 endif
-ifdef CONFIG_FMAN_T4240
-ccflags-y += -I$(FMAN)/inc/integrations/T4240
+ifdef CONFIG_FMAN_V3H
+ccflags-y += -I$(FMAN)/inc/integrations/FMANV3H
+endif
+ifdef CONFIG_FMAN_V3L
+ccflags-y += -I$(FMAN)/inc/integrations/FMANV3L
 endif
 
 ccflags-y += -I$(FMAN)/src/inc

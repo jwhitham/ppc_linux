@@ -188,22 +188,12 @@ typedef enum
 /*****************************************************************************
  FM INTEGRATION-SPECIFIC DEFINITIONS
 ******************************************************************************/
-/* Add T1 Port constraint:T1040, T1042, T1020, T1022 (T1040RM Rev D, 04/2014) */
-#ifdef CONFIG_FMAN_V3L
 #define INTG_MAX_NUM_OF_FM	    1
 /* Ports defines */
 #define FM_MAX_NUM_OF_1G_MACS	    5
 #define FM_MAX_NUM_OF_10G_MACS	    1
 #define FM_MAX_NUM_OF_MACS	    (FM_MAX_NUM_OF_1G_MACS + FM_MAX_NUM_OF_10G_MACS)
 #define FM_MAX_NUM_OF_OH_PORTS	    4
-#else /* CONFIG_FMAN_V3L */
-#define INTG_MAX_NUM_OF_FM          2
-/* Ports defines */
-#define FM_MAX_NUM_OF_1G_MACS       6
-#define FM_MAX_NUM_OF_10G_MACS      2
-#define FM_MAX_NUM_OF_MACS          (FM_MAX_NUM_OF_1G_MACS + FM_MAX_NUM_OF_10G_MACS)
-#define FM_MAX_NUM_OF_OH_PORTS      6
-#endif
 
 #define FM_MAX_NUM_OF_1G_RX_PORTS   FM_MAX_NUM_OF_1G_MACS
 #define FM_MAX_NUM_OF_10G_RX_PORTS  FM_MAX_NUM_OF_10G_MACS
@@ -218,23 +208,13 @@ typedef enum
 #define FM_MAX_NUM_OF_SUB_PORTALS               16
 #define FM_PORT_MAX_NUM_OF_OBSERVED_EXT_POOLS   0
 
-#ifdef CONFIG_FMAN_V3L
 #define FM_VSP_MAX_NUM_OF_ENTRIES               32
-#else /* CONFIG_FMAN_V3L */
-#define FM_VSP_MAX_NUM_OF_ENTRIES               64
-#endif
 #define FM_MAX_NUM_OF_PFC_PRIORITIES            8
 
 /* RAMs defines */
-#ifdef CONFIG_FMAN_V3L
 #define FM_MURAM_SIZE                   (192 * KILOBYTE)
 #define FM_IRAM_SIZE                    (32 * KILOBYTE)
 #define FM_NUM_OF_CTRL                  2
-#else /* CONFIG_FMAN_V3L */
-#define FM_MURAM_SIZE                   (384 * KILOBYTE)
-#define FM_IRAM_SIZE                    ( 64 * KILOBYTE)
-#define FM_NUM_OF_CTRL                  4
-#endif
 
 /* PCD defines */
 #define FM_PCD_PLCR_NUM_ENTRIES         256                 /**< Total number of policer profiles */
@@ -259,13 +239,8 @@ typedef enum
 #define DMA_THRESH_MAX_BUF              127
 
 /* BMI defines */
-#ifdef CONFIG_FMAN_V3L
 #define BMI_MAX_NUM_OF_TASKS            64
 #define BMI_MAX_NUM_OF_DMAS             32
-#else
-#define BMI_MAX_NUM_OF_TASKS            128
-#define BMI_MAX_NUM_OF_DMAS             84
-#endif
 
 #define BMI_MAX_FIFO_SIZE               (FM_MURAM_SIZE)
 #define PORT_MAX_WEIGHT                 16
@@ -284,9 +259,6 @@ typedef enum
 
 /* FM errata */
 #define FM_HEAVY_TRAFFIC_HANG_ERRATA_FMAN_A005669
-#ifndef CONFIG_FMAN_V3L
-#define FM_WRONG_RESET_VALUES_ERRATA_FMAN_A005127
-#endif
 #define FM_RX_FIFO_CORRUPT_ERRATA_10GMAC_A006320
 #define FM_OP_NO_VSP_NO_RELEASE_ERRATA_FMAN_A006675
 #define FM_HEAVY_TRAFFIC_SEQUENCER_HANG_ERRATA_FMAN_A006981
