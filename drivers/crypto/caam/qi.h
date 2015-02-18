@@ -85,10 +85,6 @@ struct caam_drv_req {
 	struct caam_drv_ctx *drv_ctx;
 	caam_qi_cbk cbk;
 	void *app_ctx;
-
-	/* The fields below are for internal use by QI backend driver */
-	struct list_head hdr__;
-	dma_addr_t hwaddr;
 } ____cacheline_aligned;
 
 /*
