@@ -970,7 +970,7 @@ static void aead_done(struct caam_drv_req *drv_req, u32 status)
 	aead_unmap(qidev, edesc, aead_req);
 
 	aead_request_complete(aead_req, ecode);
-	kfree(edesc);
+	qi_cache_free(edesc);
 }
 
 /* For now, identical to aead_done */
@@ -994,7 +994,7 @@ static inline void tls_encrypt_done(struct caam_drv_req *drv_req, u32 status)
 	aead_unmap(qidev, edesc, aead_req);
 
 	aead_request_complete(aead_req, ecode);
-	kfree(edesc);
+	qi_cache_free(edesc);
 }
 
 static inline void tls_decrypt_done(struct caam_drv_req *drv_req, u32 status)
@@ -1046,7 +1046,7 @@ static inline void tls_decrypt_done(struct caam_drv_req *drv_req, u32 status)
 
 out:
 	aead_request_complete(aead_req, ecode);
-	kfree(edesc);
+	qi_cache_free(edesc);
 }
 
 /*
@@ -1120,9 +1120,8 @@ static struct aead_edesc *aead_edesc_alloc(struct aead_request *req,
 	qm_sg_bytes = qm_sg_ents * sizeof(struct qm_sg_entry);
 
 	/* allocate space for base edesc and hw desc commands, link tables */
-	edesc = kmalloc(sizeof(struct aead_edesc) + qm_sg_bytes,
-				GFP_DMA | flags);
-	if (!edesc) {
+	edesc = qi_cache_alloc(GFP_DMA | flags);
+	if (unlikely(!edesc)) {
 		dev_err(qidev, "could not allocate extended descriptor\n");
 		return ERR_PTR(-ENOMEM);
 	}
@@ -1276,7 +1275,7 @@ static int aead_encrypt(struct aead_request *req)
 		ret = -EINPROGRESS;
 	} else {
 		aead_unmap(qidev, edesc, req);
-		kfree(edesc);
+		qi_cache_free(edesc);
 	}
 
 	return ret;
@@ -1318,7 +1317,7 @@ static int aead_decrypt(struct aead_request *req)
 		ret = -EINPROGRESS;
 	} else {
 		aead_unmap(qidev, edesc, req);
-		kfree(edesc);
+		qi_cache_free(edesc);
 	}
 
 	return ret;
@@ -1371,7 +1370,7 @@ static int tls_encrypt(struct aead_request *req)
 		ret = -EINPROGRESS;
 	} else {
 		aead_unmap(qidev, edesc, req);
-		kfree(edesc);
+		qi_cache_free(edesc);
 	}
 
 	return ret;
@@ -1424,7 +1423,7 @@ static int tls_decrypt(struct aead_request *req)
 		ret = -EINPROGRESS;
 	} else {
 		aead_unmap(qidev, edesc, req);
-		kfree(edesc);
+		qi_cache_free(edesc);
 	}
 
 	return ret;
@@ -1505,9 +1504,8 @@ static struct aead_edesc *aead_giv_edesc_alloc(struct aead_givcrypt_request
 	qm_sg_bytes = qm_sg_ents * sizeof(struct qm_sg_entry);
 
 	/* allocate space for base edesc and hw desc commands, link tables */
-	edesc = kmalloc(sizeof(struct aead_edesc) + qm_sg_bytes,
-				GFP_DMA | flags);
-	if (!edesc) {
+	edesc = qi_cache_alloc(GFP_DMA | flags);
+	if (unlikely(!edesc)) {
 		dev_err(qidev, "could not allocate extended descriptor\n");
 		return ERR_PTR(-ENOMEM);
 	}
@@ -1625,7 +1623,7 @@ static int aead_givencrypt(struct aead_givcrypt_request *areq)
 		ret = -EINPROGRESS;
 	} else {
 		aead_unmap(qidev, edesc, req);
-		kfree(edesc);
+		qi_cache_free(edesc);
 	}
 
 	return ret;

@@ -150,4 +150,28 @@ extern void caam_drv_ctx_rel(struct caam_drv_ctx *drv_ctx);
 extern int caam_qi_init(struct platform_device *pdev, struct device_node *np);
 extern int caam_qi_shutdown(struct device *dev);
 
+/*
+ * qi_cache_alloc - Allocate buffers from CAAM-QI cache
+ *
+ * Invoked when a user of the CAAM-QI (i.e. caamalg-qi) needs data which has
+ * to be allocated on the hotpath. Instead of using malloc, one can use the
+ * services of the CAAM QI memory cache (backed by kmem_cache). The buffers
+ * will have a size of 256B, which is sufficient for hosting 16 SG entries.
+ *
+ * flags -	flags that would be used for the equivalent malloc(..) call
+ * *
+ * Returns a pointer to a retrieved buffer on success or NULL on failure.
+ */
+extern void *qi_cache_alloc(gfp_t flags);
+
+/*
+ * qi_cache_free - Frees buffers allocated from CAAM-QI cache
+ *
+ * Invoked when a user of the CAAM-QI (i.e. caamalg-qi) no longer needs
+ * the buffer previously allocated by a qi_cache_alloc call.
+ * No checking is being done, the call is a passthrough call to
+ * kmem_cache_free(...)
+ */
+extern void qi_cache_free(void *obj);
+
 #endif /* QI_H */

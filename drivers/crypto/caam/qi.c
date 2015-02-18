@@ -21,6 +21,9 @@
 /* If DPA_ETH is not available, then use a reasonably backlog per CPU */
 #define MAX_RSP_FQ_BACKLOG_PER_CPU	64
 #endif
+#define CAAM_QI_MEMCACHE_SIZE	256	/* Length of a single buffer in
+					   the QI driver memory cache. */
+
 /*
  * The jobs are processed by the driver against a driver context.
  * With every cryptographic context, a driver context is attached.
@@ -71,6 +74,18 @@ static bool caam_congested __read_mostly;
  * they were originally allocated
  */
 static int mod_init_cpu;
+
+/*
+ * This is a a cache of buffers, from which the users of CAAM QI driver
+ * can allocate short (currently 128B) buffers. It's speedier than
+ * doing malloc on the hotpath.
+ * NOTE: A more elegant solution would be to have some headroom in the frames
+ *       being processed. This can be added by the dpa_eth driver. This would
+ *       pose a problem for userspace application processing which cannot
+ *       know of this limitation. So for now, this will work.
+ * NOTE: The memcache is SMP-safe. No need to handle spinlocks in-here
+ */
+static struct kmem_cache *qi_cache;
 
 bool caam_drv_ctx_busy(struct caam_drv_ctx *drv_ctx)
 {
@@ -462,6 +477,18 @@ struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 }
 EXPORT_SYMBOL(caam_drv_ctx_init);
 
+void *qi_cache_alloc(gfp_t flags)
+{
+	return kmem_cache_alloc(qi_cache, flags);
+}
+EXPORT_SYMBOL(qi_cache_alloc);
+
+void qi_cache_free(void *obj)
+{
+	kmem_cache_free(qi_cache, obj);
+}
+EXPORT_SYMBOL(qi_cache_free);
+
 static int caam_qi_poll(struct napi_struct *napi, int budget)
 {
 	int cleaned = qman_poll_dqrr(budget);
@@ -525,6 +552,9 @@ int caam_qi_shutdown(struct device *qidev)
 
 	/* Delete the pool channel */
 	qman_release_pool(*this_cpu_ptr(&pcpu_qipriv.pool));
+
+	if (qi_cache)
+		kmem_cache_destroy(qi_cache);
 
 	/* Now that we're done with the CGRs, restore the cpus allowed mask */
 	set_cpus_allowed_ptr(current, &old_cpumask);
@@ -783,6 +813,9 @@ int caam_qi_init(struct platform_device *caam_pdev, struct device_node *np)
 	/* Response path cannot be congested */
 	caam_congested = false;
 
+	/* kmem_cache wasn't yet allocated */
+	qi_cache = NULL;
+
 	/* Initialise the CGRs congestion detection */
 	err = alloc_cgrs(qidev);
 	if (err) {
@@ -817,6 +850,14 @@ int caam_qi_init(struct platform_device *caam_pdev, struct device_node *np)
 
 	/* Hook up QI device to parent controlling caam device */
 	ctrlpriv->qidev = qidev;
+
+	qi_cache = kmem_cache_create("caamqicache", 256, 0,
+				     SLAB_CACHE_DMA, NULL);
+	if (!qi_cache) {
+		dev_err(qidev, "Can't allocate SEC cache\n");
+		platform_device_unregister(qi_pdev);
+		return err;
+	}
 
 	/* Done with the CGRs; restore the cpus allowed mask */
 	set_cpus_allowed_ptr(current, &old_cpumask);
