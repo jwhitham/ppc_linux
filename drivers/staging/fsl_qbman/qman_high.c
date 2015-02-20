@@ -327,7 +327,7 @@ static inline void qman_stop_dequeues_ex(struct qman_portal *p)
 	PORTAL_IRQ_UNLOCK(p, irqflags);
 }
 
-static int drain_mr_fqrni(struct qm_portal *p)
+static int drain_mr(struct qm_portal *p)
 {
 	const struct qm_mr_entry *msg;
 loop:
@@ -352,11 +352,6 @@ loop:
 		msg = qm_mr_current(p);
 		if (!msg)
 			return 0;
-	}
-	if ((msg->verb & QM_MR_VERB_TYPE_MASK) != QM_MR_VERB_FQRNI) {
-		/* We aren't draining anything but FQRNIs */
-		pr_err("QMan found verb 0x%x in MR\n", msg->verb);
-		return -1;
 	}
 	qm_mr_next(p);
 	qm_mr_cci_consume(p, 1);
@@ -539,24 +534,9 @@ struct qman_portal *qman_create_portal(
 	}
 	isdr ^= (QM_PIRQ_DQRI | QM_PIRQ_MRI);
 	qm_isr_disable_write(__p, isdr);
-	if (qm_dqrr_current(__p) != NULL) {
-		pr_err("Qman DQRR unclean\n");
+	while (qm_dqrr_current(__p) != NULL)
 		qm_dqrr_cdc_consume_n(__p, 0xffff);
-	}
-	if (qm_mr_current(__p) != NULL) {
-		/* special handling, drain just in case it's a few FQRNIs */
-		if (drain_mr_fqrni(__p)) {
-			const struct qm_mr_entry *e = qm_mr_current(__p);
-			/*
-			 * Message ring cannot be empty no need to check
-			 * qm_mr_current returned successfully
-			 */
-			pr_err("Qman MR unclean, MR VERB 0x%x, "
-			       "rc 0x%x\n, addr 0x%x",
-			       e->verb, e->ern.rc, e->ern.fd.addr_lo);
-			goto fail_dqrr_mr_empty;
-		}
-	}
+	drain_mr(__p);
 	/* Success */
 	portal->config = config;
 	qm_isr_disable_write(__p, 0);
@@ -564,7 +544,6 @@ struct qman_portal *qman_create_portal(
 	/* Write a sane SDQCR */
 	qm_dqrr_sdqcr_set(__p, portal->sdqcr);
 	return portal;
-fail_dqrr_mr_empty:
 fail_eqcr_empty:
 fail_affinity:
 	free_irq(config->public_cfg.irq, portal);

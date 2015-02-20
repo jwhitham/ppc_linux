@@ -558,6 +558,8 @@ static inline void qm_dqrr_cdc_consume_n(struct qm_portal *portal, u16 bitmask)
 	DPA_ASSERT(dqrr->cmode == qm_dqrr_cdc);
 	qm_out(DQRR_DCAP, (1 << 8) |		/* DQRR_DCAP::S */
 		((u32)bitmask << 16));		/* DQRR_DCAP::DCAP_CI */
+	dqrr->ci = qm_in(DQRR_CI_CINH) & (QM_DQRR_SIZE - 1);
+	dqrr->fill = qm_cyc_diff(QM_DQRR_SIZE, dqrr->ci, dqrr->pi);
 }
 
 static inline int qm_dqrr_init(struct qm_portal *portal,
