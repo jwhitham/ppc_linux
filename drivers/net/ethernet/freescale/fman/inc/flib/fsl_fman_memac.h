@@ -71,6 +71,7 @@
 #define TX_FIFO_SECTIONS_TX_EMPTY_PFC_1G		0x00040000
 #define TX_FIFO_SECTIONS_TX_AVAIL_10G			0x00000019
 #define TX_FIFO_SECTIONS_TX_AVAIL_1G			0x00000020
+#define TX_FIFO_SECTIONS_TX_AVAIL_SLOW_10G		0x00000060
 
 #define GET_TX_EMPTY_DEFAULT_VALUE(_val)					\
 _val &= ~TX_FIFO_SECTIONS_TX_EMPTY_MASK;					\
@@ -369,6 +370,7 @@ int fman_memac_init(struct memac_regs *regs,
 	struct memac_cfg *cfg,
 	enum enet_interface enet_interface,
 	enum enet_speed enet_speed,
+	bool slow_10g_if,
 	uint32_t exceptions);
 
 void fman_memac_enable(struct memac_regs *regs, bool apply_rx, bool apply_tx);

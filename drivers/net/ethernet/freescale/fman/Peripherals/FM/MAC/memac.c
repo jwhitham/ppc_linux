@@ -885,7 +885,7 @@ static t_Error MemacInit(t_Handle h_Memac)
     t_EnetAddr              ethAddr;
     e_FmMacType             portType;
     t_Error                 err;
-
+    bool                    slow_10g_if = FALSE;
     if (p_Memac->macId == 3) /* This is a quick WA */
 		g_MemacRegs = p_Memac->p_MemMap;
 
@@ -893,8 +893,10 @@ static t_Error MemacInit(t_Handle h_Memac)
     SANITY_CHECK_RETURN_ERROR(p_Memac->p_MemacDriverParam, E_INVALID_STATE);
     SANITY_CHECK_RETURN_ERROR(p_Memac->fmMacControllerDriver.h_Fm, E_INVALID_HANDLE);
 
-    /* not needed! */
-    /*FM_GetRevision(p_Memac->fmMacControllerDriver.h_Fm, &p_Memac->fmMacControllerDriver.fmRevInfo);*/
+    FM_GetRevision(p_Memac->fmMacControllerDriver.h_Fm, &p_Memac->fmMacControllerDriver.fmRevInfo);
+    if (p_Memac->fmMacControllerDriver.fmRevInfo.majorRev == 6 &&
+        p_Memac->fmMacControllerDriver.fmRevInfo.minorRev == 4)
+        slow_10g_if = TRUE;
 
     CHECK_INIT_PARAMETERS(p_Memac, CheckInitParameters);
 
@@ -918,6 +920,7 @@ static t_Error MemacInit(t_Handle h_Memac)
                p_Memac->p_MemacDriverParam,
                enet_interface,
                enet_speed,
+               slow_10g_if,
                p_Memac->exceptions);
 
 #ifdef FM_RX_FIFO_CORRUPT_ERRATA_10GMAC_A006320

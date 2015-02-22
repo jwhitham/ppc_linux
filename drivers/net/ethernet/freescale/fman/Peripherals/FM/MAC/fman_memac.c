@@ -156,6 +156,7 @@ int fman_memac_init(struct memac_regs *regs,
         struct memac_cfg *cfg,
         enum enet_interface enet_interface,
         enum enet_speed enet_speed,
+	bool slow_10g_if,
         uint32_t exceptions)
 {
     uint32_t    tmp;
@@ -216,8 +217,13 @@ int fman_memac_init(struct memac_regs *regs,
 	tmp = 0;
 	if (enet_interface == E_ENET_IF_XGMII ||
 		enet_interface == E_ENET_IF_XFI) {
-		tmp |= (TX_FIFO_SECTIONS_TX_AVAIL_10G |
+		if(slow_10g_if) {
+			tmp |= (TX_FIFO_SECTIONS_TX_AVAIL_SLOW_10G |
 				TX_FIFO_SECTIONS_TX_EMPTY_DEFAULT_10G);
+		} else {
+			tmp |= (TX_FIFO_SECTIONS_TX_AVAIL_10G |
+				TX_FIFO_SECTIONS_TX_EMPTY_DEFAULT_10G);
+		}
 	} else {
 		tmp |= (TX_FIFO_SECTIONS_TX_AVAIL_1G |
 				TX_FIFO_SECTIONS_TX_EMPTY_DEFAULT_1G);
