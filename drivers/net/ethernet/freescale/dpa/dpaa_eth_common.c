@@ -549,7 +549,6 @@ dpa_mac_probe(struct platform_device *_of_dev)
 	struct device		*dpa_dev, *dev;
 	struct device_node	*mac_node;
 	int			 lenp;
-	const phandle		*phandle_prop;
 	struct platform_device	*of_dev;
 	struct mac_device	*mac_dev;
 #ifdef CONFIG_FSL_DPAA_1588
@@ -558,18 +557,11 @@ dpa_mac_probe(struct platform_device *_of_dev)
 	struct device_node	*timer_node;
 #endif
 
-	phandle_prop = of_get_property(_of_dev->dev.of_node,
-					"fsl,fman-mac", &lenp);
-	if (phandle_prop == NULL)
-		return NULL;
-
-	BUG_ON(lenp != sizeof(phandle));
-
 	dpa_dev = &_of_dev->dev;
 
-	mac_node = of_find_node_by_phandle(*phandle_prop);
+	mac_node = of_parse_phandle(_of_dev->dev.of_node, "fsl,fman-mac", 0);
 	if (unlikely(mac_node == NULL)) {
-		dev_err(dpa_dev, "of_find_node_by_phandle() failed\n");
+		dev_err(dpa_dev, "Cannot find MAC device device tree node\n");
 		return ERR_PTR(-EFAULT);
 	}
 
