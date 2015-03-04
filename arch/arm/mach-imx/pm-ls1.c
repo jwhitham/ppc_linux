@@ -62,6 +62,7 @@
 #define CCSR_RCPM_IPPDEXPCR1		0x144
 #define CCSR_RCPM_IPPDEXPCR1_LPUART	0x40000000
 #define CCSR_RCPM_IPPDEXPCR1_FLEXTIMER	0x20000000
+#define CCSR_RCPM_IPPDEXPCR1_OCRAM1	0x10000000
 
 #define QIXIS_CTL_SYS			0x5
 #define QIXIS_CTL_SYS_EVTSW_MASK	0x0c
@@ -187,7 +188,12 @@ static void ls1_clear_pmc_int(void)
 static void ls1_set_powerdown(void)
 {
 	iowrite32be(ippdexpcr0, ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR0);
-	iowrite32be(ippdexpcr1, ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR1);
+	/*
+	 * In the case of SD boot, system can't wake from deep sleep
+	 * if OCRAM1 is powered down. Therefore, keep it on.
+	 */
+	ippdexpcr1 |= CCSR_RCPM_IPPDEXPCR1_OCRAM1;
+	iowrite32be(ippdexpcr1,	ls1_pm_base.rcpm + CCSR_RCPM_IPPDEXPCR1);
 }
 
 static void ls1_save_ddr(void *base)
