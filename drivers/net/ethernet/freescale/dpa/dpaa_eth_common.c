@@ -900,8 +900,7 @@ struct dpa_fq *dpa_fq_alloc(struct device *dev,
 	}
 
 #ifdef CONFIG_FMAN_PFC
-	if (fq_type == FQ_TYPE_TX ||
-			fq_type == FQ_TYPE_TX_RECYCLE)
+	if (fq_type == FQ_TYPE_TX)
 		for (i = 0; i < fqids->count; i++)
 			dpa_fq[i].wq = i / dpa_num_cpus;
 	else
