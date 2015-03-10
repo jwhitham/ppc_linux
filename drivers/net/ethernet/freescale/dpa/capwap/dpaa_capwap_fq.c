@@ -465,7 +465,7 @@ int capwap_fq_pre_init(struct dpaa_capwap_domain *capwap_domain)
 		channel = (uint16_t)
 			fm_get_tx_port_channel(net_priv->mac_dev->port_dev[TX]);
 		context_a = (u64)1 << 63;
-#ifdef CONFIG_FMAN_T4240
+#if (defined CONFIG_FMAN_V3H) || (defined CONFIG_FMAN_V3L)
 		/* Configure the Tx queues for recycled frames, such that the
 		 * buffers are released by FMan and no confirmation is sent
 		 */
