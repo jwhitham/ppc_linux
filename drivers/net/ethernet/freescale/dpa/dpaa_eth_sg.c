@@ -724,8 +724,8 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 			netdev_err(net_dev, "dma_map_single() failed\n");
 		return -EINVAL;
 	}
-	fd->addr_hi = (uint8_t)upper_32_bits(addr);
-	fd->addr_lo = lower_32_bits(addr);
+	fd->addr = addr;
+
 
 	return 0;
 }
