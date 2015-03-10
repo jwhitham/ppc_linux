@@ -45,6 +45,7 @@
 #include <linux/of_net.h>
 #include <linux/device.h>
 #include <linux/phy.h>
+#include <linux/io.h>
 
 #include "lnxwrp_fm_ext.h"
 
