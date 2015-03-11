@@ -548,10 +548,10 @@ dpa_mac_probe(struct platform_device *_of_dev)
 {
 	struct device		*dpa_dev, *dev;
 	struct device_node	*mac_node;
-	int			 lenp;
 	struct platform_device	*of_dev;
 	struct mac_device	*mac_dev;
 #ifdef CONFIG_FSL_DPAA_1588
+	int			 lenp;
 	struct net_device	*net_dev = NULL;
 	struct dpa_priv_s	*priv = NULL;
 	struct device_node	*timer_node;
