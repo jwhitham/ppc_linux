@@ -307,6 +307,8 @@ static int __cold dpa_debugfs_open(struct inode *inode, struct file *file)
 int dpa_netdev_debugfs_create(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	static int cnt;
+	char debugfs_file_name[100];
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP
 	char loop_file_name[100];
 #endif
@@ -318,7 +320,8 @@ int dpa_netdev_debugfs_create(struct net_device *net_dev)
 		return -ENOMEM;
 	}
 
-	priv->debugfs_file = debugfs_create_file(net_dev->name,
+	snprintf(debugfs_file_name, 100, "eth%d", ++cnt);
+	priv->debugfs_file = debugfs_create_file(debugfs_file_name,
 							 S_IRUGO,
 							 dpa_debugfs_root,
 							 net_dev,
@@ -326,13 +329,13 @@ int dpa_netdev_debugfs_create(struct net_device *net_dev)
 	if (unlikely(priv->debugfs_file == NULL)) {
 		netdev_err(net_dev, "debugfs_create_file(%s/%s)",
 				dpa_debugfs_root->d_iname,
-				net_dev->name);
+				debugfs_file_name);
 
 		return -ENOMEM;
 	}
 
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP
-	sprintf(loop_file_name, "%s_loop", net_dev->name);
+	sprintf(loop_file_name, "eth%d_loop", cnt);
 	priv->debugfs_loop_file = debugfs_create_file(loop_file_name,
 							 S_IRUGO,
 							 dpa_debugfs_root,
