@@ -29,6 +29,15 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUG
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": %s:%hu:%s() " fmt, \
+	KBUILD_BASENAME".c", __LINE__, __func__
+#else
+#define pr_fmt(fmt) \
+	KBUILD_MODNAME ": " fmt
+#endif
+
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
@@ -43,6 +52,14 @@
 #include "dpaa_eth_common.h"
 #include "dpaa_eth_base.h"
 
+#define DPA_DESCRIPTION "FSL DPAA Advanced drivers:"
+
+MODULE_LICENSE("Dual BSD/GPL");
+
+uint8_t advanced_debug = -1;
+module_param(advanced_debug, byte, S_IRUGO);
+MODULE_PARM_DESC(advanced_debug, "Module/Driver verbosity level");
+
 static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 {
 	return ((struct dpa_bp *)dpa_bp0)->size -
@@ -52,33 +69,24 @@ static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 struct dpa_bp * __cold __must_check /* __attribute__((nonnull)) */
 dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 {
-	int			 i, lenp, na, ns;
+	int			 i, lenp, na, ns, err;
 	struct device		*dev;
 	struct device_node	*dev_node;
-	const phandle		*phandle_prop;
-	const uint32_t		*bpid;
-	const uint32_t		*bpool_cfg;
+	const __be32		*bpool_cfg;
 	struct dpa_bp		*dpa_bp;
+	u32			bpid;
 
 	dev = &_of_dev->dev;
 
-	/* The default is one, if there's no property */
-	*count = 1;
-
-	/* Get the buffer pools to be used */
-	phandle_prop = of_get_property(dev->of_node,
-					"fsl,bman-buffer-pools", &lenp);
-
-	if (phandle_prop)
-		*count = lenp / sizeof(phandle);
-	else {
-		dev_err(dev,
-			"missing fsl,bman-buffer-pools device tree entry\n");
+	*count = of_count_phandle_with_args(dev->of_node,
+			"fsl,bman-buffer-pools", NULL);
+	if (*count < 1) {
+		dev_err(dev, "missing fsl,bman-buffer-pools device tree entry\n");
 		return ERR_PTR(-EINVAL);
 	}
 
 	dpa_bp = devm_kzalloc(dev, *count * sizeof(*dpa_bp), GFP_KERNEL);
-	if (unlikely(dpa_bp == NULL)) {
+	if (dpa_bp == NULL) {
 		dev_err(dev, "devm_kzalloc() failed\n");
 		return ERR_PTR(-ENOMEM);
 	}
@@ -92,10 +100,12 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 	na = of_n_addr_cells(dev_node);
 	ns = of_n_size_cells(dev_node);
 
-	for (i = 0; i < *count && phandle_prop; i++) {
+	for (i = 0; i < *count; i++) {
 		of_node_put(dev_node);
-		dev_node = of_find_node_by_phandle(phandle_prop[i]);
-		if (unlikely(dev_node == NULL)) {
+
+		dev_node = of_parse_phandle(dev->of_node,
+				"fsl,bman-buffer-pools", i);
+		if (dev_node == NULL) {
 			dev_err(dev, "of_find_node_by_phandle() failed\n");
 			return ERR_PTR(-EFAULT);
 		}
@@ -108,13 +118,13 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count)
 			goto _return_of_node_put;
 		}
 
-		bpid = of_get_property(dev_node, "fsl,bpid", &lenp);
-		if ((bpid == NULL) || (lenp != sizeof(*bpid))) {
-			dev_err(dev, "fsl,bpid property not found.\n");
+		err = of_property_read_u32(dev_node, "fsl,bpid", &bpid);
+		if (err) {
+			dev_err(dev, "Cannot find buffer pool ID in the device tree\n");
 			dpa_bp = ERR_PTR(-EINVAL);
 			goto _return_of_node_put;
 		}
-		dpa_bp[i].bpid = (uint8_t)*bpid;
+		dpa_bp[i].bpid = (uint8_t)bpid;
 
 		bpool_cfg = of_get_property(dev_node, "fsl,bpool-ethernet-cfg",
 					&lenp);
@@ -219,3 +229,18 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 	return 0;
 }
 
+static int __init __cold dpa_advanced_load(void)
+{
+	pr_info(DPA_DESCRIPTION " (" VERSION ")\n");
+
+	return 0;
+}
+module_init(dpa_advanced_load);
+
+static void __exit __cold dpa_advanced_unload(void)
+{
+	pr_debug(KBUILD_MODNAME ": -> %s:%s()\n",
+		 KBUILD_BASENAME".c", __func__);
+
+}
+module_exit(dpa_advanced_unload);

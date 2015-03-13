@@ -102,6 +102,8 @@ static int _dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp)
 	struct device *dev = dpa_bp->dev;
 	struct sk_buff *skb, **skbh;
 
+	memset(bmb, 0, sizeof(struct bm_buffer) * 8);
+
 	for (i = 0; i < 8; i++) {
 		/* We'll prepend the skb back-pointer; can't use the DPA
 		 * priv space, because FMan will overwrite it (from offset 0)
@@ -182,6 +184,7 @@ int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(dpa_bp_priv_seed);
 
 /* Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
@@ -211,6 +214,7 @@ int dpaa_eth_refill_bpools(struct dpa_bp *dpa_bp, int *countptr)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpaa_eth_refill_bpools);
 
 /* Cleanup function for outgoing frame descriptors that were built on Tx path,
  * either contiguous frames or scatter/gather ones.
@@ -229,6 +233,7 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 	int i;
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
 	dma_addr_t addr = qm_fd_addr(fd);
+	dma_addr_t sg_addr;
 	struct sk_buff **skbh;
 	struct sk_buff *skb = NULL;
 	const enum dma_data_direction dma_dir = DMA_TO_DEVICE;
@@ -261,15 +266,18 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 #endif /* CONFIG_FSL_DPAA_TS */
 
 		/* sgt[0] is from lowmem, was dma_map_single()-ed */
-		dma_unmap_single(dpa_bp->dev, (dma_addr_t)sgt[0].addr,
-				sgt[0].length, dma_dir);
+		/* TODO: sg_addr should be in CPU endianess */
+		sg_addr = qm_sg_addr(&sgt[0]);
+		dma_unmap_single(dpa_bp->dev, sg_addr,
+				be32_to_cpu(sgt[0].length), dma_dir);
 
 		/* remaining pages were mapped with dma_map_page() */
 		for (i = 1; i < nr_frags; i++) {
 			DPA_BUG_ON(sgt[i].extension);
-
-			dma_unmap_page(dpa_bp->dev, (dma_addr_t)sgt[i].addr,
-					sgt[i].length, dma_dir);
+			/* TODO: sg_addr should be in CPU endianess */
+			sg_addr = qm_sg_addr(&sgt[i]);
+			dma_unmap_page(dpa_bp->dev, sg_addr,
+					be32_to_cpu(sgt[i].length), dma_dir);
 		}
 
 		/* Free the page frag that we allocated on Tx */
@@ -435,6 +443,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 		/* We use a single global Rx pool */
 		DPA_BUG_ON(dpa_bp != dpa_bpid2pool(sgt[i].bpid));
 
+		/* TODO: sg_addr should be in CPU endianess */
 		sg_addr = qm_sg_addr(&sgt[i]);
 		sg_vaddr = phys_to_virt(sg_addr);
 		DPA_BUG_ON(!IS_ALIGNED((unsigned long)sg_vaddr,
@@ -469,7 +478,7 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			 */
 			DPA_BUG_ON(fd_off != priv->rx_headroom);
 			skb_reserve(skb, fd_off);
-			skb_put(skb, sgt[i].length);
+			skb_put(skb, be32_to_cpu(sgt[i].length));
 		} else {
 			/* Not the first S/G entry; all data from buffer will
 			 * be added in an skb fragment; fragment index is offset
@@ -495,8 +504,8 @@ static struct sk_buff *__hot sg_fd_to_skb(const struct dpa_priv_s *priv,
 			/* page_offset only refers to the beginning of sgt[i];
 			 * but the buffer itself may have an internal offset.
 			 */
-			frag_offset = sgt[i].offset + page_offset;
-			frag_len = sgt[i].length;
+			frag_offset = be16_to_cpu(sgt[i].offset) + page_offset;
+			frag_len = be32_to_cpu(sgt[i].length);
 			/* skb_add_rx_frag() does no checking on the page; if
 			 * we pass it a tail page, we'll end up with
 			 * bad page accounting and eventually with segafults.
@@ -715,8 +724,8 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 			netdev_err(net_dev, "dma_map_single() failed\n");
 		return -EINVAL;
 	}
-	fd->addr_hi = (uint8_t)upper_32_bits(addr);
-	fd->addr_lo = lower_32_bits(addr);
+	fd->addr = addr;
+
 
 	return 0;
 }
@@ -764,7 +773,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 	sgt = (struct qm_sg_entry *)(sgt_buf + priv->tx_headroom);
 	sgt[0].bpid = 0xff;
 	sgt[0].offset = 0;
-	sgt[0].length = skb_headlen(skb);
+	sgt[0].length = cpu_to_be32(skb_headlen(skb));
 	sgt[0].extension = 0;
 	sgt[0].final = 0;
 	addr = dma_map_single(dpa_bp->dev, skb->data, sgt[0].length, dma_dir);
@@ -775,14 +784,14 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 
 	}
 	sgt[0].addr_hi = (uint8_t)upper_32_bits(addr);
-	sgt[0].addr_lo = lower_32_bits(addr);
+	sgt[0].addr_lo = cpu_to_be32(lower_32_bits(addr));
 
 	/* populate the rest of SGT entries */
 	for (i = 1; i <= nr_frags; i++) {
 		frag = &skb_shinfo(skb)->frags[i - 1];
 		sgt[i].bpid = 0xff;
 		sgt[i].offset = 0;
-		sgt[i].length = frag->size;
+		sgt[i].length = cpu_to_be32(frag->size);
 		sgt[i].extension = 0;
 		sgt[i].final = 0;
 
@@ -797,7 +806,7 @@ static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
 
 		/* keep the offset in the address */
 		sgt[i].addr_hi = (uint8_t)upper_32_bits(addr);
-		sgt[i].addr_lo = lower_32_bits(addr);
+		sgt[i].addr_lo = cpu_to_be32(lower_32_bits(addr));
 	}
 	sgt[i - 1].final = 1;
 
@@ -830,7 +839,7 @@ sgt_map_failed:
 sg_map_failed:
 	for (j = 0; j < i; j++)
 		dma_unmap_page(dpa_bp->dev, qm_sg_addr(&sgt[j]),
-			sgt[j].length, dma_dir);
+			be32_to_cpu(sgt[j].length), dma_dir);
 sg0_map_failed:
 csum_failed:
 	put_page(virt_to_head_page(sgt_buf));

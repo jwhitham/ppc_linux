@@ -352,6 +352,7 @@ int set_mac_active_pause(struct mac_device *mac_dev, bool rx, bool tx)
 
 	return _errno;
 }
+EXPORT_SYMBOL(set_mac_active_pause);
 
 /* Determine the MAC RX/TX PAUSE frames settings based on PHY
  * autonegotiation or values set by eththool.
@@ -403,6 +404,7 @@ void get_pause_cfg(struct mac_device *mac_dev, bool *rx_pause, bool *tx_pause)
 	if (flowctrl & FLOW_CTRL_TX)
 		*tx_pause = true;
 }
+EXPORT_SYMBOL(get_pause_cfg);
 
 static void adjust_link(struct net_device *net_dev)
 {
@@ -447,7 +449,7 @@ static int dtsec_init_phy(struct net_device *net_dev,
 
 	/* Remove any features not supported by the controller */
 	phy_dev->supported &= mac_dev->if_support;
-	/* Enable the symmetric and asymmetric PAUSE frame advertisments,
+	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */
 	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
@@ -478,7 +480,7 @@ static int xgmac_init_phy(struct net_device *net_dev,
 	}
 
 	phy_dev->supported &= mac_dev->if_support;
-	/* Enable the symmetric and asymmetric PAUSE frame advertisments,
+	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */
 	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
@@ -521,7 +523,7 @@ static int memac_init_phy(struct net_device *net_dev,
 
 	/* Remove any features not supported by the controller */
 	phy_dev->supported &= mac_dev->if_support;
-	/* Enable the symmetric and asymmetric PAUSE frame advertisments,
+	/* Enable the symmetric and asymmetric PAUSE frame advertisements,
 	 * as most of the PHY drivers do not enable them by default.
 	 */
 	phy_dev->supported |= (SUPPORTED_Pause | SUPPORTED_Asym_Pause);
@@ -683,7 +685,7 @@ int fm_mac_dump_regs(struct mac_device *h_mac, char *buf, int nn)
 
 	return n;
 }
-
+EXPORT_SYMBOL(fm_mac_dump_regs);
 
 static void __cold setup_dtsec(struct mac_device *mac_dev)
 {
