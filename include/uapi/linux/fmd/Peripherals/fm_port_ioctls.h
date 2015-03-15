@@ -186,6 +186,26 @@ typedef enum ioc_fm_port_counters {
     e_IOC_FM_PORT_COUNTERS_DEQ_CONFIRM                  /**< QMI counter */
 } ioc_fm_port_counters;
 
+typedef struct ioc_fm_port_bmi_stats_t {
+    uint32_t cnt_cycle;
+    uint32_t cnt_task_util;
+    uint32_t cnt_queue_util;
+    uint32_t cnt_dma_util;
+    uint32_t cnt_fifo_util;
+    uint32_t cnt_rx_pause_activation;
+    uint32_t cnt_frame;
+    uint32_t cnt_discard_frame;
+    uint32_t cnt_dealloc_buf;
+    uint32_t cnt_rx_bad_frame;
+    uint32_t cnt_rx_large_frame;
+    uint32_t cnt_rx_filter_frame;
+    uint32_t cnt_rx_list_dma_err;
+    uint32_t cnt_rx_out_of_buffers_discard;
+    uint32_t cnt_wred_discard;
+    uint32_t cnt_length_err;
+    uint32_t cnt_unsupported_format;
+} ioc_fm_port_bmi_stats_t;
+
 /**************************************************************************//**
  @Description   Structure for Port id parameters.
                 (Description may be inaccurate;
@@ -914,6 +934,23 @@ typedef struct ioc_fm_port_vsp_alloc_params_t {
 #endif
 #define FM_PORT_IOC_VSP_ALLOC _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(38), ioc_fm_port_vsp_alloc_params_t)
 #endif /* (DPAA_VERSION >= 11) */
+
+/**************************************************************************//**
+ @Function      FM_PORT_GetBmiCounters
+
+ @Description   Read port's BMI stat counters and place them into
+                a designated structure of counters.
+
+ @Param[in]     h_FmPort    A handle to a FM Port module.
+ @Param[out]    p_BmiStats  counters structure
+
+ @Return        E_OK on success; Error code otherwise.
+
+ @Cautions      Allowed only following FM_PORT_Init().
+*//***************************************************************************/
+
+#define FM_PORT_IOC_GET_BMI_COUNTERS _IOR(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(42), ioc_fm_port_bmi_stats_t)
+
 
 /** @} */ /* end of lnx_ioctl_FM_PORT_pcd_runtime_control_grp group */
 /** @} */ /* end of lnx_ioctl_FM_PORT_runtime_control_grp group */
