@@ -3550,7 +3550,7 @@ t_Error LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd
     t_Error err = E_OK;
 
     _fm_ioctl_dbg("cmd:0x%08x(type:0x%02x, nr:%u).\n",
-        cmd, _IOC_TYPE(cmd), _IOC_NR(cmd) - 50);
+        cmd, _IOC_TYPE(cmd), _IOC_NR(cmd) - 70);
 
     switch (cmd)
     {
@@ -4470,6 +4470,27 @@ t_Error LnxwrpFmPortIOCTL(t_LnxWrpFmPortDev *p_LnxWrpFmPortDev, unsigned int cmd
 
             if (copy_to_user((ioc_fm_port_mac_statistics_t *)arg, &param,
                         sizeof(ioc_fm_port_mac_statistics_t)))
+                RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+
+            break;
+        }
+
+        case FM_PORT_IOC_GET_BMI_COUNTERS:
+        {
+            t_LnxWrpFmDev *p_LnxWrpFmDev =
+                    (t_LnxWrpFmDev *)p_LnxWrpFmPortDev->h_LnxWrpFmDev;
+            ioc_fm_port_bmi_stats_t param;
+            int port_id = p_LnxWrpFmPortDev->id;
+
+            if (!p_LnxWrpFmDev)
+                RETURN_ERROR(MINOR, E_NOT_AVAILABLE, ("Port not initialized or other error!"));
+
+            if (FM_PORT_GetBmiCounters(p_LnxWrpFmPortDev->h_Dev,
+                        (t_FmPortBmiStats *)&param))
+                RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+
+            if (copy_to_user((ioc_fm_port_bmi_stats_t *)arg, &param,
+                        sizeof(ioc_fm_port_bmi_stats_t)))
                 RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
 
             break;

@@ -1294,6 +1294,25 @@ typedef enum e_FmPortCounters {
     e_FM_PORT_COUNTERS_DEQ_CONFIRM                  /**< QMI counter */
 } e_FmPortCounters;
 
+typedef struct t_FmPortBmiStats {
+    uint32_t cntCycle;
+    uint32_t cntTaskUtil;
+    uint32_t cntQueueUtil;
+    uint32_t cntDmaUtil;
+    uint32_t cntFifoUtil;
+    uint32_t cntRxPauseActivation;
+    uint32_t cntFrame;
+    uint32_t cntDiscardFrame;
+    uint32_t cntDeallocBuf;
+    uint32_t cntRxBadFrame;
+    uint32_t cntRxLargeFrame;
+    uint32_t cntRxFilterFrame;
+    uint32_t cntRxListDmaErr;
+    uint32_t cntRxOutOfBuffersDiscard;
+    uint32_t cntWredDiscard;
+    uint32_t cntLengthErr;
+    uint32_t cntUnsupportedFormat;
+} t_FmPortBmiStats;
 
 /**************************************************************************//**
  @Description   Structure for Port id parameters.
@@ -1840,6 +1859,21 @@ t_Error FM_PORT_AnalyzePerformanceParams(t_Handle h_FmPort);
  @Cautions      Allowed only following FM_PORT_Init().
 *//***************************************************************************/
 t_Error FM_PORT_SetAllocBufCounter(t_Handle h_FmPort, uint8_t poolId, bool enable);
+
+/**************************************************************************//**
+ @Function      FM_PORT_GetBmiCounters
+
+ @Description   Read port's BMI stat counters and place them into
+                a designated structure of counters.
+
+ @Param[in]     h_FmPort    A handle to a FM Port module.
+ @Param[out]    p_BmiStats  counters structure
+
+ @Return        E_OK on success; Error code otherwise.
+
+ @Cautions      Allowed only following FM_PORT_Init().
+*//***************************************************************************/
+t_Error FM_PORT_GetBmiCounters(t_Handle h_FmPort, t_FmPortBmiStats *p_BmiStats);
 
 /**************************************************************************//**
  @Function      FM_PORT_GetCounter
