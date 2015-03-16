@@ -280,7 +280,7 @@ typedef struct {
 typedef struct {
     t_FmSetParams setParams;
     t_FmGetParams getParams;
-} t_FmGetSetParams; 
+} t_FmGetSetParams;
 
 t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params);
 
@@ -701,6 +701,8 @@ void        FmPcdKgUpdateRequiredAction(t_Handle h_Scheme, uint32_t requiredActi
 bool        FmPcdKgIsDirectPlcr(t_Handle h_FmPcd, uint8_t schemeId);
 bool        FmPcdKgIsDistrOnPlcrProfile(t_Handle h_FmPcd, uint8_t schemeId);
 uint16_t    FmPcdKgGetRelativeProfileId(t_Handle h_FmPcd, uint8_t schemeId);
+t_Handle    FmPcdKgGetSchemeHandle(t_Handle h_FmPcd, uint8_t relativeSchemeId);
+bool        FmPcdKgIsSchemeHasOwners(t_Handle h_Scheme);
 t_Error     FmPcdKgCcGetSetParams(t_Handle h_FmPcd, t_Handle  h_Scheme, uint32_t requiredAction, uint32_t value);
 t_Error     FmPcdKgSetOrBindToClsPlanGrp(t_Handle h_FmPcd, uint8_t hardwarePortId, uint8_t netEnvId, protocolOpt_t *p_OptArray, uint8_t *p_ClsPlanGrpId, bool *p_IsEmptyClsPlanGrp);
 t_Error     FmPcdKgDeleteOrUnbindPortToClsPlanGrp(t_Handle h_FmPcd, uint8_t hardwarePortId, uint8_t clsPlanGrpId);
