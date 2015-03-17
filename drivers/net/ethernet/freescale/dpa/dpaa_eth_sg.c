@@ -958,7 +958,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	return NETDEV_TX_OK;
 
 xmit_failed:
-	if (fd.cmd & FM_FD_CMD_FCO) {
+	if (fd.bpid != 0xff) {
 		(*countptr)--;
 		percpu_priv->tx_returned--;
 		dpa_fd_release(net_dev, &fd);
