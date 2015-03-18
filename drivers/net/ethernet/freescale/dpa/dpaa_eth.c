@@ -846,7 +846,7 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		int err;
 		err = dpa_bp_alloc(&dpa_bp[i]);
 		if (err < 0) {
-			dpa_bp_free(priv, dpa_bp);
+			dpa_bp_free(priv);
 			priv->dpa_bp = NULL;
 			return err;
 		}
@@ -1093,7 +1093,7 @@ rx_cgr_init_failed:
 tx_cgr_init_failed:
 add_channel_failed:
 get_channel_failed:
-	dpa_bp_free(priv, priv->dpa_bp);
+	dpa_bp_free(priv);
 bp_create_failed:
 fq_probe_failed:
 alloc_failed:

@@ -220,7 +220,7 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		int err;
 		err = dpa_bp_alloc(&dpa_bp[i]);
 		if (err < 0) {
-			dpa_bp_free(priv, dpa_bp);
+			dpa_bp_free(priv);
 			priv->dpa_bp = NULL;
 			return err;
 		}
