@@ -339,12 +339,12 @@ _GLOBAL(DoSyscall)
 	lwz	r11,TI_FLAGS(r10)
 	andi.	r11,r11,_TIF_SYSCALL_T_OR_A
 	bne-	syscall_dotrace
-syscall_dotrace_cont:
 	cmplwi	0,r0,NR_syscalls
 	lis	r10,sys_call_table@h
 	ori	r10,r10,sys_call_table@l
 	slwi	r0,r0,2
 	bge-	66f
+syscall_dotrace_cont:
 	lwzx	r10,r10,r0	/* Fetch system call handler [ptr] */
 	mtlr	r10
 	addi	r9,r1,STACK_FRAME_OVERHEAD
@@ -466,6 +466,11 @@ syscall_dotrace:
 	lwz	r7,GPR7(r1)
 	lwz	r8,GPR8(r1)
 	REST_NVGPRS(r1)
+	cmplwi	0,r0,NR_syscalls
+	lis	r10,sys_call_table@h
+	ori	r10,r10,sys_call_table@l
+	slwi	r0,r0,2
+	bge-	ret_from_syscall
 	b	syscall_dotrace_cont
 
 syscall_exit_work:

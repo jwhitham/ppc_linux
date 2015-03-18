@@ -153,7 +153,6 @@ END_FW_FTR_SECTION_IFSET(FW_FEATURE_SPLPAR)
 	ld	r10,TI_FLAGS(r11)
 	andi.	r11,r10,_TIF_SYSCALL_T_OR_A
 	bne	syscall_dotrace
-.Lsyscall_dotrace_cont:
 	cmpldi	0,r0,NR_syscalls
 	bge-	syscall_enosys
 
@@ -266,7 +265,9 @@ syscall_dotrace:
 	addi	r9,r1,STACK_FRAME_OVERHEAD
 	CURRENT_THREAD_INFO(r10, r1)
 	ld	r10,TI_FLAGS(r10)
-	b	.Lsyscall_dotrace_cont
+	cmpldi	0,r0,NR_syscalls
+	bge-	.Lsyscall_exit
+	b	system_call
 
 syscall_enosys:
 	li	r3,-ENOSYS
