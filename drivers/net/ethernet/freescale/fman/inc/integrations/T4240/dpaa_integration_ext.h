@@ -291,4 +291,13 @@ typedef enum
 /* RMan erratas */
 #define RM_ERRONEOUS_ACK_ERRATA_RMAN_A006756
 
+/*****************************************************************************
+ FM MACSEC INTEGRATION-SPECIFIC DEFINITIONS
+******************************************************************************/
+#define NUM_OF_RX_SC                16
+#define NUM_OF_TX_SC                16
+
+#define NUM_OF_SA_PER_RX_SC         2
+#define NUM_OF_SA_PER_TX_SC         2
+
 #endif /* __DPAA_INTEGRATION_EXT_H */

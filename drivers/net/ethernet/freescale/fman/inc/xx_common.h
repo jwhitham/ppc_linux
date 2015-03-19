@@ -52,5 +52,5 @@
 #define MODULE_FM_PORT          0x00060000
 #define MODULE_MM               0x00070000
 #define MODULE_FM_SP            0x00080000
-
+#define MODULE_FM_MACSEC        0x00090000
 #endif /* __XX_COMMON_H */

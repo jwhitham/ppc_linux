@@ -53,10 +53,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev);
 #ifdef CONFIG_PM
 
@@ -329,7 +325,7 @@ MODULE_DEVICE_TABLE(of, dpa_proxy_match);
 
 static struct platform_driver dpa_proxy_driver = {
 	.driver = {
-		.name		= KBUILD_MODNAME"-proxy",
+		.name		= KBUILD_MODNAME "-proxy",
 		.of_match_table	= dpa_proxy_match,
 		.owner		= THIS_MODULE,
 		.pm		= PROXY_PM_OPS,

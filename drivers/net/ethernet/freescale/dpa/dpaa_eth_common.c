@@ -47,6 +47,9 @@
 #ifdef CONFIG_FSL_DPAA_1588
 #include "dpaa_1588.h"
 #endif
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+#include "dpaa_debugfs.h"
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 #include "mac.h"
 
 /* DPAA platforms benefit from hardware-assisted queue management */
@@ -66,14 +69,18 @@ struct ptp_priv_s ptp_priv;
 static struct dpa_bp *dpa_bp_array[64];
 
 int dpa_max_frm;
+EXPORT_SYMBOL(dpa_max_frm);
+
 int dpa_rx_extra_headroom;
+EXPORT_SYMBOL(dpa_rx_extra_headroom);
+
 int dpa_num_cpus = NR_CPUS;
 
 static const struct fqid_cell tx_confirm_fqids[] = {
 	{0, DPAA_ETH_TX_QUEUES}
 };
 
-static const struct fqid_cell default_fqids[][3] = {
+static struct fqid_cell default_fqids[][3] = {
 	[RX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_RX_QUEUES} },
 	[TX] = { {0, 1}, {0, 1}, {0, DPAA_ETH_TX_QUEUES} }
 };
@@ -98,10 +105,9 @@ void fsl_dpaa_eth_set_hooks(struct dpaa_eth_hooks_s *hooks)
 EXPORT_SYMBOL(fsl_dpaa_eth_set_hooks);
 #endif
 
-int dpa_netdev_init(struct device_node *dpa_node,
-		struct net_device *net_dev,
-		const uint8_t *mac_addr,
-		uint16_t tx_timeout)
+int dpa_netdev_init(struct net_device *net_dev,
+		    const uint8_t *mac_addr,
+		    uint16_t tx_timeout)
 {
 	int err;
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
@@ -139,6 +145,7 @@ int dpa_netdev_init(struct device_node *dpa_node,
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_netdev_init);
 
 int __cold dpa_start(struct net_device *net_dev)
 {
@@ -179,6 +186,7 @@ mac_start_failed:
 
 	return err;
 }
+EXPORT_SYMBOL(dpa_start);
 
 int __cold dpa_stop(struct net_device *net_dev)
 {
@@ -212,6 +220,7 @@ int __cold dpa_stop(struct net_device *net_dev)
 
 	return _errno;
 }
+EXPORT_SYMBOL(dpa_stop);
 
 void __cold dpa_timeout(struct net_device *net_dev)
 {
@@ -227,6 +236,7 @@ void __cold dpa_timeout(struct net_device *net_dev)
 
 	percpu_priv->stats.tx_errors++;
 }
+EXPORT_SYMBOL(dpa_timeout);
 
 /* net_device */
 
@@ -260,6 +270,7 @@ dpa_get_stats64(struct net_device *net_dev,
 
 	return stats;
 }
+EXPORT_SYMBOL(dpa_get_stats64);
 
 int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 {
@@ -275,6 +286,7 @@ int dpa_change_mtu(struct net_device *net_dev, int new_mtu)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_change_mtu);
 
 /* .ndo_init callback */
 int dpa_ndo_init(struct net_device *net_dev)
@@ -293,6 +305,7 @@ int dpa_ndo_init(struct net_device *net_dev)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_ndo_init);
 
 int dpa_set_features(struct net_device *dev, netdev_features_t features)
 {
@@ -300,6 +313,7 @@ int dpa_set_features(struct net_device *dev, netdev_features_t features)
 	dev->features = features;
 	return 0;
 }
+EXPORT_SYMBOL(dpa_set_features);
 
 netdev_features_t dpa_fix_features(struct net_device *dev,
 		netdev_features_t features)
@@ -317,6 +331,7 @@ netdev_features_t dpa_fix_features(struct net_device *dev,
 
 	return features;
 }
+EXPORT_SYMBOL(dpa_fix_features);
 
 #ifdef CONFIG_FSL_DPAA_TS
 u64 dpa_get_timestamp_ns(const struct dpa_priv_s *priv, enum port_type rx_tx,
@@ -478,6 +493,7 @@ int dpa_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	return ret;
 }
+EXPORT_SYMBOL(dpa_ioctl);
 
 int __cold dpa_remove(struct platform_device *of_dev)
 {
@@ -498,11 +514,14 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	err = dpa_fq_free(dev, &priv->dpa_fq_list);
 
+	qman_delete_cgr_safe(&priv->ingress_cgr);
+	qman_release_cgrid(priv->ingress_cgr.cgrid);
+	qman_delete_cgr_safe(&priv->cgr_data.cgr);
+	qman_release_cgrid(priv->cgr_data.cgr.cgrid);
+
 	dpa_private_napi_del(net_dev);
-	free_percpu(priv->percpu_priv);
 
 	dpa_bp_free(priv, priv->dpa_bp);
-	devm_kfree(dev, priv->dpa_bp);
 
 	if (priv->buf_layout)
 		devm_kfree(dev, priv->buf_layout);
@@ -521,6 +540,7 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	return err;
 }
+EXPORT_SYMBOL(dpa_remove);
 
 struct mac_device * __cold __must_check
 __attribute__((nonnull))
@@ -528,28 +548,20 @@ dpa_mac_probe(struct platform_device *_of_dev)
 {
 	struct device		*dpa_dev, *dev;
 	struct device_node	*mac_node;
-	int			 lenp;
-	const phandle		*phandle_prop;
 	struct platform_device	*of_dev;
 	struct mac_device	*mac_dev;
 #ifdef CONFIG_FSL_DPAA_1588
+	int			 lenp;
 	struct net_device	*net_dev = NULL;
 	struct dpa_priv_s	*priv = NULL;
 	struct device_node	*timer_node;
 #endif
 
-	phandle_prop = of_get_property(_of_dev->dev.of_node,
-					"fsl,fman-mac", &lenp);
-	if (phandle_prop == NULL)
-		return NULL;
-
-	BUG_ON(lenp != sizeof(phandle));
-
 	dpa_dev = &_of_dev->dev;
 
-	mac_node = of_find_node_by_phandle(*phandle_prop);
+	mac_node = of_parse_phandle(_of_dev->dev.of_node, "fsl,fman-mac", 0);
 	if (unlikely(mac_node == NULL)) {
-		dev_err(dpa_dev, "of_find_node_by_phandle() failed\n");
+		dev_err(dpa_dev, "Cannot find MAC device device tree node\n");
 		return ERR_PTR(-EFAULT);
 	}
 
@@ -608,6 +620,7 @@ dpa_mac_probe(struct platform_device *_of_dev)
 #endif
 	return mac_dev;
 }
+EXPORT_SYMBOL(dpa_mac_probe);
 
 int dpa_set_mac_address(struct net_device *net_dev, void *addr)
 {
@@ -640,6 +653,7 @@ int dpa_set_mac_address(struct net_device *net_dev, void *addr)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_set_mac_address);
 
 void dpa_set_rx_mode(struct net_device *net_dev)
 {
@@ -663,6 +677,7 @@ void dpa_set_rx_mode(struct net_device *net_dev)
 	if (unlikely(_errno < 0) && netif_msg_drv(priv))
 		netdev_err(net_dev, "mac_dev->set_multi() = %d\n", _errno);
 }
+EXPORT_SYMBOL(dpa_set_rx_mode);
 
 void dpa_set_buffers_layout(struct mac_device *mac_dev,
 		struct dpa_buffer_layout_s *layout)
@@ -694,6 +709,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 	layout[TX].manip_extra_space = params.manip_extra_space;
 	layout[TX].data_align = params.data_align ? : DPA_FD_DATA_ALIGNMENT;
 }
+EXPORT_SYMBOL(dpa_set_buffers_layout);
 
 int __attribute__((nonnull))
 dpa_bp_alloc(struct dpa_bp *dpa_bp)
@@ -764,6 +780,7 @@ pdev_register_failed:
 
 	return err;
 }
+EXPORT_SYMBOL(dpa_bp_alloc);
 
 void dpa_bp_drain(struct dpa_bp *bp)
 {
@@ -832,11 +849,13 @@ dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp)
 	for (i = 0; i < priv->bp_count; i++)
 		_dpa_bp_free(&priv->dpa_bp[i]);
 }
+EXPORT_SYMBOL(dpa_bp_free);
 
 struct dpa_bp *dpa_bpid2pool(int bpid)
 {
 	return dpa_bp_array[bpid];
 }
+EXPORT_SYMBOL(dpa_bpid2pool);
 
 void dpa_bpid2pool_map(int bpid, struct dpa_bp *dpa_bp)
 {
@@ -859,6 +878,7 @@ u16 dpa_select_queue(struct net_device *net_dev, struct sk_buff *skb)
 {
 	return dpa_get_queue_mapping(skb);
 }
+EXPORT_SYMBOL(dpa_select_queue);
 #endif
 
 struct dpa_fq *dpa_fq_alloc(struct device *dev,
@@ -880,8 +900,7 @@ struct dpa_fq *dpa_fq_alloc(struct device *dev,
 	}
 
 #ifdef CONFIG_FMAN_PFC
-	if (fq_type == FQ_TYPE_TX ||
-			fq_type == FQ_TYPE_TX_RECYCLE)
+	if (fq_type == FQ_TYPE_TX)
 		for (i = 0; i < fqids->count; i++)
 			dpa_fq[i].wq = i / dpa_num_cpus;
 	else
@@ -891,6 +910,7 @@ struct dpa_fq *dpa_fq_alloc(struct device *dev,
 
 	return dpa_fq;
 }
+EXPORT_SYMBOL(dpa_fq_alloc);
 
 /* Probing of FQs for MACful ports */
 int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
@@ -898,8 +918,9 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 			    bool alloc_tx_conf_fqs,
 			    enum port_type ptype)
 {
-	const struct fqid_cell *fqids;
-	struct dpa_fq *dpa_fq;
+	struct fqid_cell *fqids = NULL;
+	const void *fqids_off = NULL;
+	struct dpa_fq *dpa_fq = NULL;
 	struct device_node *np = dev->of_node;
 	int num_ranges;
 	int i, lenp;
@@ -910,13 +931,26 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 			goto fq_alloc_failed;
 	}
 
-	fqids = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
-	if (fqids == NULL) {
+	fqids_off = of_get_property(np, fsl_qman_frame_queues[ptype], &lenp);
+	if (fqids_off == NULL) {
 		/* No dts definition, so use the defaults. */
 		fqids = default_fqids[ptype];
 		num_ranges = 3;
 	} else {
 		num_ranges = lenp / sizeof(*fqids);
+
+		fqids = devm_kzalloc(dev, sizeof(*fqids) * num_ranges,
+				GFP_KERNEL);
+		if (fqids == NULL)
+			goto fqids_alloc_failed;
+
+		/* convert to CPU endianess */
+		for (i = 0; i < num_ranges; i++) {
+			fqids[i].start = be32_to_cpup(fqids_off +
+					i * sizeof(*fqids));
+			fqids[i].count = be32_to_cpup(fqids_off +
+					i * sizeof(*fqids) + sizeof(__be32));
+		}
 	}
 
 	for (i = 0; i < num_ranges; i++) {
@@ -967,7 +1001,8 @@ int dpa_fq_probe_mac(struct device *dev, struct list_head *list,
 	return 0;
 
 fq_alloc_failed:
-	dev_err(dev, "dpa_fq_alloc() failed\n");
+fqids_alloc_failed:
+	dev_err(dev, "Cannot allocate memory for frame queues\n");
 	return -ENOMEM;
 
 invalid_default_queue:
@@ -975,6 +1010,7 @@ invalid_error_queue:
 	dev_err(dev, "Too many default or error queues\n");
 	return -EINVAL;
 }
+EXPORT_SYMBOL(dpa_fq_probe_mac);
 
 static u32 rx_pool_channel;
 static DEFINE_SPINLOCK(rx_pool_channel_init);
@@ -993,6 +1029,13 @@ int dpa_get_channel(void)
 		return -ENOMEM;
 	return rx_pool_channel;
 }
+EXPORT_SYMBOL(dpa_get_channel);
+
+void dpa_release_channel(void)
+{
+	qman_release_pool(rx_pool_channel);
+}
+EXPORT_SYMBOL(dpa_release_channel);
 
 int dpaa_eth_add_channel(void *__arg)
 {
@@ -1007,6 +1050,7 @@ int dpaa_eth_add_channel(void *__arg)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(dpaa_eth_add_channel);
 
 /**
  * Congestion group state change notification callback.
@@ -1015,6 +1059,7 @@ int dpaa_eth_add_channel(void *__arg)
  * Also updates some CGR-related stats.
  */
 static void dpaa_eth_cgscn(struct qman_portal *qm, struct qman_cgr *cgr,
+
 	int congested)
 {
 	struct dpa_priv_s *priv = (struct dpa_priv_s *)container_of(cgr,
@@ -1077,6 +1122,7 @@ int dpaa_eth_cgr_init(struct dpa_priv_s *priv)
 out_error:
 	return err;
 }
+EXPORT_SYMBOL(dpaa_eth_cgr_init);
 
 static inline void dpa_setup_ingress(const struct dpa_priv_s *priv,
 				     struct dpa_fq *fq,
@@ -1215,6 +1261,8 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 	fq = &dpa_fq->fq_base;
 
 	if (dpa_fq->init) {
+		memset(&initfq, 0, sizeof(initfq));
+
 		initfq.we_mask = QM_INITFQ_WE_FQCTRL;
 		/* FIXME: why would we want to keep an empty FQ in cache? */
 		initfq.fqd.fq_ctrl = QM_FQCTRL_PREFERINCACHE;
@@ -1276,9 +1324,11 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 			/* ContextA: OVOM=1 (use contextA2 bits instead of ICAD)
 			 *	     A2V=1 (contextA A2 field is valid)
 			 *           A0V=1 (contextA A0 field is valid)
+			 *	     B0V=1 (contextB field is valid)
 			 * ContextA A2: EBD=1 (deallocate buffers inside FMan)
+			 * ContextB B0(ASPID): 0 (absolute Virtual Storage ID)
 			 */
-				initfq.fqd.context_a.hi = 0x1a000000;
+				initfq.fqd.context_a.hi = 0x1e000000;
 				initfq.fqd.context_a.lo = 0x80000000;
 			}
 		}
@@ -1313,7 +1363,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 			initfq.fqd.context_a.stashing.annotation_cl = 1;
 			initfq.fqd.context_a.stashing.context_cl =
 				DIV_ROUND_UP(sizeof(struct qman_fq), 64);
-		};
+		}
 
 		_errno = qman_init_fq(fq, QMAN_INITFQ_FLAG_SCHED, &initfq);
 		if (_errno < 0) {
@@ -1328,6 +1378,7 @@ int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_fq_init);
 
 static int __cold __attribute__((nonnull))
 _dpa_fq_free(struct device *dev, struct qman_fq *fq)
@@ -1377,6 +1428,7 @@ dpa_fq_free(struct device *dev, struct list_head *list)
 
 	return _errno;
 }
+EXPORT_SYMBOL(dpa_fq_free);
 
 static void
 dpaa_eth_init_tx_port(struct fm_port *port, struct dpa_fq *errq,
@@ -1463,6 +1515,7 @@ void dpaa_eth_init_ports(struct mac_device *mac_dev,
 	rx_port_pcd_param.dev = dev;
 	fm_port_pcd_bind(rxport, &rx_port_pcd_param);
 }
+EXPORT_SYMBOL(dpaa_eth_init_ports);
 
 void dpa_release_sgt(struct qm_sg_entry *sgt)
 {
@@ -1479,7 +1532,7 @@ void dpa_release_sgt(struct qm_sg_entry *sgt)
 			DPA_BUG_ON(sgt[i].extension);
 
 			bmb[j].hi       = sgt[i].addr_hi;
-			bmb[j].lo       = sgt[i].addr_lo;
+			bmb[j].lo       = be32_to_cpu(sgt[i].addr_lo);
 
 			j++; i++;
 		} while (j < ARRAY_SIZE(bmb) &&
@@ -1490,6 +1543,7 @@ void dpa_release_sgt(struct qm_sg_entry *sgt)
 			cpu_relax();
 	} while (!sgt[i-1].final);
 }
+EXPORT_SYMBOL(dpa_release_sgt);
 
 void __attribute__((nonnull))
 dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
@@ -1544,7 +1598,7 @@ void count_ern(struct dpa_percpu_priv_s *percpu_priv,
 		break;
 	}
 }
-
+EXPORT_SYMBOL(count_ern);
 
 /**
  * Turn on HW checksum computation for this outgoing frame.
@@ -1563,8 +1617,8 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	fm_prs_result_t *parse_result;
 	struct iphdr *iph;
 	struct ipv6hdr *ipv6h = NULL;
-	int l4_proto;
-	int ethertype = ntohs(skb->protocol);
+	u8 l4_proto;
+	u16 ethertype = ntohs(skb->protocol);
 	int retval = 0;
 
 	if (skb->ip_summed != CHECKSUM_PARTIAL)
@@ -1593,16 +1647,16 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 	 */
 	switch (ethertype) {
 	case ETH_P_IP:
-		parse_result->l3r = FM_L3_PARSE_RESULT_IPV4;
+		parse_result->l3r = cpu_to_be16(FM_L3_PARSE_RESULT_IPV4);
 		iph = ip_hdr(skb);
 		DPA_BUG_ON(iph == NULL);
-		l4_proto = ntohs(iph->protocol);
+		l4_proto = iph->protocol;
 		break;
 	case ETH_P_IPV6:
-		parse_result->l3r = FM_L3_PARSE_RESULT_IPV6;
+		parse_result->l3r = cpu_to_be16(FM_L3_PARSE_RESULT_IPV6);
 		ipv6h = ipv6_hdr(skb);
 		DPA_BUG_ON(ipv6h == NULL);
-		l4_proto = ntohs(ipv6h->nexthdr);
+		l4_proto = ipv6h->nexthdr;
 		break;
 	default:
 		/* We shouldn't even be here */
@@ -1648,3 +1702,4 @@ int dpa_enable_tx_csum(struct dpa_priv_s *priv,
 return_error:
 	return retval;
 }
+EXPORT_SYMBOL(dpa_enable_tx_csum);

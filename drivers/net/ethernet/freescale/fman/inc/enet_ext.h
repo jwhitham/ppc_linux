@@ -104,6 +104,7 @@ typedef enum e_EnetSpeed
     e_ENET_SPEED_10     = E_ENET_SPEED_10,       /**< 10 Mbps */
     e_ENET_SPEED_100    = E_ENET_SPEED_100,      /**< 100 Mbps */
     e_ENET_SPEED_1000   = E_ENET_SPEED_1000,     /**< 1000 Mbps = 1 Gbps */
+    e_ENET_SPEED_2500   = E_ENET_SPEED_2500,     /**< 2500 Mbps = 2.5 Gbps */
     e_ENET_SPEED_10000  = E_ENET_SPEED_10000     /**< 10000 Mbps = 10 Gbps */
 } e_EnetSpeed;
 
@@ -134,6 +135,7 @@ typedef enum e_EnetMode
     e_ENET_MODE_SGMII_1000        = (e_ENET_IF_SGMII | e_ENET_SPEED_1000),
                                         /**< 1000 Mbps SGMII with auto-negotiation between MAC and
                                              SGMII phy according to Cisco SGMII specification */
+    e_ENET_MODE_SGMII_2500        = (e_ENET_IF_SGMII | e_ENET_SPEED_2500),
     e_ENET_MODE_SGMII_BASEX_10    = (ENET_IF_SGMII_BASEX | e_ENET_IF_SGMII | e_ENET_SPEED_10),
                                         /**< 10 Mbps SGMII with 1000BaseX auto-negotiation between
                                              MAC and SGMII phy or backplane */

@@ -198,7 +198,7 @@ static int gfar_init_bds(struct net_device *ndev)
 	struct gfar_priv_rx_q *rx_queue = NULL;
 	struct txbd8 *txbdp;
 	struct rxbd8 *rxbdp;
-	u32 *rfbptr;
+	u32 __iomem *rfbptr;
 	int i, j;
 
 	for (i = 0; i < priv->num_tx_queues; i++) {
@@ -392,7 +392,7 @@ static void gfar_init_rqprm(struct gfar_private *priv)
 
 static void gfar_rx_buff_size_config(struct gfar_private *priv)
 {
-	int frame_size = priv->ndev->mtu + ETH_HLEN;
+	int frame_size = priv->ndev->mtu + ETH_HLEN + ETH_FCS_LEN;
 
 	/* set this when rx hw offload (TOE) functions are being used */
 	priv->uses_rxfcb = 0;
@@ -601,22 +601,6 @@ static void gfar_ints_enable(struct gfar_private *priv)
 	}
 }
 
-void lock_tx_qs(struct gfar_private *priv)
-{
-	int i;
-
-	for (i = 0; i < priv->num_tx_queues; i++)
-		spin_lock(&priv->tx_queue[i]->txlock);
-}
-
-void unlock_tx_qs(struct gfar_private *priv)
-{
-	int i;
-
-	for (i = 0; i < priv->num_tx_queues; i++)
-		spin_unlock(&priv->tx_queue[i]->txlock);
-}
-
 static int gfar_alloc_tx_queues(struct gfar_private *priv)
 {
 	int i;
@@ -816,7 +800,7 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 	unsigned int num_tx_qs, num_rx_qs;
 	unsigned short mode, poll_mode;
 
-	if (!np || !of_device_is_available(np))
+	if (!np)
 		return -ENODEV;
 
 	if (of_device_is_compatible(np, "fsl,etsec2")) {
@@ -3432,8 +3416,8 @@ static void adjust_link(struct net_device *dev)
 	struct phy_device *phydev = priv->phydev;
 
 	if (unlikely(phydev->link != priv->oldlink ||
-		     phydev->duplex != priv->oldduplex ||
-		     phydev->speed != priv->oldspeed))
+		     (phydev->link && (phydev->duplex != priv->oldduplex ||
+				       phydev->speed != priv->oldspeed))))
 		gfar_update_link_state(priv);
 }
 

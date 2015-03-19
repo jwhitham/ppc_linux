@@ -2556,6 +2556,8 @@ EXPORT_SYMBOL(qman_modify_cgr);
 					QM_CHANNEL_SWPORTAL0))
 #define PORTAL_IDX(n) (n->config->public_cfg.channel - QM_CHANNEL_SWPORTAL0)
 
+static u8 qman_cgr_cpus[__CGR_NUM];
+
 int qman_create_cgr(struct qman_cgr *cgr, u32 flags,
 			struct qm_mcc_initcgr *opts)
 {
@@ -2572,7 +2574,10 @@ int qman_create_cgr(struct qman_cgr *cgr, u32 flags,
 	if (cgr->cgrid >= __CGR_NUM)
 		return -EINVAL;
 
+	preempt_disable();
 	p = get_affine_portal();
+	qman_cgr_cpus[cgr->cgrid] = smp_processor_id();
+	preempt_enable();
 
 	memset(&local_opts, 0, sizeof(struct qm_mcc_initcgr));
 	cgr->chan = p->config->public_cfg.channel;
@@ -2714,6 +2719,47 @@ put_portal:
 	return ret;
 }
 EXPORT_SYMBOL(qman_delete_cgr);
+
+struct cgr_comp {
+	struct qman_cgr *cgr;
+	struct completion completion;
+};
+
+static int qman_delete_cgr_thread(void *p)
+{
+	struct cgr_comp *cgr_comp = (struct cgr_comp *)p;
+	int res;
+
+	res = qman_delete_cgr((struct qman_cgr *)cgr_comp->cgr);
+	complete(&cgr_comp->completion);
+
+	return res;
+}
+
+void qman_delete_cgr_safe(struct qman_cgr *cgr)
+{
+	struct task_struct *thread;
+	struct cgr_comp cgr_comp;
+
+	preempt_disable();
+	if (qman_cgr_cpus[cgr->cgrid] != smp_processor_id()) {
+		init_completion(&cgr_comp.completion);
+		cgr_comp.cgr = cgr;
+		thread = kthread_create(qman_delete_cgr_thread, &cgr_comp,
+					"cgr_del");
+
+		if (likely(!IS_ERR(thread))) {
+			kthread_bind(thread, qman_cgr_cpus[cgr->cgrid]);
+			wake_up_process(thread);
+			wait_for_completion(&cgr_comp.completion);
+			preempt_enable();
+			return;
+		}
+	}
+	qman_delete_cgr(cgr);
+	preempt_enable();
+}
+EXPORT_SYMBOL(qman_delete_cgr_safe);
 
 int qm_get_clock(u64 *clock_hz)
 {

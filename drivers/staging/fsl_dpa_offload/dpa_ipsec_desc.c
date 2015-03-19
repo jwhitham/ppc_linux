@@ -67,23 +67,19 @@ int get_sec_info(struct dpa_ipsec *dpa_ipsec)
 	const u32 *sec_era;
 	int prop_size;
 
-	sec_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v5.3");
-	if (sec_node)
-		dpa_ipsec->sec_ver = SEC_VER_5_3;
-	else {
-		dpa_ipsec->sec_ver = SEC_DEF_VER;
-		sec_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
-		if (!sec_node) {
-			log_err("Can't find device node for SEC! Check device tree!\n");
-			return -ENODEV;
-		}
+	sec_node = of_find_node_with_property(NULL, "fsl,sec-era");
+	if (sec_node) {
+		sec_era = of_get_property(sec_node, "fsl,sec-era", &prop_size);
+		if (sec_era && prop_size == sizeof(*sec_era) && *sec_era > 0)
+			dpa_ipsec->sec_era = *sec_era;
+		of_node_put(sec_node);
 	}
 
-	sec_era = of_get_property(sec_node, "fsl,sec-era", &prop_size);
-	if (sec_era && prop_size == sizeof(*sec_era) && *sec_era > 0)
-		dpa_ipsec->sec_era = *sec_era;
-	else
+	if (dpa_ipsec->sec_era == 0) {
 		dpa_ipsec->sec_era = SEC_DEF_ERA;
+		log_warn("Unable to acquire the SEC era from the device tree. Defaulting to SEC era %d.\n",
+			dpa_ipsec->sec_era);
+	}
 
 	dpa_ipsec->jrdev = get_jrdev(dpa_ipsec);
 	if (!dpa_ipsec->jrdev)

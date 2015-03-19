@@ -67,7 +67,6 @@ shared_tx_error_dqrr(struct qman_portal                *portal,
 static void shared_ern(struct qman_portal	*portal,
 		       struct qman_fq		*fq,
 		       const struct qm_mr_entry	*msg);
-int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
 
 #define DPA_DESCRIPTION "FSL DPAA Shared Ethernet driver"
 
@@ -75,14 +74,10 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
 /* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
-static uint16_t tx_timeout = 1000;
-module_param(tx_timeout, ushort, S_IRUGO);
-MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
+static uint16_t shared_tx_timeout = 1000;
+module_param(shared_tx_timeout, ushort, S_IRUGO);
+MODULE_PARM_DESC(shared_tx_timeout, "The Tx timeout in ms");
 
 static const struct of_device_id dpa_shared_match[];
 
@@ -274,18 +269,19 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 
 	if (fd->format == qm_fd_sg) {
 		if (dpa_bp->vaddr) {
-			sgt = dpa_phys2virt(dpa_bp,
-					    qm_fd_addr(fd)) + dpa_fd_offset(fd);
+			sgt = dpa_phys2virt(dpa_bp, qm_fd_addr(fd)) +
+				dpa_fd_offset(fd);
 
 			for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
+				void *frag_addr = dpa_phys2virt(dpa_bp,
+						qm_sg_addr(&sgt[i]) +
+						be16_to_cpu(sgt[i].offset));
+				u32 frag_length = be32_to_cpu(sgt[i].length);
 				BUG_ON(sgt[i].extension);
 
 				/* copy from sgt[i] */
-				memcpy(skb_put(skb, sgt[i].length),
-					dpa_phys2virt(dpa_bp,
-							qm_sg_addr(&sgt[i]) +
-							sgt[i].offset),
-					sgt[i].length);
+				memcpy(skb_put(skb, frag_length), frag_addr,
+						frag_length);
 				if (sgt[i].final)
 					break;
 			}
@@ -305,12 +301,13 @@ shared_rx_dqrr(struct qman_portal *portal, struct qman_fq *fq,
 							dpa_bp->size));
 
 			for (i = 0; i < DPA_SGT_MAX_ENTRIES; i++) {
+				u32 frag_length = be32_to_cpu(sgt[i].length);
 				BUG_ON(sgt[i].extension);
-
 				copy_from_unmapped_area(
-					skb_put(skb, sgt[i].length),
-					qm_sg_addr(&sgt[i]) + sgt[i].offset,
-					sgt[i].length);
+						skb_put(skb, frag_length),
+						qm_sg_addr(&sgt[i]) +
+						be16_to_cpu(sgt[i].offset),
+						frag_length);
 
 				if (sgt[i].final)
 					break;
@@ -600,7 +597,7 @@ static int dpa_shared_netdev_init(struct device_node *dpa_node,
 	net_dev->hw_features |= (NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 		NETIF_F_LLTX);
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
+	return dpa_netdev_init(net_dev, mac_addr, shared_tx_timeout);
 }
 
 #ifdef CONFIG_PM
@@ -717,7 +714,7 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	priv->net_dev = net_dev;
 	strcpy(priv->if_type, "shared");
 
-	priv->msg_enable = netif_msg_init(debug, -1);
+	priv->msg_enable = netif_msg_init(advanced_debug, -1);
 
 	mac_dev = dpa_mac_probe(_of_dev);
 	if (IS_ERR(mac_dev) || !mac_dev) {
@@ -805,10 +802,10 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 			buf_layout, dev);
 
 	/* Now we need to initialize either a private or shared interface */
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+	priv->percpu_priv = devm_alloc_percpu(dev, *priv->percpu_priv);
 
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
+		dev_err(dev, "devm_alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
@@ -830,8 +827,6 @@ dpaa_eth_shared_probe(struct platform_device *_of_dev)
 	return 0;
 
 netdev_init_failed:
-	if (net_dev)
-		free_percpu(priv->percpu_priv);
 alloc_percpu_failed:
 fq_alloc_failed:
 	if (net_dev) {
@@ -866,7 +861,7 @@ MODULE_DEVICE_TABLE(of, dpa_shared_match);
 
 static struct platform_driver dpa_shared_driver = {
 	.driver = {
-		.name		= KBUILD_MODNAME,
+		.name		= KBUILD_MODNAME "-shared",
 		.of_match_table	= dpa_shared_match,
 		.owner		= THIS_MODULE,
 		.pm		= SHARED_PM_OPS,

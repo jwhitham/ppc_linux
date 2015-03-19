@@ -373,6 +373,7 @@ int dpaa_eth_poll(struct napi_struct *napi, int budget)
 
 	return cleaned;
 }
+EXPORT_SYMBOL(dpaa_eth_poll);
 
 static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 			  const struct dpa_priv_s	*priv,
@@ -718,9 +719,9 @@ void dpa_private_napi_del(struct net_device *net_dev)
 		}
 	}
 }
+EXPORT_SYMBOL(dpa_private_napi_del);
 
-static int dpa_private_netdev_init(struct device_node *dpa_node,
-				struct net_device *net_dev)
+static int dpa_private_netdev_init(struct net_device *net_dev)
 {
 	int i;
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
@@ -755,7 +756,7 @@ static int dpa_private_netdev_init(struct device_node *dpa_node,
 	/* Advertise GRO support */
 	net_dev->features |= NETIF_F_GRO;
 
-	return dpa_netdev_init(dpa_node, net_dev, mac_addr, tx_timeout);
+	return dpa_netdev_init(net_dev, mac_addr, tx_timeout);
 }
 
 static struct dpa_bp * __cold
@@ -769,7 +770,7 @@ dpa_priv_bp_probe(struct device *dev)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	dpa_bp->percpu_count = alloc_percpu(*dpa_bp->percpu_count);
+	dpa_bp->percpu_count = devm_alloc_percpu(dev, *dpa_bp->percpu_count);
 	dpa_bp->target_count = CONFIG_FSL_DPAA_ETH_MAX_BUF_COUNT;
 
 	dpa_bp->seed_cb = dpa_bp_priv_seed;
@@ -1042,10 +1043,10 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	}
 #endif
 
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+	priv->percpu_priv = devm_alloc_percpu(dev, *priv->percpu_priv);
 
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
+		dev_err(dev, "devm_alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
@@ -1060,7 +1061,7 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		goto napi_add_failed;
 
-	err = dpa_private_netdev_init(dpa_node, net_dev);
+	err = dpa_private_netdev_init(net_dev);
 
 	if (err < 0)
 		goto netdev_init_failed;
@@ -1078,25 +1079,23 @@ dpaa_eth_priv_probe(struct platform_device *_of_dev)
 netdev_init_failed:
 napi_add_failed:
 	dpa_private_napi_del(net_dev);
-	free_percpu(priv->percpu_priv);
+alloc_percpu_failed:
 #ifdef CONFIG_FMAN_PFC
 pfc_mapping_failed:
 #endif
-alloc_percpu_failed:
 	dpa_fq_free(dev, &priv->dpa_fq_list);
 fq_alloc_failed:
+	qman_delete_cgr_safe(&priv->ingress_cgr);
 	qman_release_cgrid(priv->ingress_cgr.cgrid);
-	qman_delete_cgr(&priv->ingress_cgr);
 rx_cgr_init_failed:
+	qman_delete_cgr_safe(&priv->cgr_data.cgr);
 	qman_release_cgrid(priv->cgr_data.cgr.cgrid);
-	qman_delete_cgr(&priv->cgr_data.cgr);
 tx_cgr_init_failed:
 add_channel_failed:
 get_channel_failed:
 	dpa_bp_free(priv, priv->dpa_bp);
 bp_create_failed:
 fq_probe_failed:
-	devm_kfree(dev, buf_layout);
 alloc_failed:
 mac_probe_failed:
 	dev_set_drvdata(dev, NULL);
@@ -1133,6 +1132,10 @@ static int __init __cold dpa_load(void)
 
 	pr_info(DPA_DESCRIPTION " (" VERSION ")\n");
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_debugfs_module_init();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
@@ -1162,6 +1165,15 @@ static void __exit __cold dpa_unload(void)
 		KBUILD_BASENAME".c", __func__);
 
 	platform_driver_unregister(&dpa_driver);
+
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_debugfs_module_exit();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+
+	/* Only one channel is used and needs to be relased after all
+	 * interfaces are removed
+	 */
+	dpa_release_channel();
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);

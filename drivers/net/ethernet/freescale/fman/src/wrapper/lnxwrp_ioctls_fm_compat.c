@@ -849,18 +849,20 @@ void compat_copy_fm_port_vsp_alloc_params(
 }
 #endif /* (DPAA_VERSION >= 11) */
 
-void compat_copy_fm_pcd_cc_tbl_get_miss(
-        ioc_compat_fm_pcd_cc_tbl_get_miss_params_t *compat_param,
-        ioc_fm_pcd_cc_tbl_get_miss_params_t *param,
+void compat_copy_fm_pcd_cc_tbl_get_stats(
+        ioc_compat_fm_pcd_cc_tbl_get_stats_t *compat_param,
+        ioc_fm_pcd_cc_tbl_get_stats_t *param,
         uint8_t compat)
 {
     if (compat == COMPAT_US_TO_K)
     {
         param->id = compat_pcd_id2ptr(compat_param->id);
-        memcpy(&param->miss_statistics, &compat_param->miss_statistics, sizeof(ioc_fm_pcd_cc_key_statistics_t));
+	param->key_index = compat_param->key_index;
+        memcpy(&param->statistics, &compat_param->statistics, sizeof(ioc_fm_pcd_cc_key_statistics_t));
     } else {
         compat_param->id = compat_add_ptr2id(param->id, FM_MAP_TYPE_PCD_NODE);
-        memcpy(&compat_param->miss_statistics, &param->miss_statistics, sizeof(ioc_fm_pcd_cc_key_statistics_t));
+	compat_param->key_index = param->key_index;
+        memcpy(&compat_param->statistics, &param->statistics, sizeof(ioc_fm_pcd_cc_key_statistics_t));
     }
 }
 

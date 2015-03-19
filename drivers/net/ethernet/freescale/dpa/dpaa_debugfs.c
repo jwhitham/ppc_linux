@@ -32,7 +32,6 @@
 #include <linux/module.h>
 #include <linux/fsl_qman.h>	/* struct qm_mcr_querycgr */
 #include <linux/debugfs.h>
-#include <asm/debug.h>
 #include "dpaa_debugfs.h"
 #include "dpaa_eth.h" /* struct dpa_priv_s, dpa_percpu_priv_s, dpa_bp */
 
@@ -308,6 +307,8 @@ static int __cold dpa_debugfs_open(struct inode *inode, struct file *file)
 int dpa_netdev_debugfs_create(struct net_device *net_dev)
 {
 	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	static int cnt;
+	char debugfs_file_name[100];
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP
 	char loop_file_name[100];
 #endif
@@ -319,30 +320,29 @@ int dpa_netdev_debugfs_create(struct net_device *net_dev)
 		return -ENOMEM;
 	}
 
-	priv->debugfs_file = debugfs_create_file(net_dev->name,
+	snprintf(debugfs_file_name, 100, "eth%d", ++cnt);
+	priv->debugfs_file = debugfs_create_file(debugfs_file_name,
 							 S_IRUGO,
 							 dpa_debugfs_root,
 							 net_dev,
 							 &dpa_debugfs_fops);
 	if (unlikely(priv->debugfs_file == NULL)) {
-		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s)",
-				powerpc_debugfs_root->d_iname,
+		netdev_err(net_dev, "debugfs_create_file(%s/%s)",
 				dpa_debugfs_root->d_iname,
-				net_dev->name);
+				debugfs_file_name);
 
 		return -ENOMEM;
 	}
 
 #ifdef CONFIG_FSL_DPAA_DBG_LOOP
-	sprintf(loop_file_name, "%s_loop", net_dev->name);
+	sprintf(loop_file_name, "eth%d_loop", cnt);
 	priv->debugfs_loop_file = debugfs_create_file(loop_file_name,
 							 S_IRUGO,
 							 dpa_debugfs_root,
 							 net_dev,
 							 &dpa_debugfs_lp_fops);
 	if (unlikely(priv->debugfs_loop_file == NULL)) {
-		netdev_err(net_dev, "debugfs_create_file(%s/%s/%s)",
-				powerpc_debugfs_root->d_iname,
+		netdev_err(net_dev, "debugfs_create_file(%s/%s)",
 				dpa_debugfs_root->d_iname,
 				loop_file_name);
 
@@ -362,30 +362,26 @@ void dpa_netdev_debugfs_remove(struct net_device *net_dev)
 #endif
 }
 
-static int __init dpa_debugfs_module_init(void)
+int __init dpa_debugfs_module_init(void)
 {
 	int	 _errno = 0;
 
 	pr_info(KBUILD_MODNAME ": " DPA_DEBUGFS_DESCRIPTION " (" VERSION ")\n");
 
-	dpa_debugfs_root = debugfs_create_dir(DPA_ETH_DEBUGFS_ROOT,
-					      powerpc_debugfs_root);
+	dpa_debugfs_root = debugfs_create_dir(DPA_ETH_DEBUGFS_ROOT, NULL);
+
 	if (unlikely(dpa_debugfs_root == NULL)) {
 		_errno = -ENOMEM;
 		pr_err(KBUILD_MODNAME ": %s:%hu:%s():\n",
 				   KBUILD_BASENAME".c", __LINE__, __func__);
 		pr_err("\tdebugfs_create_dir(%s/"KBUILD_MODNAME") = %d\n",
-			   powerpc_debugfs_root->d_iname, _errno);
+			   DPA_ETH_DEBUGFS_ROOT, _errno);
 	}
 
 	return _errno;
 }
 
-static void __exit dpa_debugfs_module_exit(void)
+void __exit dpa_debugfs_module_exit(void)
 {
 	debugfs_remove(dpa_debugfs_root);
 }
-
-module_init(dpa_debugfs_module_init);
-module_exit(dpa_debugfs_module_exit);
-MODULE_LICENSE("Dual BSD/GPL");

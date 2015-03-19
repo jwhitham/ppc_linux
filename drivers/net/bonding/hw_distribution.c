@@ -259,7 +259,7 @@ ssize_t bonding_show_oh_enable(struct device *d,
 		struct device_attribute *attr, char *buf)
 {
 
-	int res = 0;
+	int res = 0, ret;
 	struct bonding *bond = to_bond(d);
 	uint16_t channel;
 	unsigned long fman_dcpid, oh_offset, cell_index;
@@ -280,9 +280,10 @@ ssize_t bonding_show_oh_enable(struct device *d,
 	if (res)
 		buf[res-1] = '\n'; /* eat the leftover space */
 
-	if ((bond->params.ohp->oh_en) &&
-		(!export_oh_port_info_to_ceetm(bond, &channel,
-			&fman_dcpid, &oh_offset, &cell_index)))
+	ret = export_oh_port_info_to_ceetm(bond, &channel, &fman_dcpid,
+			&oh_offset, &cell_index);
+
+	if (!ret && bond->params.ohp->oh_en)
 		hw_lag_dbg("offline port channel:%d\n", channel);
 
 	return res;
@@ -336,27 +337,29 @@ ssize_t bonding_store_oh_enable(struct device *d,
  */
 static bool is_dpa_eth_port(struct net_device *netdev)
 {
+	int ret;
 	struct device *dev = (struct device *) &(netdev->dev);
 
-	if ((strlen(dev_driver_string(dev->parent)) >= 7) &&
-		strncmp(dev_driver_string(dev->parent), "fsl_dpa", 7) == 0)
-		return true;
-	else
-		return false;
+	if (strlen(dev_driver_string(dev->parent)) >= 7) {
+		ret = strncmp(dev_driver_string(dev->parent), "fsl_dpa", 7);
+		return ret ? false : true;
+	}
+
+	return false;
 }
 
 bool are_all_slaves_linkup(struct bonding *bond)
 {
-	struct slave *slave;
+	struct slave *s;
 
-	read_lock(&bond->lock);
-	bond_for_each_slave(bond, slave)
-		if (!(SLAVE_IS_OK(slave))) {
-			read_unlock(&bond->lock);
+	bond_for_each_slave(bond, s) {
+		hw_lag_dbg("This slave:%s link status is up:%s\n",
+			   s->dev->name, IS_UP(s->dev) ? "true" : "false");
+
+		if (!(IS_UP(s->dev)))
 			return false;
-		}
+	}
 
-	read_unlock(&bond->lock);
 	return true;
 }
 
@@ -514,7 +517,7 @@ struct sk_buff *oh_cleanup_tx_fd(const struct qm_fd *fd)
 	dma_unmap_single(dpa_bp->dev, addr, dpa_bp->size, dma_dir);
 
 	/* retrieve skb back pointer */
-	DPA_READ_SKB_PTR(skb, skbh, phys_to_virt(addr), 0);
+	DPA_READ_SKB_PTR(skb, skbh, phys_to_virt((unsigned long)addr), 0);
 	nr_frags = skb_shinfo(skb)->nr_frags;
 
 	if (fd->format == qm_fd_sg) {
@@ -549,7 +552,7 @@ static void dump_parser_result(const struct qm_fd *fd)
 	void *vaddr;
 	const fm_prs_result_t *parse_results;
 
-	vaddr = phys_to_virt(addr);
+	vaddr = phys_to_virt((unsigned long)addr);
 	DPA_BUG_ON(!IS_ALIGNED((unsigned long)vaddr, SMP_CACHE_BYTES));
 
 	parse_results = (const fm_prs_result_t *)(vaddr +
@@ -582,7 +585,8 @@ static void show_dbg_info(const struct qm_fd *fd, const char *func_name,
 		struct sk_buff *skb)
 {
 #ifdef CONFIG_HW_LAG_DEBUG
-	u32 pad, fd_status;
+	u32 fd_status;
+	unsigned long pad;
 	dma_addr_t addr;
 	struct ethhdr *eth;
 	struct iphdr  *iph;
@@ -596,7 +600,7 @@ static void show_dbg_info(const struct qm_fd *fd, const char *func_name,
 
 	/* find out the pad */
 	skb_addr = virt_to_phys(skb->head);
-	pad = addr - skb_addr;
+	pad = (unsigned long)addr - skb_addr;
 
 	/* The skb is currently pointed at head + headroom. The packet
 	 * starts at skb->head + pad + fd offset.
@@ -754,7 +758,7 @@ oh_ingress_tx_default_dqrr(struct qman_portal		*portal,
 	netdev = ((struct dpa_fq *)fq)->net_dev;
 	if (!netdev) {
 		pr_err("error netdev == NULL.\n");
-		skbh = (struct sk_buff **)phys_to_virt(addr);
+		skbh = (struct sk_buff **)phys_to_virt((unsigned long)addr);
 		dev_kfree_skb(*skbh);
 		return qman_cb_dqrr_consume;
 	}
@@ -791,7 +795,7 @@ oh_ingress_tx_default_dqrr(struct qman_portal		*portal,
 
 	/* find out the pad */
 	skb_addr = virt_to_phys(skb->head);
-	pad = addr - skb_addr;
+	pad = (u32)(addr - skb_addr);
 
 	countptr = __this_cpu_ptr(bp->percpu_count);
 	(*countptr)--;
@@ -954,12 +958,12 @@ static const struct qman_fq oh_egress_ernq = {
 	.cb = { .ern = lag_public_egress_ern}
 };
 
-static int oh_add_channel(void *__arg)
+static int op_add_channel(void *__arg)
 {
 	int cpu;
 	struct qman_portal *portal;
 	const cpumask_t *cpus = qman_affine_cpus();
-	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u32)(unsigned long)__arg);
+	u32 pool = QM_SDQCR_CHANNELS_POOL_CONV((u16)(unsigned long)__arg);
 
 	for_each_cpu(cpu, cpus) {
 		portal = (struct qman_portal *)qman_get_affine_portal(cpu);
@@ -969,18 +973,10 @@ static int oh_add_channel(void *__arg)
 	return 0;
 }
 
-static int init_oh_errq_defq(struct device *dev,
-		uint32_t fqid_err, uint32_t fqid_def,
-		struct dpa_fq **oh_errq, struct dpa_fq **oh_defq,
-		uint16_t *priv_channel)
+static int op_alloc_pool_channel(uint16_t *priv_channel)
 {
 	int errno;
-	struct dpa_fq *errq, *defq;
-	/* These two vaules come from DPA-Eth driver */
-	uint8_t wq_errq = 2, wq_defq = 1;
 	u32 channel;
-	struct qm_mcc_initfq initfq;
-	struct qm_fqd fqd;
 	struct task_struct *kth;
 
 	/* Get a channel */
@@ -990,22 +986,32 @@ static int init_oh_errq_defq(struct device *dev,
 		return errno;
 	}
 
-	if (channel < 0) {
-		errno = channel;
-		pr_err("error on dpa_get_channel().\n");
-		return errno;
-	}
-
 	/* Start a thread that will walk the cpus with affine portals
 	 * and add this pool channel to each's dequeue mask.
 	 */
 
-	kth = kthread_run(oh_add_channel, (void *)(unsigned long)channel,
-			  "oh_add_channel");
+	kth = kthread_run(op_add_channel, (void *)(unsigned long)channel,
+			  "op_add_channel");
 	if (!kth) {
 		pr_warn("run kthread faild...\n");
 		return -ENOMEM;
 	}
+
+	*priv_channel = (uint16_t)channel;
+
+	return 0;
+}
+
+static int init_oh_errq_defq(struct device *dev,
+		uint32_t fqid_err, uint32_t fqid_def,
+		struct dpa_fq **oh_errq, struct dpa_fq **oh_defq,
+		uint16_t channel)
+{
+	int errno;
+	struct dpa_fq *errq, *defq;
+	/* These two vaules come from DPA-Eth driver */
+	uint8_t wq_errq = 2, wq_defq = 1;
+	struct qm_mcc_initfq initfq;
 
 	/* Allocate memories for Tx ErrQ and Tx DefQ of oh port */
 	errq = devm_kzalloc(dev, sizeof(struct dpa_fq), GFP_KERNEL);
@@ -1038,7 +1044,6 @@ static int init_oh_errq_defq(struct device *dev,
 		return errno;
 	}
 
-	*priv_channel = (uint16_t)channel;
 	/* Set the FQs init options then init the FQs */
 	initfq.we_mask = QM_INITFQ_WE_DESTWQ;
 	initfq.fqd.dest.channel = (uint16_t)channel;
@@ -1061,20 +1066,6 @@ static int init_oh_errq_defq(struct device *dev,
 		qman_destroy_fq(&errq->fq_base, 0);
 		devm_kfree(dev, errq);
 		return errno;
-	}
-
-	errno = qman_query_fq(&errq->fq_base, &fqd);
-	hw_lag_dbg("errno of qman_query_fq:0x%08x\n", errno);
-	if (fqd.fq_ctrl != initfq.fqd.fq_ctrl) {
-		pr_err("queried fq_ctrl=%x, should be=%x\n", fqd.fq_ctrl,
-			initfq.fqd.fq_ctrl);
-		panic("fail");
-	}
-	if (memcmp(&fqd.td, &initfq.fqd.td, sizeof(fqd.td))) {
-		pr_err("queried td_thresh=%x:%x, should be=%x:%x\n",
-			fqd.td.exp, fqd.td.mant,
-			initfq.fqd.td.exp, initfq.fqd.td.mant);
-		panic("fail");
 	}
 
 	/* init oh ports default fq */
@@ -1435,8 +1426,8 @@ int get_oh_info(void)
 				return -EINVAL;
 			}
 
-			hw_lag_dbg("Found port id %ud, in node %s\n",
-					*p_port_id, dpa_oh_node->full_name);
+			hw_lag_dbg("Found port id %u, in node %s\n",
+				   *p_port_id, dpa_oh_node->full_name);
 			BUG_ON(lenp % sizeof(*p_port_id));
 
 			/* Read channel id for the queues */
@@ -1455,7 +1446,7 @@ int get_oh_info(void)
 			BUG_ON(!oh_of_dev);
 			oh_dev = &oh_of_dev->dev;
 			of_dev = of_find_device_by_node(dpa_oh_node);
-			BUG_ON(!oh_of_dev);
+			BUG_ON(!of_dev);
 			dpa_oh_dev = &of_dev->dev;
 			poh[i].of_dev = of_dev;
 			poh[i].oh_of_dev = oh_of_dev;
@@ -1466,7 +1457,7 @@ int get_oh_info(void)
 			poh[i].cell_index = *p_port_id;
 			poh[i].oh_config = dev_get_drvdata(dpa_oh_dev);
 			poh[i].p_oh_port_handle = p_oh_port_handle;
-			poh[i].oh_channel_id = *p_channel_id;
+			poh[i].oh_channel_id = (uint16_t)*p_channel_id;
 			oh_port = poh[i].oh_config->oh_port;
 			fm_port_get_buff_layout_ext_params(oh_port, &params);
 			poh[i].bpid = params.pool_param[0].id;
@@ -1487,12 +1478,23 @@ int get_oh_info(void)
 				return -EINVAL;
 			}
 
+			if (!poh[i].p_oh_rcv_channel) {
+				uint16_t ch;
+				errno = op_alloc_pool_channel(&ch);
+				if (errno) {
+					pr_err("Get pool channel error.\n");
+					return errno;
+				} else {
+					poh[i].p_oh_rcv_channel = ch;
+				}
+			}
+
 			errno = init_oh_errq_defq(poh[i].dpa_oh_dev,
 					poh[i].oh_config->error_fqid,
 					poh[i].oh_config->default_fqid,
 					&poh[i].oh_errq,
 					&poh[i].oh_defq,
-					&poh[i].p_oh_rcv_channel);
+					poh[i].p_oh_rcv_channel);
 			if (errno != BOND_OH_SUCCESS) {
 				pr_err("error when probe errq or defq.\n");
 				return errno;
@@ -1575,77 +1577,41 @@ int get_dcp_id_from_dpa_eth_port(struct net_device *netdev)
  * Get all information of the offline port which is being used
  * by a bundle, such as fman_dcpid, offline port offset, cell index,
  * offline port channel. This API is required by CEETM Qos.
- * Regarding fman dpcid, till sdk1.6, there is one fman in p1023, the
- * offset is 0x1000000, for other dpaa socs, the offset of fman0 is
- * 0x400000, the offset of fman1 is 0x500000, hence for current socs,
- * the offset of fman0 <=0x4000000, 0x400000 < fman1 <=0x500000.
- * return BOND_OH_SUCCESS when got all information, otherwise return
- * Non-Zero.
  */
-#define FMAN0_MAX_OFFSET 0x400000
-#define FMAN1_MAX_OFFSET 0x500000
 int export_oh_port_info_to_ceetm(struct bonding *bond, uint16_t *channel,
 		unsigned long *fman_dcpid, unsigned long *oh_offset,
 		unsigned long *cell_index)
 {
-	/**
-	 * split str: "/soc@ffe000000/fman@400000/port@84000", then get
-	 * the fman@ part and port@ part from them. regex is good enough
-	 * as below:
-	 * ret = sscanf((char *) p, "%*[^@]@%*[^@]@%[^/]/port@%s", s1, s2);
-	 * but the kernel version does not support the method.
-	 */
-	int errno;
-	char s1[16] = {0}, s2[16] = {0};
-	char *p, *p1;
+	struct oh_port_priv *p = bond->params.ohp;
+	char tmp[] = "cell-index";
 
-	if (!bond->params.ohp) {
+	if (!p) {
 		pr_err("The bundle has not binded an offline port.\n");
-		return 1;
+		return BOND_OH_ERROR;
 	}
 
-	if (!bond->params.ohp->oh_en) {
+	if (!p->oh_en) {
 		pr_err("The offline is disabled, to enable it, use sysfs.\n");
-		return 2;
+		return BOND_OH_ERROR;
 	}
 
-	if (!bond->params.ohp->oh_node) {
+	if (!p->oh_node) {
 		pr_err("The offline node error.\n");
-		return 3;
+		return BOND_OH_ERROR;
 	}
 
-	p = strstr(bond->params.ohp->oh_node->full_name, "fman@");
-	p += strlen("fman@");
-	p1 = strstr(p, "/port@");
-
-	memcpy(s1, p, p1 - p);
-
-	p = strstr(p, "/port@");
-	p += strlen("/port@");
-
-	errno = sscanf((const char *) p, "%s", s2);
-	if (errno != 1) {
-		pr_err("parser error while process offline port node\n");
-		return 4;
+	if (of_property_read_u32(p->oh_node, "reg", (u32 *)oh_offset)) {
+		pr_err("Errors on getting offline port offset.\n");
+		return BOND_OH_ERROR;
 	}
 
-	errno = kstrtoul(s1, 16, fman_dcpid) | kstrtoul(s2, 16, oh_offset);
-	if (errno) {
-		pr_err("error on kstrtoul fman_dcpid, of_offset\n");
-		return 5;
-	}
-	if (*fman_dcpid <= FMAN0_MAX_OFFSET) {
-		*fman_dcpid = 0;
-	} else if ((*fman_dcpid > FMAN0_MAX_OFFSET) &&
-			(*fman_dcpid <= FMAN1_MAX_OFFSET)) {
-		*fman_dcpid = 1;
-	} else {
-		pr_err("error on calculating fman dcpid, new soc appears.\n");
-		return 6;
+	if (of_property_read_u32(p->oh_node->parent, tmp, (u32 *)fman_dcpid)) {
+		pr_err("Errors on getting fman_dcpid.\n");
+		return BOND_OH_ERROR;
 	}
 
-	*channel = bond->params.ohp->oh_channel_id;
-	*cell_index = bond->params.ohp->cell_index;
+	*channel = (uint16_t)p->oh_channel_id;
+	*cell_index = p->cell_index;
 
 	hw_lag_dbg("This oh port mapped to bond has channel:0x%0x\n", *channel);
 	hw_lag_dbg("fman_dcpid:0x%0lx, oh_offset:0x%0lx, cell-index:%0lx\n",
@@ -1843,8 +1809,8 @@ int oh_tx_csum_enable(struct sk_buff *skb,
 			   parse_result->l3r, parse_result->l4r);
 
 		/* At index 0 is IPOffset_1 as defined in the Parse Results */
-		parse_result->ip_off[0] = skb_network_offset(skb);
-		parse_result->l4_off = skb_transport_offset(skb);
+		parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
+		parse_result->l4_off = (uint8_t)skb_transport_offset(skb);
 
 		/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
 		fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DTC;
@@ -1940,8 +1906,8 @@ return_error:
 			   parse_result->l3r, parse_result->l4r);
 
 		/* At index 0 is IPOffset_1 as defined in the Parse Results */
-		parse_result->ip_off[0] = skb_network_offset(skb);
-		parse_result->l4_off = skb_transport_offset(skb);
+		parse_result->ip_off[0] = (uint8_t)skb_network_offset(skb);
+		parse_result->l4_off = (uint8_t)skb_transport_offset(skb);
 
 		/* Enable L3 (and L4, if TCP or UDP) HW checksum. */
 		fd->cmd |= FM_FD_CMD_RPD | FM_FD_CMD_DCL4C;
@@ -2033,7 +1999,7 @@ int __hot dpa_oh_tx(struct sk_buff *skb, struct bonding *bond,
 	fd.format = qm_fd_contig;
 	fd.length20 = skb->len;
 	fd.offset = priv->tx_headroom;
-	fd.addr_hi = upper_32_bits(addr);
+	fd.addr_hi = (u8)upper_32_bits(addr);
 	fd.addr_lo = lower_32_bits(addr);
 	/* fd.cmd |= FM_FD_CMD_FCO; */
 	fd.bpid = bp->bpid;
@@ -2113,7 +2079,8 @@ static int get_dpa_slave_info(struct slave *slave, uint16_t *tx_channel)
 	if (!is_dpa_eth_port(slave->dev) || !(priv->mac_dev))
 		return BOND_OH_ERROR;
 
-	*tx_channel = fm_get_tx_port_channel(priv->mac_dev->port_dev[TX]);
+	*tx_channel = (uint16_t)fm_get_tx_port_channel(
+				priv->mac_dev->port_dev[TX]);
 
 	return BOND_OH_SUCCESS;
 }
@@ -2126,7 +2093,8 @@ int get_dpa_slave_info_ex(struct slave *slave, uint16_t *tx_channel,
 	if (!is_dpa_eth_port(slave->dev) || !(priv->mac_dev))
 		return BOND_OH_ERROR;
 
-	*tx_channel	= fm_get_tx_port_channel(priv->mac_dev->port_dev[TX]);
+	*tx_channel	= (uint16_t)fm_get_tx_port_channel(
+				    priv->mac_dev->port_dev[TX]);
 	*egress_fq	= priv->egress_fqs[0];
 	*first_fqid	= priv->egress_fqs[0]->fqid;
 

@@ -233,6 +233,7 @@ void dpaa_eth_sysfs_init(struct device *dev)
 			return;
 		}
 }
+EXPORT_SYMBOL(dpaa_eth_sysfs_init);
 
 void dpaa_eth_sysfs_remove(struct device *dev)
 {

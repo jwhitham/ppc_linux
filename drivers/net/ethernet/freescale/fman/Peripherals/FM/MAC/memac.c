@@ -93,6 +93,8 @@ static void SetupSgmiiInternalPhy(t_Memac *p_Memac, uint8_t phyAddr)
 
     /* SGMII mode + AN enable */
     tmpReg16 = PHY_SGMII_IF_MODE_AN | PHY_SGMII_IF_MODE_SGMII;
+    if ((p_Memac->enetMode) == e_ENET_MODE_SGMII_2500)
+        tmpReg16 = PHY_SGMII_CR_PHY_RESET | PHY_SGMII_IF_MODE_SGMII;
     MEMAC_MII_WritePhyReg(p_Memac, phyAddr, 0x14, tmpReg16);
 
     /* Device ability according to SGMII specification */
@@ -693,6 +695,21 @@ static t_Error MemacDelExactMatchMacAddress(t_Handle h_Memac, t_EnetAddr *p_EthA
 
 /* ......................................................................... */
 
+static t_Error MemacGetId(t_Handle h_Memac, uint32_t *macId)
+{
+    t_Memac     *p_Memac = (t_Memac *)h_Memac;
+
+    SANITY_CHECK_RETURN_ERROR(p_Memac, E_INVALID_HANDLE);
+    SANITY_CHECK_RETURN_ERROR(!p_Memac->p_MemacDriverParam, E_INVALID_STATE);
+
+    *macId = p_Memac->macId;
+
+    return E_OK;
+}
+
+/* ......................................................................... */
+
+
 static t_Error MemacAddHashMacAddress(t_Handle h_Memac, t_EnetAddr *p_EthAddr)
 {
     t_Memac             *p_Memac = (t_Memac *)h_Memac;
@@ -1059,7 +1076,7 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
     p_FmMacControllerDriver->f_FM_MAC_RemoveHashMacAddr         = MemacDelHashMacAddress;
     p_FmMacControllerDriver->f_FM_MAC_AddExactMatchMacAddr      = MemacAddExactMatchMacAddress;
     p_FmMacControllerDriver->f_FM_MAC_RemovelExactMatchMacAddr  = MemacDelExactMatchMacAddress;
-    p_FmMacControllerDriver->f_FM_MAC_GetId                     = NULL;
+    p_FmMacControllerDriver->f_FM_MAC_GetId                     = MemacGetId;
     p_FmMacControllerDriver->f_FM_MAC_GetVersion                = NULL;
     p_FmMacControllerDriver->f_FM_MAC_GetMaxFrameLength         = MemacGetMaxFrameLength;
 

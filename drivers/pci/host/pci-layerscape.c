@@ -101,8 +101,13 @@ static irqreturn_t ls_pcie_msi_irq_handler(int irq, void *data)
 		dev_err(pcie->dev, "unexpected MSI\n");
 		return IRQ_NONE;
 	}
-
+#if defined(CONFIG_PREEMPT_RT_FULL) || defined(CONFIG_PREEMPT_RTB)
+	local_irq_disable();
+#endif
 	generic_handle_irq(msi_irq);
+#if defined(CONFIG_PREEMPT_RT_FULL) || defined(CONFIG_PREEMPT_RTB)
+	local_irq_enable();
+#endif
 	return IRQ_HANDLED;
 }
 

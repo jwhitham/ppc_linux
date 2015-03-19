@@ -156,11 +156,13 @@ int fm_get_max_frm()
 {
 	return fsl_fm_max_frm;
 }
+EXPORT_SYMBOL(fm_get_max_frm);
 
 int fm_get_rx_extra_headroom()
 {
 	return ALIGN(fsl_fm_rx_extra_headroom, 16);
 }
+EXPORT_SYMBOL(fm_get_rx_extra_headroom);
 
 static int __init fm_set_max_frm(char *str)
 {

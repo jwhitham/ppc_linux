@@ -37,5 +37,7 @@
 
 int dpa_netdev_debugfs_create(struct net_device *net_dev);
 void dpa_netdev_debugfs_remove(struct net_device *net_dev);
+int __init dpa_debugfs_module_init(void);
+void __exit dpa_debugfs_module_exit(void);
 
 #endif /* DPAA_DEBUGFS_H_ */

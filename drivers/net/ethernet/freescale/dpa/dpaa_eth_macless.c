@@ -65,18 +65,10 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 MODULE_DESCRIPTION(DPA_DESCRIPTION);
 
-static uint8_t debug = -1;
-module_param(debug, byte, S_IRUGO);
-MODULE_PARM_DESC(debug, "Module/Driver verbosity level");
-
 /* This has to work in tandem with the DPA_CS_THRESHOLD_xxx values. */
-static uint16_t tx_timeout = 1000;
-module_param(tx_timeout, ushort, S_IRUGO);
-MODULE_PARM_DESC(tx_timeout, "The Tx timeout in ms");
-
-/* reused from the shared driver */
-extern const struct dpa_fq_cbs_t shared_fq_cbs;
-int __hot dpa_shared_tx(struct sk_buff *skb, struct net_device *net_dev);
+static uint16_t macless_tx_timeout = 1000;
+module_param(macless_tx_timeout, ushort, S_IRUGO);
+MODULE_PARM_DESC(macless_tx_timeout, "The MACless Tx timeout in ms");
 
 /* forward declarations */
 static int __cold dpa_macless_start(struct net_device *net_dev);
@@ -88,8 +80,6 @@ static void __cold dpa_macless_set_rx_mode(struct net_device *net_dev);
 static int dpaa_eth_macless_probe(struct platform_device *_of_dev);
 static netdev_features_t
 dpa_macless_fix_features(struct net_device *dev, netdev_features_t features);
-static int dpa_macless_netdev_init(struct device_node *dpa_node,
-				struct net_device *net_dev);
 
 static const struct net_device_ops dpa_macless_ops = {
 	.ndo_open = dpa_macless_start,
@@ -119,7 +109,7 @@ MODULE_DEVICE_TABLE(of, dpa_macless_match);
 
 static struct platform_driver dpa_macless_driver = {
 	.driver = {
-		.name		= KBUILD_MODNAME,
+		.name		= KBUILD_MODNAME "-macless",
 		.of_match_table	= dpa_macless_match,
 		.owner		= THIS_MODULE,
 	},
@@ -227,8 +217,8 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 		net_dev->mem_start = mac_dev->res->start;
 		net_dev->mem_end = mac_dev->res->end;
 
-		return dpa_netdev_init(dpa_node, net_dev, mac_dev->addr,
-				tx_timeout);
+		return dpa_netdev_init(net_dev, mac_dev->addr,
+				macless_tx_timeout);
 	} else {
 		/* Get the MAC address from device tree */
 		mac_addr = of_get_mac_address(dpa_node);
@@ -239,8 +229,8 @@ static int dpa_macless_netdev_init(struct device_node *dpa_node,
 			return -EINVAL;
 		}
 
-		return dpa_netdev_init(dpa_node, net_dev, mac_addr,
-				tx_timeout);
+		return dpa_netdev_init(net_dev, mac_addr,
+				macless_tx_timeout);
 	}
 }
 
@@ -273,7 +263,8 @@ static int dpa_fq_probe_macless(struct device *dev, struct list_head *list,
 	return 0;
 }
 
-struct proxy_device *dpa_macless_proxy_probe(struct platform_device *_of_dev)
+	static struct proxy_device *
+dpa_macless_proxy_probe(struct platform_device *_of_dev)
 {
 	struct device		*dev;
 	const phandle		*proxy_prop;
@@ -358,7 +349,7 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	priv->net_dev = net_dev;
 	sprintf(priv->if_type, "macless%d", macless_idx++);
 
-	priv->msg_enable = netif_msg_init(debug, -1);
+	priv->msg_enable = netif_msg_init(advanced_debug, -1);
 
 	priv->peer = NULL;
 	priv->mac_dev = NULL;
@@ -432,10 +423,10 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 
 	priv->tx_headroom = DPA_DEFAULT_TX_HEADROOM;
 
-	priv->percpu_priv = alloc_percpu(*priv->percpu_priv);
+	priv->percpu_priv = devm_alloc_percpu(dev, *priv->percpu_priv);
 
 	if (priv->percpu_priv == NULL) {
-		dev_err(dev, "alloc_percpu() failed\n");
+		dev_err(dev, "devm_alloc_percpu() failed\n");
 		err = -ENOMEM;
 		goto alloc_percpu_failed;
 	}
@@ -456,8 +447,6 @@ static int dpaa_eth_macless_probe(struct platform_device *_of_dev)
 	return 0;
 
 netdev_init_failed:
-	if (net_dev)
-		free_percpu(priv->percpu_priv);
 alloc_percpu_failed:
 fq_alloc_failed:
 	if (net_dev)
@@ -497,10 +486,7 @@ static int __init __cold dpa_macless_load(void)
 
 	return _errno;
 }
-/* waits for proxy to initialize first, in case MAC device reference
- * is needed
- */
-late_initcall(dpa_macless_load);
+module_init(dpa_macless_load);
 
 static void __exit __cold dpa_macless_unload(void)
 {

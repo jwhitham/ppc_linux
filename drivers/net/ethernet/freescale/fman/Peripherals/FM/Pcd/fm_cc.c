@@ -3572,6 +3572,9 @@ static t_Error UpdatePtrWhichPointOnCrntMdfNode(
 
         ccNodeInfo.h_CcNode = h_NewAd;
         EnqueueNodeInfoToRelevantLst(h_NewLst, &ccNodeInfo, NULL);
+
+        if (p_NextEngineParams->h_Manip)
+            FmPcdManipUpdateOwner(p_NextEngineParams->h_Manip, FALSE);
     }
     return E_OK;
 }
