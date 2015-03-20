@@ -138,6 +138,10 @@
 #define TCON_CTRL1			0x00
 #define TCON_BYPASS_ENABLE		BIT(29)
 
+#define SCFG_PIXCLKCR			0x28
+#define PXCKEN				BIT(31)
+#define PXCK_DISABLE			0
+
 #define MFB_SET_ALPHA		_IOW('M', 0, __u8)
 #define MFB_GET_ALPHA		_IOR('M', 0, __u8)
 #define MFB_SET_LAYER		_IOW('M', 4, struct layer_display_offset)
@@ -1184,6 +1188,7 @@ static int fsl_dcu_suspend(struct device *dev)
 {
 	struct dcu_fb_data *dcufb = dev_get_drvdata(dev);
 
+	regmap_write(dcufb->scfg_regmap, SCFG_PIXCLKCR, PXCK_DISABLE);
 	regcache_cache_only(dcufb->regmap, true);
 	regcache_mark_dirty(dcufb->regmap);
 	clk_disable_unprepare(dcufb->clk);
@@ -1223,6 +1228,7 @@ static int fsl_dcu_resume(struct device *dev)
 	reset_total_layers(np, dcufb);
 	regcache_cache_only(dcufb->regmap, false);
 	regcache_sync(dcufb->regmap);
+	regmap_write(dcufb->scfg_regmap, SCFG_PIXCLKCR, PXCKEN);
 
 	return 0;
 }

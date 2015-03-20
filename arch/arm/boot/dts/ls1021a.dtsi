@@ -128,7 +128,15 @@
 			sdhci,auto-cmd12;
 			big-endian;
 			bus-width = <4>;
+			sleep = <&rcpm 0x00000080 0x0>;
 			status = "disabled";
+		};
+
+		sata: sata@3200000 {
+			compatible = "fsl,ls1021a-ahci";
+			reg = <0x0 0x3200000 0x0 0x10000>;
+			interrupts = <GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&platform_clk 1>;
 		};
 
 		scfg: scfg@1570000 {
@@ -391,6 +399,7 @@
 			interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&sysclk>;
 			clock-names = "ipg";
+			sleep = <&rcpm 0x0 0x40000000>;
 			status = "disabled";
 		};
 
@@ -447,6 +456,7 @@
 			#gpio-cells = <2>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
+			sleep = <&rcpm 0x00000040 0x0>;
 		};
 
 		gpio2: gpio@2310000 {
@@ -484,6 +494,7 @@
 			reg = <0x0 0x29d0000 0x0 0x10000>;
 			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
 			big-endian;
+			sleep = <&rcpm 0x0 0x20000000>;
 			status = "disabled";
 		};
 
@@ -606,6 +617,7 @@
 			fsl,dma-endian-le;
 			fsl,magic-packet;
 			fsl,wake-on-filer;
+			sleep = <&rcpm 0x80000000 0x0>;
 			fsl,num_rx_queues = <0x1>;
 			fsl,num_tx_queues = <0x1>;
 			local-mac-address = [ 00 00 00 00 00 00 ];

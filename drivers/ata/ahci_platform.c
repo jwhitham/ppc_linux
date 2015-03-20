@@ -326,6 +326,7 @@ disable_unprepare_clk:
 static SIMPLE_DEV_PM_OPS(ahci_pm_ops, ahci_suspend, ahci_resume);
 
 static const struct of_device_id ahci_of_match[] = {
+	{ .compatible = "fsl,ls1021a-ahci", },
 	{ .compatible = "snps,spear-ahci", },
 	{ .compatible = "snps,exynos5440-ahci", },
 	{},
