@@ -38,7 +38,7 @@ ccflags-y += -DVERSION=\"\"
 #Include NetComm SW specific definitions
 include $(srctree)/drivers/net/ethernet/freescale/fman/ncsw_config.mk
 
-EXTRA_CFLAGS += \
+ccflags-y += \
 	-Idrivers/crypto/caam \
 	-Idrivers/net/ethernet/freescale/fman/src/wrapper \
 	-Idrivers/net/ethernet/freescale/fman/Peripherals/FM/Pcd \

@@ -1,7 +1,7 @@
 #
 # Makefile for the Freescale Ethernet controllers
 #
-EXTRA_CFLAGS           += -DVERSION=\"\"
+ccflags-y           += -DVERSION=\"\"
 #
 #Include netcomm SW specific definitions
 
