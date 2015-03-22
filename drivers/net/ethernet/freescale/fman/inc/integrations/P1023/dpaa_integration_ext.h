@@ -180,31 +180,6 @@ typedef enum {
  @Description   Enum for inter-module interrupts registration
 *//***************************************************************************/
 
-typedef enum e_FmMacsecEventModules{
-    e_FM_MACSEC_MOD_SC_TX,
-    e_FM_MACSEC_MOD_DUMMY_LAST
-} e_FmMacsecEventModules;
-
-typedef enum e_FmMacsecInterModuleEvent {
-    e_FM_MACSEC_EV_SC_TX,
-    e_FM_MACSEC_EV_ERR_SC_TX,
-    e_FM_MACSEC_EV_DUMMY_LAST
-} e_FmMacsecInterModuleEvent;
-
-#define NUM_OF_INTER_MODULE_EVENTS (NUM_OF_TX_SC * 2)
-
-#define GET_MACSEC_MODULE_EVENT(mod, id, intrType, event) \
-    switch(mod){                                          \
-        case e_FM_MACSEC_MOD_SC_TX:                       \
-             event = (intrType == e_FM_INTR_TYPE_ERR) ?   \
-                        e_FM_MACSEC_EV_ERR_SC_TX:         \
-                        e_FM_MACSEC_EV_SC_TX;             \
-             event += (uint8_t)(2 * id);break;            \
-            break;                                        \
-        default:event = e_FM_MACSEC_EV_DUMMY_LAST;        \
-        break;}
-
-
 /* 1023 unique features */
 #define FM_QMI_NO_ECC_EXCEPTIONS
 #define FM_CSI_CFED_LIMIT
