@@ -220,6 +220,7 @@ int dpa_proxy_set_mac_address(struct proxy_device *proxy_dev,
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_proxy_set_mac_address);
 
 int dpa_proxy_set_rx_mode(struct proxy_device *proxy_dev,
 		       struct net_device *net_dev)
@@ -233,6 +234,7 @@ int dpa_proxy_set_rx_mode(struct proxy_device *proxy_dev,
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_proxy_set_rx_mode);
 
 int dpa_proxy_start(struct net_device *net_dev)
 {
@@ -276,6 +278,7 @@ port_enable_fail:
 
 	return _errno;
 }
+EXPORT_SYMBOL(dpa_proxy_start);
 
 int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
 {
@@ -302,6 +305,7 @@ int dpa_proxy_stop(struct proxy_device *proxy_dev, struct net_device *net_dev)
 
 	return _errno;
 }
+EXPORT_SYMBOL(dpa_proxy_stop);
 
 static int __cold dpa_eth_proxy_remove(struct platform_device *of_dev)
 {

@@ -46,11 +46,5 @@ dpa_bp_probe(struct platform_device *_of_dev, size_t *count);
 int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count);
 int dpa_bp_shared_port_seed(struct dpa_bp *bp);
-int __init __cold dpa_proxy_load(void);
-int __init __cold dpa_shared_load(void);
-int __init __cold dpa_macless_load(void);
-void __exit __cold dpa_proxy_unload(void);
-void __exit __cold dpa_shared_unload(void);
-void __exit __cold dpa_macless_unload(void);
 
 #endif /* __DPAA_ETH_BASE_H */

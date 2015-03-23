@@ -59,6 +59,7 @@ MODULE_LICENSE("Dual BSD/GPL");
 uint8_t advanced_debug = -1;
 module_param(advanced_debug, byte, S_IRUGO);
 MODULE_PARM_DESC(advanced_debug, "Module/Driver verbosity level");
+EXPORT_SYMBOL(advanced_debug);
 
 static int dpa_bp_cmp(const void *dpa_bp0, const void *dpa_bp1)
 {
@@ -161,6 +162,7 @@ _return_of_node_put:
 
 	return dpa_bp;
 }
+EXPORT_SYMBOL(dpa_bp_probe);
 
 int dpa_bp_shared_port_seed(struct dpa_bp *bp)
 {
@@ -206,6 +208,7 @@ int dpa_bp_shared_port_seed(struct dpa_bp *bp)
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_bp_shared_port_seed);
 
 int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		size_t count)
@@ -228,6 +231,7 @@ int dpa_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 
 	return 0;
 }
+EXPORT_SYMBOL(dpa_bp_create);
 
 static int __init __cold dpa_advanced_load(void)
 {

@@ -1235,6 +1235,7 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 		}
 	}
 }
+EXPORT_SYMBOL(dpa_fq_setup);
 
 int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 {
