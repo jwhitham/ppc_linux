@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/suspend.h>
 #include <linux/of_platform.h>
+#include <linux/usb.h>
 
 #include <asm/fsl_pm.h>
 
@@ -42,7 +43,17 @@ void fsl_set_power_except(struct device *dev, int on)
 	struct device_node *mac_node;
 	int ret;
 
-	ret = of_property_read_u32_array(dev->of_node, "sleep", value, 2);
+	if (dev && !strncmp(dev->bus->name, "usb", 3)) {
+		struct usb_device *udev = container_of(dev,
+						struct usb_device, dev);
+		struct device *controller = udev->bus->controller;
+
+		ret = of_property_read_u32_array(controller->parent->of_node,
+				"sleep", value, 2);
+	} else
+		ret = of_property_read_u32_array(dev->of_node, "sleep",
+				value, 2);
+
 	if (ret) {
 		/* search fman mac node */
 		phandle_prop = of_get_property(dev->of_node, "fsl,fman-mac",
