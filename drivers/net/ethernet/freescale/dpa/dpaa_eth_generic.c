@@ -1373,7 +1373,7 @@ static int dpa_generic_remove(struct platform_device *of_dev)
 
 	/* TODO: this is for private dirver also; make generic */
 #if 0
-	dpa_bp_free(priv, priv->dpa_bp);
+	dpa_bp_free(priv);
 	devm_kfree(dev, priv->dpa_bp);
 
 	if (priv->buf_layout)

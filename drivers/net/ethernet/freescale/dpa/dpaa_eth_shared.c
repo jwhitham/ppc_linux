@@ -107,6 +107,7 @@ const struct dpa_fq_cbs_t shared_fq_cbs = {
 	.tx_errq = { .cb = { .dqrr = shared_tx_error_dqrr } },
 	.egress_ern = { .cb = { .ern = shared_ern } }
 };
+EXPORT_SYMBOL(shared_fq_cbs);
 
 static inline void * __must_check __attribute__((nonnull))
 dpa_phys2virt(const struct dpa_bp *dpa_bp, dma_addr_t addr)
@@ -580,6 +581,7 @@ buf_acquire_failed:
 	/* err remains unused, NETDEV_TX_OK must be returned here */
 	return NETDEV_TX_OK;
 }
+EXPORT_SYMBOL(dpa_shared_tx);
 
 static int dpa_shared_netdev_init(struct device_node *dpa_node,
 				struct net_device *net_dev)
@@ -838,7 +840,7 @@ cgr_init_failed:
 add_channel_failed:
 get_channel_failed:
 	if (net_dev)
-		dpa_bp_free(priv, priv->dpa_bp);
+		dpa_bp_free(priv);
 bp_create_failed:
 fq_probe_failed:
 	devm_kfree(dev, buf_layout);

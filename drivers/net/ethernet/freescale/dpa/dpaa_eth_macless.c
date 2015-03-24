@@ -454,7 +454,7 @@ fq_alloc_failed:
 add_channel_failed:
 get_channel_failed:
 	if (net_dev)
-		dpa_bp_free(priv, priv->dpa_bp);
+		dpa_bp_free(priv);
 bp_create_failed:
 fq_probe_failed:
 	dev_set_drvdata(dev, NULL);

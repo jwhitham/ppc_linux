@@ -160,7 +160,7 @@ void dpa_set_buffers_layout(struct mac_device *mac_dev,
 int __attribute__((nonnull))
 dpa_bp_alloc(struct dpa_bp *dpa_bp);
 void __cold __attribute__((nonnull))
-dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp);
+dpa_bp_free(struct dpa_priv_s *priv);
 struct dpa_bp *dpa_bpid2pool(int bpid);
 void dpa_bpid2pool_map(int bpid, struct dpa_bp *dpa_bp);
 bool dpa_bpid2pool_use(int bpid);

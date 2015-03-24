@@ -521,7 +521,7 @@ int __cold dpa_remove(struct platform_device *of_dev)
 
 	dpa_private_napi_del(net_dev);
 
-	dpa_bp_free(priv, priv->dpa_bp);
+	dpa_bp_free(priv);
 
 	if (priv->buf_layout)
 		devm_kfree(dev, priv->buf_layout);
@@ -847,7 +847,7 @@ _dpa_bp_free(struct dpa_bp *dpa_bp)
 }
 
 void __cold __attribute__((nonnull))
-dpa_bp_free(struct dpa_priv_s *priv, struct dpa_bp *dpa_bp)
+dpa_bp_free(struct dpa_priv_s *priv)
 {
 	int i;
 
@@ -1240,6 +1240,7 @@ void dpa_fq_setup(struct dpa_priv_s *priv, const struct dpa_fq_cbs_t *fq_cbs,
 		}
 	}
 }
+EXPORT_SYMBOL(dpa_fq_setup);
 
 int dpa_fq_init(struct dpa_fq *dpa_fq, bool td_enable)
 {

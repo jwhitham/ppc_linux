@@ -299,7 +299,7 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 	/* If we intended the buffers from this frame to go into the bpools
 	 * when the FMan transmit was done, we need to put it in manually.
 	 */
-	if (fd->cmd & FM_FD_CMD_FCO) {
+	if (fd->bpid != 0xff) {
 		dpa_fd_release(net_dev, fd);
 		return;
 	}
@@ -554,7 +554,7 @@ static void priv_ern(struct qman_portal	*portal,
 	 * when the FM was done, we need to put it in
 	 * manually.
 	 */
-	if (msg->ern.fd.cmd & FM_FD_CMD_FCO) {
+	if (msg->ern.fd.bpid != 0xff) {
 		dpa_fd_release(net_dev, &fd);
 		return;
 	}
@@ -846,7 +846,7 @@ static int dpa_priv_bp_create(struct net_device *net_dev, struct dpa_bp *dpa_bp,
 		int err;
 		err = dpa_bp_alloc(&dpa_bp[i]);
 		if (err < 0) {
-			dpa_bp_free(priv, dpa_bp);
+			dpa_bp_free(priv);
 			priv->dpa_bp = NULL;
 			return err;
 		}
@@ -1093,7 +1093,7 @@ rx_cgr_init_failed:
 tx_cgr_init_failed:
 add_channel_failed:
 get_channel_failed:
-	dpa_bp_free(priv, priv->dpa_bp);
+	dpa_bp_free(priv);
 bp_create_failed:
 fq_probe_failed:
 alloc_failed:
