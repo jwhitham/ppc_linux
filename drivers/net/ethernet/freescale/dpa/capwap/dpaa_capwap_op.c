@@ -55,13 +55,9 @@ int op_init(struct t_Port *port, struct net_device *net_dev)
 	bool is_found = false;
 	struct platform_device *oh_dev;
 	struct dpa_oh_config_s *oh_config;
-	int ret;
-	uint16_t channel;
-	struct dpa_fq *fq;
 	uint32_t def_fqid, err_fqid;
 	t_LnxWrpFmPortDev   *fm_port_dev = NULL;
 	t_LnxWrpFmDev *fm_dev = NULL;
-	struct task_struct *kth;
 	static struct of_device_id dpa_oh_node_of_match[] = {
 		{ .compatible = "fsl,dpa-oh", },
 		{ /* end of list */ },

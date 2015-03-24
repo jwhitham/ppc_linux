@@ -524,14 +524,14 @@ int add_in_tunnel(struct dpaa_capwap_domain *capwap_domain,
 	struct cipher_params *cipher;
 	struct dtls_block_decap_pdb *pdb;
 	struct dtls_decap_descriptor_t *preheader_initdesc;
-	struct qman_fq *fq;
+	struct qman_fq *fq = NULL;
 	uint16_t desc_len;
 	unsigned char *buff_start = NULL;
 	u64 context_a = 0;
 	uint32_t context_b = 0;
 	uint16_t channel;
 	uint16_t flow_index;
-	dma_addr_t dma_addr;
+	dma_addr_t dma_addr = 0;
 	struct qman_fq_chain *fq_node;
 
 	flow_index = get_flow_index(in_tunnel_params->dtls,
@@ -826,14 +826,14 @@ int add_out_tunnel(struct dpaa_capwap_domain *capwap_domain,
 	struct auth_params *auth;
 	struct cipher_params *cipher;
 	struct dtls_encap_descriptor_t *preheader_initdesc;
-	struct qman_fq *fq;
+	struct qman_fq *fq = NULL;
 	uint16_t desc_len;
 	unsigned char *buff_start = NULL;
 	u64 context_a = 0;
 	uint32_t context_b = 0;
 	uint16_t channel;
 	uint16_t flow_index;
-	dma_addr_t dma_addr;
+	dma_addr_t dma_addr = 0;
 	struct qman_fq_chain *fq_node;
 
 	if (!capwap_domain || !p_tunnel)

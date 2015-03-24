@@ -93,8 +93,10 @@ static struct dpaa_capwap_domain *capwap_domain;
 static struct dpa_bp *br_dpa_bp;
 static int encrypt_status; /* 0: non-dtls encrypt, 1: dtls encrypt */
 
+#ifdef CONFIG_FSL_CAPWAP_BRIDGE_ZMC
 static struct sk_buff *alloc_bman_skb(void *bp, unsigned int length);
 static void free_bman_skb(struct sk_buff *skb);
+#endif
 
 static void capwap_napi_enable(struct dpa_priv_s *priv)
 {
@@ -109,7 +111,7 @@ static void capwap_napi_enable(struct dpa_priv_s *priv)
 	}
 }
 
-static void capwap_napi_disable(struct dpa_priv_s *priv)
+void capwap_napi_disable(struct dpa_priv_s *priv)
 {
 	struct dpa_percpu_priv_s *percpu_priv;
 	int i, j;
@@ -359,7 +361,9 @@ static int __hot capwap_br_to_dpaa(struct sk_buff *skb,
 	void *dpa_bp_vaddr;
 	int i;
 	struct qman_fq *fq_base, *fq;
+#ifdef CONFIG_FSL_CAPWAP_BRIDGE_ZMC
 	dma_addr_t addr;
+#endif
 	struct net_device *net_dev = fslbr_dev->capwap_net_dev;
 	int tunnel_id = encrypt_status ? DATA_DTLS_TUNNEL : DATA_N_DTLS_TUNNEL;
 
@@ -411,7 +415,9 @@ static int __hot capwap_br_to_dpaa(struct sk_buff *skb,
 			  dpa_bp_vaddr + dpa_fd_offset(&fd),
 			  dpa_fd_length(&fd));
 
+#ifdef CONFIG_FSL_CAPWAP_BRIDGE_ZMC
 skb_copied:
+#endif
 	fq_base = (struct qman_fq *)capwap_domain->fqs->
 					outbound_core_tx_fqs.fq_base;
 	if (encrypt_status)
@@ -643,7 +649,7 @@ static ssize_t fslbr_show_statistic(struct device *dev,
 		bytes += sprintf(buf + bytes, "\tTx: %u\n", br_tx[i]);
 		bytes += sprintf(buf + bytes, "\tTx Error: %u\n", br_tx_err[i]);
 		bytes += sprintf(buf + bytes,
-				"\tTx N-ZZM No Buffer Error: %u-%u\n",
+				"\tTx N-ZZM No Buffer Error: %u\n",
 				br_no_buffer_err[i]);
 		bytes += sprintf(buf + bytes, "\tTx Upload: %u\n",
 			fsl_tunnel_stats[i].tunnel_upload);

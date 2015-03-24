@@ -238,7 +238,7 @@ long wrp_dpa_capwap_ioctl(struct file *filp, unsigned int cmd,
 		struct dpaa_capwap_tunnel  *out_tunnel = NULL;
 		struct dpaa_capwap_domain *capwap_domain = NULL;
 		struct dpaa_capwap_domain_tunnel_out_params out_tunnel_params;
-		struct tunnel_info *tunnel_node, *new_tunnel;
+		struct tunnel_info *tunnel_node, *new_tunnel = NULL;
 		uint8_t *buf;
 
 		/* Copy parameters from user-space */
