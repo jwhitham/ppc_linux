@@ -19,8 +19,10 @@ void set_pm_suspend_state(suspend_state_t state)
 {
 	pm_state = state;
 }
+EXPORT_SYMBOL_GPL(set_pm_suspend_state);
 
 suspend_state_t pm_suspend_state(void)
 {
 	return pm_state;
 }
+EXPORT_SYMBOL_GPL(pm_suspend_state);
