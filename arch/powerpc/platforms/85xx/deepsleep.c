@@ -83,6 +83,11 @@ int fsl_dp_iomap(void)
 	int ret = 0;
 	phys_addr_t ccsr_phy_addr, dcsr_phy_addr;
 
+	saved_law = NULL;
+	ccsr_base = NULL;
+	dcsr_base = NULL;
+	pld_base = NULL;
+
 	ccsr_phy_addr = get_immrbase();
 	if (ccsr_phy_addr == -1) {
 		pr_err("%s: Can't get the address of CCSR\n", __func__);
@@ -128,31 +133,33 @@ int fsl_dp_iomap(void)
 	if (!np) {
 		pr_err("%s: Can't find the node of \"law\"\n", __func__);
 		ret = -EINVAL;
-		goto pld_err;
+		goto alloc_err;
 	}
 	ret = of_property_read_u32(np, "fsl,num-laws", &num_laws);
 	if (ret) {
 		ret = -EINVAL;
-		goto pld_err;
+		goto alloc_err;
 	}
 
 	saved_law = kzalloc(sizeof(*saved_law) * num_laws, GFP_KERNEL);
 	if (!saved_law) {
 		ret = -ENOMEM;
-		goto pld_err;
+		goto alloc_err;
 	}
 	of_node_put(np);
 
 	return 0;
 
+alloc_err:
+	iounmap(pld_base);
+	pld_base = NULL;
 pld_err:
 	iounmap(dcsr_base);
+	dcsr_base = NULL;
 dcsr_err:
 	iounmap(ccsr_base);
-ccsr_err:
 	ccsr_base = NULL;
-	dcsr_base = NULL;
-	pld_base = NULL;
+ccsr_err:
 	return ret;
 }
 
@@ -172,6 +179,9 @@ void fsl_dp_iounmap(void)
 		iounmap(pld_base);
 		pld_base = NULL;
 	}
+
+	kfree(saved_law);
+	saved_law = NULL;
 }
 
 static void fsl_dp_ddr_save(void *ccsr_base)

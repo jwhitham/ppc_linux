@@ -892,6 +892,8 @@ deepsleep_start:
 	PPC_STL r8, 8(r9)
 	mfspr	r8, SPRN_TCR
 	PPC_STL r8, 16(r9)
+	mfcr	r8
+	PPC_STL	r8, 24(r9)
 	li	r8, 0
 	mtspr	SPRN_TCR, r8
 
@@ -1103,6 +1105,8 @@ _GLOBAL(fsl_booke_deep_sleep_resume)
 	mtlr	r4
 	lwz	r4, 8(r3)
 	mtmsr	r4
+	lwz	r4, 24(r3)
+	mtcr	r4
 
 	blr
 
@@ -1155,6 +1159,8 @@ _GLOBAL(fsl_booke_deep_sleep_resume)
 	mtlr	r4
 	ld	r4, 8(r3)
 	mtmsr	r4
+	ld	r4, 24(r3)
+	mtcr	r4
 
 	blr
 
