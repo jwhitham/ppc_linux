@@ -73,22 +73,22 @@
 		};
 */
 		/* The following OP is used as outbound OP*/
-		dpa-fman0-oh@3 {
+		dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";
 			fsl,bman-buffer-pools = <&bp7>;
 			/* Define frame queues for the OH port*/
 			/* <OH Rx error, OH Rx default> */
 			fsl,qman-frame-queues-oh = <0x52 1 0x53 1>;
-			fsl,fman-oh-port = <&fman0_oh3>;
+			fsl,fman-oh-port = <&fman0_oh2>;
 		};
 		/* The following OP is used as inbound OP*/
-		dpa-fman0-oh@4 {
+		dpa-fman0-oh@3 {
 			compatible = "fsl,dpa-oh";
 			fsl,bman-buffer-pools = <&bp7>;
 			/* Define frame queues for the OH port*/
 			/* <OH Rx error, OH Rx default> */
 			fsl,qman-frame-queues-oh = <0x54 1 0x55 1>;
-			fsl,fman-oh-port = <&fman0_oh4>;
+			fsl,fman-oh-port = <&fman0_oh3>;
 		};
 	};
 
@@ -99,7 +99,7 @@
 				cell-index = <0>;
 				/* Set 128bytes manip extra space for outbound(frgamentation) OP */
 				args0 {
-					cell-index = <2>;
+					cell-index = <1>;
 					compatible = "fsl,fman-port-op-extended-args";
 					/* manip_extra_space, data_align */
 					buffer-layout = <0x80 0x40>;
