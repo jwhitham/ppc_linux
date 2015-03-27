@@ -65,7 +65,7 @@
 #include "fsl_fman_test.h"
 
 #include "dpaa_eth.h"
-#include "dpaa_eth-common.h"
+#include "dpaa_eth_common.h"
 
 #define FMT_FRM_WATERMARK   0xdeadbeefdeadbeeaLL
 
