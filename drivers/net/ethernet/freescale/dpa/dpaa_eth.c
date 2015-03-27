@@ -255,7 +255,7 @@ static void _dpa_rx_error(struct net_device *net_dev,
 		if (netif_msg_hw(priv) && net_ratelimit())
 			netdev_err(net_dev, "Err FD status = 0x%08x\n",
 					fd->status & FM_FD_STAT_RX_ERRORS);
-#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
+#ifdef CONFIG_FSL_DPAA_HOOKS
 	if (dpaa_eth_hooks.rx_error &&
 		dpaa_eth_hooks.rx_error(net_dev, fd, fqid) == DPAA_ETH_STOLEN)
 		/* it's up to the hook to perform resource cleanup */
@@ -288,7 +288,7 @@ static void _dpa_tx_error(struct net_device		*net_dev,
 	if (netif_msg_hw(priv) && net_ratelimit())
 		netdev_warn(net_dev, "FD status = 0x%08x\n",
 				fd->status & FM_FD_STAT_TX_ERRORS);
-#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
+#ifdef CONFIG_FSL_DPAA_HOOKS
 	if (dpaa_eth_hooks.tx_error &&
 		dpaa_eth_hooks.tx_error(net_dev, fd, fqid) == DPAA_ETH_STOLEN)
 		/* now the hook must ensure proper cleanup */
@@ -394,7 +394,7 @@ static void __hot _dpa_tx_conf(struct net_device	*net_dev,
 	}
 
 	/* hopefully we need not get the timestamp before the hook */
-#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
+#ifdef CONFIG_FSL_DPAA_HOOKS
 	if (dpaa_eth_hooks.tx_confirm && dpaa_eth_hooks.tx_confirm(net_dev,
 		fd, fqid) == DPAA_ETH_STOLEN)
 		/* it's the hook that must now perform cleanup */

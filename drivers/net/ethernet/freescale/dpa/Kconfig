@@ -10,6 +10,9 @@ menuconfig FSL_DPAA_ETH
 
 if FSL_DPAA_ETH
 
+config FSL_DPAA_HOOKS
+	bool "DPAA Ethernet driver hooks"
+
 config FSL_DPAA_OFFLINE_PORTS
 	bool "Offline Ports support"
 	depends on FSL_DPAA_ETH
