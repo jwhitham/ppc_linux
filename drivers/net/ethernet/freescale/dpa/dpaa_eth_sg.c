@@ -578,20 +578,13 @@ void __hot _dpa_rx(struct net_device *net_dev,
 
 	if (likely(fd->format == qm_fd_contig)) {
 #if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
-#if defined(CONFIG_AS_FASTPATH) && !defined(CONFIG_FSL_DPAA_ETH_JUMBO_FRAME)
-		/* Do not allow Jumbo packet to ASF */
-		if (likely(fd->length20 <= 1514)) {
-#endif
-			/* Execute the Rx processing hook, if it exists. */
-			if (dpaa_eth_hooks.rx_default &&
-				dpaa_eth_hooks.rx_default((void *)fd, net_dev,
-						fqid) == DPAA_ETH_STOLEN) {
-				/* won't count the rx bytes in */
-				return;
-			}
-#if defined(CONFIG_AS_FASTPATH) && !defined(CONFIG_FSL_DPAA_ETH_JUMBO_FRAME)
+		/* Execute the Rx processing hook, if it exists. */
+		if (dpaa_eth_hooks.rx_default &&
+			dpaa_eth_hooks.rx_default((void *)fd, net_dev,
+					fqid) == DPAA_ETH_STOLEN) {
+			/* won't count the rx bytes in */
+			return;
 		}
-#endif
 #endif
 		skb = contig_fd_to_skb(priv, fd, &use_gro);
 	} else
