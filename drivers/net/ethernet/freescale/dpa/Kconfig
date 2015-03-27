@@ -13,6 +13,12 @@ if FSL_DPAA_ETH
 config FSL_DPAA_HOOKS
 	bool "DPAA Ethernet driver hooks"
 
+config FSL_DPAA_MACSEC
+	tristate "DPAA MACSEC"
+	select FSL_DPAA_HOOKS
+	---help---
+	  Enable MACSEC support in DPAA.
+
 config FSL_DPAA_OFFLINE_PORTS
 	bool "Offline Ports support"
 	depends on FSL_DPAA_ETH
@@ -170,6 +176,13 @@ config FSL_DPAA_ETH_DEBUGFS
 	default y
 	---help---
 	  This option compiles debugfs code for the DPAA Ethernet driver.
+
+config FSL_DPAA_MACSEC_DEBUGFS
+	bool "DPAA MACSEC debugfs interface"
+	default y
+	depends on DEBUG_FS && FSL_DPAA_MACSEC
+	---help---
+	  This option compiles debugfs code for the DPAA Ethernet MACSEC driver.
 
 config FSL_DPAA_ETH_DEBUG
 	bool "DPAA Ethernet Debug Support"
