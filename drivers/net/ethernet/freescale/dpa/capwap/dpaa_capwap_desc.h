@@ -153,7 +153,7 @@ struct dtls_encap_descriptor_t {
 	uint32_t auth_key[13];		/* Max Space for storing auth Key */
 	uint32_t enc_key[7];		/* Max Space for storing enc Key */
 	uint32_t operation_cmd;		/* For operation Command */
-} __packed;
+} __packed __aligned(64);
 
 struct dtls_decap_descriptor_t {
 	struct preheader_t prehdr;
@@ -165,7 +165,7 @@ struct dtls_decap_descriptor_t {
 	uint32_t auth_key[13];		/* Max Space for storing auth Key */
 	uint32_t dec_key[7];		/* Max Space for storing dec Key */
 	uint32_t operation_cmd;		/* For operation Command */
-} __packed;
+} __packed __aligned(64);
 
 #define SEC_DEF_VER 40 /* like in P4080 */
 #define SEC_VER_5_3 53

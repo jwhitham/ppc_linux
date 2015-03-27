@@ -523,7 +523,7 @@ int add_in_tunnel(struct dpaa_capwap_domain *capwap_domain,
 	struct auth_params *auth;
 	struct cipher_params *cipher;
 	struct dtls_block_decap_pdb *pdb;
-	struct dtls_decap_descriptor_t *preheader_initdesc;
+	struct dtls_decap_descriptor_t *preheader_initdesc = NULL;
 	struct qman_fq *fq = NULL;
 	uint16_t desc_len;
 	unsigned char *buff_start = NULL;
@@ -827,7 +827,7 @@ int add_out_tunnel(struct dpaa_capwap_domain *capwap_domain,
 	struct dtls_block_encap_pdb *pdb;
 	struct auth_params *auth;
 	struct cipher_params *cipher;
-	struct dtls_encap_descriptor_t *preheader_initdesc;
+	struct dtls_encap_descriptor_t *preheader_initdesc = NULL;
 	struct qman_fq *fq = NULL;
 	uint16_t desc_len;
 	unsigned char *buff_start = NULL;
