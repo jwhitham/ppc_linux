@@ -150,6 +150,7 @@ int capwap_fq_rx_init(struct qman_fq *fq, u32 fqid,
 		return ret;
 	}
 
+	memset(&opts, 0, sizeof(opts));
 	opts.we_mask = QM_INITFQ_WE_DESTWQ | QM_INITFQ_WE_FQCTRL |
 			QM_INITFQ_WE_CONTEXTA;
 	opts.fqd.dest.channel = channel;
@@ -191,6 +192,7 @@ int capwap_fq_tx_init(struct qman_fq *fq, u16 channel,
 		return ret;
 	}
 
+	memset(&opts, 0, sizeof(opts));
 	opts.we_mask = QM_INITFQ_WE_DESTWQ | QM_INITFQ_WE_FQCTRL;
 	if (context_a)
 		opts.we_mask |= QM_INITFQ_WE_CONTEXTA;
