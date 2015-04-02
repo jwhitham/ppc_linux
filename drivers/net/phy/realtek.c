@@ -35,7 +35,7 @@
 #define RTL8211F_PHYSTAT_DUPLEX	  0x0008
 #define RTL8211F_PHYSTAT_SPDDONE  0x0800
 #define RTL8211F_PHYSTAT_LINK     0x0004
-#define PHY_AUTONEGOTIATE_TIMEOUT 50000
+#define PHY_AUTONEGOTIATE_TIMEOUT 3000
 
 MODULE_DESCRIPTION("Realtek PHY driver");
 MODULE_AUTHOR("Johnson Leung");
@@ -110,7 +110,7 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 	mii_reg = phy_read(phydev, RTL8211F_PHY_STATUS);
 	phydev->link = 1;
 	while (!(mii_reg & RTL8211F_PHYSTAT_LINK)) {
-		if (i > PHY_AUTONEGOTIATE_TIMEOUT) {
+		if (i++ > PHY_AUTONEGOTIATE_TIMEOUT) {
 			pr_warn("RTL8211F LINK TIMEOUT\n");
 			phydev->link = 0;
 			break;
