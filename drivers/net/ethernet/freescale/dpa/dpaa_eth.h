@@ -187,6 +187,25 @@ struct dpa_buffer_layout_s {
 
 #define DPAA_ETH_RX_QUEUES	128
 
+/* Convenience macros for storing/retrieving the skb back-pointers. They must
+ * accommodate both recycling and confirmation paths - i.e. cases when the buf
+ * was allocated by ourselves, respectively by the stack. In the former case,
+ * we could store the skb at negative offset; in the latter case, we can't,
+ * so we'll use 0 as offset.
+ *
+ * NB: @off is an offset from a (struct sk_buff **) pointer!
+ */
+#define DPA_WRITE_SKB_PTR(skb, skbh, addr, off) \
+{ \
+	skbh = (struct sk_buff **)addr; \
+	*(skbh + (off)) = skb; \
+}
+#define DPA_READ_SKB_PTR(skb, skbh, addr, off) \
+{ \
+	skbh = (struct sk_buff **)addr; \
+	skb = *(skbh + (off)); \
+}
+
 #ifdef CONFIG_PM
 /* Magic Packet wakeup */
 #define DPAA_WOL_MAGIC		0x00000001
@@ -413,6 +432,20 @@ void __hot _dpa_process_parse_results(const fm_prs_result_t *parse_results,
 				      const struct qm_fd *fd,
 				      struct sk_buff *skb,
 				      int *use_gro);
+#ifndef CONFIG_FSL_DPAA_TS
+bool dpa_skb_is_recyclable(struct sk_buff *skb);
+bool dpa_buf_is_recyclable(struct sk_buff *skb,
+			   uint32_t min_size,
+			   uint16_t min_offset,
+			   unsigned char **new_buf_start);
+#endif
+int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
+			   struct sk_buff *skb, struct qm_fd *fd,
+			   int *count_ptr, int *offset);
+int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
+		       struct sk_buff *skb, struct qm_fd *fd);
+int __cold __attribute__((nonnull))
+	_dpa_fq_free(struct device *dev, struct qman_fq *fq);
 
 /* Turn on HW checksum computation for this outgoing frame.
  * If the current protocol is not something we support in this regard

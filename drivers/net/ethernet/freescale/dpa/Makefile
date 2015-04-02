@@ -27,6 +27,7 @@ obj-$(CONFIG_FSL_DPAA_ETH) += fsl_advanced.o
 obj-$(CONFIG_FSL_DPAA_ETH) += fsl_proxy.o
 obj-$(CONFIG_FSL_DPAA_ETH) += fsl_dpa_shared.o
 obj-$(CONFIG_FSL_DPAA_ETH) += fsl_dpa_macless.o
+obj-$(CONFIG_FSL_DPAA_MACSEC) += fsl_dpa_macsec.o
 
 fsl_advanced-objs += dpaa_eth_base.o
 # suport for multiple drivers per kernel module comes in kernel 3.14
@@ -34,6 +35,11 @@ fsl_advanced-objs += dpaa_eth_base.o
 fsl_proxy-objs += dpaa_eth_proxy.o
 fsl_dpa_shared-objs += dpaa_eth_shared.o
 fsl_dpa_macless-objs += dpaa_eth_macless.o
+fsl_dpa_macsec-objs += dpaa_eth_macsec.o
+
+ifeq ($(CONFIG_FSL_DPAA_MACSEC_DEBUGFS),y)
+fsl_dpa_macsec-objs += dpaa_debugfs_macsec.o
+endif
 
 ifeq ($(CONFIG_FSL_DPAA_OFFLINE_PORTS),y)
 obj-$(CONFIG_FSL_DPAA_ETH) += fsl_oh.o

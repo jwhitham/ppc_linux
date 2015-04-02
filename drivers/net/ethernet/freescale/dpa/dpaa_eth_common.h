@@ -95,7 +95,7 @@ extern u16 qman_portal_max;
 /* from dpa_ethtool.c */
 extern const struct ethtool_ops dpa_ethtool_ops;
 
-#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
+#ifdef CONFIG_FSL_DPAA_HOOKS
 /* Various hooks used for unit-testing and/or fastpath optimizations.
  * Currently only one set of such hooks is supported.
  */

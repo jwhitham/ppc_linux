@@ -49,25 +49,6 @@
 #include "dpaa_1588.h"
 #endif
 
-/* Convenience macros for storing/retrieving the skb back-pointers. They must
- * accommodate both recycling and confirmation paths - i.e. cases when the buf
- * was allocated by ourselves, respectively by the stack. In the former case,
- * we could store the skb at negative offset; in the latter case, we can't,
- * so we'll use 0 as offset.
- *
- * NB: @off is an offset from a (struct sk_buff **) pointer!
- */
-#define DPA_WRITE_SKB_PTR(skb, skbh, addr, off) \
-	{ \
-		skbh = (struct sk_buff **)addr; \
-		*(skbh + (off)) = skb; \
-	}
-#define DPA_READ_SKB_PTR(skb, skbh, addr, off) \
-	{ \
-		skbh = (struct sk_buff **)addr; \
-		skb = *(skbh + (off)); \
-	}
-
 /* DMA map and add a page frag back into the bpool.
  * @vaddr fragment must have been allocated with netdev_alloc_frag(),
  * specifically for fitting into @dpa_bp.
@@ -303,9 +284,10 @@ struct sk_buff *_dpa_cleanup_tx_fd(const struct dpa_priv_s *priv,
 
 	return skb;
 }
+EXPORT_SYMBOL(_dpa_cleanup_tx_fd);
 
 #ifndef CONFIG_FSL_DPAA_TS
-static bool dpa_skb_is_recyclable(struct sk_buff *skb)
+bool dpa_skb_is_recyclable(struct sk_buff *skb)
 {
 	/* No recycling possible if skb buffer is kmalloc'ed  */
 	if (skb->head_frag == 0)
@@ -322,8 +304,9 @@ static bool dpa_skb_is_recyclable(struct sk_buff *skb)
 
 	return true;
 }
+EXPORT_SYMBOL(dpa_skb_is_recyclable);
 
-static bool dpa_buf_is_recyclable(struct sk_buff *skb,
+bool dpa_buf_is_recyclable(struct sk_buff *skb,
 				  uint32_t min_size,
 				  uint16_t min_offset,
 				  unsigned char **new_buf_start)
@@ -352,6 +335,7 @@ static bool dpa_buf_is_recyclable(struct sk_buff *skb,
 
 	return false;
 }
+EXPORT_SYMBOL(dpa_buf_is_recyclable);
 #endif
 
 /* Build a linear skb around the received buffer.
@@ -577,21 +561,14 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	DPA_BUG_ON((fd->format != qm_fd_contig) && (fd->format != qm_fd_sg));
 
 	if (likely(fd->format == qm_fd_contig)) {
-#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
-#if defined(CONFIG_AS_FASTPATH) && !defined(CONFIG_FSL_DPAA_ETH_JUMBO_FRAME)
-		/* Do not allow Jumbo packet to ASF */
-		if (likely(fd->length20 <= 1514)) {
-#endif
-			/* Execute the Rx processing hook, if it exists. */
-			if (dpaa_eth_hooks.rx_default &&
-				dpaa_eth_hooks.rx_default((void *)fd, net_dev,
-						fqid) == DPAA_ETH_STOLEN) {
-				/* won't count the rx bytes in */
-				return;
-			}
-#if defined(CONFIG_AS_FASTPATH) && !defined(CONFIG_FSL_DPAA_ETH_JUMBO_FRAME)
+#ifdef CONFIG_FSL_DPAA_HOOKS
+		/* Execute the Rx processing hook, if it exists. */
+		if (dpaa_eth_hooks.rx_default &&
+			dpaa_eth_hooks.rx_default((void *)fd, net_dev,
+					fqid) == DPAA_ETH_STOLEN) {
+			/* won't count the rx bytes in */
+			return;
 		}
-#endif
 #endif
 		skb = contig_fd_to_skb(priv, fd, &use_gro);
 	} else
@@ -650,9 +627,9 @@ _release_frame:
 	dpa_fd_release(net_dev, fd);
 }
 
-static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
-				  struct sk_buff *skb, struct qm_fd *fd,
-				  int *count_ptr, int *offset)
+int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
+			   struct sk_buff *skb, struct qm_fd *fd,
+			   int *count_ptr, int *offset)
 {
 	struct sk_buff **skbh;
 	dma_addr_t addr;
@@ -736,9 +713,10 @@ static int __hot skb_to_contig_fd(struct dpa_priv_s *priv,
 
 	return 0;
 }
+EXPORT_SYMBOL(skb_to_contig_fd);
 
-static int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
-			      struct sk_buff *skb, struct qm_fd *fd)
+int __hot skb_to_sg_fd(struct dpa_priv_s *priv,
+		       struct sk_buff *skb, struct qm_fd *fd)
 {
 	struct dpa_bp *dpa_bp = priv->dpa_bp;
 	dma_addr_t addr;
@@ -853,6 +831,7 @@ csum_failed:
 
 	return err;
 }
+EXPORT_SYMBOL(skb_to_sg_fd);
 
 int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 {
@@ -864,7 +843,7 @@ int __hot dpa_tx(struct sk_buff *skb, struct net_device *net_dev)
 	const int queue_mapping = dpa_get_queue_mapping(skb);
 	const bool nonlinear = skb_is_nonlinear(skb);
 	int *countptr, offset = 0;
-#if defined(CONFIG_AS_FASTPATH) || defined(CONFIG_FSL_FMAN_TEST)
+#ifdef CONFIG_FSL_DPAA_HOOKS
 	/* If there is a Tx hook, run it. */
 	if (dpaa_eth_hooks.tx &&
 		dpaa_eth_hooks.tx(skb, net_dev) == DPAA_ETH_STOLEN)

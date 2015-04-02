@@ -12,6 +12,7 @@ if FSL_FMAN
 config FSL_FMAN_TEST
 	bool "FMan test module"
 	default n
+	select FSL_DPAA_HOOKS
 	---help---
 		This option compiles test code for FMan.
 
