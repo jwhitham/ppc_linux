@@ -186,7 +186,7 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 #ifdef CONFIG_FMAN_V3L
 	/* Fixup for RTL8211F MDIO timing delay on T1023RDB */
 	if (SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1023)
-		udelay(50);
+		udelay(100);
 #endif
 
 	/* Initiate the read */
