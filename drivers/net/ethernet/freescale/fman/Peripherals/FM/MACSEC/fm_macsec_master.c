@@ -574,7 +574,7 @@ t_Error FmMacsecSetPTP(t_Handle h_FmMacsec, bool enable)
     if (enable)
         tmpReg |= CFG_S0I;
     else
-        tmpReg &= CFG_S0I;
+        tmpReg &= ~CFG_S0I;
     WRITE_UINT32(p_FmMacsec->p_FmMacsecRegs->cfg, tmpReg);
 
     return E_OK;
