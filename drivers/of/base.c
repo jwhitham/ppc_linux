@@ -1049,8 +1049,6 @@ int of_property_read_string(struct device_node *np, const char *propname,
 		return -EINVAL;
 	if (!prop->value)
 		return -ENODATA;
-	if (strnlen(prop->value, prop->length) >= prop->length)
-		return -EILSEQ;
 	*out_string = prop->value;
 	return 0;
 }
