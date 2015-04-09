@@ -1486,18 +1486,11 @@ void run_local_timers(void)
 	}
 #endif
 
-	if (!base->active_timers)
-		goto out;
+	raise_softirq(TIMER_SOFTIRQ);
 
-	/* Check whether the next pending timer has expired */
-	if (time_before_eq(base->next_timer, jiffies))
-		raise_softirq(TIMER_SOFTIRQ);
-out:
 #ifdef CONFIG_PREEMPT_RT_FULL
 	rt_spin_unlock_after_trylock_in_irq(&base->lock);
 #endif
-	/* The ; ensures that gcc won't complain in the !RT case */
-	;
 }
 
 #ifdef __ARCH_WANT_SYS_ALARM
