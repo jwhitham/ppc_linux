@@ -72,7 +72,7 @@ struct caam_drv_private {
 
 	struct device *dev;
 	struct platform_device **jrpdev; /* Alloc'ed array per sub-device */
-#ifdef CONFIG_FSL_QMAN
+#ifdef CONFIG_CAAM_QI
 	struct device *qidev;
 #endif
 	struct platform_device *pdev;

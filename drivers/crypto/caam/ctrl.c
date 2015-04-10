@@ -12,7 +12,7 @@
 #include "desc_constr.h"
 #include "error.h"
 
-#ifdef CONFIG_FSL_QMAN
+#ifdef CONFIG_CAAM_QI
 #include "qi.h"
 #endif
 
@@ -303,7 +303,7 @@ static int caam_remove(struct platform_device *pdev)
 			of_device_unregister(ctrlpriv->jrpdev[ring]);
 	}
 
-#ifdef CONFIG_FSL_QMAN
+#ifdef CONFIG_CAAM_QI
 	if (ctrlpriv->qidev)
 		caam_qi_shutdown(ctrlpriv->qidev);
 #endif
@@ -638,7 +638,7 @@ static int caam_probe(struct platform_device *pdev)
 		wr_reg32(&ctrlpriv->qi->qi_control_lo, QICTL_DQEN);
 
 		/* If QMAN driver is present, init CAAM-QI backend */
-#ifdef CONFIG_FSL_QMAN
+#ifdef CONFIG_CAAM_QI
 		if (caam_qi_init(pdev, nprop))
 			dev_err(dev, "caam qi i/f init failed\n");
 #endif
