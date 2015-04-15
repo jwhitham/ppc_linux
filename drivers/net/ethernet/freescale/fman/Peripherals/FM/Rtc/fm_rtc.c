@@ -209,9 +209,9 @@ t_Error FM_RTC_Init(t_Handle h_FmRtc)
 
     /* find source clock frequency in Mhz */
     if (p_Rtc->p_RtcDriverParam->src_clk != E_FMAN_RTC_SOURCE_CLOCK_SYSTEM)
-         p_Rtc->srcClkFreqMhz = p_Rtc->p_RtcDriverParam->ext_src_clk_freq;
+        p_Rtc->srcClkFreqMhz = p_Rtc->p_RtcDriverParam->ext_src_clk_freq;
     else
-        p_Rtc->srcClkFreqMhz = (uint32_t)(FmGetClockFreq(p_Rtc->h_Fm)/2);
+        p_Rtc->srcClkFreqMhz = (uint32_t)(FmGetMacClockFreq(p_Rtc->h_Fm));
 
     /* if timer in Master mode Initialize TMR_CTRL */
     /* We want the counter (TMR_CNT) to count in nano-seconds */

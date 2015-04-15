@@ -1019,6 +1019,19 @@ t_Error FmResetMac(t_Handle h_Fm, e_FmMacType type, uint8_t macId);
 uint16_t FmGetClockFreq(t_Handle h_Fm);
 
 /**************************************************************************//**
+ @Function      FmGetMacClockFreq
+
+ @Description   Used by MAC driver to get the MAC clock frequency
+
+ @Param[in]     h_Fm            A handle to an FM Module.
+
+ @Return        clock-freq on success; 0 otherwise.
+
+ @Cautions      Allowed only following FM_Init().
+*//***************************************************************************/
+uint16_t FmGetMacClockFreq(t_Handle h_Fm);
+
+/**************************************************************************//**
  @Function      FmGetId
 
  @Description   Used by PCD driver to read rhe FM id

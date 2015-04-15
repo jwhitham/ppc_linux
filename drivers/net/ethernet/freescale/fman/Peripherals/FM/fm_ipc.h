@@ -192,6 +192,7 @@ typedef _Packed struct t_FmIpcIsr
 *//***************************************************************************/
 typedef _Packed struct t_FmIpcParams {
     uint16_t        fmClkFreq;              /**< OUT: FM Clock frequency */
+    uint16_t        fmMacClkFreq;           /**< OUT: FM MAC clock frequence */
     uint8_t         majorRev;               /**< OUT: FM Major revision */
     uint8_t         minorRev;               /**< OUT: FM Minor revision */
 } _PackedType t_FmIpcParams;

@@ -483,6 +483,9 @@ typedef struct t_FmParams {
                                                          to be used by the FM. */
     uint16_t                fmClkFreq;              /**< In Mhz;
                                                          Relevant when FM not runs in "guest-mode". */
+    uint16_t                fmMacClkRatio;          /**< FM MAC Clock ratio, for backward comparability:
+                                                                     when fmMacClkRatio = 0, ratio is 2:1
+                                                                     when fmMacClkRatio = 1, ratio is 1:1  */
     t_FmExceptionsCallback  *f_Exception;           /**< An application callback routine to handle exceptions;
                                                          Relevant when FM not runs in "guest-mode". */
     t_FmBusErrorCallback    *f_BusError;            /**< An application callback routine to handle exceptions;

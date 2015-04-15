@@ -543,6 +543,7 @@ typedef struct
     uint8_t                     fmId;
     e_FmPortType                portsTypes[FM_MAX_NUM_OF_HW_PORT_IDS];
     uint16_t                    fmClkFreq;
+    uint16_t                    fmMacClkFreq;
     t_FmRevisionInfo            revInfo;
 /**************************/
 /* Master Only parameters */

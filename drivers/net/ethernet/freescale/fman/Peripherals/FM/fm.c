@@ -1030,6 +1030,7 @@ static t_Error FmHandleIpcMsgCB(t_Handle  h_Fm,
 
             /* Get clock frequency */
             ipcParams.fmClkFreq = p_Fm->p_FmStateStruct->fmClkFreq;
+            ipcParams.fmMacClkFreq = p_Fm->p_FmStateStruct->fmMacClkFreq;
 
             fman_get_revision(p_Fm->p_FmFpmRegs,&ipcParams.majorRev,&ipcParams.minorRev);
 
@@ -2464,6 +2465,13 @@ uint16_t FmGetClockFreq(t_Handle h_Fm)
     return p_Fm->p_FmStateStruct->fmClkFreq;
 }
 
+uint16_t FmGetMacClockFreq(t_Handle h_Fm)
+{
+    t_Fm *p_Fm = (t_Fm*)h_Fm;
+
+    return p_Fm->p_FmStateStruct->fmMacClkFreq;
+}
+
 uint32_t FmGetTimeStampScale(t_Handle h_Fm)
 {
     t_Fm                *p_Fm = (t_Fm*)h_Fm;
@@ -3085,6 +3093,7 @@ static t_Error InitGuestMode(t_Fm *p_Fm)
         memcpy((uint8_t*)&ipcParams, reply.replyBody, sizeof(t_FmIpcParams));
 
         p_Fm->p_FmStateStruct->fmClkFreq = ipcParams.fmClkFreq;
+        p_Fm->p_FmStateStruct->fmMacClkFreq = ipcParams.fmMacClkFreq;
         p_Fm->p_FmStateStruct->revInfo.majorRev = ipcParams.majorRev;
         p_Fm->p_FmStateStruct->revInfo.minorRev = ipcParams.minorRev;
     }
@@ -3321,6 +3330,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
     p_Fm->h_FmMuram                             = p_FmParam->h_FmMuram;
     p_Fm->h_App                                 = p_FmParam->h_App;
     p_Fm->p_FmStateStruct->fmClkFreq            = p_FmParam->fmClkFreq;
+    p_Fm->p_FmStateStruct->fmMacClkFreq         = p_FmParam->fmClkFreq / ((!p_FmParam->fmMacClkRatio)? 2: p_FmParam->fmMacClkRatio);
     p_Fm->f_Exception                           = p_FmParam->f_Exception;
     p_Fm->f_BusError                            = p_FmParam->f_BusError;
     p_Fm->p_FmFpmRegs = (struct fman_fpm_regs *)UINT_TO_PTR(baseAddr + FM_MM_FPM);

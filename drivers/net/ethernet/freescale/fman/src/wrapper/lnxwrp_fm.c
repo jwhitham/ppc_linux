@@ -61,6 +61,7 @@
 #include <linux/fsl/qe.h>        /* For struct qe_firmware */
 #include <sysdev/fsl_soc.h>
 #include <asm/fsl_pm.h>
+#include <asm/fsl_guts.h>
 #include <linux/stat.h>	   /* For file access mask */
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
@@ -889,6 +890,39 @@ static t_Error ConfigureFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
     return FillRestFmInfo(p_LnxWrpFmDev);
 }
 
+/*
+ * Table for matching compatible strings, for device tree
+ * guts node, for QorIQ SOCs.
+ * "fsl,qoriq-device-config-2.0" corresponds to T4 & B4
+ * SOCs. For the older SOCs "fsl,qoriq-device-config-1.0"
+ * string would be used.
+*/
+static const struct of_device_id guts_device_ids[] = {
+        { .compatible = "fsl,qoriq-device-config-1.0", },
+        { .compatible = "fsl,qoriq-device-config-2.0", },
+        {}
+};
+
+static unsigned int get_rcwsr(int regnum)
+{
+	struct ccsr_guts __iomem *guts_regs = NULL;
+	struct device_node *guts_node;
+
+	guts_node = of_find_matching_node(NULL, guts_device_ids);
+	if (!guts_node) {
+		pr_err("could not find GUTS node\n");
+		return 0;
+	}
+	guts_regs = of_iomap(guts_node, 0);
+	of_node_put(guts_node);
+	if (!guts_regs) {
+		pr_err("ioremap of GUTS node failed\n");
+		return 0;
+	}
+
+	return ioread32be(&guts_regs->rcwsr[regnum]);
+}
+
 static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
 {
     const struct qe_firmware *fw;
@@ -926,6 +960,13 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
         p_LnxWrpFmDev->fmDevSettings.param.partNumOfVSPs = FM_VSP_MAX_NUM_OF_ENTRIES;
     }
 #endif
+
+    if(p_LnxWrpFmDev->fmDevSettings.param.fmId == 0)
+        p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio =
+            !!(get_rcwsr(4) & 0x2); /* RCW[FM_MAC_RAT0] */
+    else
+        p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio =
+            !!(get_rcwsr(4) & 0x1); /* RCW[FM_MAC_RAT1] */
 
     if ((p_LnxWrpFmDev->h_Dev = FM_Config(&p_LnxWrpFmDev->fmDevSettings.param)) == NULL)
         RETURN_ERROR(MAJOR, E_INVALID_HANDLE, ("FM"));
