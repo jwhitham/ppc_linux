@@ -1521,6 +1521,10 @@ static int __init __cold dpa_generic_load(void)
 
 	pr_info(KBUILD_MODNAME ": " DPA_GENERIC_DESCRIPTION " (" VERSION ")\n");
 
+#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
+	dpa_generic_debugfs_module_init();
+#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
+
 	/* initialise dpaa_eth mirror values */
 	dpa_rx_extra_headroom = fm_get_rx_extra_headroom();
 	dpa_max_frm = fm_get_max_frm();
@@ -1531,10 +1535,6 @@ static int __init __cold dpa_generic_load(void)
 			": %s:%hu:%s(): platform_driver_register() = %d\n",
 			KBUILD_BASENAME".c", __LINE__, __func__, _errno);
 	}
-
-#ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
-	dpa_generic_debugfs_module_init();
-#endif /* CONFIG_FSL_DPAA_ETH_DEBUGFS */
 
 	pr_debug(KBUILD_MODNAME ": %s:%s() ->\n",
 		KBUILD_BASENAME".c", __func__);
