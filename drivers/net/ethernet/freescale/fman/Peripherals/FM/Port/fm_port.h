@@ -509,6 +509,7 @@ typedef _Packed struct
 #define BMI_PORT_RFNE_FRWD_DCL4C                0x10000000
 #define BMI_PORT_RFNE_FRWD_RPD                  0x40000000
 #define BMI_RFNE_FDCS_MASK                      0xFF000000
+#define BMI_RFNE_HXS_MASK                       0x000000FF
 
 #define BMI_CMD_MR_LEAC                         0x00200000
 #define BMI_CMD_MR_SLEAC                        0x00100000

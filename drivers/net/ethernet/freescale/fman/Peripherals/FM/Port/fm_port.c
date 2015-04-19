@@ -1093,6 +1093,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
     uint8_t physicalSchemeId;
     uint32_t ccTreePhysOffset;
     t_FmPcdKgInterModuleBindPortToSchemes schemeBind;
+    uint32_t initialSwPrs = 0;
 
     ASSERT_COND(p_FmPort);
     SANITY_CHECK_RETURN_ERROR(!p_FmPort->p_FmPortDriverParam, E_INVALID_STATE);
@@ -1493,6 +1494,24 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
         for (i = 0; i < p_PcdParams->p_PrsParams->numOfHdrsWithAdditionalParams;
                 i++)
         {
+            /* case for using sw parser as the initial NIA address, before
+               * HW parsing
+               */
+            if ((p_PcdParams->p_PrsParams->additionalParams[i].hdr == HEADER_TYPE_NONE) && 
+                    p_PcdParams->p_PrsParams->additionalParams[i].swPrsEnable)
+            {
+                initialSwPrs = FmPcdGetSwPrsOffset(p_FmPort->h_FmPcd, HEADER_TYPE_NONE,
+                               p_PcdParams->p_PrsParams->additionalParams[i].indexPerHdr);
+                if (initialSwPrs == ILLEGAL_BASE)
+                    RETURN_ERROR(MAJOR, E_INVALID_VALUE, NO_MSG);
+
+                /* clear parser first HXS */
+                p_FmPort->savedBmiNia &= ~BMI_RFNE_HXS_MASK; /* 0x000000FF */
+                /* rewrite with soft parser start */
+                p_FmPort->savedBmiNia |= initialSwPrs;
+                continue;
+            }
+
             hdrNum =
                 GetPrsHdrNum(p_PcdParams->p_PrsParams->additionalParams[i].hdr);
             if (hdrNum == ILLEGAL_HDR_NUM)

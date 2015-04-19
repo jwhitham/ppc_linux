@@ -2176,7 +2176,12 @@ typedef union u_FmPcdHdrPrsOpts {
  @Description   A structure for defining each header for the parser
 *//***************************************************************************/
 typedef struct t_FmPcdPrsAdditionalHdrParams {
-    e_NetHeaderType         hdr;            /**< Selected header */
+    e_NetHeaderType         hdr;            /**< Selected header; use  HEADER_TYPE_NONE
+                                                 to indicate that sw parser is to run first
+                                                 (before HW parser, and independent of the
+                                                 existence of any protocol), in this case,
+                                                 swPrsEnable must be set, and all other
+                                                 parameters are irrelevant.  */
     bool                    errDisable;     /**< TRUE to disable error indication */
     bool                    swPrsEnable;    /**< Enable jump to SW parser when this
                                                  header is recognized by the HW parser. */

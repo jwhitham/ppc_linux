@@ -434,7 +434,10 @@ typedef struct t_FmPcdPrsLabelParams {
     uint32_t                instructionOffset;              /**< SW parser label instruction offset (2 bytes
                                                                  resolution), relative to Parser RAM. */
     e_NetHeaderType         hdr;                            /**< The existence of this header will invoke
-                                                                 the SW parser code. */
+                                                                 the SW parser code; Use  HEADER_TYPE_NONE
+                                                                 to indicate that sw parser is to run
+                                                                 independent of the existence of any protocol
+                                                                 (run before HW parser). */
     uint8_t                 indexPerHdr;                    /**< Normally 0, if more than one SW parser
                                                                  attachments for the same header, use this
                                                                  index to distinguish between them. */
