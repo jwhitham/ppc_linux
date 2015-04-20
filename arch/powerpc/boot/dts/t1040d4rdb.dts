@@ -42,6 +42,23 @@
 	#size-cells = <2>;
 	interrupt-parent = <&mpic>;
 
+	chosen {
+	    name = "chosen";
+
+	    dpaa-extended-args {
+		fman1-extd-args {
+		    cell-index = <0>;
+		    compatible = "fsl,fman-extended-args";
+		    fman1_rx3-extd-args {
+			cell-index = <3>;
+			compatible = "fsl,fman-port-1g-rx-extended-args";
+			ar-tables-sizes = <10 10 10 10 10 10 20 2000>;
+			ar-filters-sizes = <10 20 20>;
+		    };
+		};
+	    };
+	};
+
 	aliases {
 		phy_rgmii_0 = &phy_rgmii_0;
 		phy_rgmii_1 = &phy_rgmii_1;
@@ -59,6 +76,11 @@
 		ranges = <0x00000000 0xf 0xfe000000 0x1000000>;
 		reg = <0xf 0xfe000000 0 0x00001000>;
 
+
+	        qman: qman@318000 {
+	        };
+	        bman: bman@31a000 {
+	        };
 
 		fman0: fman@400000 {
 			sleep = <&rcpm 0x00000008>;
