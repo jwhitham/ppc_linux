@@ -1568,7 +1568,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
                     p_FmPort->p_FmPortPrsRegs->hdrs[i].lcv,
                     FmPcdGetLcv(p_FmPort->h_FmPcd, p_FmPort->netEnvId, (uint8_t)i));
             /* set HXS register according to default+Additional params+protocol options */
-            WRITE_UINT32( p_FmPort->p_FmPortPrsRegs->hdrs[i].softSeqAttach,
+            WRITE_UINT32(p_FmPort->p_FmPortPrsRegs->hdrs[i].softSeqAttach,
                          tmpHxs[i]);
         }
 
@@ -1594,8 +1594,17 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
                     p_PcdParams->p_PrsParams->prsResultPrivateInfo;
 
     } /* end parser */
-    else
+    else {
+        if (FmPcdIsAdvancedOffloadSupported(p_FmPort->h_FmPcd)
+            && (p_FmPort->portType == e_FM_PORT_TYPE_OH_OFFLINE_PARSING))
+        {
+            hdrNum = GetPrsHdrNum(HEADER_TYPE_IPv6);
+            WRITE_UINT32(p_FmPort->p_FmPortPrsRegs->hdrs[hdrNum].softSeqAttach,
+                         (PRS_HDR_SW_PRS_EN | OFFLOAD_SW_PATCH_IPv6_LABEL));
+        }
+
         p_FmPort->privateInfo = 0;
+    }
 
     WRITE_UINT32(
             *p_BmiPrsStartOffset,

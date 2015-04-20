@@ -218,8 +218,8 @@ typedef uint32_t fmPcdEngines_t; /**< options as defined below: */
 #define OFFLOAD_SW_PATCH_IPv4_LABEL             0x300
 #else
 #define OFFLOAD_SW_PATCH_IPv4_SIZE              0x046
-#define OFFLOAD_SW_PATCH_IPv4_LABEL             0x1E0
-#define OFFLOAD_CAPWAP_SW_PATCH_LABEL           0x39b
+#define OFFLOAD_SW_PATCH_IPv4_LABEL             0x1D0
+#define OFFLOAD_CAPWAP_SW_PATCH_LABEL           0x38d
 #endif /* (DPAA_VERSION == 10) */
 /* Will be used for:
  * 1. identify fragments
