@@ -179,7 +179,7 @@ typedef enum
 
 /* Rams defines */
 #define FM_MURAM_SIZE                   (160*KILOBYTE)
-#define FM_IRAM_SIZE                    ( 64*KILOBYTE)
+#define FM_IRAM_SIZE(major, minor)      (64 * KILOBYTE)
 #define FM_NUM_OF_CTRL                  2
 
 /* PCD defines */

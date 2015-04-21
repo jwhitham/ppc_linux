@@ -397,18 +397,20 @@ static t_Error ClearIRam(t_Fm *p_Fm)
 {
     t_FMIramRegs    *p_Iram;
     int             i;
+    int             iram_size;
 
     ASSERT_COND(p_Fm);
     p_Iram = (t_FMIramRegs *)UINT_TO_PTR(p_Fm->baseAddr + FM_MM_IMEM);
+    iram_size = FM_IRAM_SIZE(p_Fm->p_FmStateStruct->revInfo.majorRev,p_Fm->p_FmStateStruct->revInfo.minorRev);
 
     /* Enable the auto-increment */
     WRITE_UINT32(p_Iram->iadd, IRAM_IADD_AIE);
     while (GET_UINT32(p_Iram->iadd) != IRAM_IADD_AIE) ;
 
-    for (i=0; i < (FM_IRAM_SIZE/4); i++)
+    for (i=0; i < (iram_size/4); i++)
         WRITE_UINT32(p_Iram->idata, 0xffffffff);
 
-    WRITE_UINT32(p_Iram->iadd, FM_IRAM_SIZE - 4);
+    WRITE_UINT32(p_Iram->iadd, iram_size - 4);
     CORE_MemoryBarrier();
     while (GET_UINT32(p_Iram->idata) != 0xffffffff) ;
 
