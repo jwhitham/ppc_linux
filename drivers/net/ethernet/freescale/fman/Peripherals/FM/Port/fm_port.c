@@ -1603,6 +1603,8 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
                          (PRS_HDR_SW_PRS_EN | OFFLOAD_SW_PATCH_IPv6_LABEL));
         }
 
+        WRITE_UINT32(*p_BmiPrsStartOffset, 0);
+
         p_FmPort->privateInfo = 0;
     }
 
@@ -1672,13 +1674,13 @@ static t_Error DeletePcd(t_FmPort *p_FmPort)
         RETURN_ERROR(MAJOR, E_INVALID_OPERATION,
                      ("port has to be detached previousely"));
 
+    WRITE_UINT32(*p_BmiPrsStartOffset, 0);
+
     /* "cut" PCD out of the port's flow - go to BMI */
     /* WRITE_UINT32(*p_BmiNia, (p_FmPort->savedBmiNia & BMI_RFNE_FDCS_MASK) | (NIA_ENG_BMI | NIA_BMI_AC_ENQ_FRAME)); */
 
     if (p_FmPort->pcdEngines & FM_PCD_PRS)
     {
-        WRITE_UINT32(*p_BmiPrsStartOffset, 0);
-
         /* stop parser */
         WRITE_UINT32(p_FmPort->p_FmPortPrsRegs->pcac, PRS_CAC_STOP);
         /* wait for parser to be in idle state */
