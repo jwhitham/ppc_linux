@@ -2702,6 +2702,12 @@ int qman_ceetm_lni_enable_shaper(struct qm_ceetm_lni *lni, int coupled,
 int qman_ceetm_lni_disable_shaper(struct qm_ceetm_lni *lni);
 
 /**
+ * qman_ceetm_lni_is_shaper_enabled - Check LNI shaper status
+ * @lni: the give LNI
+ */
+int qman_ceetm_lni_is_shaper_enabled(struct qm_ceetm_lni *lni);
+
+/**
  * qman_ceetm_lni_set_commit_rate
  * qman_ceetm_lni_get_commit_rate
  * qman_ceetm_lni_set_excess_rate
@@ -2730,6 +2736,33 @@ int qman_ceetm_lni_set_excess_rate(struct qm_ceetm_lni *lni,
 int qman_ceetm_lni_get_excess_rate(struct qm_ceetm_lni *lni,
 				   struct qm_ceetm_rate *token_rate,
 				   u16 *token_limit);
+/**
+ * qman_ceetm_lni_set_commit_rate_bps
+ * qman_ceetm_lni_get_commit_rate_bps
+ * qman_ceetm_lni_set_excess_rate_bps
+ * qman_ceetm_lni_get_excess_rate_bps - Set/get the shaper CR/ER rate
+ * and token limit for the given LNI.
+ * @lni: the given LNI.
+ * @bps: the desired shaping rate in bps for "set" fuction, or the shaping rate
+ * of the LNI queried by "get" function.
+ * @token_limit: the desired token bucket limit for "set" function, or the token
+ * limit of the given LNI queried by "get" function.
+ *
+ * Returns zero for success. The "set" function returns -EINVAL if the given
+ * LNI is unshapped or -EIO if the configure shaper command returns error.
+ * The "get" function returns -EINVAL if the token rate or the token limit is
+ * not set or the query command returns error.
+ */
+int qman_ceetm_lni_set_commit_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 bps,
+				       u16 token_limit);
+int qman_ceetm_lni_get_commit_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 *bps, u16 *token_limit);
+int qman_ceetm_lni_set_excess_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 bps,
+				       u16 token_limit);
+int qman_ceetm_lni_get_excess_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 *bps, u16 *token_limit);
 
 /**
  * qman_ceetm_lni_set_tcfcc
@@ -2808,6 +2841,12 @@ int qman_ceetm_channel_enable_shaper(struct qm_ceetm_channel *channel,
 int qman_ceetm_channel_disable_shaper(struct qm_ceetm_channel *channel);
 
 /**
+ * qman_ceetm_channel_is_shaper_enabled - Check channel shaper status.
+ * @channel: the give channel.
+ */
+int qman_ceetm_channel_is_shaper_enabled(struct qm_ceetm_channel *channel);
+
+/**
  * qman_ceetm_channel_set_commit_rate
  * qman_ceetm_channel_get_commit_rate
  * qman_ceetm_channel_set_excess_rate
@@ -2835,6 +2874,31 @@ int qman_ceetm_channel_set_excess_rate(struct qm_ceetm_channel *channel,
 int qman_ceetm_channel_get_excess_rate(struct qm_ceetm_channel *channel,
 				   struct qm_ceetm_rate *token_rate,
 				   u16 *token_limit);
+/**
+ * qman_ceetm_channel_set_commit_rate_bps
+ * qman_ceetm_channel_get_commit_rate_bps
+ * qman_ceetm_channel_set_excess_rate_bps
+ * qman_ceetm_channel_get_excess_rate_bps - Set/get channel CR/ER shaper
+ * parameters.
+ * @channel: the given channel.
+ * @token_rate: the desired shaper rate in bps for "set" function, or the
+ * shaper rate in bps for "get" function.
+ * @token_limit: the desired token limit for "set" function, or the queried
+ * token limit for "get" function.
+ *
+ * Return zero for success. The "set" function returns -EINVAL if the channel
+ * is unshaped, or -EIO if the configure shapper command returns error. The
+ * "get" function returns -EINVAL if token rate of token limit is not set, or
+ * the query shaper command returns error.
+ */
+int qman_ceetm_channel_set_commit_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 bps, u16 token_limit);
+int qman_ceetm_channel_get_commit_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 *bps, u16 *token_limit);
+int qman_ceetm_channel_set_excess_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 bps, u16 token_limit);
+int qman_ceetm_channel_get_excess_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 *bps, u16 *token_limit);
 
 /**
  * qman_ceetm_channel_set_weight
@@ -3009,6 +3073,21 @@ int qman_ceetm_set_queue_weight(struct qm_ceetm_cq *cq,
 int qman_ceetm_get_queue_weight(struct qm_ceetm_cq *cq,
 				struct qm_ceetm_weight_code *weight_code);
 
+/**
+ * qman_ceetm_set_queue_weight_in_ratio
+ * qman_ceetm_get_queue_weight_in_ratio - Configure/query the weight of a
+ * grouped class queue.
+ * @cq: the given class queue.
+ * @ratio: the weight in ratio. It should be the real ratio number multiplied
+ * by 100 to get rid of fraction.
+ *
+ * Returns zero for success, or -EIO if the configure weight command returns
+ * error for "set" function, or -EINVAL if the query command returns
+ * error for "get" function.
+ */
+int qman_ceetm_set_queue_weight_in_ratio(struct qm_ceetm_cq *cq, u32 ratio);
+int qman_ceetm_get_queue_weight_in_ratio(struct qm_ceetm_cq *cq, u32 *ratio);
+
 /* Weights are encoded using a pseudo-exponential scheme. The weight codes 0,
  * 32, 64, [...] correspond to weights of 1, 2, 4, [...]. The weights
  * corresponding to intermediate weight codes are calculated using linear
@@ -3076,6 +3155,13 @@ int qman_ceetm_ratio2wbfs(u32 numerator,
  */
 int qman_ceetm_cq_get_dequeue_statistics(struct qm_ceetm_cq *cq, u32 flags,
 					u64 *frame_count, u64 *byte_count);
+
+/**
+ * qman_ceetm_drain_cq - drain the CQ till it is empty.
+ * @cq: the give CQ object.
+ * Return 0 for success or -EINVAL for unsuccessful command to empty CQ.
+ */
+int qman_ceetm_drain_cq(struct qm_ceetm_cq *cq);
 
 	/* ---------------------- */
 	/* CEETM :: logical FQIDs */

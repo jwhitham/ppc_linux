@@ -3504,11 +3504,6 @@ int qman_ceetm_lni_enable_shaper(struct qm_ceetm_lni *lni, int coupled,
 {
 	struct qm_mcc_ceetm_mapping_shaper_tcfc_config config_opts;
 
-	if (lni->shaper_enable) {
-		pr_err("The shaper has already been enabled\n");
-		return -EINVAL;
-	}
-
 	lni->shaper_enable = 1;
 	lni->shaper_couple = coupled;
 	lni->oal = oal;
@@ -3550,6 +3545,12 @@ int qman_ceetm_lni_disable_shaper(struct qm_ceetm_lni *lni)
 }
 EXPORT_SYMBOL(qman_ceetm_lni_disable_shaper);
 
+int qman_ceetm_lni_is_shaper_enabled(struct qm_ceetm_lni *lni)
+{
+	return lni->shaper_enable;
+}
+EXPORT_SYMBOL(qman_ceetm_lni_is_shaper_enabled);
+
 int qman_ceetm_lni_set_commit_rate(struct qm_ceetm_lni *lni,
 				const struct qm_ceetm_rate *token_rate,
 				u16 token_limit)
@@ -3559,34 +3560,52 @@ int qman_ceetm_lni_set_commit_rate(struct qm_ceetm_lni *lni,
 	struct qm_mcr_ceetm_mapping_shaper_tcfc_query query_result;
 	int ret;
 
-	if (!lni->shaper_enable) {
-		pr_err("The LNI#%d is unshaped, cannot set CR rate\n",
-						lni->idx);
-		return -EINVAL;
-	}
-
-	query_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
-	query_opts.dcpid = lni->dcp_idx;
-	ret = qman_ceetm_query_mapping_shaper_tcfc(&query_opts, &query_result);
-	if (ret) {
-		pr_err("Fail to get current LNI shaper setting\n");
-		return -EINVAL;
-	}
-
 	lni->cr_token_rate.whole = token_rate->whole;
 	lni->cr_token_rate.fraction = token_rate->fraction;
 	lni->cr_token_bucket_limit = token_limit;
-	config_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
-	config_opts.dcpid = lni->dcp_idx;
-	config_opts.shaper_config.crtcr = (token_rate->whole << 13) |
-				 (token_rate->fraction);
-	config_opts.shaper_config.crtbl = token_limit;
-	config_opts.shaper_config.cpl = query_result.shaper_query.cpl;
-	config_opts.shaper_config.ertcr = query_result.shaper_query.ertcr;
-	config_opts.shaper_config.ertbl = query_result.shaper_query.ertbl;
-	return	qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
+	if (lni->shaper_enable) {
+		query_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
+		query_opts.dcpid = lni->dcp_idx;
+		ret = qman_ceetm_query_mapping_shaper_tcfc(&query_opts,
+							&query_result);
+		if (ret) {
+			pr_err("Fail to get current LNI shaper setting\n");
+			return -EINVAL;
+		}
+
+		config_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
+		config_opts.dcpid = lni->dcp_idx;
+		config_opts.shaper_config.crtcr = (token_rate->whole << 13) |
+					 (token_rate->fraction);
+		config_opts.shaper_config.crtbl = token_limit;
+		config_opts.shaper_config.cpl = query_result.shaper_query.cpl;
+		config_opts.shaper_config.ertcr =
+					query_result.shaper_query.ertcr;
+		config_opts.shaper_config.ertbl =
+					query_result.shaper_query.ertbl;
+		return	qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
+	} else {
+		return 0;
+	}
 }
 EXPORT_SYMBOL(qman_ceetm_lni_set_commit_rate);
+
+int qman_ceetm_lni_set_commit_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 bps,
+				       u16 token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_bps2tokenrate(bps, &token_rate, 0);
+	if (ret) {
+		pr_err("Can not convert bps to token rate\n");
+		return -EINVAL;
+	}
+
+	return qman_ceetm_lni_set_commit_rate(lni, &token_rate, token_limit);
+}
+EXPORT_SYMBOL(qman_ceetm_lni_set_commit_rate_bps);
 
 int qman_ceetm_lni_get_commit_rate(struct qm_ceetm_lni *lni,
 				struct qm_ceetm_rate *token_rate,
@@ -3611,6 +3630,22 @@ int qman_ceetm_lni_get_commit_rate(struct qm_ceetm_lni *lni,
 }
 EXPORT_SYMBOL(qman_ceetm_lni_get_commit_rate);
 
+int qman_ceetm_lni_get_commit_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 *bps, u16 *token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_lni_get_commit_rate(lni, &token_rate, token_limit);
+	if (ret) {
+		pr_err("The LNI CR rate or limit is not available\n");
+		return -EINVAL;
+	}
+
+	return qman_ceetm_tokenrate2bps(&token_rate, bps, 0);
+}
+EXPORT_SYMBOL(qman_ceetm_lni_get_commit_rate_bps);
+
 int qman_ceetm_lni_set_excess_rate(struct qm_ceetm_lni *lni,
 					const struct qm_ceetm_rate *token_rate,
 					u16 token_limit)
@@ -3620,35 +3655,53 @@ int qman_ceetm_lni_set_excess_rate(struct qm_ceetm_lni *lni,
 	struct qm_mcr_ceetm_mapping_shaper_tcfc_query query_result;
 	int ret;
 
-	if (!lni->shaper_enable) {
-		pr_err("The LIN#%d is unshaped, cannot set ER rate\n",
-								lni->idx);
-		return -EINVAL;
-	}
-
-	query_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
-	query_opts.dcpid = lni->dcp_idx;
-	ret = qman_ceetm_query_mapping_shaper_tcfc(&query_opts, &query_result);
-	if (ret) {
-		pr_err("Fail to get current LNI shaper setting\n");
-		return -EINVAL;
-	}
-
 	lni->er_token_rate.whole = token_rate->whole;
 	lni->er_token_rate.fraction = token_rate->fraction;
 	lni->er_token_bucket_limit = token_limit;
-	config_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
-	config_opts.dcpid = lni->dcp_idx;
-	config_opts.shaper_config.ertcr =
-			 (token_rate->whole << 13) | (token_rate->fraction);
-	config_opts.shaper_config.ertbl = token_limit;
-	config_opts.shaper_config.cpl = query_result.shaper_query.cpl;
-	config_opts.shaper_config.crtcr = query_result.shaper_query.crtcr;
-	config_opts.shaper_config.crtbl = query_result.shaper_query.crtbl;
+	if (lni->shaper_enable) {
+		query_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
+		query_opts.dcpid = lni->dcp_idx;
+		ret = qman_ceetm_query_mapping_shaper_tcfc(&query_opts,
+							&query_result);
+		if (ret) {
+			pr_err("Fail to get current LNI shaper setting\n");
+			return -EINVAL;
+		}
 
-	return qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
+		config_opts.cid = CEETM_COMMAND_LNI_SHAPER | lni->idx;
+		config_opts.dcpid = lni->dcp_idx;
+		config_opts.shaper_config.ertcr =
+			 (token_rate->whole << 13) | (token_rate->fraction);
+		config_opts.shaper_config.ertbl = token_limit;
+		config_opts.shaper_config.cpl = query_result.shaper_query.cpl;
+		config_opts.shaper_config.crtcr =
+					query_result.shaper_query.crtcr;
+		config_opts.shaper_config.crtbl =
+					query_result.shaper_query.crtbl;
+
+		return qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
+	} else {
+		return 0;
+	}
 }
 EXPORT_SYMBOL(qman_ceetm_lni_set_excess_rate);
+
+int qman_ceetm_lni_set_excess_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 bps,
+				       u16 token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_bps2tokenrate(bps, &token_rate, 0);
+	if (ret) {
+		pr_err("Can not convert bps to token rate\n");
+		return -EINVAL;
+	}
+
+	return qman_ceetm_lni_set_excess_rate(lni, &token_rate, token_limit);
+}
+EXPORT_SYMBOL(qman_ceetm_lni_set_excess_rate_bps);
 
 int qman_ceetm_lni_get_excess_rate(struct qm_ceetm_lni *lni,
 					struct qm_ceetm_rate *token_rate,
@@ -3671,6 +3724,22 @@ int qman_ceetm_lni_get_excess_rate(struct qm_ceetm_lni *lni,
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_lni_get_excess_rate);
+
+int qman_ceetm_lni_get_excess_rate_bps(struct qm_ceetm_lni *lni,
+				       u64 *bps, u16 *token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_lni_get_excess_rate(lni, &token_rate, token_limit);
+	if (ret) {
+		pr_err("The LNI ER rate or limit is not available\n");
+		return -EINVAL;
+	}
+
+	return qman_ceetm_tokenrate2bps(&token_rate, bps, 0);
+}
+EXPORT_SYMBOL(qman_ceetm_lni_get_excess_rate_bps);
 
 #define QMAN_CEETM_LNITCFCC_CQ_LEVEL_SHIFT(n) ((15 - n) * 4)
 #define QMAN_CEETM_LNITCFCC_ENABLE 0x8
@@ -3893,11 +3962,6 @@ int qman_ceetm_channel_disable_shaper(struct qm_ceetm_channel *channel)
 	struct qm_mcc_ceetm_mapping_shaper_tcfc_config config_opts;
 	u8 map;
 
-	if (channel->shaper_enable == 0) {
-		pr_err("This channel shaper has been disabled\n");
-		return -EINVAL;
-	}
-
 	query_opts.cid = CEETM_COMMAND_CHANNEL_MAPPING | channel->idx;
 	query_opts.dcpid = channel->dcp_idx;
 
@@ -3916,6 +3980,25 @@ int qman_ceetm_channel_disable_shaper(struct qm_ceetm_channel *channel)
 }
 EXPORT_SYMBOL(qman_ceetm_channel_disable_shaper);
 
+int qman_ceetm_channel_is_shaper_enabled(struct qm_ceetm_channel *channel)
+{
+	struct qm_mcc_ceetm_mapping_shaper_tcfc_query query_opts;
+	struct qm_mcr_ceetm_mapping_shaper_tcfc_query query_result;
+	u8 map;
+
+	query_opts.cid = CEETM_COMMAND_CHANNEL_MAPPING | channel->idx;
+	query_opts.dcpid = channel->dcp_idx;
+
+	if (qman_ceetm_query_mapping_shaper_tcfc(&query_opts, &query_result)) {
+		pr_err("Can't query channel mapping\n");
+		return -EINVAL;
+	}
+
+	map = query_result.channel_mapping_query.map;
+	return (map & QMAN_CEETM_ENABLE_CHANNEL_SHAPER) ? 1 : 0;
+}
+EXPORT_SYMBOL(qman_ceetm_channel_is_shaper_enabled);
+
 int qman_ceetm_channel_set_commit_rate(struct qm_ceetm_channel *channel,
 				const struct qm_ceetm_rate *token_rate,
 				u16 token_limit)
@@ -3924,11 +4007,6 @@ int qman_ceetm_channel_set_commit_rate(struct qm_ceetm_channel *channel,
 	struct qm_mcc_ceetm_mapping_shaper_tcfc_query query_opts;
 	struct qm_mcr_ceetm_mapping_shaper_tcfc_query query_result;
 	int ret;
-
-	if (!channel->shaper_enable) {
-		pr_err("This channel is unshaped\n");
-		return -EINVAL;
-	}
 
 	query_opts.cid = CEETM_COMMAND_CHANNEL_SHAPER | channel->idx;
 	query_opts.dcpid = channel->dcp_idx;
@@ -3954,6 +4032,22 @@ int qman_ceetm_channel_set_commit_rate(struct qm_ceetm_channel *channel,
 }
 EXPORT_SYMBOL(qman_ceetm_channel_set_commit_rate);
 
+int qman_ceetm_channel_set_commit_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 bps, u16 token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_bps2tokenrate(bps, &token_rate, 0);
+	if (ret) {
+		pr_err("Can not convert bps to token rate\n");
+		return -EINVAL;
+	}
+	return qman_ceetm_channel_set_commit_rate(channel, &token_rate,
+						  token_limit);
+}
+EXPORT_SYMBOL(qman_ceetm_channel_set_commit_rate_bps);
+
 int qman_ceetm_channel_get_commit_rate(struct qm_ceetm_channel *channel,
 				struct qm_ceetm_rate *token_rate,
 				u16 *token_limit)
@@ -3978,6 +4072,23 @@ int qman_ceetm_channel_get_commit_rate(struct qm_ceetm_channel *channel,
 }
 EXPORT_SYMBOL(qman_ceetm_channel_get_commit_rate);
 
+int qman_ceetm_channel_get_commit_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 *bps, u16 *token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_channel_get_commit_rate(channel, &token_rate,
+						 token_limit);
+	if (ret) {
+		pr_err("The channel CR rate or limit is not available\n");
+		return -EINVAL;
+	}
+
+	return qman_ceetm_tokenrate2bps(&token_rate, bps, 0);
+}
+EXPORT_SYMBOL(qman_ceetm_channel_get_commit_rate_bps);
+
 int qman_ceetm_channel_set_excess_rate(struct qm_ceetm_channel *channel,
 					const struct qm_ceetm_rate *token_rate,
 					u16 token_limit)
@@ -3986,11 +4097,6 @@ int qman_ceetm_channel_set_excess_rate(struct qm_ceetm_channel *channel,
 	struct qm_mcc_ceetm_mapping_shaper_tcfc_query query_opts;
 	struct qm_mcr_ceetm_mapping_shaper_tcfc_query query_result;
 	int ret;
-
-	if (!channel->shaper_enable) {
-		pr_err("This channel is unshaped\n");
-		return -EINVAL;
-	}
 
 	query_opts.cid = CEETM_COMMAND_CHANNEL_SHAPER | channel->idx;
 	query_opts.dcpid = channel->dcp_idx;
@@ -4015,6 +4121,22 @@ int qman_ceetm_channel_set_excess_rate(struct qm_ceetm_channel *channel,
 }
 EXPORT_SYMBOL(qman_ceetm_channel_set_excess_rate);
 
+int qman_ceetm_channel_set_excess_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 bps, u16 token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_bps2tokenrate(bps, &token_rate, 0);
+	if (ret) {
+		pr_err("Can not convert bps to token rate\n");
+		return -EINVAL;
+	}
+	return qman_ceetm_channel_set_excess_rate(channel, &token_rate,
+						  token_limit);
+}
+EXPORT_SYMBOL(qman_ceetm_channel_set_excess_rate_bps);
+
 int qman_ceetm_channel_get_excess_rate(struct qm_ceetm_channel *channel,
 					struct qm_ceetm_rate *token_rate,
 					u16 *token_limit)
@@ -4037,6 +4159,23 @@ int qman_ceetm_channel_get_excess_rate(struct qm_ceetm_channel *channel,
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_channel_get_excess_rate);
+
+int qman_ceetm_channel_get_excess_rate_bps(struct qm_ceetm_channel *channel,
+					   u64 *bps, u16 *token_limit)
+{
+	struct qm_ceetm_rate token_rate;
+	int ret;
+
+	ret = qman_ceetm_channel_get_excess_rate(channel, &token_rate,
+						 token_limit);
+	if (ret) {
+		pr_err("The channel ER rate or limit is not available\n");
+		return -EINVAL;
+	}
+
+	return qman_ceetm_tokenrate2bps(&token_rate, bps, 0);
+}
+EXPORT_SYMBOL(qman_ceetm_channel_get_excess_rate_bps);
 
 int qman_ceetm_channel_set_weight(struct qm_ceetm_channel *channel,
 						u16 token_limit)
@@ -4416,6 +4555,7 @@ int qman_ceetm_cq_release(struct qm_ceetm_cq *cq)
 		return -EBUSY;
 	}
 	list_del(&cq->node);
+	qman_ceetm_drain_cq(cq);
 	kfree(cq);
 	return 0;
 }
@@ -4549,6 +4689,38 @@ int qman_ceetm_ratio2wbfs(u32 numerator,
 }
 EXPORT_SYMBOL(qman_ceetm_ratio2wbfs);
 
+int qman_ceetm_set_queue_weight_in_ratio(struct qm_ceetm_cq *cq, u32 ratio)
+{
+	struct qm_ceetm_weight_code weight_code;
+
+	if (qman_ceetm_ratio2wbfs(ratio, 100, &weight_code, 0)) {
+		pr_err("Cannot get wbfs code for cq %x\n", cq->idx);
+		return -EINVAL;
+	}
+	return qman_ceetm_set_queue_weight(cq, &weight_code);
+}
+EXPORT_SYMBOL(qman_ceetm_set_queue_weight_in_ratio);
+
+int qman_ceetm_get_queue_weight_in_ratio(struct qm_ceetm_cq *cq, u32 *ratio)
+{
+	struct qm_ceetm_weight_code weight_code;
+	u32 n, d;
+
+	if (qman_ceetm_get_queue_weight(cq, &weight_code)) {
+		pr_err("Cannot query the weight code for cq%x\n", cq->idx);
+		return -EINVAL;
+	}
+
+	if (qman_ceetm_wbfs2ratio(&weight_code, &n, &d)) {
+		pr_err("Cannot get the ratio with wbfs code\n");
+		return -EINVAL;
+	}
+
+	*ratio = (n * (u32)100) / d;
+	return 0;
+}
+EXPORT_SYMBOL(qman_ceetm_get_queue_weight_in_ratio);
+
 int qman_ceetm_cq_get_dequeue_statistics(struct qm_ceetm_cq *cq, u32 flags,
 					u64 *frame_count, u64 *byte_count)
 {
@@ -4575,6 +4747,23 @@ int qman_ceetm_cq_get_dequeue_statistics(struct qm_ceetm_cq *cq, u32 flags,
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_cq_get_dequeue_statistics);
+
+int qman_ceetm_drain_cq(struct qm_ceetm_cq *cq)
+{
+	struct qm_mcr_ceetm_cq_peek_pop_xsfdrread ppxr;
+	int ret;
+
+	do {
+		ret = qman_ceetm_cq_peek_pop_xsfdrread(cq, 1, 0, &ppxr);
+		if (ret) {
+			pr_err("Failed to pop frame from CQ\n");
+			return -EINVAL;
+		}
+	} while (!(ppxr.stat & 0x2));
+
+	return 0;
+}
+EXPORT_SYMBOL(qman_ceetm_drain_cq);
 
 #define CEETM_LFQMT_LFQID_MSB 0xF00000
 #define CEETM_LFQMT_LFQID_LSB 0x000FFF
