@@ -47,6 +47,7 @@
 #define MACSEC_ICV_SIZE             16
 #define MACSEC_SECTAG_SIZE          16
 #define MACSEC_SCI_SIZE             8
+#define MACSEC_FCS_SIZE             4
 
 /**************************************************************************//**
  @Description       Exceptions
@@ -137,7 +138,8 @@
 #define DEFAULT_sc0ReservedForPTP                       FALSE
 #define DEFAULT_initNextPn                              1
 #define DEFAULT_pnExhThr                                0xffffffff
-#define DEFAULT_overhead                                (MACSEC_ICV_SIZE + MACSEC_SECTAG_SIZE)
+#define DEFAULT_sectagOverhead                          (MACSEC_ICV_SIZE + MACSEC_SECTAG_SIZE)
+#define DEFAULT_mflSubtract                             MACSEC_FCS_SIZE
 
 
 /**************************************************************************//**
@@ -447,6 +449,7 @@ typedef struct
     bool                                byPassMode;
     bool                                reservedSc0;
     uint32_t                            sectagOverhead;
+    uint32_t                            mflSubtract;
 } t_FmMacsecDriverParam;
 
 typedef struct

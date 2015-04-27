@@ -151,8 +151,9 @@ static t_Error MacsecInit(t_Handle h_FmMacsec)
     WRITE_UINT32(p_FmMacsec->p_FmMacsecRegs->cfg, tmpReg);
 
     tmpReg = FM_MAC_GetMaxFrameLength(p_FmMacsec->h_FmMac);
-    /* Ethernet FCS (4 bytes) overhead must be subtracted from MFL*/
-    tmpReg -= 4;
+    /* At least Ethernet FCS (4 bytes) overhead must be subtracted from MFL.
+     * In addition, the SCI (8 bytes) overhead might be subtracted as well. */
+    tmpReg -= p_FmMacsecDriverParam->mflSubtract;
     WRITE_UINT32(p_FmMacsec->p_FmMacsecRegs->mfl, tmpReg);
 
     WRITE_UINT32(p_FmMacsec->p_FmMacsecRegs->tpnet, p_FmMacsecDriverParam->pnExhThr);
@@ -320,6 +321,7 @@ static t_Error MacsecConfigSectagWithoutSCI(t_Handle h_FmMacsec)
     SANITY_CHECK_RETURN_ERROR(p_FmMacsec->p_FmMacsecDriverParam, E_INVALID_HANDLE);
 
     p_FmMacsec->p_FmMacsecDriverParam->sectagOverhead -= MACSEC_SCI_SIZE;
+    p_FmMacsec->p_FmMacsecDriverParam->mflSubtract += MACSEC_SCI_SIZE;
 
     return E_OK;
 }
@@ -1012,7 +1014,8 @@ t_Handle FM_MACSEC_MASTER_Config(t_FmMacsecParams *p_FmMacsecParam)
     p_FmMacsec->p_FmMacsecDriverParam->reservedSc0                                   = DEFAULT_sc0ReservedForPTP;
     p_FmMacsec->p_FmMacsecDriverParam->byPassMode                                    = !DEFAULT_normalMode;
     p_FmMacsec->p_FmMacsecDriverParam->pnExhThr                                      = DEFAULT_pnExhThr;
-    p_FmMacsec->p_FmMacsecDriverParam->sectagOverhead                                = DEFAULT_overhead;
+    p_FmMacsec->p_FmMacsecDriverParam->sectagOverhead                                = DEFAULT_sectagOverhead;
+    p_FmMacsec->p_FmMacsecDriverParam->mflSubtract                                   = DEFAULT_mflSubtract;
     /* build the FM MACSEC master IPC address */
     memset(p_FmMacsec->fmMacsecModuleName, 0, (sizeof(char))*MODULE_NAME_SIZE);
     FM_MAC_GetId(p_FmMacsec->h_FmMac,&macId);
