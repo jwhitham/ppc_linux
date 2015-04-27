@@ -1530,29 +1530,25 @@ static int enable_macsec(struct generic_msg *gen)
 	void __iomem *mac_dev_base_addr;
 	uintptr_t macsec_reg_addr;
 	struct macsec_data *mdata;
-	char *if_name;
+	char if_name[IFNAMSIZ];
 	struct macsec_priv_s *selected_macsec_priv;
 
-	mdata = kmalloc(sizeof(*mdata), GFP_KERNEL);
-	memcpy(mdata, &gen->payload.en_macsec, sizeof(*mdata));
+	mdata = &gen->payload.en_macsec;
 
-	if_name = kmalloc((strlen(mdata->if_name) + 1), GFP_KERNEL);
-	if (unlikely(!if_name)) {
-		pr_err("error when allocating memory\n");
-		return -ENOMEM;
+	if (unlikely(mdata->if_name_length > IFNAMSIZ)) {
+		pr_err("interface name too long\n");
+		return -EINVAL;
 	}
 
 	rv = copy_from_user(if_name, mdata->if_name, mdata->if_name_length);
 	if (unlikely(rv != 0)) {
 		pr_err("copy_from_user could not copy %i bytes\n", rv);
-		kfree(if_name);
 		return -EFAULT;
 	}
 
 	macsec_id = ifname_to_id(if_name);
 	if (macsec_id < 0 || macsec_id >= FM_MAX_NUM_OF_MACS) {
 		pr_err("error on converting to macsec_id\n");
-		kfree(if_name);
 		return -ENXIO;
 	}
 
@@ -1560,7 +1556,6 @@ static int enable_macsec(struct generic_msg *gen)
 
 	if (selected_macsec_priv->fm_macsec) {
 		pr_err("macsec has already been configured\n");
-		kfree(if_name);
 		return -EINVAL;
 	}
 
@@ -1580,10 +1575,8 @@ static int enable_macsec(struct generic_msg *gen)
 	macsec_params.non_guest_params.app_h = selected_macsec_priv->mac_dev;
 
 	selected_macsec_priv->fm_macsec = fm_macsec_config(&macsec_params);
-	if (unlikely(selected_macsec_priv->fm_macsec == NULL)) {
-		kfree(if_name);
+	if (unlikely(selected_macsec_priv->fm_macsec == NULL))
 		return -EINVAL;
-	}
 
 	if (mdata->config_unknown_sci_treatment) {
 		rv = fm_macsec_config_unknown_sci_frame_treatment(
@@ -1655,11 +1648,9 @@ static int enable_macsec(struct generic_msg *gen)
 	if (unlikely(rv < 0))
 		goto _return_fm_macsec_free;
 
-	kfree(if_name);
 	return macsec_id;
 
 _return_fm_macsec_free:
-	kfree(if_name);
 	fm_macsec_free(selected_macsec_priv->fm_macsec);
 	selected_macsec_priv->fm_macsec = NULL;
 	return rv;
