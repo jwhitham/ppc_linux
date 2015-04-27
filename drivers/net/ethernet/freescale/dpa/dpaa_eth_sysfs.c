@@ -244,8 +244,8 @@ static struct device_attribute dpaa_eth_attrs[] = {
 	__ATTR(fqids, S_IRUGO, dpaa_eth_show_fqids, NULL),
 	__ATTR(bpids, S_IRUGO, dpaa_eth_show_bpids, NULL),
 	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_regs, NULL),
-	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_rx_stats, NULL),
-	__ATTR(mac_regs, S_IRUGO, dpaa_eth_show_mac_tx_stats, NULL),
+	__ATTR(mac_rx_stats, S_IRUGO, dpaa_eth_show_mac_rx_stats, NULL),
+	__ATTR(mac_tx_stats, S_IRUGO, dpaa_eth_show_mac_tx_stats, NULL),
 #ifdef CONFIG_FSL_DPAA_1588
 	__ATTR(ptp_1588, S_IRUGO | S_IWUSR, dpaa_eth_show_ptp_1588,
 					dpaa_eth_set_ptp_1588),
