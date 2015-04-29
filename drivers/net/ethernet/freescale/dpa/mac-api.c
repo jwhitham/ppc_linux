@@ -818,6 +818,7 @@ int fm_mac_dump_rx_stats(struct mac_device *h_mac, char *buf, int nn)
 
 	return n;
 }
+EXPORT_SYMBOL(fm_mac_dump_rx_stats);
 
 int fm_mac_dump_tx_stats(struct mac_device *h_mac, char *buf, int nn)
 {
@@ -828,6 +829,7 @@ int fm_mac_dump_tx_stats(struct mac_device *h_mac, char *buf, int nn)
 
 	return n;
 }
+EXPORT_SYMBOL(fm_mac_dump_tx_stats);
 
 static void __cold setup_dtsec(struct mac_device *mac_dev)
 {

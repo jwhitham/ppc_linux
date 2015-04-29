@@ -821,6 +821,7 @@ void dpa_bp_drain(struct dpa_bp *bp)
 		}
 	} while (ret > 0);
 }
+EXPORT_SYMBOL(dpa_bp_drain);
 
 static void __cold __attribute__((nonnull))
 _dpa_bp_free(struct dpa_bp *dpa_bp)
