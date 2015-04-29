@@ -19,9 +19,6 @@
 #include <linux/mdio.h>
 #include <linux/of_platform.h>
 #include <linux/of_mdio.h>
-#ifdef CONFIG_FMAN_V3L
-#include <asm/mpc85xx.h>
-#endif
 
 /* Number of microseconds to wait for a register to respond */
 #define TIMEOUT	1000
@@ -182,12 +179,6 @@ static int xgmac_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 		if (ret)
 			return ret;
 	}
-
-#ifdef CONFIG_FMAN_V3L
-	/* Fixup for RTL8211F MDIO timing delay on T1023RDB */
-	if (SVR_SOC_VER(mfspr(SPRN_SVR)) == SVR_T1023)
-		udelay(100);
-#endif
 
 	/* Initiate the read */
 	out_be32(&regs->mdio_ctl, mdio_ctl | MDIO_CTL_READ);
