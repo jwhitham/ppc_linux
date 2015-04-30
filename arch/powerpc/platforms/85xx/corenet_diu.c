@@ -30,6 +30,16 @@
 #define CPLD_DIUCSR_DVIEN	0x80
 #define CPLD_DIUCSR_BACKLIGHT	0x0f
 
+static const struct of_device_id corenet_cpld_matches[] = {
+	{
+		.compatible = "fsl,t104xrdb-cpld",
+	},
+	{
+		.compatible = "fsl,t1040d4rdb-cpld",
+	},
+	{},
+};
+
 /**
  * t1042rdb_set_monitor_port: switch the output to a different monitor port
  */
@@ -38,7 +48,8 @@ static void t1042rdb_set_monitor_port(enum fsl_diu_monitor_port port)
 	struct device_node *cpld_node;
 	static void __iomem *cpld_base;
 
-	cpld_node = of_find_compatible_node(NULL, NULL, "fsl,t104xrdb-cpld");
+	cpld_node = of_find_matching_node_and_match(NULL, corenet_cpld_matches,
+						    NULL);
 	if (!cpld_node) {
 		pr_err("%s: Missing CPLD node\n", __func__);
 		return;
@@ -240,6 +251,16 @@ static void t1024qds_diu_init(void)
 	diu_ops.valid_monitor_port      = corenet_valid_monitor_port;
 }
 
+static const struct of_device_id corenet_board_matches[] = {
+	{
+		.compatible = "fsl,T1042RDB_PI",
+	},
+	{
+		.compatible = "fsl,T1042D4RDB",
+	},
+	{},
+};
+
 static int __init corenet_diu_init(void)
 {
 	struct device_node *np;
@@ -248,9 +269,12 @@ static int __init corenet_diu_init(void)
 	if (!np)
 		return 0;
 
-	/* T1042RDB_PI board */
-	if (of_find_compatible_node(NULL, NULL, "fsl,T1042RDB_PI"))
+	if (of_find_matching_node_and_match(NULL, corenet_board_matches,
+					    NULL)) {
 		t1042rdb_diu_init();
+
+		return 0;
+	}
 
 	/* T1024QDS board */
 	if (of_find_compatible_node(NULL, NULL, "fsl,T1024QDS"))
