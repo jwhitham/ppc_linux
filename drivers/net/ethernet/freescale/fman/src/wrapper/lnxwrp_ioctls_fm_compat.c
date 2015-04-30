@@ -310,12 +310,18 @@ static inline void compat_copy_fm_pcd_cc_next_kg(
     {
         param->new_fqid         = compat_param->new_fqid;
         param->override_fqid    = compat_param->override_fqid;
+#if DPAA_VERSION >= 11
+        param->new_relative_storage_profile_id = compat_param->new_relative_storage_profile_id;
+#endif
         param->p_direct_scheme  = compat_pcd_id2ptr(compat_param->p_direct_scheme);
     }
     else
     {
         compat_param->new_fqid          = param->new_fqid;
         compat_param->override_fqid     = param->override_fqid;
+#if DPAA_VERSION >= 11
+        compat_param->new_relative_storage_profile_id = param->new_relative_storage_profile_id;
+#endif
         compat_param->p_direct_scheme   = compat_pcd_ptr2id(param->p_direct_scheme);
     }
 
