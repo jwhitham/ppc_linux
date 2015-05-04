@@ -490,7 +490,12 @@ static const struct qe_firmware *FindFmanMicrocode(void)
 #define SVR_VER_IGNORE_MASK (SVR_SECURITY_MASK | SVR_PERSONALITY_MASK)
 #define SVR_B4860_REV1_VALUE 0x86800010
 #define SVR_B4860_REV2_VALUE 0x86800020
-
+#define SVR_T4240_VALUE      0x82400000
+#define SVR_T4120_VALUE      0x82400100
+#define SVR_T4160_VALUE      0x82410000
+#define SVR_T4080_VALUE      0x82410200
+#define SVR_T4_DEVICE_ID     0x82400000
+#define SVR_DEVICE_ID_MASK   0xFFF00000
 
 static t_LnxWrpFmDev * ReadFmDevTreeNode (struct platform_device *of_dev)
 {
@@ -967,6 +972,15 @@ static t_Error InitFmDev(t_LnxWrpFmDev  *p_LnxWrpFmDev)
     else
         p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio =
             !!(get_rcwsr(4) & 0x1); /* RCW[FM_MAC_RAT1] */
+
+    {   
+    /* T4 Devices ClkRatio is always 1 regardless of RCW[FM_MAC_RAT1] */
+        uint32_t svr;
+        svr = mfspr(SPRN_SVR);
+
+        if ((svr & SVR_DEVICE_ID_MASK) == SVR_T4_DEVICE_ID)
+            p_LnxWrpFmDev->fmDevSettings.param.fmMacClkRatio = 1;
+    }
 
     if ((p_LnxWrpFmDev->h_Dev = FM_Config(&p_LnxWrpFmDev->fmDevSettings.param)) == NULL)
         RETURN_ERROR(MAJOR, E_INVALID_HANDLE, ("FM"));
