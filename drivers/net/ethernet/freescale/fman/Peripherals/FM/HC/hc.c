@@ -342,19 +342,6 @@ t_Error FmHcSetFramesDataMemory(t_Handle h_FmHc,
     return FillBufPool(p_FmHc);
 }
 
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-t_Error FmHcDumpRegs(t_Handle h_FmHc)
-{
-    t_FmHc  *p_FmHc = (t_FmHc*)h_FmHc;
-
-    SANITY_CHECK_RETURN_ERROR(p_FmHc, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_FmHc->h_HcPortDev, E_INVALID_HANDLE);
-
-    return  FM_PORT_DumpRegs(p_FmHc->h_HcPortDev);
-
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */
-
 void FmHcTxConf(t_Handle h_FmHc, t_DpaaFD *p_Fd)
 {
     t_FmHc      *p_FmHc = (t_FmHc*)h_FmHc;

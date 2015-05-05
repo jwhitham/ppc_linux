@@ -1202,52 +1202,6 @@ static t_Error DtsecSetException(t_Handle h_Dtsec, e_FmMacExceptions exception, 
     return E_OK;
 }
 
-/* ........................................................................... */
-
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-static t_Error DtsecDumpRegs(t_Handle h_Dtsec)
-{
-    t_Dtsec *p_Dtsec = (t_Dtsec *)h_Dtsec;
-    int i = 0;
-
-    DECLARE_DUMP;
-
-    if (p_Dtsec->p_MemMap)
-    {
-        DUMP_TITLE(p_Dtsec->p_MemMap, ("dTSEC %d: ", p_Dtsec->macId));
-        DUMP_VAR(p_Dtsec->p_MemMap, tsec_id);
-        DUMP_VAR(p_Dtsec->p_MemMap, tsec_id2);
-        DUMP_VAR(p_Dtsec->p_MemMap, ievent);
-        DUMP_VAR(p_Dtsec->p_MemMap, imask);
-        DUMP_VAR(p_Dtsec->p_MemMap, ecntrl);
-        DUMP_VAR(p_Dtsec->p_MemMap, ptv);
-        DUMP_VAR(p_Dtsec->p_MemMap, tmr_ctrl);
-        DUMP_VAR(p_Dtsec->p_MemMap, tmr_pevent);
-        DUMP_VAR(p_Dtsec->p_MemMap, tmr_pemask);
-        DUMP_VAR(p_Dtsec->p_MemMap, tctrl);
-        DUMP_VAR(p_Dtsec->p_MemMap, rctrl);
-        DUMP_VAR(p_Dtsec->p_MemMap, maccfg1);
-        DUMP_VAR(p_Dtsec->p_MemMap, maccfg2);
-        DUMP_VAR(p_Dtsec->p_MemMap, ipgifg);
-        DUMP_VAR(p_Dtsec->p_MemMap, hafdup);
-        DUMP_VAR(p_Dtsec->p_MemMap, maxfrm);
-
-        DUMP_VAR(p_Dtsec->p_MemMap, macstnaddr1);
-        DUMP_VAR(p_Dtsec->p_MemMap, macstnaddr2);
-
-        DUMP_SUBSTRUCT_ARRAY(i, 8)
-        {
-            DUMP_VAR(p_Dtsec->p_MemMap, macaddr[i].exact_match1);
-            DUMP_VAR(p_Dtsec->p_MemMap, macaddr[i].exact_match2);
-        }
-        DUMP_VAR(p_Dtsec->p_MemMap, car1);
-        DUMP_VAR(p_Dtsec->p_MemMap, car2);
-    }
-
-    return E_OK;
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */
-
 
 /*****************************************************************************/
 /*                      dTSEC Init & Free API                                   */
@@ -1447,9 +1401,6 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
     p_FmMacControllerDriver->f_FM_MAC_MII_WritePhyReg           = DTSEC_MII_WritePhyReg;
     p_FmMacControllerDriver->f_FM_MAC_MII_ReadPhyReg            = DTSEC_MII_ReadPhyReg;
 
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-    p_FmMacControllerDriver->f_FM_MAC_DumpRegs                  = DtsecDumpRegs;
-#endif /* (defined(DEBUG_ERRORS) && ... */
 }
 
 

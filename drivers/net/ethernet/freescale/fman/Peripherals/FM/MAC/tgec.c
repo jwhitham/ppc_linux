@@ -741,50 +741,6 @@ static t_Error TgecTxEccWorkaround(t_Tgec *p_Tgec)
 }
 #endif /* FM_TX_ECC_FRMS_ERRATA_10GMAC_A004 */
 
-/* ......................................................................... */
-
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-static t_Error TgecDumpRegs(t_Handle h_Tgec)
-{
-    t_Tgec    *p_Tgec = (t_Tgec *)h_Tgec;
-
-    DECLARE_DUMP;
-
-    if (p_Tgec->p_MemMap)
-    {
-        DUMP_TITLE(p_Tgec->p_MemMap, ("10G MAC %d: ", p_Tgec->macId));
-        DUMP_VAR(p_Tgec->p_MemMap, tgec_id);
-        DUMP_VAR(p_Tgec->p_MemMap, command_config);
-        DUMP_VAR(p_Tgec->p_MemMap, mac_addr_0);
-        DUMP_VAR(p_Tgec->p_MemMap, mac_addr_1);
-        DUMP_VAR(p_Tgec->p_MemMap, maxfrm);
-        DUMP_VAR(p_Tgec->p_MemMap, pause_quant);
-        DUMP_VAR(p_Tgec->p_MemMap, rx_fifo_sections);
-        DUMP_VAR(p_Tgec->p_MemMap, tx_fifo_sections);
-        DUMP_VAR(p_Tgec->p_MemMap, rx_fifo_almost_f_e);
-        DUMP_VAR(p_Tgec->p_MemMap, tx_fifo_almost_f_e);
-        DUMP_VAR(p_Tgec->p_MemMap, hashtable_ctrl);
-        DUMP_VAR(p_Tgec->p_MemMap, mdio_cfg_status);
-        DUMP_VAR(p_Tgec->p_MemMap, mdio_command);
-        DUMP_VAR(p_Tgec->p_MemMap, mdio_data);
-        DUMP_VAR(p_Tgec->p_MemMap, mdio_regaddr);
-        DUMP_VAR(p_Tgec->p_MemMap, status);
-        DUMP_VAR(p_Tgec->p_MemMap, tx_ipg_len);
-        DUMP_VAR(p_Tgec->p_MemMap, mac_addr_2);
-        DUMP_VAR(p_Tgec->p_MemMap, mac_addr_3);
-        DUMP_VAR(p_Tgec->p_MemMap, rx_fifo_ptr_rd);
-        DUMP_VAR(p_Tgec->p_MemMap, rx_fifo_ptr_wr);
-        DUMP_VAR(p_Tgec->p_MemMap, tx_fifo_ptr_rd);
-        DUMP_VAR(p_Tgec->p_MemMap, tx_fifo_ptr_wr);
-        DUMP_VAR(p_Tgec->p_MemMap, imask);
-        DUMP_VAR(p_Tgec->p_MemMap, ievent);
-    }
-
-    return E_OK;
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */
-
-
 /*****************************************************************************/
 /*                      FM Init & Free API                                   */
 /*****************************************************************************/
@@ -960,10 +916,6 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
 
     p_FmMacControllerDriver->f_FM_MAC_MII_WritePhyReg           = TGEC_MII_WritePhyReg;
     p_FmMacControllerDriver->f_FM_MAC_MII_ReadPhyReg            = TGEC_MII_ReadPhyReg;
-
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-    p_FmMacControllerDriver->f_FM_MAC_DumpRegs                  = TgecDumpRegs;
-#endif /* (defined(DEBUG_ERRORS) && ... */
 }
 
 

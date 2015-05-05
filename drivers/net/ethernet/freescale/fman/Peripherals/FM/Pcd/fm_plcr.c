@@ -1532,52 +1532,6 @@ t_Error FM_PCD_SetPlcrStatistics(t_Handle h_FmPcd, bool enable)
     return E_OK;
 }
 
-/* ... */
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-t_Error FM_PCD_PlcrDumpRegs(t_Handle h_FmPcd)
-{
-    t_FmPcd             *p_FmPcd = (t_FmPcd*)h_FmPcd;
-    int                 i = 0;
-
-    DECLARE_DUMP;
-
-    SANITY_CHECK_RETURN_ERROR(p_FmPcd, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_FmPcd->p_FmPcdPlcr, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(!p_FmPcd->p_FmPcdDriverParam, E_INVALID_STATE);
-    SANITY_CHECK_RETURN_ERROR(((p_FmPcd->guestId == NCSW_MASTER_ID) ||
-                               p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs), E_INVALID_OPERATION);
-
-    DUMP_SUBTITLE(("\n"));
-    DUMP_TITLE(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs, ("FM-PCD policer regs"));
-
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_gcr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_gsr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_evr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_ier);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_ifr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_eevr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_eier);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_eifr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_rpcnt);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_ypcnt);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_rrpcnt);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_rypcnt);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_tpcnt);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_flmcnt);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_serc);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_upcr);
-    DUMP_VAR(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs,fmpl_dpmr);
-
-    DUMP_TITLE(&p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_pmr, ("fmpl_pmr"));
-    DUMP_SUBSTRUCT_ARRAY(i, 63)
-    {
-        DUMP_MEMORY(&p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->fmpl_pmr[i], sizeof(uint32_t));
-    }
-
-    return E_OK;
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */
-
 t_Handle FM_PCD_PlcrProfileSet(t_Handle     h_FmPcd,
                                t_FmPcdPlcrProfileParams *p_ProfileParams)
 {
@@ -1890,54 +1844,3 @@ t_Error FM_PCD_PlcrProfileSetCounter(t_Handle h_Profile, e_FmPcdPlcrProfileCount
 
     return E_OK;
 }
-
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-t_Error FM_PCD_PlcrProfileDumpRegs(t_Handle h_Profile)
-{
-    t_FmPcdPlcrProfile                  *p_Profile = (t_FmPcdPlcrProfile*)h_Profile;
-    t_FmPcd                             *p_FmPcd;
-    t_FmPcdPlcrProfileRegs              *p_ProfilesRegs;
-    uint16_t                            profileIndx;
-    uint32_t                            tmpReg, intFlags;
-
-    DECLARE_DUMP;
-
-    SANITY_CHECK_RETURN_ERROR(p_Profile, E_INVALID_HANDLE);
-    p_FmPcd = p_Profile->h_FmPcd;
-    SANITY_CHECK_RETURN_ERROR(p_FmPcd, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(p_FmPcd->p_FmPcdPlcr, E_INVALID_HANDLE);
-
-    profileIndx = p_Profile->absoluteProfileId;
-
-    DUMP_SUBTITLE(("\n"));
-    DUMP_TITLE(p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs, ("FM-PCD policer-profile regs"));
-
-    p_ProfilesRegs = &p_FmPcd->p_FmPcdPlcr->p_FmPcdPlcrRegs->profileRegs;
-
-    tmpReg = FmPcdPlcrBuildReadPlcrActionReg((uint16_t)profileIndx);
-    intFlags = PlcrHwLock(p_FmPcd->p_FmPcdPlcr);
-    WritePar(p_FmPcd, tmpReg);
-
-    DUMP_TITLE(p_ProfilesRegs, ("Profile %d regs", profileIndx));
-
-    DUMP_VAR(p_ProfilesRegs, fmpl_pemode);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pegnia);
-    DUMP_VAR(p_ProfilesRegs, fmpl_peynia);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pernia);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pecir);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pecbs);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pepepir_eir);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pepbs_ebs);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pelts);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pects);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pepts_ets);
-    DUMP_VAR(p_ProfilesRegs, fmpl_pegpc);
-    DUMP_VAR(p_ProfilesRegs, fmpl_peypc);
-    DUMP_VAR(p_ProfilesRegs, fmpl_perpc);
-    DUMP_VAR(p_ProfilesRegs, fmpl_perypc);
-    DUMP_VAR(p_ProfilesRegs, fmpl_perrpc);
-    PlcrHwUnlock(p_FmPcd->p_FmPcdPlcr, intFlags);
-
-    return E_OK;
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */

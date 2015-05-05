@@ -1752,41 +1752,6 @@ uint32_t FM_PCD_GetCounter(t_Handle h_FmPcd, e_FmPcdCounters counter)
     return 0;
 }
 
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-t_Error FM_PCD_DumpRegs(t_Handle h_FmPcd)
-{
-    t_FmPcd             *p_FmPcd = (t_FmPcd*)h_FmPcd;
-    t_Error             err = E_OK;
-
-    DECLARE_DUMP;
-
-    SANITY_CHECK_RETURN_ERROR(h_FmPcd, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(!p_FmPcd->p_FmPcdDriverParam, E_INVALID_STATE);
-
-    if (p_FmPcd->p_FmPcdKg)
-        err |= FM_PCD_KgDumpRegs(h_FmPcd);
-    if (p_FmPcd->p_FmPcdPlcr)
-        err |= FM_PCD_PlcrDumpRegs(h_FmPcd);
-    if (p_FmPcd->p_FmPcdPrs)
-        err |= FM_PCD_PrsDumpRegs(h_FmPcd);
-
-    return err;
-}
-
-t_Error FM_PCD_HcDumpRegs(t_Handle h_FmPcd)
-{
-    t_FmPcd             *p_FmPcd = (t_FmPcd*)h_FmPcd;
-
-    DECLARE_DUMP;
-
-    SANITY_CHECK_RETURN_ERROR(h_FmPcd, E_INVALID_HANDLE);
-    SANITY_CHECK_RETURN_ERROR(!p_FmPcd->p_FmPcdDriverParam, E_INVALID_STATE);
-    SANITY_CHECK_RETURN_ERROR(p_FmPcd->h_Hc, E_INVALID_STATE);
-
-    return FmHcDumpRegs(p_FmPcd->h_Hc);
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */
-
 t_Error FM_PCD_SetException(t_Handle h_FmPcd, e_FmPcdExceptions exception, bool enable)
 {
     t_FmPcd         *p_FmPcd = (t_FmPcd*)h_FmPcd;

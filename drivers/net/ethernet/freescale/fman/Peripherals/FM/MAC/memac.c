@@ -812,63 +812,6 @@ static uint16_t MemacGetMaxFrameLength(t_Handle h_Memac)
     return fman_memac_get_max_frame_len(p_Memac->p_MemMap);
 }
 
-/* ......................................................................... */
-
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-static t_Error MemacDumpRegs(t_Handle h_Memac)
-{
-    t_Memac     *p_Memac = (t_Memac *)h_Memac;
-    int         i = 0;
-
-    DECLARE_DUMP;
-
-    if (p_Memac->p_MemMap)
-    {
-        DUMP_TITLE(p_Memac->p_MemMap, ("mEMAC %d: ", p_Memac->macId));
-        DUMP_VAR(p_Memac->p_MemMap, command_config);
-        DUMP_VAR(p_Memac->p_MemMap, mac_addr0.mac_addr_l);
-        DUMP_VAR(p_Memac->p_MemMap, mac_addr0.mac_addr_u);
-        DUMP_VAR(p_Memac->p_MemMap, maxfrm);
-        DUMP_VAR(p_Memac->p_MemMap, hashtable_ctrl);
-        DUMP_VAR(p_Memac->p_MemMap, ievent);
-        DUMP_VAR(p_Memac->p_MemMap, tx_ipg_length);
-        DUMP_VAR(p_Memac->p_MemMap, imask);
-
-        DUMP_SUBSTRUCT_ARRAY(i, 4)
-        {
-            DUMP_VAR(p_Memac->p_MemMap, pause_quanta[i]);
-        }
-        DUMP_SUBSTRUCT_ARRAY(i, 4)
-        {
-            DUMP_VAR(p_Memac->p_MemMap, pause_thresh[i]);
-        }
-
-        DUMP_VAR(p_Memac->p_MemMap, rx_pause_status);
-
-        DUMP_SUBSTRUCT_ARRAY(i, MEMAC_NUM_OF_PADDRS)
-        {
-            DUMP_VAR(p_Memac->p_MemMap, mac_addr[i].mac_addr_l);
-            DUMP_VAR(p_Memac->p_MemMap, mac_addr[i].mac_addr_u);
-        }
-
-        DUMP_VAR(p_Memac->p_MemMap, lpwake_timer);
-        DUMP_VAR(p_Memac->p_MemMap, sleep_timer);
-        DUMP_VAR(p_Memac->p_MemMap, statn_config);
-        DUMP_VAR(p_Memac->p_MemMap, if_mode);
-        DUMP_VAR(p_Memac->p_MemMap, if_status);
-        DUMP_VAR(p_Memac->p_MemMap, hg_config);
-        DUMP_VAR(p_Memac->p_MemMap, hg_pause_quanta);
-        DUMP_VAR(p_Memac->p_MemMap, hg_pause_thresh);
-        DUMP_VAR(p_Memac->p_MemMap, hgrx_pause_status);
-        DUMP_VAR(p_Memac->p_MemMap, hg_fifos_status);
-        DUMP_VAR(p_Memac->p_MemMap, rhm);
-        DUMP_VAR(p_Memac->p_MemMap, thm);
-    }
-
-    return E_OK;
-}
-#endif /* (defined(DEBUG_ERRORS) && ... */
-
 
 /*****************************************************************************/
 /*                      mEMAC Init & Free API                                   */
@@ -1086,10 +1029,6 @@ static void InitFmMacControllerDriver(t_FmMacControllerDriver *p_FmMacController
 
     p_FmMacControllerDriver->f_FM_MAC_MII_WritePhyReg           = MEMAC_MII_WritePhyReg;
     p_FmMacControllerDriver->f_FM_MAC_MII_ReadPhyReg            = MEMAC_MII_ReadPhyReg;
-
-#if (defined(DEBUG_ERRORS) && (DEBUG_ERRORS > 0))
-    p_FmMacControllerDriver->f_FM_MAC_DumpRegs                  = MemacDumpRegs;
-#endif /* (defined(DEBUG_ERRORS) && ... */
 }
 
 
