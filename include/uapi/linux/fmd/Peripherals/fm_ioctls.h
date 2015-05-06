@@ -328,7 +328,7 @@ typedef struct ioc_fm_vsp_prs_result_params_t {
 #endif
 
 typedef struct fm_ctrl_mon_t {
-    uint8_t     percent_cnt[1];
+    uint8_t     percent_cnt[2];
 } fm_ctrl_mon_t;
 
 typedef struct ioc_fm_ctrl_mon_counters_params_t {

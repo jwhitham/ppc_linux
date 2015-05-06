@@ -3523,7 +3523,7 @@ t_Error LnxwrpFmIOCTL(t_LnxWrpFmDev *p_LnxWrpFmDev, unsigned int cmd, unsigned l
             else
 #endif
             {
-                if (copy_from_user(&param, (void *)arg, sizeof(ioc_fm_counters_params_t)))
+                if (copy_from_user(&param, (void *)arg, sizeof(ioc_fm_ctrl_mon_counters_params_t)))
                     RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
             }
 
