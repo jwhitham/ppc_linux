@@ -247,7 +247,7 @@ int dpa_generic_debugfs_create(struct net_device *net_dev)
 
 void dpa_generic_debugfs_remove(struct net_device *net_dev)
 {
-	struct dpa_priv_s *priv = netdev_priv(net_dev);
+	struct dpa_generic_priv_s *priv = netdev_priv(net_dev);
 
 	debugfs_remove(priv->debugfs_file);
 }
