@@ -153,7 +153,7 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
     if (!p_Fm->p_FmStateStruct->totalFifoSize ||
         (p_Fm->p_FmStateStruct->totalFifoSize > BMI_MAX_FIFO_SIZE))
         RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                     ("totalFifoSize (curr - %d) has to be in the range 256 - %d",
+                     ("totalFifoSize (currently defined as %d) has to be in the range of 256 to %d",
                       p_Fm->p_FmStateStruct->totalFifoSize,
                       BMI_MAX_FIFO_SIZE));
     if (!p_Fm->p_FmStateStruct->totalNumOfTasks ||
@@ -2637,8 +2637,15 @@ t_Error FmSetSizeOfFifo(t_Handle    h_Fm,
 
     /* check that there are enough uncommitted fifo size */
     if ((p_Fm->p_FmStateStruct->accumulatedFifoSize - currentVal + sizeOfFifo) >
-        (p_Fm->p_FmStateStruct->totalFifoSize - p_Fm->p_FmStateStruct->extraFifoPoolSize))
-        RETURN_ERROR(MAJOR, E_NOT_AVAILABLE, ("Requested fifo size and extra size exceed total FIFO size."));
+        (p_Fm->p_FmStateStruct->totalFifoSize - p_Fm->p_FmStateStruct->extraFifoPoolSize)){
+        REPORT_ERROR(MAJOR, E_INVALID_VALUE,
+            ("Port request fifo size + accumulated size > total FIFO size:"));
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE,
+            ("port 0x%x requested %d bytes, extra size = %d, accumulated size = %d total size = %d",
+                hardwarePortId, sizeOfFifo, p_Fm->p_FmStateStruct->extraFifoPoolSize,
+                p_Fm->p_FmStateStruct->accumulatedFifoSize,
+                p_Fm->p_FmStateStruct->totalFifoSize));
+    }
     else
     {
         /* update accumulated */
