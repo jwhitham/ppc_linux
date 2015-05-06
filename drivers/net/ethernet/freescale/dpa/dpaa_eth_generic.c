@@ -1347,6 +1347,46 @@ static int dpa_generic_bp_create(struct net_device *net_dev,
 	return 0;
 }
 
+static void dpa_generic_bp_free(struct dpa_generic_priv_s *priv)
+{
+	struct dpa_bp *bp = NULL;
+	int i = 0;
+
+	/* release the rx bpools */
+	for (i = 0; i < priv->rx_bp_count; i++) {
+		bp = &priv->rx_bp[i];
+		if (!bp)
+			continue;
+
+		if (!atomic_dec_and_test(&bp->refs))
+			continue;
+
+		if (bp->free_buf_cb)
+			dpa_bp_drain(bp);
+
+		bman_free_pool(bp->pool);
+
+		if (bp->dev)
+			platform_device_unregister(to_platform_device(bp->dev));
+	}
+
+	/* release the tx draining bpool */
+	bp = priv->draining_tx_bp;
+	if (!bp)
+		return;
+
+	if (!atomic_dec_and_test(&bp->refs))
+		return;
+
+	if (bp->free_buf_cb)
+		dpa_bp_drain(bp);
+
+	bman_free_pool(bp->pool);
+
+	if (bp->dev)
+		platform_device_unregister(to_platform_device(bp->dev));
+}
+
 static int dpa_generic_remove(struct platform_device *of_dev)
 {
 	int err;
@@ -1363,22 +1403,11 @@ static int dpa_generic_remove(struct platform_device *of_dev)
 	dev_set_drvdata(dev, NULL);
 	unregister_netdev(net_dev);
 
-	/* TODO: this is for private driver; make it generic */
-	err = 0;
-#if 0
 	err = dpa_fq_free(dev, &priv->dpa_fq_list);
-#endif
 
-	dpa_private_napi_del(net_dev);
+	dpa_generic_napi_del(net_dev);
 
-	/* TODO: this is for private dirver also; make generic */
-#if 0
-	dpa_bp_free(priv);
-	devm_kfree(dev, priv->dpa_bp);
-
-	if (priv->buf_layout)
-		devm_kfree(dev, priv->buf_layout);
-#endif
+	dpa_generic_bp_free(priv);
 
 #ifdef CONFIG_FSL_DPAA_ETH_DEBUGFS
 	dpa_generic_debugfs_remove(net_dev);
