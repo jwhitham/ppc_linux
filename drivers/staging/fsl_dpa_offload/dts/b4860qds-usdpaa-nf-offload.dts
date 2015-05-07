@@ -1,7 +1,7 @@
 /*
  * B4860QDS Device Tree Source
  *
- * Copyright 2012 Freescale Semiconductor Inc.
+ * Copyright 2013 Freescale Semiconductor Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -119,16 +119,22 @@
 			fsl,qman-frame-queues-tx = <0x76 1 0x77 1>;
 		};
 		ethernet@4 {
-			compatible = "fsl,b4860-dpa-ethernet-init", "fsl,dpa-ethernet-init";
+			compatible = "fsl,b4860-dpa-ethernet-shared", "fsl,dpa-ethernet-shared";
 			fsl,bman-buffer-pools = <&bp16>;
-			fsl,qman-frame-queues-rx = <0x58 1 0x59 1>;
-			fsl,qman-frame-queues-tx = <0x78 1 0x79 1>;
+			fsl,qman-frame-queues-rx = <0x58 1 0x59 1 0x1000 2>;
+			fsl,qman-frame-queues-tx = <0x78 1 0x79 1 0x2000 8>;
 		};
 		ethernet@5 {
+			compatible = "fsl,b4860-dpa-ethernet-shared", "fsl,dpa-ethernet-shared";
+			fsl,bman-buffer-pools = <&bp16>;
+			fsl,qman-frame-queues-rx = <0x5a 1 0x5b 1 0x1002 2>;
+			fsl,qman-frame-queues-tx = <0x7a 1 0x7b 1 0x2008 8>;
+		};
+		ethernet@8 {
 			compatible = "fsl,b4860-dpa-ethernet-init", "fsl,dpa-ethernet-init";
 			fsl,bman-buffer-pools = <&bp16>;
-			fsl,qman-frame-queues-rx = <0x5a 1 0x5b 1>;
-			fsl,qman-frame-queues-tx = <0x7a 1 0x7b 1>;
+			fsl,qman-frame-queues-rx = <0x5c 1 0x5d 1>;
+			fsl,qman-frame-queues-tx = <0x7c 1 0x7d 1>;
 		};
 
 	       /* ethernet@16 declared as MAC-less interface with no "fsl,fman-mac" property.
@@ -150,31 +156,16 @@
 			fsl,qman-frame-queues-tx = <5008 8>;
 			local-mac-address = [00 11 22 33 44 66];
 		};
-		ethernet@18 {
-			compatible = "fsl,b4860-dpa-ethernet-macless", "fsl,dpa-ethernet-macless";
-			fsl,bman-buffer-pools = <&bp16>;
-			fsl,qman-frame-queues-rx = <6000 8>;
-			fsl,qman-frame-queues-tx = <6008 8>;
-			local-mac-address = [00 11 22 33 44 77];
-		};
-		ethernet@19 {
-			compatible = "fsl,b4860-dpa-ethernet-generic", "fsl,dpa-ethernet-generic";
-			fsl,qman-frame-queues-rx = <7000 2>;
-			fsl,qman-frame-queues-tx = <7008 1>;
-			fsl,oh-ports = <&oh2 &oh3>;
-			fsl,disable_buff_dealloc;
-			local-mac-address = [00 11 22 33 44 88];
-		};
 
-		oh2: dpa-fman0-oh@2 {
+		dpa-fman0-oh@2 {
 			compatible = "fsl,dpa-oh";
 			/* Define frame queues for the OH port*/
 			/* <OH Rx error, OH Rx default> */
 			fsl,qman-frame-queues-oh = <0x6e 1 0x6f 1>;
-			fsl,bman-buffer-pools = <&bp17>;
+			fsl,bman-buffer-pools = <&bp16>;
 			fsl,fman-oh-port = <&fman0_oh2>;
 		};
-		oh3: dpa_fman0_oh3: dpa-fman0-oh@3 {
+		dpa_fman0_oh3: dpa-fman0-oh@3 {
 			compatible = "fsl,dpa-oh";
 			fsl,qman-frame-queues-oh = <0x68 1 0x69 1>;
 			fsl,bman-buffer-pools = <&bp9>;
