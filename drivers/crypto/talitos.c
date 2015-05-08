@@ -1298,7 +1298,7 @@ static int sg_to_link_tbl(struct scatterlist *sg, int sg_count,
 {
 	int n_sg = sg_count;
 
-	while (n_sg--) {
+	while (sg && n_sg--) {
 		to_talitos_ptr(link_tbl_ptr, sg_dma_address(sg));
 		link_tbl_ptr->len = cpu_to_be16(sg_dma_len(sg));
 		link_tbl_ptr->j_extent = 0;
@@ -1486,7 +1486,7 @@ static int sg_count(struct scatterlist *sg_list, int nbytes, bool *chained)
 	int sg_nents = 0;
 
 	*chained = false;
-	while (nbytes > 0) {
+	while (nbytes > 0 && sg) {
 		sg_nents++;
 		nbytes -= sg->length;
 		if (!sg_is_last(sg) && (sg + 1)->length == 0)
