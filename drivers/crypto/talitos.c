@@ -65,7 +65,7 @@ static void to_talitos_ptr(struct talitos_ptr *talitos_ptr, dma_addr_t dma_addr)
  */
 static void map_single_talitos_ptr(struct device *dev,
 				   struct talitos_ptr *talitos_ptr,
-				   unsigned short len, void *data,
+				   unsigned int len, void *data,
 				   unsigned char extent,
 				   enum dma_data_direction dir)
 {
@@ -458,7 +458,7 @@ static void talitos_error(struct device *dev, u32 isr, u32 isr_lo)
 	struct talitos_private *priv = dev_get_drvdata(dev);
 	unsigned int timeout = TALITOS_TIMEOUT;
 	int ch, error, reset_dev = 0, reset_ch = 0;
-	u32 v, v_lo;
+	u32 v_lo;
 
 	for (ch = 0; ch < priv->num_channels; ch++) {
 		/* skip channels without errors */
@@ -467,7 +467,6 @@ static void talitos_error(struct device *dev, u32 isr, u32 isr_lo)
 
 		error = -EINVAL;
 
-		v = in_be32(priv->chan[ch].reg + TALITOS_CCPSR);
 		v_lo = in_be32(priv->chan[ch].reg + TALITOS_CCPSR_LO);
 
 		if (v_lo & TALITOS_CCPSR_LO_DOF) {
@@ -1052,7 +1051,7 @@ struct talitos_ahash_req_ctx {
 	unsigned int first;
 	unsigned int last;
 	unsigned int to_hash_later;
-	u64 nbuf;
+	unsigned int nbuf;
 	struct scatterlist bufsl[2];
 	struct scatterlist *psrc;
 };
@@ -1826,8 +1825,7 @@ static int common_nonsnoop(struct talitos_edesc *edesc,
 					      (edesc->src_nents + 1) *
 					      sizeof(struct talitos_ptr));
 		desc->ptr[4].j_extent |= DESC_PTR_LNKTBL_JUMP;
-		sg_count = sg_to_link_tbl(areq->dst, sg_count, cryptlen,
-					  link_tbl_ptr);
+		sg_to_link_tbl(areq->dst, sg_count, cryptlen, link_tbl_ptr);
 		dma_sync_single_for_device(ctx->dev, edesc->dma_link_tbl,
 					   edesc->dma_len, DMA_BIDIRECTIONAL);
 	}
