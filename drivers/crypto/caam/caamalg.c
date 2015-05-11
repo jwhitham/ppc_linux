@@ -660,6 +660,12 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	unsigned int blocksize = crypto_aead_blocksize(aead);
 	/* Associated data length is always = 13 for TLS */
 	unsigned int assoclen = 13;
+	/*
+	 * Pointer Size bool determines the size of address pointers.
+	 * false - Pointers fit in one 32-bit word.
+	 * true - Pointers fit in two 32-bit words.
+	 */
+	static const bool ps = (CAAM_PTR_SZ != CAAM_CMD_SZ);
 
 	if (!ctx->enckeylen || !ctx->authsize)
 		return 0;
@@ -917,23 +923,66 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	/* VSIL = (payloadlen + icvlen + padlen) - icvlen + padlen */
 	append_math_sub(desc, VARSEQINLEN, REG3, REG2, 4);
 
-	/* move seqoutptr fields into math registers */
-	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF | MOVE_DEST_MATH0 |
-			(54 * 4 << MOVE_OFFSET_SHIFT) | 20);
-	/* seqinptr will point to seqoutptr */
-	append_math_and_imm_u32(desc, REG0, REG0, IMM,
-				~(CMD_SEQ_IN_PTR ^ CMD_SEQ_OUT_PTR));
-	/* Load jump command */
-	jumpback = CMD_JUMP | (char)-9;
-	append_load_imm_u32(desc, jumpback, LDST_CLASS_DECO | LDST_IMM |
-			    LDST_SRCDST_WORD_DECO_MATH2 |
-			    (4 << LDST_OFFSET_SHIFT));
-	append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 1);
-	/* move updated seqinptr fields to JD */
-	append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 | MOVE_DEST_DESCBUF |
-			(54 * 4 << MOVE_OFFSET_SHIFT) | 24);
-	/* read updated seqinptr */
-	append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 6);
+	/*
+	 * Start a new input sequence using the SEQ OUT PTR command options,
+	 * pointer and length used when the current output sequence was defined.
+	 */
+	if (ps) {
+		/*
+		 * Move the lower 32 bits of Shared Descriptor address, the
+		 * SEQ OUT PTR command, Output Pointer (2 words) and
+		 * Output Length into math registers.
+		 */
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			    MOVE_DEST_MATH0 | (54 * 4 << MOVE_OFFSET_SHIFT) |
+			    20);
+		/* Transform SEQ OUT PTR command in SEQ IN PTR command */
+		append_math_and_imm_u32(desc, REG0, REG0, IMM,
+					~(CMD_SEQ_IN_PTR ^ CMD_SEQ_OUT_PTR));
+		/* Append a JUMP command after the copied fields */
+		jumpback = CMD_JUMP | (char)-9;
+		append_load_imm_u32(desc, jumpback, LDST_CLASS_DECO | LDST_IMM |
+				    LDST_SRCDST_WORD_DECO_MATH2 |
+				    (4 << LDST_OFFSET_SHIFT));
+		append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 1);
+		/* Move the updated fields back to the Job Descriptor */
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 |
+			    MOVE_DEST_DESCBUF | (54 * 4 << MOVE_OFFSET_SHIFT) |
+			    24);
+		/*
+		 * Read the new SEQ IN PTR command, Input Pointer, Input Length
+		 * and then jump back to the next command from the
+		 * Shared Descriptor.
+		 */
+		append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 6);
+	} else {
+		/*
+		 * Move the SEQ OUT PTR command, Output Pointer (1 word) and
+		 * Output Length into math registers.
+		 */
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			    MOVE_DEST_MATH0 | (53 * 4 << MOVE_OFFSET_SHIFT) |
+			    12);
+		/* Transform SEQ OUT PTR command in SEQ IN PTR command */
+		append_math_and_imm_u64(desc, REG0, REG0, IMM,
+			~(((u64)(CMD_SEQ_IN_PTR ^ CMD_SEQ_OUT_PTR)) << 32));
+		/* Append a JUMP command after the copied fields */
+		jumpback = CMD_JUMP | (char)-7;
+		append_load_imm_u32(desc, jumpback, LDST_CLASS_DECO | LDST_IMM |
+				    LDST_SRCDST_WORD_DECO_MATH1 |
+				    (4 << LDST_OFFSET_SHIFT));
+		append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 1);
+		/* Move the updated fields back to the Job Descriptor */
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 |
+			    MOVE_DEST_DESCBUF | (53 * 4 << MOVE_OFFSET_SHIFT) |
+			    16);
+		/*
+		 * Read the new SEQ IN PTR command, Input Pointer, Input Length
+		 * and then jump back to the next command from the
+		 * Shared Descriptor.
+		 */
+		append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 5);
+	}
 
 	/* skip payload */
 	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_SKIP | FIFOLDST_VLF);
