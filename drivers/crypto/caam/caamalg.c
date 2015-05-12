@@ -884,6 +884,10 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 	/* VSOL = payloadlen + icvlen + padlen */
 	append_math_add(desc, VARSEQOUTLEN, ZERO, REG3, 4);
 
+#ifdef __LITTLE_ENDIAN
+	append_moveb(desc, MOVE_WAITCOMP |
+		     MOVE_SRC_MATH0 | MOVE_DEST_MATH0 | 8);
+#endif
 	/* update Len field */
 	append_math_sub(desc, REG0, REG0, REG2, 8);
 
@@ -933,9 +937,15 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 		 * SEQ OUT PTR command, Output Pointer (2 words) and
 		 * Output Length into math registers.
 		 */
+#ifdef __LITTLE_ENDIAN
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			    MOVE_DEST_MATH0 | (55 * 4 << MOVE_OFFSET_SHIFT) |
+			    20);
+#else
 		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
 			    MOVE_DEST_MATH0 | (54 * 4 << MOVE_OFFSET_SHIFT) |
 			    20);
+#endif
 		/* Transform SEQ OUT PTR command in SEQ IN PTR command */
 		append_math_and_imm_u32(desc, REG0, REG0, IMM,
 					~(CMD_SEQ_IN_PTR ^ CMD_SEQ_OUT_PTR));
@@ -946,9 +956,15 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 				    (4 << LDST_OFFSET_SHIFT));
 		append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 1);
 		/* Move the updated fields back to the Job Descriptor */
+#ifdef __LITTLE_ENDIAN
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 |
+			    MOVE_DEST_DESCBUF | (55 * 4 << MOVE_OFFSET_SHIFT) |
+			    24);
+#else
 		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 |
 			    MOVE_DEST_DESCBUF | (54 * 4 << MOVE_OFFSET_SHIFT) |
 			    24);
+#endif
 		/*
 		 * Read the new SEQ IN PTR command, Input Pointer, Input Length
 		 * and then jump back to the next command from the
@@ -960,9 +976,15 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 		 * Move the SEQ OUT PTR command, Output Pointer (1 word) and
 		 * Output Length into math registers.
 		 */
+#ifdef __LITTLE_ENDIAN
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
+			    MOVE_DEST_MATH0 | (54 * 4 << MOVE_OFFSET_SHIFT) |
+			    12);
+#else
 		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_DESCBUF |
 			    MOVE_DEST_MATH0 | (53 * 4 << MOVE_OFFSET_SHIFT) |
 			    12);
+#endif
 		/* Transform SEQ OUT PTR command in SEQ IN PTR command */
 		append_math_and_imm_u64(desc, REG0, REG0, IMM,
 			~(((u64)(CMD_SEQ_IN_PTR ^ CMD_SEQ_OUT_PTR)) << 32));
@@ -973,9 +995,15 @@ static int tls_set_sh_desc(struct crypto_aead *aead)
 				    (4 << LDST_OFFSET_SHIFT));
 		append_jump(desc, JUMP_TEST_ALL | JUMP_COND_CALM | 1);
 		/* Move the updated fields back to the Job Descriptor */
+#ifdef __LITTLE_ENDIAN
+		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 |
+			    MOVE_DEST_DESCBUF | (54 * 4 << MOVE_OFFSET_SHIFT) |
+			    16);
+#else
 		append_move(desc, MOVE_WAITCOMP | MOVE_SRC_MATH0 |
 			    MOVE_DEST_DESCBUF | (53 * 4 << MOVE_OFFSET_SHIFT) |
 			    16);
+#endif
 		/*
 		 * Read the new SEQ IN PTR command, Input Pointer, Input Length
 		 * and then jump back to the next command from the
