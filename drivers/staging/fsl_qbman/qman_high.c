@@ -4963,7 +4963,7 @@ int qman_ceetm_cscn_dcp_get(struct qm_ceetm_ccg *ccg,
 
 	*vcgid = query_result.cm_query.cdv;
 	*cscn_enabled = (query_result.cm_query.cscn_targ_dcp >>
-							(7 - dcp_idx)) & 0x1;
+							dcp_idx) & 0x1;
 	return 0;
 }
 EXPORT_SYMBOL(qman_ceetm_cscn_dcp_get);

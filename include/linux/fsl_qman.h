@@ -1245,8 +1245,8 @@ struct qm_mcr_ceetm_ccgr_query {
 			struct qm_cgr_wr_parm wr_parm_g;
 			struct qm_cgr_wr_parm wr_parm_y;
 			struct qm_cgr_wr_parm wr_parm_r;
-			u8 cscn_targ_dcp;
-			u16 dcp_lsn;
+			u16 cscn_targ_dcp;
+			u8 dcp_lsn;
 			u64 i_cnt:40;
 			u8 __reserved4[3];
 			u64 a_cnt:40;
