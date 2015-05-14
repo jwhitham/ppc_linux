@@ -3680,8 +3680,6 @@ int dpa_ipsec_free(int dpa_ipsec_id)
 
 	free_resources(dpa_ipsec_id);
 
-	mark_unused_gbl_dpa_ipsec(instance->id);
-
 	return 0;
 }
 EXPORT_SYMBOL(dpa_ipsec_free);
