@@ -20,6 +20,7 @@
 #include "desc_constr.h"
 #include "jr.h"
 #include "error.h"
+#include "sg_sw_sec4.h"
 #include <linux/crypto.h>
 #include "pdb.h"
 
@@ -187,8 +188,11 @@ struct dsa_edesc_s {
 	dma_addr_t d_dma;
 	dma_addr_t ab_dma;
 	dma_addr_t g_dma;
+	dma_addr_t g_sg_dma;
 	dma_addr_t tmp_dma;
 	uint8_t *tmp; /* Allocate locally for dsa_verify */
+	struct sec4_sg_entry g_sg;
+	bool erratum_A_006899;
 	u32 hw_desc[];
 };
 

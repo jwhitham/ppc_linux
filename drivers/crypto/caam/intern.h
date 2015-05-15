@@ -95,6 +95,11 @@ struct caam_drv_private {
 	struct list_head pkc_list;
 
 	int era;		/* SEC Era */
+
+#define SEC_ERRATUM_A_006899 0x01
+	/* SEC errata bitmask */
+	u32 errata;
+
 	int virt_en;		/* Virtualization enabled in CAAM */
 
 #define	RNG4_MAX_HANDLES 2

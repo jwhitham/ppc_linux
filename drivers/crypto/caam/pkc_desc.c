@@ -271,10 +271,15 @@ void *caam_keygen_desc(struct dsa_edesc_s *edesc)
 			      (start_idx << HDR_START_IDX_SHIFT) |
 			      (start_idx & HDR_DESCLEN_MASK) | HDR_ONE);
 		ecc_desc->sgf_ln = (edesc->l_len << DSA_PDB_L_SHIFT) |
-			((edesc->n_len & DSA_PDB_N_MASK));
+				   (edesc->n_len & DSA_PDB_N_MASK);
+		if (edesc->erratum_A_006899) {
+			ecc_desc->sgf_ln |= DSA_PDB_SGF_G;
+			ecc_desc->g_dma = edesc->g_sg_dma;
+		} else {
+			ecc_desc->g_dma = edesc->g_dma;
+		}
 		ecc_desc->q_dma = edesc->q_dma;
 		ecc_desc->r_dma = edesc->r_dma;
-		ecc_desc->g_dma = edesc->g_dma;
 		ecc_desc->s_dma = edesc->s_dma;
 		ecc_desc->w_dma = edesc->key_dma;
 		ecc_desc->ab_dma = edesc->ab_dma;

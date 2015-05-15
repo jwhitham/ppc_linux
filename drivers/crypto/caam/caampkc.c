@@ -30,6 +30,12 @@ struct caam_pkc_context_s {
 	struct device *dev;
 };
 
+struct caam_pkc_alg {
+	struct list_head entry;
+	struct device *ctrldev;
+	struct crypto_alg crypto_alg;
+};
+
 static void rsa_unmap(struct device *dev,
 		      struct rsa_edesc *edesc, struct pkc_request *req)
 {
@@ -484,6 +490,10 @@ static int caam_keygen_edesc(struct pkc_request *req,
 {
 	struct crypto_pkc *tfm = crypto_pkc_reqtfm(req);
 	struct caam_pkc_context_s *ctxt = crypto_pkc_ctx(tfm);
+	struct crypto_alg *alg = crypto_pkc_tfm(tfm)->__crt_alg;
+	struct caam_pkc_alg *caam_alg =
+			container_of(alg, struct caam_pkc_alg, crypto_alg);
+	struct caam_drv_private *caam_priv = dev_get_drvdata(caam_alg->ctrldev);
 	struct device *dev = ctxt->dev;
 	struct keygen_req_s *key_req = &req->req_u.keygen;
 
@@ -491,6 +501,7 @@ static int caam_keygen_edesc(struct pkc_request *req,
 	edesc->n_len = key_req->r_len;
 	edesc->req_type = req->type;
 	edesc->curve_type = req->curve_type;
+	edesc->erratum_A_006899 = caam_priv->errata & SEC_ERRATUM_A_006899;
 
 	edesc->q_dma = dma_map_single(dev, key_req->q, key_req->q_len,
 					  DMA_TO_DEVICE);
@@ -511,6 +522,20 @@ static int caam_keygen_edesc(struct pkc_request *req,
 	if (dma_mapping_error(dev, edesc->g_dma)) {
 		dev_err(dev, "Unable to map  memory\n");
 		goto g_map_fail;
+	}
+
+	if (edesc->erratum_A_006899) {
+		dma_to_sec4_sg_one(&(edesc->g_sg), edesc->g_dma,
+				   key_req->g_len, 0);
+		edesc->g_sg.len |= SEC4_SG_LEN_FIN;
+
+		edesc->g_sg_dma = dma_map_single(dev, &(edesc->g_sg),
+						 sizeof(struct sec4_sg_entry),
+						 DMA_TO_DEVICE);
+		if (dma_mapping_error(dev, edesc->g_sg_dma)) {
+			dev_err(dev, "unable to map S/G table\n");
+			goto g_sg_dma_fail;
+		}
 	}
 
 	edesc->key_dma = dma_map_single(dev, key_req->pub_key,
@@ -545,6 +570,10 @@ s_map_fail:
 	dma_unmap_single(dev, edesc->key_dma, key_req->pub_key_len,
 			 DMA_FROM_DEVICE);
 key_map_fail:
+	if (edesc->erratum_A_006899)
+		dma_unmap_single(dev, edesc->g_sg_dma, key_req->g_len,
+				 DMA_TO_DEVICE);
+g_sg_dma_fail:
 	dma_unmap_single(dev, edesc->g_dma, key_req->g_len, DMA_TO_DEVICE);
 g_map_fail:
 	dma_unmap_single(dev, edesc->r_dma, key_req->r_len, DMA_TO_DEVICE);
@@ -1322,12 +1351,6 @@ static struct caam_pkc_template driver_pkc[] = {
 			  .max_keysize = 4096,
 			  },
 	 }
-};
-
-struct caam_pkc_alg {
-	struct list_head entry;
-	struct device *ctrldev;
-	struct crypto_alg crypto_alg;
 };
 
 /* Per session pkc's driver context creation function */
