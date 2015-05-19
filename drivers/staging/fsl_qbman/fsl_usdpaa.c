@@ -195,9 +195,9 @@ static u32 largest_page_size(u32 size)
 /* Determine if value is power of 4 */
 static inline bool is_power_of_4(u64 x)
 {
-	if (!is_power_of_2(x))
+	if (x == 0 || ((x & (x - 1)) != 0))
 		return false;
-	return !!(x & 0x5555555555555555ul);
+	return !!(x & 0x5555555555555555ull);
 }
 
 /* Helper for ioctl_dma_map() when we have a larger fragment than we need. This
