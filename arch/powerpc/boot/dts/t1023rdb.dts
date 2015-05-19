@@ -107,7 +107,17 @@
 		};
 
 		i2c@118100 {
+			ina220@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <1000>;
+			};
 
+			ina220@41 {
+				compatible = "ti,ina220";
+				reg = <0x41>;
+				shunt-resistor = <1000>;
+			};
 		};
 
 		fman0: fman@400000 {
