@@ -126,6 +126,13 @@
 				reg = <0x4c>;
 			};
 
+			/* INA220 Current Sense */
+			ina220@40 {
+				compatible = "ti,ina220";
+				reg = <0x40>;
+				shunt-resistor = <1000>;
+			};
+
 			eeprom@50 {
 				compatible = "at24,24c256";
 				reg = <0x50>;
