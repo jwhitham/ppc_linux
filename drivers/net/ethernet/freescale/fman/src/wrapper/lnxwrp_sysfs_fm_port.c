@@ -380,7 +380,7 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 		FM_DMP_LN(buf, n, "control bits 0x%04x\n", ArpDescriptor->control);
 		if (ArpDescriptor->numOfBindings)
 		{
-			char ip_str[20];
+			char ip_str[100];
 			t_DsarArpBindingEntry* bindings = ioremap(
 				ioread32be(&ArpDescriptor->p_Bindings) +
 				p_FmPort->fmMuramPhysBaseAddr,
@@ -390,8 +390,11 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 			FM_DMP_LN(buf, n, "      ip          vlan id\n");
 			for (i = 0; i < ArpDescriptor->numOfBindings; i++)
 			{
-				n += sprintf(ip_str, "%d:%d:%d:%d", ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3]);
-				FM_DMP_LN(buf, n, "%-15s     0x%x\n", ip_str, bindings->vlanId);
+				n += snprintf(ip_str, 100, "%d.%d.%d.%d",
+					ip_addr[0], ip_addr[1],
+					ip_addr[2], ip_addr[3]);
+				FM_DMP_LN(buf, n, "%-15s     0x%x\n",
+					ip_str, bindings->vlanId);
 			}
 			iounmap(bindings);
 		}
@@ -427,7 +430,7 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 		FM_DMP_LN(buf, n, "control bits 0x%04x\n", ICMPV4Descriptor->control);
 		if (ICMPV4Descriptor->numOfBindings)
 		{
-			char ip_str[20];
+			char ip_str[100];
 			t_DsarArpBindingEntry* bindings = ioremap(
 				ioread32be(&ICMPV4Descriptor->p_Bindings) +
 				p_FmPort->fmMuramPhysBaseAddr,
@@ -437,8 +440,11 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 			FM_DMP_LN(buf, n, "      ip          vlan id\n");
 			for (i = 0; i < ICMPV4Descriptor->numOfBindings; i++)
 			{
-				n += sprintf(ip_str, "%d:%d:%d:%d", ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3]);
-				FM_DMP_LN(buf, n, "%-15s     0x%x\n", ip_str, bindings->vlanId);
+				n += snprintf(ip_str, 100, "%d.%d.%d.%d",
+					ip_addr[0], ip_addr[1],
+					ip_addr[2], ip_addr[3]);
+				FM_DMP_LN(buf, n, "%-15s     0x%x\n",
+					ip_str, bindings->vlanId);
 			}
 			iounmap(bindings);
 		}
@@ -470,7 +476,7 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 		FM_DMP_LN(buf, n, "solicited address 0x%08x\n", NDDescriptor->solicitedAddr);
 		if (NDDescriptor->numOfBindings)
 		{
-			char ip_str[20];
+			char ip_str[100];
 			t_DsarIcmpV6BindingEntry* bindings = ioremap(
 				ioread32be(&NDDescriptor->p_Bindings) +
 				p_FmPort->fmMuramPhysBaseAddr,
@@ -480,7 +486,8 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 			FM_DMP_LN(buf, n, "                  ip                        vlan id\n");
 			for (i = 0; i < NDDescriptor->numOfBindings; i++)
 			{
-				n += sprintf(ip_str, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
+				n += snprintf(ip_str, 100,
+					"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 				ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3],
 				ip_addr[4], ip_addr[5], ip_addr[6], ip_addr[7]);
 				FM_DMP_LN(buf, n, "%s     0x%x\n", ip_str, bindings->vlanId);
@@ -516,7 +523,7 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 		FM_DMP_LN(buf, n, "control bits 0x%04x\n", ICMPV6Descriptor->control);
 		if (ICMPV6Descriptor->numOfBindings)
 		{
-			char ip_str[20];
+			char ip_str[100];
 			t_DsarIcmpV6BindingEntry* bindings = ioremap(
 				ioread32be(&ICMPV6Descriptor->p_Bindings) +
 				p_FmPort->fmMuramPhysBaseAddr,
@@ -526,7 +533,8 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 			FM_DMP_LN(buf, n, "                  ip                        vlan id\n");
 			for (i = 0; i < ICMPV6Descriptor->numOfBindings; i++)
 			{
-				n += sprintf(ip_str, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
+				n += snprintf(ip_str, 100,
+					"%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
 				ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3],
 				ip_addr[4], ip_addr[5], ip_addr[6], ip_addr[7]);
 				FM_DMP_LN(buf, n, "%s     0x%x\n", ip_str, bindings->vlanId);
@@ -560,7 +568,7 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 		FM_DMP_LN(buf, n, "max message length 0x%04x\n", SnmpDescriptor->maxSnmpMsgLength);
 		if (SnmpDescriptor->numOfIpv4Addresses)
 		{
-			char ip_str[20];
+			char ip_str[100];
 			t_DsarSnmpIpv4AddrTblEntry* addrs = ioremap(
 				ioread32be(&SnmpDescriptor->p_Ipv4AddrTbl) +
 				p_FmPort->fmMuramPhysBaseAddr,
@@ -570,7 +578,9 @@ static int fm_port_dsar_dump_regs(void *h_dev, char *buf, int nn)
 			FM_DMP_LN(buf, n, "      ip          vlan id\n");
 			for (i = 0; i < SnmpDescriptor->numOfIpv4Addresses; i++)
 			{
-				n += sprintf(ip_str, "%d:%d:%d:%d", ip_addr[0], ip_addr[1], ip_addr[2], ip_addr[3]);
+				n += snprintf(ip_str, 100, "%d.%d.%d.%d",
+					ip_addr[0], ip_addr[1],
+					ip_addr[2], ip_addr[3]);
 				FM_DMP_LN(buf, n, "%-15s     0x%x\n", ip_str, addrs->vlanId);
 			}
 			iounmap(addrs);
