@@ -165,7 +165,9 @@ do_loop:
 		BUG_ON(tmp != num);
 		i -= num;
 	}
-	i = bman_acquire(pool, NULL, 1, 0);
+
+	struct bm_buffer tmp_buf;
+	i = bman_acquire(pool, &tmp_buf, 1, 0);
 	BUG_ON(i > 0);
 
 	bufs_confirm();
