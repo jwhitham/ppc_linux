@@ -26,6 +26,7 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/flash.h>
 #include <linux/mtd/spi-nor.h>
+#include <linux/delay.h>
 
 #define	MAX_CMD_SIZE		6
 struct m25p {
@@ -256,9 +257,13 @@ static int m25p_suspend(struct device *dev)
 	struct m25p *flash = dev_get_drvdata(dev);
 	struct spi_nor *nor = &flash->spi_nor;
 
-	/* Wait till previous write/erase is done. */
-	if (nor->wait_till_ready)
-		return nor->wait_till_ready(nor);
+	/*
+	 * A minimum de-selection time of 50ns must come between the
+	 * RESET ENABLE and RESET MEMORY commands
+	 */
+	m25p80_write_reg(nor, SPINOR_OP_RESET_EN, NULL, 0, 0);
+	ndelay(50);
+	m25p80_write_reg(nor, SPINOR_OP_RESET_MEM, NULL, 0, 0);
 
 	return 0;
 }
