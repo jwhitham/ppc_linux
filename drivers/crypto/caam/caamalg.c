@@ -4392,7 +4392,7 @@ static int caam_cra_init(struct crypto_tfm *tfm)
 		if (op_id < ARRAY_SIZE(digest_size)) {
 			ctx->authsize = digest_size[op_id];
 		} else {
-			dev_err(ctx->jrdev, "incorrect op_id %d; must be less than %d\n",
+			dev_err(ctx->jrdev, "incorrect op_id %d; must be less than %zu\n",
 					op_id, ARRAY_SIZE(digest_size));
 			caam_jr_free(ctx->jrdev);
 			return -EINVAL;

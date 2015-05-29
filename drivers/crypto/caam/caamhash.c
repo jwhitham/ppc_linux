@@ -1778,7 +1778,7 @@ static int caam_hash_cra_init(struct crypto_tfm *tfm)
 
 	op_id = (ctx->alg_op & OP_ALG_ALGSEL_SUBMASK) >> OP_ALG_ALGSEL_SHIFT;
 	if (op_id >= ARRAY_SIZE(runninglen)) {
-		dev_err(ctx->jrdev, "incorrect op_id %d; must be less than %d\n",
+		dev_err(ctx->jrdev, "incorrect op_id %d; must be less than %zu\n",
 				op_id, ARRAY_SIZE(runninglen));
 		ret = -EINVAL;
 		goto out_err;
