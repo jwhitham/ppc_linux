@@ -127,7 +127,7 @@ static void __init core_mux_init(struct device_node *np)
 	init.name = clk_name;
 	init.ops = &cmux_ops;
 	init.parent_names = parent_names;
-	init.num_parents = count;
+	init.num_parents = (u8)count;
 	init.flags = 0;
 	cmux_clk->hw.init = &init;
 
