@@ -922,7 +922,7 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 	unsigned long next_addr = PAGE_SIZE, populate;
 
 	/* error checking to ensure values copied from user space are valid */
-	if (!i->len || (i->len % PAGE_SIZE))
+	if (i->len % PAGE_SIZE)
 		return -EINVAL;
 
 	map = kmalloc(sizeof(*map), GFP_KERNEL);
@@ -942,6 +942,13 @@ static long ioctl_dma_map(struct file *fp, struct ctx *ctx,
 					ret = -EBUSY;
 					goto out;
 				}
+
+				/* Check to ensure size matches record */
+				if (i->len != frag->map_len && i->len) {
+					pr_err("ioctl_dma_map() Size requested does not match %s and is none zero. This usage will be disallowed in future release\n",
+					frag->name);
+				}
+
 				/* Check if this has already been mapped
 				   to this process */
 				list_for_each_entry(tmp, &ctx->maps, list)
@@ -1669,6 +1676,8 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 		ret = ioctl_dma_map(fp, ctx, &converted);
 		input.ptr = ptr_to_compat(converted.ptr);
 		input.phys_addr = converted.phys_addr;
+		input.len = converted.len;
+		input.flags = converted.flags;
 		strncpy(input.name, converted.name, USDPAA_DMA_NAME_MAX);
 		input.has_locking = converted.has_locking;
 		input.did_create = converted.did_create;
