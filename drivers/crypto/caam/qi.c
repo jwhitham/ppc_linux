@@ -49,8 +49,6 @@ struct caam_qi_pcpu_priv {
 	struct napi_struct irqtask;	/* IRQ task for QI backend */
 	struct net_device net_dev;	/* netdev used by NAPI */
 	struct qman_fq rsp_fq;		/* Response FQ from CAAM */
-	u32 pool;			/* Pool channel used by all from-SEC
-					   queues */
 } ____cacheline_aligned;
 
 static DEFINE_PER_CPU(struct caam_qi_pcpu_priv, pcpu_qipriv);
@@ -550,9 +548,6 @@ int caam_qi_shutdown(struct device *qidev)
 	else
 		qman_release_cgrid(priv->rsp_cgr.cgrid);
 
-	/* Delete the pool channel */
-	qman_release_pool(*this_cpu_ptr(&pcpu_qipriv.pool));
-
 	if (qi_cache)
 		kmem_cache_destroy(qi_cache);
 
@@ -631,7 +626,7 @@ static enum qman_cb_dqrr_result caam_rsp_fq_dqrr_cb(struct qman_portal *p,
 	return qman_cb_dqrr_consume;
 }
 
-static int alloc_rsp_fq_cpu(struct device *qidev, unsigned int cpu, u32 pool)
+static int alloc_rsp_fq_cpu(struct device *qidev, unsigned int cpu)
 {
 	struct qm_mcc_initfq opts;
 	struct qman_fq *fq;
@@ -654,13 +649,13 @@ static int alloc_rsp_fq_cpu(struct device *qidev, unsigned int cpu, u32 pool)
 
 	opts.we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_DESTWQ |
 		QM_INITFQ_WE_CONTEXTB | QM_INITFQ_WE_CONTEXTA |
-		QM_INITFQ_WE_CGID;
+		QM_INITFQ_WE_CGID | QMAN_INITFQ_FLAG_LOCAL;
 
 	opts.fqd.fq_ctrl = QM_FQCTRL_CTXASTASHING |
 			   QM_FQCTRL_CPCSTASH |
 			   QM_FQCTRL_CGE;
 
-	opts.fqd.dest.channel = (u16)pool;
+	opts.fqd.dest.channel = qman_affine_channel(cpu);
 	opts.fqd.cgid = qipriv.rsp_cgr.cgrid;
 	opts.fqd.dest.wq = 0;
 	opts.fqd.context_a.stashing.exclusive =
@@ -707,7 +702,7 @@ static int alloc_cgrs(struct device *qidev)
 	/*
 	 * This effectively sets the to-CPU threshold equal to half of the
 	 * number of buffers available to dpa_eth driver. It means that at most
-	 * half of the buffers can be in the pool channel from SEC, waiting
+	 * half of the buffers can be in the queues from SEC, waiting
 	 * to be transmitted to the core (and then on the TX queues).
 	 * NOTE: This is an arbitrary division; the factor '2' below could
 	 *       also be '3' or '4'. It also depends on the number of devices
@@ -733,42 +728,19 @@ static int alloc_cgrs(struct device *qidev)
 	return 0;
 }
 
-static inline void add_cpu2pool(int cpu, u32 pool)
-{
-	struct qman_portal *portal =
-			(struct qman_portal *)qman_get_affine_portal(cpu);
-	qman_p_static_dequeue_add(portal,
-				  QM_SDQCR_CHANNELS_POOL_CONV((u16)pool));
-}
-
 static int alloc_rsp_fqs(struct device *qidev)
 {
 	const cpumask_t *cpus = qman_affine_cpus();
 	int ret, i;
-	u32 pool;
-
-	ret = qman_alloc_pool(&pool);
-	if (ret) {
-		dev_err(qidev, "CAAM pool alloc failed: %d\n", ret);
-		return ret;
-	}
-	dev_info(qidev, "Allocated pool %d\n", pool);
 
 	/*Now create response FQs*/
 	for_each_cpu(i, cpus) {
-		ret = alloc_rsp_fq_cpu(qidev, i, pool);
+		ret = alloc_rsp_fq_cpu(qidev, i);
 		if (ret) {
 			dev_err(qidev, "CAAM rsp FQ alloc failed, cpu: %u", i);
 			return ret;
 		}
-		add_cpu2pool(i, pool);
 	}
-
-	/*
-	 * The pool will be used (i.e. set as destination only from this CPU
-	 * (the CPU performing the initialization).
-	 */
-	*this_cpu_ptr(&pcpu_qipriv.pool) = pool;
 
 	return 0;
 }
