@@ -3517,6 +3517,7 @@ int qman_ceetm_lni_enable_shaper(struct qm_ceetm_lni *lni, int coupled,
 			 lni->er_token_rate.fraction;
 	config_opts.shaper_config.crtbl = lni->cr_token_bucket_limit;
 	config_opts.shaper_config.ertbl = lni->er_token_bucket_limit;
+	config_opts.shaper_config.mps = 60;
 	return qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
 }
 EXPORT_SYMBOL(qman_ceetm_lni_enable_shaper);
@@ -3540,6 +3541,7 @@ int qman_ceetm_lni_disable_shaper(struct qm_ceetm_lni *lni)
 	 */
 	config_opts.shaper_config.crtcr = 0xFFFFFF;
 	config_opts.shaper_config.ertcr = 0xFFFFFF;
+	config_opts.shaper_config.mps = 60;
 	lni->shaper_enable = 0;
 	return qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
 }
@@ -3583,6 +3585,7 @@ int qman_ceetm_lni_set_commit_rate(struct qm_ceetm_lni *lni,
 					query_result.shaper_query.ertcr;
 		config_opts.shaper_config.ertbl =
 					query_result.shaper_query.ertbl;
+		config_opts.shaper_config.mps = query_result.shaper_query.mps;
 		return	qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
 	} else {
 		return 0;
@@ -3678,7 +3681,7 @@ int qman_ceetm_lni_set_excess_rate(struct qm_ceetm_lni *lni,
 					query_result.shaper_query.crtcr;
 		config_opts.shaper_config.crtbl =
 					query_result.shaper_query.crtbl;
-
+		config_opts.shaper_config.mps = query_result.shaper_query.mps;
 		return qman_ceetm_configure_mapping_shaper_tcfc(&config_opts);
 	} else {
 		return 0;

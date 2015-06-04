@@ -789,7 +789,8 @@ struct qm_mcc_ceetm_mapping_shaper_tcfc_config {
 			u32 ertcr:24;
 			u16 crtbl;
 			u16 ertbl;
-			u8 __reserved2[48];
+			u8 mps;	/* This will be hardcoded by driver with 60 */
+			u8 __reserved2[47];
 		} __packed shaper_config;
 		struct {
 			u8 __reserved2[11];
@@ -1203,7 +1204,8 @@ struct qm_mcr_ceetm_mapping_shaper_tcfc_query {
 			u32 ertcr:24;
 			u16 crtbl;
 			u16 ertbl;
-			u8 __reserved2[16];
+			u8 mps;
+			u8 __reserved2[15];
 			u32 crat;
 			u32 erat;
 			u8 __reserved3[24];
