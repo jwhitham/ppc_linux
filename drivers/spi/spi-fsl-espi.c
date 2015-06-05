@@ -739,6 +739,35 @@ static int of_fsl_espi_remove(struct platform_device *dev)
 }
 
 #ifdef CONFIG_PM_SLEEP
+#define DCFG_CCSR_DEVDISR4_OFF	0x7c
+#define ESPI_BIT		(1 << 27)
+
+static int hw_disable_espi(int disable)
+{
+	struct device_node *np;
+	void __iomem *gut_addr = NULL;	/* Local Access Control registers */
+	u32 regval;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,t1040-device-config");
+	if (!np) {
+		pr_err("could not find a guts node\n");
+		return -ENODEV;
+	}
+	gut_addr = of_iomap(np, 0);
+	if (!gut_addr)
+		return -ENODEV;
+
+	regval = in_be32(gut_addr + DCFG_CCSR_DEVDISR4_OFF);
+	if (disable == true)
+		regval |= ESPI_BIT;
+	else
+		regval &= ~ESPI_BIT;
+
+	out_be32(gut_addr + DCFG_CCSR_DEVDISR4_OFF, regval);
+
+	return 0;
+}
+
 static int of_fsl_espi_suspend(struct device *dev)
 {
 	struct spi_master *master = dev_get_drvdata(dev);
@@ -760,6 +789,8 @@ static int of_fsl_espi_suspend(struct device *dev)
 	regval &= ~SPMODE_ENABLE;
 	mpc8xxx_spi_write_reg(&reg_base->mode, regval);
 
+	hw_disable_espi(true);
+
 	return 0;
 }
 
@@ -771,6 +802,8 @@ static int of_fsl_espi_resume(struct device *dev)
 	struct fsl_espi_reg *reg_base;
 	u32 regval;
 	int i;
+
+	hw_disable_espi(false);
 
 	mpc8xxx_spi = spi_master_get_devdata(master);
 	reg_base = mpc8xxx_spi->reg_base;
