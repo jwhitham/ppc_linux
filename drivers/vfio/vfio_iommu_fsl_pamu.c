@@ -200,6 +200,9 @@ static int vaddr_get_pfn(unsigned long vaddr, int prot, unsigned long *pfn,
 	int i;
 
 	pages = kzalloc(sizeof(*pages) * nr_pages, GFP_KERNEL);
+	if (!pages)
+		return -ENOMEM;
+
 	ret = get_user_pages_fast(vaddr, nr_pages, !!(prot & IOMMU_WRITE), pages);
 	if (ret != nr_pages)
 		goto error;
