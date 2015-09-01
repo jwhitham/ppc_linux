@@ -1,0 +1,36 @@
+#!/bin/bash -xe
+
+rm -rf boot
+mkdir boot
+mkdir boot/tools
+
+./scripts/dtc/dtc arch/powerpc/boot/dts/p1020rdb.dts -I dts -o boot/p1020rdbT.dtb -O dtb
+./scripts/dtc/dtc arch/powerpc/boot/dts/p1022ds_32b.dts -I dts -o boot/p1022ds_32bT.dtb -O dtb
+./scripts/dtc/dtc arch/powerpc/boot/dts/p1022ds_36b.dts -I dts -o boot/p1022ds_36bT.dtb -O dtb
+
+cp .config boot/configT.txt
+cp arch/powerpc/boot/uImage boot/uImageT
+
+pushd boot/tools
+cp -aL /lib/ld.so.1 /lib/power*/libc.so.6 /bin/kmod .
+ln -s kmod insmod
+ln -s kmod lsmod
+ln -s kmod rmmod
+cp ../../lib/modules/*/kernel/fs/fat/msdos.ko .
+cat <<EOF > test.sh
+#!/bin/sh -x
+cd /boot/tools
+export LD_LIBRARY_PATH=\$PWD
+./ld.so.1 ./lsmod
+./ld.so.1 ./rmmod msdos.ko
+./ld.so.1 ./lsmod
+./ld.so.1 ./insmod msdos.ko
+./ld.so.1 ./lsmod
+EOF
+chmod a+x test.sh
+popd
+
+tar cvzf 312_kernel_test.tar.gz lib/modules/ boot/
+cp 312_kernel_test.tar.gz /tmp
+
+
