@@ -9,7 +9,7 @@ LDFLAGS += -L../rvs_library -lrvs
 	make -C ../rvs_library librvs.a
 
 rvs_library_test: ../rvs_library/librvs.a $(OBJS)
-	gcc -o rvs_library_test $(OBJS) $(LDFLAGS)
+	gcc -o rvs_library_test -static $(OBJS) $(LDFLAGS)
 
 .PHONY: clean
 clean:
