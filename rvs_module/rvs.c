@@ -39,7 +39,7 @@
 #define RVS_HASH_MASK		((1U << RVS_HASH_SHIFT) - 1)
 
 /* Default buffer size (entries). */
-#define RVS_DFLT_BUF_SHIFT	(14)
+#define RVS_DFLT_BUF_SHIFT	(16)
 
 /*
  * Object containing the global state of the tracer and the traces
@@ -116,10 +116,10 @@ static void rvs_sched_in(struct preempt_notifier *pn, int cpu)
 static void rvs_sched_out(struct preempt_notifier *pn,
            struct task_struct *next)
 {
+   u32 cycles = rvs_get_cycles();
    struct rvs_task *taskp = container_of(pn, struct rvs_task, notifier);
 
    if (taskp->in_progress) {
-      u32 cycles = rvs_get_cycles();
 
       if (!current->nsproxy) {
          /* thread has been killed (uncleanly) */

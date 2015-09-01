@@ -29,8 +29,8 @@ int32_t nolib_syscall (int32_t nr, ...);
 
 #define TRACE_FILE_NAME    "trace.bin"
 
-#define USER_BUFFER_SIZE     (1 << 1) /* 1M entries */
-#define KERNEL_BUFFER_SIZE   (1 << 1) /* 64K entries */
+#define USER_BUFFER_SIZE     (1 << 20) /* 1M entries */
+#define KERNEL_BUFFER_SIZE   (1 << 16) /* 64K entries */
 #define MERGED_BUFFER_SIZE   (USER_BUFFER_SIZE + KERNEL_BUFFER_SIZE)
 
 
@@ -83,7 +83,7 @@ void RVS_Init(void)
    if (rvs_device_fd < 0) {
       fatal_error ("RVS_Init: could not open " RVS_FILE_NAME);
    }
-   if ((USER_BUFFER_SIZE < 2) || (KERNEL_BUFFER_SIZE < 2)) {
+   if ((USER_BUFFER_SIZE < 4) || (KERNEL_BUFFER_SIZE < 4)) {
       fatal_error ("buffers are too small");
    }
 
@@ -120,6 +120,9 @@ void RVS_Ipoint (unsigned id)
       merge_buffers_now ();
       user_pos->tstamp = rvs_get_cycles ();
       user_pos->id = RVS_END_WRITE;
+      user_pos ++;
+      user_pos->tstamp = rvs_get_cycles ();
+      user_pos->id = id;
    }
    user_pos ++;
 }

@@ -3,14 +3,19 @@
 #pragma RVS default_instrument ("TRUE", "TIME_FUNCTIONS");
 #pragma RVS instrument ("main", "FALSE");
 
+void subtask (void)
+{
+   unsigned j;
+   for (j = 0; j < INNER; j++) { 
+      asm ("nop");
+   }
+}
 void task1 (void)
 {
-   unsigned i, j;
+   unsigned i;
 
    for (i = 0; i < OUTER; i++) {
-      for (j = 0; j < INNER; j++) { 
-         asm ("nop");
-      }
+      subtask ();
    }
 }
 

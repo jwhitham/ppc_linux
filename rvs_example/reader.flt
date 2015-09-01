@@ -1,0 +1,52 @@
+
+read.byte_reader("B0 B1 B2 B3", "B4 B5 B6 B7");
+read.wrap(32);
+
+<c_script>
+
+/* Markers to indicate time spent writing trace data */
+#define RVS_BEGIN_WRITE		0xfffffff1
+#define RVS_END_WRITE		0xfffffff0
+
+/* Context switch markers in the trace. */
+#define RVS_SWITCH_FROM		0xffffffff
+#define RVS_SWITCH_TO		0xfffffffe
+
+int skipping = 0;
+unsigned long long skip_time = 0;
+unsigned long long begin_time = 0;
+
+void filter_block (t_trace_elts trace, unsigned int * last)
+{
+	int i, j;
+	
+	for (j = 0, i = 0; i < (*last);i++) {
+      switch (trace[i].i) {
+         case RVS_SWITCH_FROM:
+         case RVS_BEGIN_WRITE:
+            skipping ++;
+            if (skipping == 1) {
+               begin_time = trace[i].t;
+            }
+            break;
+         case RVS_SWITCH_TO:
+         case RVS_END_WRITE:
+            skipping --;
+            if (skipping == 0) {
+               skip_time += trace[i].t - begin_time;
+            }
+            break;
+         default:
+            if (skipping == 0) {
+               trace[j] = trace[i];
+               trace[j].t -= skip_time;
+               trace[j].wt -= skip_time;
+               j++;
+            }
+            break;
+      }
+   }
+   (*last) = j;
+}
+
+</c_script>
