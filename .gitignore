@@ -99,3 +99,8 @@ x509.genkey
 /lib/modules/
 /p10*.dtb
 /boot
+
+
+/L1-invalidator
+/L2_and_Branching
+
