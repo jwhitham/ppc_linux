@@ -33,7 +33,8 @@ nolib_syscall:
    sc
    bnslr;
 
-   b ppc_syscall_error
+	li 3,-1
+   blr
 
    .size nolib_syscall,.-nolib_syscall
 

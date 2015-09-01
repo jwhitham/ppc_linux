@@ -65,10 +65,6 @@ static void fatal_error (const char * s)
 }
 
 #ifdef CONFIG_PPC
-void ppc_syscall_error (void)
-{
-   fatal_error ("ppc_syscall_error");
-}
 void ppc_exit (void)
 {
    nolib_syscall (__NR_exit, 0, 0, 0);
