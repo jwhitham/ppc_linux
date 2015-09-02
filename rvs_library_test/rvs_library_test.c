@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include "librvs.h"
@@ -12,12 +13,22 @@
 #define RVS_SWITCH_FROM		0xffffffff
 #define RVS_SWITCH_TO		0xfffffffe
 
+static inline uint32_t rvs_get_cycles(void)
+{
+   uint32_t l1;
+   asm volatile("mfspr %0, 526" : "=r" (l1));
+   return l1;
+}
+
+typedef struct overflow_s {
+   uint32_t t1, t2;
+} overflow_t;
+
 int main (void)
 {
-   unsigned       i, j;
-   struct timeval t0;
-   struct timeval t1;
    FILE *         fd;
+   FILE *         fd2;
+   uint32_t       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
    uint32_t       kernel_entries = 0;
@@ -26,34 +37,79 @@ int main (void)
    uint64_t       fixed_tstamp = 0;
    uint64_t       enter_kernel_tstamp = 0;
    uint64_t       start_tstamp = 0;
-   uint64_t       total_time = 0;
    uint64_t       total_kernel_time = 0;
-   uint64_t       expected_time = 0;
-   double         deinstrument = 0.0;
+   uint64_t       loop_time = 0;
+   const uint64_t expected_time = 2000 * 1000 * 1000;
+   const uint32_t histogram_size = 100;
+   const uint32_t overflow_size = 10000;
+   uint32_t       histogram[histogram_size];
+   overflow_t     overflow[overflow_size];
+   uint32_t       overflow_count = 0;
+   uint32_t       peak = 0;
+   uint32_t       average_iteration_time = 1;
+   uint32_t       iterations = 0;
 
    printf ("Calling RVS_Init()\n");
    RVS_Init();
 
+   memset (histogram, 0, sizeof (histogram));
    printf ("Starting test\n");
    fflush (stdout);
-   gettimeofday (&t0, NULL);
-   do {
-      for (i = 0; i < 10; i++) {
-         RVS_Ipoint (10);
-         /* busy wait for 100e6 clock cycles */
-         for (j = 0; j < 50000000; j++) {
-            asm ("nop");
+   {
+      uint32_t loop_start, loop_now, loop_last, delta;
+
+      RVS_Ipoint (10);
+      loop_start = rvs_get_cycles ();
+      loop_last = loop_now = loop_start;
+      do {
+         loop_now = rvs_get_cycles ();
+         delta = loop_now - loop_last;
+         if (delta < histogram_size) {
+            histogram[delta]++;
+         } else if (overflow_count < overflow_size) {
+            overflow[overflow_count].t1 = loop_last;
+            overflow[overflow_count].t2 = loop_now;
+            overflow_count++;
          }
-         RVS_Ipoint (11);
-         expected_time = j * 2;
-      }
-      gettimeofday (&t1, NULL);
-   } while (t1.tv_sec < (t0.tv_sec + 2));
+         iterations ++;
+         loop_last = loop_now;
+      } while ((loop_now - loop_start) < (uint32_t) expected_time);
+      RVS_Ipoint (11);
+   }
 
    RVS_Output();
+
    printf ("Examining results\n");
-   fd = fopen ("trace.bin", "rb");
+   fd = fopen ("histogram.txt", "wt");
    if (!fd) {
+      printf ("Failed, histogram.txt not created\n");
+      return 1;
+   }
+   for (i = 0; i < histogram_size; i++) {
+      fprintf (fd, "%u,%u\n", i, histogram[i]);
+      if (histogram[i] > peak) {
+         peak = histogram[i];
+         average_iteration_time = i;
+      }
+   }
+   fclose (fd);
+   printf ("An uninterrupted loop iteration costs %u clock cycles\n",
+           average_iteration_time);
+
+   fd = fopen ("overflow.txt", "wt");
+   if (!fd) {
+      printf ("Failed, overflow.txt not created\n");
+      return 1;
+   }
+   for (i = 0; i < overflow_count; i++) {
+      fprintf (fd, "%u,%u,%u\n", i, overflow[i].t1, overflow[i].t2);
+   }
+   fclose (fd);
+   printf ("There were %u interruptions\n", overflow_count);
+
+   fd2 = fopen ("events.txt", "wt");
+   fd = fopen ("trace.bin", "rb");
+   if ((!fd) || (!fd2)) {
       printf ("Failed, trace.bin not found\n");
       return 1;
    }
@@ -72,9 +128,10 @@ int main (void)
          case RVS_SWITCH_FROM:
             enter_kernel_tstamp = fixed_tstamp;
             kernel_entries ++;
+            fprintf (fd2, "%u,%u,", kernel_entries, tstamp);
             break;
          case RVS_SWITCH_TO:
-            printf ("kernel entry: %u cycles\n", (unsigned) (fixed_tstamp - enter_kernel_tstamp));
+            fprintf (fd2, "%u\n", tstamp);
             total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
             break;
          case 10:
@@ -83,35 +140,25 @@ int main (void)
             start_tstamp = fixed_tstamp;
             break;
          case 11:
-            if (kernel_entries != 0) {
-               printf ("%u kernel entries, ", kernel_entries);
-
-               total_time = fixed_tstamp - start_tstamp;
-               printf ("%1.0f clock cycles, ", (double) total_time);
-
-               if (total_time < expected_time) {
-                  printf ("Failed, total time was less than %1.0f\n", (double) expected_time);
-                  return 1;
-               }
-
-               total_time -= total_kernel_time;
-               printf ("minus %1.0f in kernel, ", (double) total_kernel_time);
-
-               if (total_time < expected_time) {
-                  printf ("Failed, total time was less than %1.0f\n", (double) expected_time);
-                  return 1;
-               }
-
-               deinstrument = (double) (total_time - expected_time) / (double) kernel_entries;
-               printf ("kernel entry overhead seems to be %1.0f\n", deinstrument);
-            }
+            printf ("loop: %u iterations, %1.0f wallclock cycles, %u switches, %1.0f ticks\n",
+               iterations,
+               (double) (fixed_tstamp - start_tstamp),
+               kernel_entries,
+               ((double) (fixed_tstamp - start_tstamp) / 3.2e6));
+            loop_time = (uint64_t) iterations * (uint64_t) average_iteration_time;
+            printf ("      %1.0f in other threads, %1.0f in user space, %1.0f unaccounted\n",
+               (double) total_kernel_time,
+               (double) loop_time,
+               (double) (fixed_tstamp - start_tstamp) - 
+                  (double) total_kernel_time - (double) loop_time);
             break;
          default:
-            printf ("Unexpected ipoint id %u\n", id);
+            printf ("Invalid ipoint id %u\n", id);
             return 1;
       }
    }
    fclose (fd);
+   fclose (fd2);
    printf ("Test passed\n");
    return 0;
 }
