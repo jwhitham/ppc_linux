@@ -2,8 +2,8 @@
 CXX=powerpc-eabi-g++
 CC=powerpc-eabi-gcc
 LD=powerpc-eabi-g++
-CFLAGS=-g
-CXXFLAGS=-g
+CFLAGS=-g -I../rvs_library
+CXXFLAGS=-g -I../rvs_library
 
 all: example
 

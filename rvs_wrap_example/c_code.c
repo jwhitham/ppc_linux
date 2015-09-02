@@ -1,4 +1,6 @@
 
+#pragma RVS add_code ("#include \"librvs.h\"");
+
 void cpp_task (void);
 
 void c_task (void)
