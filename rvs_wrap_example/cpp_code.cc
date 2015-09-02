@@ -10,8 +10,6 @@ void subtask (void)
    }
 }
 
-extern "C" void cpp_task (void);
-
 void cpp_task (void)
 {
    unsigned i;
@@ -21,3 +19,11 @@ void cpp_task (void)
    }
 }
 
+
+int main (void)
+{
+   #pragma RVS add_code ("RVS_Init();");
+   cpp_task ();
+   #pragma RVS add_code ("RVS_Output();");
+   return 0;
+}

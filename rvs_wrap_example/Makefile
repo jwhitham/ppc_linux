@@ -1,17 +1,18 @@
 
 CXX=powerpc-eabi-g++
-CC=powerpc-eabi-gcc
-LD=powerpc-eabi-g++
-CFLAGS=-g -I../rvs_library
+CC=$(CXX)
+LD=$(CXX)
 CXXFLAGS=-g -I../rvs_library
+LDFLAGS=-L../rvs_library
+LIBS=-lrvs
 
 all: example
 
 clean:
 	rm -f $(OBJS) example
 
-OBJS=start.o cpp_code.o c_code.o
+OBJS=start.o cpp_code.o
 
 example: $(OBJS) Makefile
-	$(LD) -o example $(OBJS)
+	$(LD) -o example $(OBJS) $(LDFLAGS) $(LIBS)
 
