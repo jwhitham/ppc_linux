@@ -1,5 +1,6 @@
 .global _start
 .global start
+.global __eabi
 .global main
 _start:
 start:
@@ -12,4 +13,6 @@ start:
    sc
    b 0b
 
+__eabi:
+   blr
 

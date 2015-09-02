@@ -2,9 +2,9 @@
 CXX=powerpc-eabi-g++
 CC=$(CXX)
 LD=$(CXX)
-CXXFLAGS=-g -I../rvs_library
+CXXFLAGS=-g -I../rvs_library -nostdinc -fno-exceptions 
 LDFLAGS=-L../rvs_library
-LIBS=-lrvs
+LIBS=-lrvs -nostdlib
 
 all: example
 

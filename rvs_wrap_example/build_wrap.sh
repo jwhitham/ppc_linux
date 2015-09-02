@@ -1,9 +1,9 @@
 #!/bin/bash -xe
 make clean
-
+rm -rf ./rvs ./custom_rvs_lib_dir
 
 export RVS_WRAPPER_RVS=./rvs
-export RVS_WRAPPER_RVSLIB=custom_rvs_lib_dir 
+export RVS_WRAPPER_RVSLIB=./custom_rvs_lib_dir 
 export RVS_WRAPPER_RVSCCPATH=/home/jwhitham/linux-tools/bin/powerpc-eabi-g++
 export RVS_WRAPPER_RVSTEMPLATES=./templates 
 export RVS_WRAPPER_RVSOUT=./rvs/out/ 
