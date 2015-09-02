@@ -1,5 +1,6 @@
 #define OUTER 100
 #define INNER 1000000
+#pragma RVS add_code ("#include \"librvs.h\"");
 #pragma RVS default_instrument ("TRUE", "TIME_FUNCTIONS");
 #pragma RVS instrument ("main", "FALSE");
 
@@ -23,10 +24,10 @@ void ppc_exit (void);
 
 int _start (void)
 {
-   RVS_Init();
+   #pragma RVS add_code("RVS_Init();");
    task1 ();
-   RVS_Output();
-   ppc_exit ();
+   #pragma RVS add_code("RVS_Output();");
+   #pragma RVS add_code("ppc_exit ();");
    return 0;
 }
 

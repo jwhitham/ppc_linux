@@ -9,7 +9,7 @@ echo 'instrumenting example.c'
 cins --exf tmp.exf example.p  -c rvs_ipoint.h
 
 echo 'compile instrumented code'
-powerpc-eabi-gcc -c -x c example.p.i -g -O2
+powerpc-eabi-gcc -c -x c example.p.i -g -O2 -I../rvs_library
 powerpc-eabi-gcc -o example example.p.o \
    -L../rvs_library -lrvs  -nostdlib
 
