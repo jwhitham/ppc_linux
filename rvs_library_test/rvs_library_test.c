@@ -6,6 +6,8 @@
 #include "librvs.h"
 
 
+void loopN (unsigned count);
+
 static inline uint32_t rvs_get_cycles(void)
 {
    uint32_t l1;
@@ -21,6 +23,7 @@ int main (void)
 {
    FILE *         fd;
    FILE *         fd3;
+   FILE *         fd2;
    uint32_t       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
@@ -32,93 +35,46 @@ int main (void)
    uint64_t       start_tstamp = 0;
    uint64_t       total_kernel_time = 0;
    uint64_t       last_kernel_exit = 0;
-   uint64_t       loop_time = 0;
-   uint64_t       start_time = 0;
-   const uint64_t expected_time = 2000 * 1000 * 1000;
-   const uint32_t histogram_size = 100;
-   const uint32_t overflow_size = 10000;
-   uint32_t       histogram[histogram_size];
-   overflow_t     overflow[overflow_size];
-   uint32_t       overflow_count = 0;
-   uint32_t       peak = 0;
-   uint32_t       average_iteration_time = 1;
-   uint32_t       iterations = 0;
+   uint64_t       min_loop_time = 0;
    uint32_t       kernel_depth = 0;
+   const uint32_t loop_cycles = 100000;
 
    printf ("Calling RVS_Init()\n");
    RVS_Init();
 
-   memset (histogram, 0, sizeof (histogram));
-   printf ("Starting test\n");
+   printf ("Starting test:\n");
    fflush (stdout);
-   {
-      uint32_t loop_start, loop_now, loop_last, delta;
 
+   for (i = 0; i < 10000; i++) {
       RVS_Ipoint (10);
-      loop_start = rvs_get_cycles ();
-      loop_last = loop_now = loop_start;
-      do {
-         loop_now = rvs_get_cycles ();
-         delta = loop_now - loop_last;
-         if (delta < histogram_size) {
-            histogram[delta]++;
-         } else if (overflow_count < overflow_size) {
-            overflow[overflow_count].t1 = loop_last;
-            overflow[overflow_count].t2 = loop_now;
-            overflow_count++;
-         }
-         iterations ++;
-         loop_last = loop_now;
-      } while ((loop_now - loop_start) < (uint32_t) expected_time);
+      loopN (loop_cycles);
       RVS_Ipoint (11);
    }
 
    RVS_Output();
 
    printf ("Examining results\n");
-   fd = fopen ("histogram.txt", "wt");
-   if (!fd) {
-      printf ("Failed, histogram.txt not created\n");
-      return 1;
-   }
-   for (i = 0; i < histogram_size; i++) {
-      fprintf (fd, "%u,%u\n", i, histogram[i]);
-      if (histogram[i] > peak) {
-         peak = histogram[i];
-         average_iteration_time = i;
-      }
-   }
-   fclose (fd);
-   printf ("An uninterrupted loop iteration costs %u clock cycles\n",
-           average_iteration_time);
 
-   fd = fopen ("overflow.txt", "wt");
-   if (!fd) {
-      printf ("Failed, overflow.txt not created\n");
+   if ((fd3 = fopen ("trace.txt", "wt")) == NULL) {
+      perror ("creating trace.txt");
       return 1;
    }
-   for (i = 0; i < overflow_count; i++) {
-      fprintf (fd, "%u,%u,%u\n", i, overflow[i].t1, overflow[i].t2);
+   if ((fd2 = fopen ("results.txt", "wt")) == NULL) {
+      perror ("creating results.txt");
+      return 1;
    }
-   fclose (fd);
-   printf ("There were %u interruptions\n", overflow_count);
+   if ((fd = fopen ("trace.bin", "rb")) == NULL) {
+      perror ("reading trace.bin");
+      return 1;
+   }
 
-   fd3 = fopen ("trace.txt", "wt");
-   fd = fopen ("trace.bin", "rb");
-   if ((!fd) || (!fd3)) {
-      printf ("Failed, trace.bin not found\n");
-      return 1;
-   }
    while ((fread (&id, 4, 1, fd) == 1) && (fread (&tstamp, 4, 1, fd) == 1)) {
       if (tstamp < old_tstamp) {
          offset += 1ULL << 32ULL;
       }
       fixed_tstamp = tstamp + offset;
       old_tstamp = tstamp;
-      if (start_time == 0) {
-         start_time = tstamp;
-      }
-      fprintf (fd3, "%08x %10.6f\n", id, ((double) (tstamp - start_time) / 800e6));
+      fprintf (fd3, "%08x %14.0f\n", id, (double) tstamp);
 
       switch (id) {
          case RVS_BEGIN_WRITE:
@@ -136,6 +92,7 @@ int main (void)
                 * of the scheduler.
                 */
                total_kernel_time += fixed_tstamp - last_kernel_exit;
+               kernel_entries --;
             }
             /* fall through */
          case RVS_TIMER_ENTRY:
@@ -145,7 +102,6 @@ int main (void)
             kernel_depth ++;
             if (kernel_depth == 1) {
                enter_kernel_tstamp = fixed_tstamp;
-               kernel_entries ++;
             }
             if (kernel_depth > 10) {
                printf ("Too many nested kernel entries\n");
@@ -164,6 +120,7 @@ int main (void)
                if (kernel_depth == 0) {
                   total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
                   last_kernel_exit = fixed_tstamp;
+                  kernel_entries ++;
                }
             }
             break;
@@ -175,17 +132,28 @@ int main (void)
             break;
          case 11:
             last_kernel_exit = 0;
-            printf ("loop: %u iterations, %1.0f wallclock cycles, %u switches, %1.0f ticks\n",
-               iterations,
+            fprintf (fd2, "%1.0f %1.0f %u\n",
                (double) (fixed_tstamp - start_tstamp),
-               kernel_entries,
-               ((double) (fixed_tstamp - start_tstamp) / 3.2e6));
-            loop_time = (uint64_t) iterations * (uint64_t) average_iteration_time;
-            printf ("      %1.0f in other threads, %1.0f in user space, %1.0f unaccounted\n",
-               (double) total_kernel_time,
-               (double) loop_time,
-               (double) (fixed_tstamp - start_tstamp) - 
-                  (double) total_kernel_time - (double) loop_time);
+               (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
+               kernel_entries);
+            if (kernel_entries == 0) {
+               if ((!min_loop_time) || ((fixed_tstamp - start_tstamp) < min_loop_time)) {
+                  min_loop_time = (fixed_tstamp - start_tstamp);
+                  printf ("Uninterrupted loop execution time is %1.0f\n",
+                          (double) min_loop_time);
+               }
+            } else {
+               if (min_loop_time) {
+                  printf ("Loop %1.0f to %1.0f is: %1.0f wall-clock, %1.0f execution, %u interrupts, %1.0f per interrupt\n",
+                     (double) start_tstamp,
+                     (double) fixed_tstamp,
+                     (double) (fixed_tstamp - start_tstamp),
+                     (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
+                     kernel_entries,
+                     (double) ((fixed_tstamp - start_tstamp) - total_kernel_time - min_loop_time) /
+                        (double) kernel_entries);
+               }
+            }
             break;
          default:
             printf ("Invalid ipoint id %u\n", id);
@@ -193,6 +161,7 @@ int main (void)
       }
    }
    fclose (fd);
+   fclose (fd2);
    fclose (fd3);
    printf ("Test passed\n");
    return 0;
