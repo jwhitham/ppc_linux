@@ -15,10 +15,6 @@ static inline uint32_t rvs_get_cycles(void)
    return l1;
 }
 
-typedef struct overflow_s {
-   uint32_t t1, t2;
-} overflow_t;
-
 int main (void)
 {
    FILE *         fd;
@@ -27,7 +23,10 @@ int main (void)
    uint32_t       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
-   uint32_t       kernel_entries = 0;
+   uint32_t       timer_events = 0;
+   uint32_t       sys_events = 0;
+   uint32_t       irq_events = 0;
+   uint32_t       sched_events = 0;
    uint32_t       old_tstamp = 0;
    uint64_t       offset = 0;
    uint64_t       fixed_tstamp = 0;
@@ -74,7 +73,6 @@ int main (void)
       }
       fixed_tstamp = tstamp + offset;
       old_tstamp = tstamp;
-      fprintf (fd3, "%08x %14.0f\n", id, (double) tstamp);
 
       switch (id) {
          case RVS_BEGIN_WRITE:
@@ -92,7 +90,6 @@ int main (void)
                 * of the scheduler.
                 */
                total_kernel_time += fixed_tstamp - last_kernel_exit;
-               kernel_entries --;
             }
             /* fall through */
          case RVS_TIMER_ENTRY:
@@ -119,24 +116,37 @@ int main (void)
                kernel_depth --;
                if (kernel_depth == 0) {
                   total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
-                  last_kernel_exit = fixed_tstamp;
-                  kernel_entries ++;
+               }
+               switch (id) {
+                  case RVS_TIMER_EXIT:
+                     last_kernel_exit = fixed_tstamp;
+                     timer_events ++;
+                     break;
+                  case RVS_SYS_EXIT:
+                     sys_events ++;
+                     break;
+                  case RVS_IRQ_EXIT:
+                     irq_events ++;
+                     break;
+                  case RVS_SWITCH_TO:
+                     sched_events ++;
+                     break;
                }
             }
             break;
          case 10:
             last_kernel_exit = 0;
-            kernel_entries = 0;
+            timer_events = sys_events = irq_events = sched_events = 0;
             total_kernel_time = 0;
             start_tstamp = fixed_tstamp;
             break;
          case 11:
             last_kernel_exit = 0;
-            fprintf (fd2, "%1.0f %1.0f %u\n",
+            fprintf (fd2, "%1.0f %1.0f %u %u %u %u\n",
                (double) (fixed_tstamp - start_tstamp),
                (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
-               kernel_entries);
-            if (kernel_entries == 0) {
+               timer_events, sys_events, irq_events, sched_events);
+            if ((timer_events + sys_events + irq_events + sched_events) == 0) {
                if ((!min_loop_time) || ((fixed_tstamp - start_tstamp) < min_loop_time)) {
                   min_loop_time = (fixed_tstamp - start_tstamp);
                   printf ("Uninterrupted loop execution time is %1.0f\n",
@@ -144,14 +154,14 @@ int main (void)
                }
             } else {
                if (min_loop_time) {
-                  printf ("Loop %1.0f to %1.0f is: %1.0f wall-clock, %1.0f execution, %u interrupts, %1.0f per interrupt\n",
+                  printf ("Loop %1.0f to %1.0f is: %1.0f wall-clock, %1.0f execution, "
+                        "%1.0f extra from %u timer events, %u sys events, %u irq events, %u sched_events\n",
                      (double) start_tstamp,
                      (double) fixed_tstamp,
                      (double) (fixed_tstamp - start_tstamp),
                      (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
-                     kernel_entries,
-                     (double) ((fixed_tstamp - start_tstamp) - total_kernel_time - min_loop_time) /
-                        (double) kernel_entries);
+                     (double) ((fixed_tstamp - start_tstamp) - total_kernel_time - min_loop_time),
+                     timer_events, sys_events, irq_events, sched_events);
                }
             }
             break;
@@ -159,6 +169,8 @@ int main (void)
             printf ("Invalid ipoint id %u\n", id);
             return 1;
       }
+      fprintf (fd3, "%08x %14.0f %14.0f\n", id, (double) fixed_tstamp,
+               (double) ((fixed_tstamp - start_tstamp) - total_kernel_time));
    }
    fclose (fd);
    fclose (fd2);
