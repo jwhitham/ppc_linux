@@ -5,13 +5,6 @@
 #include <stdlib.h>
 #include "librvs.h"
 
-/* Context switch markers in the trace. */
-#define RVS_TIMER_ENTRY    0xffffffff     /* timer interrupt entry */
-#define RVS_TIMER_EXIT     0xfffffffe     /* timer interrupt exit */
-#define RVS_SWITCH_FROM    0xfffffff3     /* task suspended */
-#define RVS_SWITCH_TO      0xfffffff2     /* task resumed */
-#define RVS_BEGIN_WRITE		0xfffffff1     /* librvs began writing trace to disk */
-#define RVS_END_WRITE		0xfffffff0     /* librvs finished writing trace to disk */
 
 static inline uint32_t rvs_get_cycles(void)
 {
@@ -28,6 +21,7 @@ int main (void)
 {
    FILE *         fd;
    FILE *         fd2;
+   FILE *         fd3;
    uint32_t       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
@@ -39,6 +33,7 @@ int main (void)
    uint64_t       start_tstamp = 0;
    uint64_t       total_kernel_time = 0;
    uint64_t       loop_time = 0;
+   uint64_t       start_time = 0;
    const uint64_t expected_time = 2000 * 1000 * 1000;
    const uint32_t histogram_size = 100;
    const uint32_t overflow_size = 10000;
@@ -109,8 +104,9 @@ int main (void)
    printf ("There were %u interruptions\n", overflow_count);
 
    fd2 = fopen ("events.txt", "wt");
+   fd3 = fopen ("trace.txt", "wt");
    fd = fopen ("trace.bin", "rb");
-   if ((!fd) || (!fd2)) {
+   if ((!fd) || (!fd2) || (!fd3)) {
       printf ("Failed, trace.bin not found\n");
       return 1;
    }
@@ -120,6 +116,10 @@ int main (void)
       }
       fixed_tstamp = tstamp + offset;
       old_tstamp = tstamp;
+      if (start_time == 0) {
+         start_time = tstamp;
+      }
+      fprintf (fd3, "%08x %10.6f\n", id, ((double) (tstamp - start_time) / 800e6));
 
       switch (id) {
          case RVS_BEGIN_WRITE:
@@ -128,18 +128,22 @@ int main (void)
             return 1;
          case RVS_TIMER_ENTRY:
          case RVS_SWITCH_FROM:
+         case RVS_IRQ_ENTRY:
+         case RVS_SYS_ENTRY:
             kernel_depth ++;
             if (kernel_depth == 1) {
                enter_kernel_tstamp = fixed_tstamp;
                kernel_entries ++;
                fprintf (fd2, "%u,%u,", kernel_entries, tstamp);
             }
-            if (kernel_depth > 2) {
+            if (kernel_depth > 10) {
                printf ("Too many nested kernel entries\n");
                return 1;
             }
             break;
+         case RVS_IRQ_EXIT:
          case RVS_TIMER_EXIT:
+         case RVS_SYS_EXIT:
          case RVS_SWITCH_TO:
             if (kernel_depth == 0) {
                printf ("Too many nested kernel exits\n");
@@ -176,6 +180,7 @@ int main (void)
    }
    fclose (fd);
    fclose (fd2);
+   fclose (fd3);
    printf ("Test passed\n");
    return 0;
 }

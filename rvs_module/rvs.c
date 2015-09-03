@@ -13,6 +13,8 @@
 #include <linux/io.h>
 #include <linux/pm.h>
 #include <linux/tracepoint.h>
+#include <trace/events/syscalls.h>
+#include <trace/syscall.h>
 #include <asm/pgtable.h>
 #include <asm/trace.h>
 
@@ -155,6 +157,42 @@ static void rvs_timer_exit (void *data, struct pt_regs *regs)
    }
 }
 
+static void rvs_irq_entry (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())) {
+      rvs_add_entry(taskp, RVS_IRQ_ENTRY, rvs_get_cycles());
+   }
+}
+
+static void rvs_irq_exit (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())) {
+      rvs_add_entry(taskp, RVS_IRQ_EXIT, rvs_get_cycles());
+   }
+}
+
+static void rvs_sys_entry (void *data, struct pt_regs *regs, long id)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())) {
+      rvs_add_entry(taskp, RVS_SYS_ENTRY, rvs_get_cycles());
+   }
+}
+
+static void rvs_sys_exit (void *data, struct pt_regs *regs, long id)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())) {
+      rvs_add_entry(taskp, RVS_SYS_EXIT, rvs_get_cycles());
+   }
+}
+
 static struct preempt_ops rvs_preempt_ops = {
    .sched_in = rvs_sched_in,
    .sched_out = rvs_sched_out,
@@ -166,6 +204,10 @@ static void rvs_init_notifiers(struct rvs_task *taskp)
    preempt_notifier_register(&taskp->notifier);
    register_trace_timer_interrupt_entry(rvs_timer_entry, taskp);
    register_trace_timer_interrupt_exit(rvs_timer_exit, taskp);
+   register_trace_irq_entry(rvs_irq_entry, taskp);
+   register_trace_irq_exit(rvs_irq_exit, taskp);
+   register_trace_sys_enter(rvs_sys_entry, taskp);
+   register_trace_sys_exit(rvs_sys_exit, taskp);
 }
 
 static void rvs_clear_notifiers(struct rvs_task *taskp)
@@ -173,6 +215,10 @@ static void rvs_clear_notifiers(struct rvs_task *taskp)
    preempt_notifier_unregister(&taskp->notifier);
    unregister_trace_timer_interrupt_entry(rvs_timer_entry, taskp);
    unregister_trace_timer_interrupt_exit(rvs_timer_exit, taskp);
+   unregister_trace_irq_entry(rvs_irq_entry, taskp);
+   unregister_trace_irq_exit(rvs_irq_exit, taskp);
+   unregister_trace_sys_enter(rvs_sys_entry, taskp);
+   unregister_trace_sys_exit(rvs_sys_exit, taskp);
    tracepoint_synchronize_unregister();
 }
 
