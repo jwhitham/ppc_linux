@@ -146,13 +146,13 @@ int main (void)
          case RVS_SYS_EXIT:
          case RVS_SWITCH_TO:
             if (kernel_depth == 0) {
-               printf ("Too many nested kernel exits\n");
-               return 1;
-            }
-            kernel_depth --;
-            if (kernel_depth == 0) {
-               fprintf (fd2, "%u\n", tstamp);
-               total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
+               printf ("Too many nested kernel exits (%08x)\n", id);
+            } else {
+               kernel_depth --;
+               if (kernel_depth == 0) {
+                  fprintf (fd2, "%u\n", tstamp);
+                  total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
+               }
             }
             break;
          case 10:

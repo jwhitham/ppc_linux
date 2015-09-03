@@ -540,11 +540,8 @@ static int rvs_release(struct inode *inode, struct file *filp)
 {
    struct rvs_task *taskp = filp->private_data;
 
-   printk (KERN_INFO "rvs_clear_notifiers %p\n", taskp);
    rvs_clear_notifiers(taskp);
    rvs_task_detach(taskp);
-
-   printk (KERN_INFO "rvs_task_destroy %p\n", taskp);
    rvs_task_destroy(taskp);
 
    return 0;
@@ -618,7 +615,7 @@ static int __init rvs_init(void)
    /* Init on all other CPUs */
    r = smp_call_function(rvs_init_cpu, NULL, 1);
    if (r) {
-      printk(KERN_ERR "rvs: failed cpu initliasation\n");
+      printk(KERN_ERR "rvs: failed cpu initialisation\n");
       preempt_enable();
       goto out;
    }
