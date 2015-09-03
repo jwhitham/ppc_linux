@@ -12,7 +12,9 @@
 #include <linux/mm.h>
 #include <linux/io.h>
 #include <linux/pm.h>
+#include <linux/tracepoint.h>
 #include <asm/pgtable.h>
+#include <asm/trace.h>
 
 #include "rvs.h"
 
@@ -521,6 +523,29 @@ static struct miscdevice rvs_dev = {
    &rvs_chardev_ops,
 };
 
+struct tp_data {
+   unsigned ecalls, xcalls;
+   spinlock_t lock;
+};
+
+static void entry_tracepoint (void *data, struct pt_regs *regs)
+{
+   struct tp_data * tpd = (struct tp_data*) data;
+   spin_lock(&tpd->lock);
+   tpd->ecalls++;
+   spin_unlock(&tpd->lock);
+}
+
+static void exit_tracepoint (void *data, struct pt_regs *regs)
+{
+   struct tp_data * tpd = (struct tp_data*) data;
+   spin_lock(&tpd->lock);
+   tpd->xcalls++;
+   spin_unlock(&tpd->lock);
+}
+
+static struct tp_data tpd;
+
 static void rvs_init_cpu(void *info)
 {
    printk(KERN_INFO "rvs: init on CPU %d\n", smp_processor_id());
@@ -562,6 +587,10 @@ static int __init rvs_init(void)
    for (i = 0; i < RVS_HASH_SIZE; i++)
       INIT_HLIST_HEAD(&tracer->hash[i]);
 
+   spin_lock_init(&tpd.lock);
+   tpd.ecalls = tpd.xcalls = 0;
+   register_trace_timer_interrupt_entry(entry_tracepoint, &tpd);
+   register_trace_timer_interrupt_exit(exit_tracepoint, &tpd);
 out:
    return r;
 }
@@ -570,6 +599,11 @@ static void __exit rvs_exit(void)
 {
    printk(KERN_INFO "rvs: unloading tracer\n");
    misc_deregister(&rvs_dev);
+   unregister_trace_timer_interrupt_entry(entry_tracepoint, &tpd);
+   unregister_trace_timer_interrupt_exit(exit_tracepoint, &tpd);
+   tracepoint_synchronize_unregister();
+   printk(KERN_INFO "counters %u %u\n", tpd.ecalls, tpd.xcalls);
+    
 }
 
 module_init(rvs_init);
