@@ -8,8 +8,8 @@
 
 
 
-#include "librvs.h"
 #include <rvs.h>
+#include "librvs.h"
 
 #ifdef CONFIG_X86
 #define nolib_syscall syscall

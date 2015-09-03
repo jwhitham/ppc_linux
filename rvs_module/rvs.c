@@ -85,6 +85,7 @@ struct rvs_task {
 
    pid_t tid;			/* Thread ID of the traced task. */
    struct hlist_node hlist;	/* Hash list entry. */
+   unsigned cpu_id;
 };
 
 /* Global tracer state (just the hash table for now). */
@@ -111,8 +112,10 @@ static void rvs_sched_in(struct preempt_notifier *pn, int cpu)
 {
    struct rvs_task *taskp = container_of(pn, struct rvs_task, notifier);
 
-   if (taskp->in_progress)
+   if (taskp->in_progress) {
       rvs_add_entry(taskp, RVS_SWITCH_TO, rvs_get_cycles());
+      taskp->cpu_id = smp_processor_id();
+   }
 }
 
 static void rvs_sched_out(struct preempt_notifier *pn,
@@ -134,6 +137,24 @@ static void rvs_sched_out(struct preempt_notifier *pn,
    }
 }
 
+static void rvs_timer_entry (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())) {
+      rvs_add_entry(taskp, RVS_TIMER_ENTRY, rvs_get_cycles());
+   }
+}
+
+static void rvs_timer_exit (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())) {
+      rvs_add_entry(taskp, RVS_TIMER_EXIT, rvs_get_cycles());
+   }
+}
+
 static struct preempt_ops rvs_preempt_ops = {
    .sched_in = rvs_sched_in,
    .sched_out = rvs_sched_out,
@@ -143,11 +164,16 @@ static void rvs_init_notifiers(struct rvs_task *taskp)
 {
    preempt_notifier_init(&taskp->notifier, &rvs_preempt_ops);
    preempt_notifier_register(&taskp->notifier);
+   register_trace_timer_interrupt_entry(rvs_timer_entry, taskp);
+   register_trace_timer_interrupt_exit(rvs_timer_exit, taskp);
 }
 
 static void rvs_clear_notifiers(struct rvs_task *taskp)
 {
    preempt_notifier_unregister(&taskp->notifier);
+   unregister_trace_timer_interrupt_entry(rvs_timer_entry, taskp);
+   unregister_trace_timer_interrupt_exit(rvs_timer_exit, taskp);
+   tracepoint_synchronize_unregister();
 }
 
 static inline unsigned rvs_hash_bucket(pid_t tid)
@@ -327,6 +353,7 @@ static struct rvs_task *rvs_task_create(struct task_struct *task)
    INIT_HLIST_NODE(&taskp->hlist);
 
    taskp->in_progress = 0;
+   taskp->cpu_id = smp_processor_id();
 
    taskp->buf_shift = RVS_DFLT_BUF_SHIFT;
    buf_size = 1U << taskp->buf_shift;
@@ -467,8 +494,11 @@ static int rvs_release(struct inode *inode, struct file *filp)
 {
    struct rvs_task *taskp = filp->private_data;
 
+   printk (KERN_INFO "rvs_clear_notifiers %p\n", taskp);
    rvs_clear_notifiers(taskp);
    rvs_task_detach(taskp);
+
+   printk (KERN_INFO "rvs_task_destroy %p\n", taskp);
    rvs_task_destroy(taskp);
 
    return 0;
@@ -523,29 +553,6 @@ static struct miscdevice rvs_dev = {
    &rvs_chardev_ops,
 };
 
-struct tp_data {
-   unsigned ecalls, xcalls;
-   spinlock_t lock;
-};
-
-static void entry_tracepoint (void *data, struct pt_regs *regs)
-{
-   struct tp_data * tpd = (struct tp_data*) data;
-   spin_lock(&tpd->lock);
-   tpd->ecalls++;
-   spin_unlock(&tpd->lock);
-}
-
-static void exit_tracepoint (void *data, struct pt_regs *regs)
-{
-   struct tp_data * tpd = (struct tp_data*) data;
-   spin_lock(&tpd->lock);
-   tpd->xcalls++;
-   spin_unlock(&tpd->lock);
-}
-
-static struct tp_data tpd;
-
 static void rvs_init_cpu(void *info)
 {
    printk(KERN_INFO "rvs: init on CPU %d\n", smp_processor_id());
@@ -586,11 +593,6 @@ static int __init rvs_init(void)
    spin_lock_init(&tracer->hash_lock);
    for (i = 0; i < RVS_HASH_SIZE; i++)
       INIT_HLIST_HEAD(&tracer->hash[i]);
-
-   spin_lock_init(&tpd.lock);
-   tpd.ecalls = tpd.xcalls = 0;
-   register_trace_timer_interrupt_entry(entry_tracepoint, &tpd);
-   register_trace_timer_interrupt_exit(exit_tracepoint, &tpd);
 out:
    return r;
 }
@@ -599,11 +601,6 @@ static void __exit rvs_exit(void)
 {
    printk(KERN_INFO "rvs: unloading tracer\n");
    misc_deregister(&rvs_dev);
-   unregister_trace_timer_interrupt_entry(entry_tracepoint, &tpd);
-   unregister_trace_timer_interrupt_exit(exit_tracepoint, &tpd);
-   tracepoint_synchronize_unregister();
-   printk(KERN_INFO "counters %u %u\n", tpd.ecalls, tpd.xcalls);
-    
 }
 
 module_init(rvs_init);

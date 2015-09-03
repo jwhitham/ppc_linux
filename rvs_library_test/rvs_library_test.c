@@ -5,13 +5,13 @@
 #include <stdlib.h>
 #include "librvs.h"
 
-/* Markers to indicate time spent writing trace data */
-#define RVS_BEGIN_WRITE		0xfffffff1
-#define RVS_END_WRITE		0xfffffff0
-
 /* Context switch markers in the trace. */
-#define RVS_SWITCH_FROM		0xffffffff
-#define RVS_SWITCH_TO		0xfffffffe
+#define RVS_TIMER_ENTRY    0xffffffff     /* timer interrupt entry */
+#define RVS_TIMER_EXIT     0xfffffffe     /* timer interrupt exit */
+#define RVS_SWITCH_FROM    0xfffffff3     /* task suspended */
+#define RVS_SWITCH_TO      0xfffffff2     /* task resumed */
+#define RVS_BEGIN_WRITE		0xfffffff1     /* librvs began writing trace to disk */
+#define RVS_END_WRITE		0xfffffff0     /* librvs finished writing trace to disk */
 
 static inline uint32_t rvs_get_cycles(void)
 {
@@ -48,6 +48,7 @@ int main (void)
    uint32_t       peak = 0;
    uint32_t       average_iteration_time = 1;
    uint32_t       iterations = 0;
+   uint32_t       kernel_depth = 0;
 
    printf ("Calling RVS_Init()\n");
    RVS_Init();
@@ -125,14 +126,30 @@ int main (void)
          case RVS_END_WRITE:
             printf ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
             return 1;
+         case RVS_TIMER_ENTRY:
          case RVS_SWITCH_FROM:
-            enter_kernel_tstamp = fixed_tstamp;
-            kernel_entries ++;
-            fprintf (fd2, "%u,%u,", kernel_entries, tstamp);
+            kernel_depth ++;
+            if (kernel_depth == 1) {
+               enter_kernel_tstamp = fixed_tstamp;
+               kernel_entries ++;
+               fprintf (fd2, "%u,%u,", kernel_entries, tstamp);
+            }
+            if (kernel_depth > 2) {
+               printf ("Too many nested kernel entries\n");
+               return 1;
+            }
             break;
+         case RVS_TIMER_EXIT:
          case RVS_SWITCH_TO:
-            fprintf (fd2, "%u\n", tstamp);
-            total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
+            if (kernel_depth == 0) {
+               printf ("Too many nested kernel exits\n");
+               return 1;
+            }
+            kernel_depth --;
+            if (kernel_depth == 0) {
+               fprintf (fd2, "%u\n", tstamp);
+               total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
+            }
             break;
          case 10:
             kernel_entries = 0;

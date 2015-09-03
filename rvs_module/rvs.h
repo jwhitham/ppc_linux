@@ -31,8 +31,10 @@ struct rvs_stats {
 #define RVS_FILE_NAME		"/dev/rvs"
 
 /* Context switch markers in the trace. */
-#define RVS_SWITCH_FROM		0xffffffff
-#define RVS_SWITCH_TO		0xfffffffe
+#define RVS_TIMER_ENTRY    0xffffffff     /* timer interrupt entry */
+#define RVS_TIMER_EXIT     0xfffffffe     /* timer interrupt exit */
+#define RVS_SWITCH_FROM    0xfffffff3     /* task suspended */
+#define RVS_SWITCH_TO      0xfffffff2     /* task resumed */
 
 static inline __s32 rvs_time_before(__u32 a, __u32 b)
 {
