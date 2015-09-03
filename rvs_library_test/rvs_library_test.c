@@ -20,7 +20,6 @@ typedef struct overflow_s {
 int main (void)
 {
    FILE *         fd;
-   FILE *         fd2;
    FILE *         fd3;
    uint32_t       i;
    uint32_t       tstamp = 0;
@@ -32,6 +31,7 @@ int main (void)
    uint64_t       enter_kernel_tstamp = 0;
    uint64_t       start_tstamp = 0;
    uint64_t       total_kernel_time = 0;
+   uint64_t       last_kernel_exit = 0;
    uint64_t       loop_time = 0;
    uint64_t       start_time = 0;
    const uint64_t expected_time = 2000 * 1000 * 1000;
@@ -103,10 +103,9 @@ int main (void)
    fclose (fd);
    printf ("There were %u interruptions\n", overflow_count);
 
-   fd2 = fopen ("events.txt", "wt");
    fd3 = fopen ("trace.txt", "wt");
    fd = fopen ("trace.bin", "rb");
-   if ((!fd) || (!fd2) || (!fd3)) {
+   if ((!fd) || (!fd3)) {
       printf ("Failed, trace.bin not found\n");
       return 1;
    }
@@ -126,15 +125,27 @@ int main (void)
          case RVS_END_WRITE:
             printf ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
             return 1;
-         case RVS_TIMER_ENTRY:
          case RVS_SWITCH_FROM:
+            if ((kernel_depth == 0) && last_kernel_exit) {
+               /* Special case. The scheduler is invoked after the interrupt
+                * has been serviced, before returning to user code. This is done
+                * from code in arch/powerpc/kernel/entry_32.S:
+                * ret_from_except -> do_work -> do_resched -> recheck -> schedule
+                *
+                * Ignore the time between the end of the interrupt and the start
+                * of the scheduler.
+                */
+               total_kernel_time += fixed_tstamp - last_kernel_exit;
+            }
+            /* fall through */
+         case RVS_TIMER_ENTRY:
          case RVS_IRQ_ENTRY:
          case RVS_SYS_ENTRY:
+            last_kernel_exit = 0;
             kernel_depth ++;
             if (kernel_depth == 1) {
                enter_kernel_tstamp = fixed_tstamp;
                kernel_entries ++;
-               fprintf (fd2, "%u,%u,", kernel_entries, tstamp);
             }
             if (kernel_depth > 10) {
                printf ("Too many nested kernel entries\n");
@@ -145,22 +156,25 @@ int main (void)
          case RVS_TIMER_EXIT:
          case RVS_SYS_EXIT:
          case RVS_SWITCH_TO:
-            if (kernel_depth == 0) {
-               printf ("Too many nested kernel exits (%08x)\n", id);
+            last_kernel_exit = 0;
+            if (kernel_depth <= 0) {
+               kernel_depth = 0;
             } else {
                kernel_depth --;
                if (kernel_depth == 0) {
-                  fprintf (fd2, "%u\n", tstamp);
                   total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
+                  last_kernel_exit = fixed_tstamp;
                }
             }
             break;
          case 10:
+            last_kernel_exit = 0;
             kernel_entries = 0;
             total_kernel_time = 0;
             start_tstamp = fixed_tstamp;
             break;
          case 11:
+            last_kernel_exit = 0;
             printf ("loop: %u iterations, %1.0f wallclock cycles, %u switches, %1.0f ticks\n",
                iterations,
                (double) (fixed_tstamp - start_tstamp),
@@ -179,7 +193,6 @@ int main (void)
       }
    }
    fclose (fd);
-   fclose (fd2);
    fclose (fd3);
    printf ("Test passed\n");
    return 0;
