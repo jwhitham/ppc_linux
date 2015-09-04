@@ -11,16 +11,19 @@ mkdir boot/tools
 cp .config boot/configT.txt
 cp arch/powerpc/boot/uImage boot/uImageT
 
-make -C rvs_module K=$PWD clean
 make -C rvs_library clean
 make -C rvs_library_test clean
-
-make -C rvs_module K=$PWD
 make -C rvs_library
 make -C rvs_library_test
 
+pushd rvs_module
+make K=$PWD clean
+make K=$PWD
+popd
+
 tar xvzf ../L1_L2_kernel_modules.tar.gz 
-cat > L2_and_Branching/Makefile <<EOF
+pushd L2_and_Branching
+cat > Makefile <<EOF
 K ?= /lib/modules/$(shell uname -r)/build
 
 obj-m += L2-disabler.o
@@ -31,9 +34,9 @@ modules clean:
 	make -C \$(K) M=\$(PWD) \$@
 
 EOF
-
-make -C L2_and_Branching/ K=$PWD clean
-make -C L2_and_Branching/ K=$PWD
+make K=$PWD clean
+make K=$PWD
+popd
 
 
 tar cvzf 312_kernel_test.tar.gz lib/modules/ boot/ \
