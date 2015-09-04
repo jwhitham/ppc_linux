@@ -11,26 +11,37 @@ mkdir boot/tools
 cp .config boot/configT.txt
 cp arch/powerpc/boot/uImage boot/uImageT
 
-pushd boot/tools
-cp -aL /lib/ld.so.1 /lib/power*/libc.so.6 /bin/kmod .
-ln -s kmod insmod
-ln -s kmod lsmod
-ln -s kmod rmmod
-cp ../../lib/modules/*/kernel/fs/fat/msdos.ko .
-cat <<EOF > test.sh
-#!/bin/sh -x
-cd /boot/tools
-export LD_LIBRARY_PATH=\$PWD
-./ld.so.1 ./lsmod
-./ld.so.1 ./rmmod msdos.ko
-./ld.so.1 ./lsmod
-./ld.so.1 ./insmod msdos.ko
-./ld.so.1 ./lsmod
-EOF
-chmod a+x test.sh
-popd
+make -C rvs_module K=$PWD clean
+make -C rvs_library clean
+make -C rvs_library_test clean
 
-tar cvzf 312_kernel_test.tar.gz lib/modules/ boot/
+make -C rvs_module K=$PWD
+make -C rvs_library
+make -C rvs_library_test
+
+tar xvzf ../L1_L2_kernel_modules.tar.gz 
+cat > L2_and_Branching/Makefile <<EOF
+K ?= /lib/modules/$(shell uname -r)/build
+
+obj-m += L2-disabler.o
+obj-m += L-dis.o
+obj-m += B-dis.o
+
+modules clean:
+	make -C \$(K) M=\$(PWD) \$@
+
+EOF
+
+make -C L2_and_Branching/ K=$PWD clean
+make -C L2_and_Branching/ K=$PWD
+
+
+tar cvzf 312_kernel_test.tar.gz lib/modules/ boot/ \
+   rvs_module/*.ko \
+   L2_and_Branching/*.ko \
+   rvs_library/librvs.a \
+   rvs_library/librvs.h \
+   rvs_library_test/rvs_library_test
 cp 312_kernel_test.tar.gz /tmp
 
 
