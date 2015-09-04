@@ -17,8 +17,7 @@ make -C rvs_library
 make -C rvs_library_test
 
 pushd rvs_module
-make K=$PWD clean
-make K=$PWD
+make K=$PWD/..
 popd
 
 tar xvzf ../L1_L2_kernel_modules.tar.gz 
@@ -34,8 +33,7 @@ modules clean:
 	make -C \$(K) M=\$(PWD) \$@
 
 EOF
-make K=$PWD clean
-make K=$PWD
+make K=$PWD/..
 popd
 
 
