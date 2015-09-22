@@ -1,6 +1,7 @@
 
 read.byte_reader("B0 B1 B2 B3", "B4 B5 B6 B7");
 read.wrap(32);
+read.reset_start_time;
 
 <c_script>
 
@@ -16,44 +17,38 @@ read.wrap(32);
 #define RVS_BEGIN_WRITE    0xfffffff1     /* userspace: librvs began writing trace to disk */
 #define RVS_END_WRITE      0xfffffff0     /* userspace: librvs finished writing trace to disk */
 
-int skipping = 0;
+int interrupted = 0;
 unsigned long long skip_time = 0;
-unsigned long long begin_time = 0;
+unsigned long long last_valid_time = 0;
 
 void filter_block (t_trace_elts trace, unsigned int * last)
 {
 	int i, j;
 	
-	for (j = 0, i = 0; i < (*last);i++) {
+	for (i = j = 0; i < (*last); i++) {
       switch (trace[i].i) {
          case RVS_SWITCH_FROM:
          case RVS_BEGIN_WRITE:
          case RVS_TIMER_ENTRY:
          case RVS_SYS_ENTRY:
          case RVS_IRQ_ENTRY:
-            skipping ++;
-            if (skipping == 1) {
-               begin_time = trace[i].t;
-            }
-            break;
          case RVS_SWITCH_TO:
          case RVS_END_WRITE:
          case RVS_TIMER_EXIT:
          case RVS_SYS_EXIT:
          case RVS_IRQ_EXIT:
-            skipping --;
-            if (skipping <= 0) {
-               skip_time += trace[i].t - begin_time;
-               skipping = 0;
-            }
+            interrupted = 1;
             break;
          default:
-            if (skipping == 0) {
-               trace[j] = trace[i];
-               trace[j].t -= skip_time;
-               trace[j].wt -= skip_time;
-               j++;
+            if (interrupted) {
+               skip_time += trace[i].t - last_valid_time;
+               interrupted = 0;
             }
+            last_valid_time = trace[i].t;
+            trace[j] = trace[i];
+            trace[j].t -= skip_time;
+            trace[j].wt -= skip_time;
+            j++;
             break;
       }
    }
