@@ -1,10 +1,7 @@
-/* Macro to indicate that RVS is on */
 #define RVS
 
-/* Instrumentation point */
 void RVS_Ipoint(unsigned int);
 
-/* Instrumentation macros */
 #define RVS_I(_I)     RVS_Ipoint(_I)
 #define RVS_E(_I,_E)  (RVS_I(_I),_E)
 #define RVS_C(_I,_C)  (RVS_E(_I,0)?_C:_C)

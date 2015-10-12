@@ -12,7 +12,11 @@
 #include <linux/mm.h>
 #include <linux/io.h>
 #include <linux/pm.h>
+#include <linux/tracepoint.h>
+#include <trace/events/syscalls.h>
+#include <trace/syscall.h>
 #include <asm/pgtable.h>
+#include <asm/trace.h>
 
 #include "rvs.h"
 
@@ -49,40 +53,43 @@
  * need to extend the interface.
  */
 struct rvs_tracer {
-   spinlock_t hash_lock;		/* Synchronise writers. */
+   spinlock_t hash_lock;      /* Synchronise writers. */
    struct hlist_head hash[RVS_HASH_SIZE]; /* Hash table. */
 };
 
 /* A trace entry. */
 struct rvs_entry {
-   u32 tid;			/* Entering/exiting thread ID */ 
-   u32 tstamp;			/* Timestamp. */
+   u32 tid;         /* Entering/exiting thread ID */ 
+   u32 tstamp;         /* Timestamp. */
 };
 
 /* log2(sizeof(struct rvs_entry)) */
-#define RVS_ENTRY_SHIFT			3
-#define RVS_ENTRY_SIZE			(1 << RVS_ENTRY_SHIFT)
-#define RVS_ENTRY_MASK			((1 << RVS_ENTRY_SHIFT) - 1)
+#define RVS_ENTRY_SHIFT         3
+#define RVS_ENTRY_SIZE         (1 << RVS_ENTRY_SHIFT)
+#define RVS_ENTRY_MASK         ((1 << RVS_ENTRY_SHIFT) - 1)
 
 /* Trace for a single task. */
 struct rvs_task {
-   DECLARE_NOTIFIER(notifier);	/* Context switch notifier. */
-   int in_progress;		/* Tracing in progress. */
+   DECLARE_NOTIFIER(notifier);  /* Context switch notifier. */
+   char in_progress;            /* Tracing in progress. */
+   char is_suspended;           /* Task is suspended. */
+   char in_syscall;             /* Task in system call */
 
-   unsigned buf_shift;		/* Buffer size (log2, in entries). */
+   unsigned buf_shift;          /* Buffer size (log2, in entries). */
 
-   unsigned first, last;		/* Ring buffer pointers. */
-   struct rvs_entry *entries;	/* Buffer entries.  The double
-                * allocation for rvs_task and
-                * entries[] is not ideal, but
-                * the allocation constraints
-                * imposed by using RCU limit
-                * our reallocation possibilities. */
+   unsigned first, last;        /* Ring buffer pointers. */
+   struct rvs_entry *entries;   /* Buffer entries.  The double
+                                 * allocation for rvs_task and
+                                 * entries[] is not ideal, but
+                                 * the allocation constraints
+                                 * imposed by using RCU limit
+                                 * our reallocation possibilities. */
 
-   struct rvs_stats stats;		/* Collect tracing statistics. */
+   struct rvs_stats stats;      /* Collect tracing statistics. */
 
-   pid_t tid;			/* Thread ID of the traced task. */
-   struct hlist_node hlist;	/* Hash list entry. */
+   pid_t tid;                   /* Thread ID of the traced task. */
+   struct hlist_node hlist;     /* Hash list entry. */
+   unsigned cpu_id;
 };
 
 /* Global tracer state (just the hash table for now). */
@@ -109,8 +116,11 @@ static void rvs_sched_in(struct preempt_notifier *pn, int cpu)
 {
    struct rvs_task *taskp = container_of(pn, struct rvs_task, notifier);
 
-   if (taskp->in_progress)
+   if (taskp->in_progress) {
+      taskp->cpu_id = smp_processor_id();
+      taskp->is_suspended = 0;
       rvs_add_entry(taskp, RVS_SWITCH_TO, rvs_get_cycles());
+   }
 }
 
 static void rvs_sched_out(struct preempt_notifier *pn,
@@ -129,6 +139,69 @@ static void rvs_sched_out(struct preempt_notifier *pn,
       }
 
       rvs_add_entry(taskp, RVS_SWITCH_FROM, cycles);
+      taskp->is_suspended = 1;
+   }
+}
+
+static void rvs_timer_entry (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())
+   && !taskp->is_suspended) {
+      rvs_add_entry(taskp, RVS_TIMER_ENTRY, rvs_get_cycles());
+   }
+}
+
+static void rvs_timer_exit (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())
+   && !taskp->is_suspended) {
+      rvs_add_entry(taskp, RVS_TIMER_EXIT, rvs_get_cycles());
+   }
+}
+
+static void rvs_irq_entry (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())
+   && !taskp->is_suspended) {
+      rvs_add_entry(taskp, RVS_IRQ_ENTRY, rvs_get_cycles());
+   }
+}
+
+static void rvs_irq_exit (void *data, struct pt_regs *regs)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())
+   && !taskp->is_suspended) {
+      rvs_add_entry(taskp, RVS_IRQ_EXIT, rvs_get_cycles());
+   }
+}
+
+static void rvs_sys_entry (void *data, struct pt_regs *regs, long id)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())
+   && !taskp->is_suspended && (!taskp->in_syscall)) {
+      rvs_add_entry(taskp, RVS_SYS_ENTRY, rvs_get_cycles());
+      taskp->in_syscall = 1;
+   }
+}
+
+static void rvs_sys_exit (void *data, struct pt_regs *regs, long id)
+{
+   struct rvs_task *taskp = (struct rvs_task *) data;
+
+   if (taskp->in_progress && (taskp->cpu_id == smp_processor_id())
+   && (!taskp->is_suspended) && taskp->in_syscall) {
+      taskp->in_syscall = 0;
+      rvs_add_entry(taskp, RVS_SYS_EXIT, rvs_get_cycles());
    }
 }
 
@@ -141,11 +214,24 @@ static void rvs_init_notifiers(struct rvs_task *taskp)
 {
    preempt_notifier_init(&taskp->notifier, &rvs_preempt_ops);
    preempt_notifier_register(&taskp->notifier);
+   register_trace_timer_interrupt_entry(rvs_timer_entry, taskp);
+   register_trace_timer_interrupt_exit(rvs_timer_exit, taskp);
+   register_trace_irq_entry(rvs_irq_entry, taskp);
+   register_trace_irq_exit(rvs_irq_exit, taskp);
+   register_trace_sys_enter(rvs_sys_entry, taskp);
+   register_trace_sys_exit(rvs_sys_exit, taskp);
 }
 
 static void rvs_clear_notifiers(struct rvs_task *taskp)
 {
    preempt_notifier_unregister(&taskp->notifier);
+   unregister_trace_timer_interrupt_entry(rvs_timer_entry, taskp);
+   unregister_trace_timer_interrupt_exit(rvs_timer_exit, taskp);
+   unregister_trace_irq_entry(rvs_irq_entry, taskp);
+   unregister_trace_irq_exit(rvs_irq_exit, taskp);
+   unregister_trace_sys_enter(rvs_sys_entry, taskp);
+   unregister_trace_sys_exit(rvs_sys_exit, taskp);
+   tracepoint_synchronize_unregister();
 }
 
 static inline unsigned rvs_hash_bucket(pid_t tid)
@@ -285,6 +371,7 @@ static long rvs_enable(struct file *filp, void __user *argp)
       return -EINVAL;
 
    taskp->in_progress = 1;
+   taskp->is_suspended = 0;
    return 0;
 }
 
@@ -325,6 +412,8 @@ static struct rvs_task *rvs_task_create(struct task_struct *task)
    INIT_HLIST_NODE(&taskp->hlist);
 
    taskp->in_progress = 0;
+   taskp->is_suspended = 0;
+   taskp->cpu_id = smp_processor_id();
 
    taskp->buf_shift = RVS_DFLT_BUF_SHIFT;
    buf_size = 1U << taskp->buf_shift;
@@ -540,7 +629,7 @@ static int __init rvs_init(void)
    /* Init on all other CPUs */
    r = smp_call_function(rvs_init_cpu, NULL, 1);
    if (r) {
-      printk(KERN_ERR "rvs: failed cpu initliasation\n");
+      printk(KERN_ERR "rvs: failed cpu initialisation\n");
       preempt_enable();
       goto out;
    }
@@ -561,7 +650,6 @@ static int __init rvs_init(void)
    spin_lock_init(&tracer->hash_lock);
    for (i = 0; i < RVS_HASH_SIZE; i++)
       INIT_HLIST_HEAD(&tracer->hash[i]);
-
 out:
    return r;
 }

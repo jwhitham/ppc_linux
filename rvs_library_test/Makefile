@@ -1,7 +1,7 @@
 all: rvs_library_test
 
 CFLAGS += -I../rvs_library -I. -Wall -Werror -g -O2
-OBJS := rvs_library_test.o
+OBJS := rvs_library_test.o loopN.o
 LDFLAGS += -L../rvs_library -lrvs
 
 
