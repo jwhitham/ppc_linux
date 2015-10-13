@@ -29,24 +29,20 @@ int32_t nolib_syscall (int32_t nr, ...);
 
 #define TRACE_FILE_NAME    "trace.bin"
 
-#define USER_BUFFER_SIZE     (1 << 20) /* 1M entries */
+#define USER_BUFFER_SIZE     (1 << 25) /* 32M entries */
 #define KERNEL_BUFFER_SIZE   (1 << 16) /* 64K entries */
 #define MERGED_BUFFER_SIZE   (USER_BUFFER_SIZE + KERNEL_BUFFER_SIZE)
 
 
 /* User RVS interface. */
-struct rvs_uentry {
-   uint32_t id;
-   uint32_t tstamp;
-};
 
 static int32_t rvs_device_fd = -1;
 static int32_t rvs_trace_fd = -1;
 static struct rvs_uentry user_buffer[USER_BUFFER_SIZE];
 static struct rvs_uentry kernel_buffer[KERNEL_BUFFER_SIZE];
 static struct rvs_uentry merged_buffer[MERGED_BUFFER_SIZE];
-static struct rvs_uentry * user_pos;
-static struct rvs_uentry * merged_pos;
+struct rvs_uentry * user_pos = &user_buffer[0];
+static struct rvs_uentry * merged_pos = &merged_buffer[0];
 static uint32_t kernel_loaded, kernel_read;
 static uint32_t user_loaded, user_read;
 
@@ -91,36 +87,17 @@ void RVS_Init(void)
    if (r < 0) {
       fatal_error("RVS_Init: failed to enable kernel tracing");
    }
-   user_pos = &user_buffer[0];
-   merged_pos = &merged_buffer[0];
+   if (!user_pos) {
+      user_pos = &user_buffer[0];
+   }
+   if (!merged_pos) {
+      merged_pos = &merged_buffer[0];
+   }
 
    rvs_trace_fd = nolib_syscall (__NR_creat, TRACE_FILE_NAME, 0664, 0);
    if (rvs_trace_fd < 0) {
       fatal_error ("RVS_Init: could not create " TRACE_FILE_NAME);
    }
-}
-
-void RVS_Ipoint (unsigned id)
-{
-   if (!user_pos) {
-      return;
-   }
-
-   user_pos->tstamp = rvs_get_cycles ();
-   user_pos->id = id;
-
-   if (user_pos == &user_buffer[USER_BUFFER_SIZE - 1]) {
-      /* flush the trace */
-      user_pos->id = RVS_BEGIN_WRITE;
-      user_pos ++;
-      merge_buffers_now ();
-      user_pos->tstamp = rvs_get_cycles ();
-      user_pos->id = RVS_END_WRITE;
-      user_pos ++;
-      user_pos->tstamp = rvs_get_cycles ();
-      user_pos->id = id;
-   }
-   user_pos ++;
 }
 
 static void download_kernel_trace (void)

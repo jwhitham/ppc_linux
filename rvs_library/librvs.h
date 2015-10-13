@@ -22,7 +22,37 @@ extern "C" {
 
 void RVS_Init (void);
 void RVS_Output (void);
-void RVS_Ipoint (unsigned id);
+
+struct rvs_uentry {
+   uint32_t id;
+   uint32_t tstamp;
+};
+
+extern struct rvs_uentry * user_pos;
+
+static inline void RVS_Ipoint (unsigned id)
+{
+   unsigned l1;
+   asm volatile("mfspr %0, 526" : "=r" (l1));   /* get cycles */
+   user_pos->tstamp = l1;
+   user_pos->id = id;
+
+#if 0
+   if (user_pos == &user_buffer[USER_BUFFER_SIZE - 1]) {
+      /* flush the trace */
+      user_pos->id = RVS_BEGIN_WRITE;
+      user_pos ++;
+      merge_buffers_now ();
+      user_pos->tstamp = rvs_get_cycles ();
+      user_pos->id = RVS_END_WRITE;
+      user_pos ++;
+      user_pos->tstamp = rvs_get_cycles ();
+      user_pos->id = id;
+   }
+#endif
+   user_pos ++;
+}
+
 
 #ifdef __cplusplus
 };
