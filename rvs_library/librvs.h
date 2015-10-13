@@ -24,8 +24,8 @@ void RVS_Init (void);
 void RVS_Output (void);
 
 struct rvs_uentry {
-   uint32_t id;
-   uint32_t tstamp;
+   unsigned id;
+   unsigned tstamp;
 };
 
 extern struct rvs_uentry * user_pos;

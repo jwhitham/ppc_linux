@@ -1,6 +1,5 @@
 #define RVS
 
-void RVS_Ipoint(unsigned int);
 
 #define RVS_I(_I)     RVS_Ipoint(_I)
 #define RVS_E(_I,_E)  (RVS_I(_I),_E)
