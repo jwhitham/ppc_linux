@@ -30,7 +30,7 @@ int32_t nolib_syscall (int32_t nr, ...);
 #define TRACE_FILE_NAME    "trace.bin"
 
 #define USER_BUFFER_SIZE     (1 << 25) /* 32M entries */
-#define KERNEL_BUFFER_SIZE   (1 << 16) /* 64K entries */
+#define KERNEL_BUFFER_SIZE   (1 << 20) /* 1M entries */
 #define MERGED_BUFFER_SIZE   (USER_BUFFER_SIZE + KERNEL_BUFFER_SIZE)
 
 

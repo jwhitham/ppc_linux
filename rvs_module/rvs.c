@@ -44,7 +44,7 @@
 #define RVS_HASH_MASK		((1U << RVS_HASH_SHIFT) - 1)
 
 /* Default buffer size (entries). */
-#define RVS_DFLT_BUF_SHIFT	(16)
+#define RVS_DFLT_BUF_SHIFT	(20) /* 1M entries */
 
 /*
  * Object containing the global state of the tracer and the traces
