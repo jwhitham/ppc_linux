@@ -11,13 +11,14 @@ mkdir boot/tools
 cp .config boot/configT.txt
 cp arch/powerpc/boot/uImage boot/uImageT
 
-make -C rvs_library clean
-make -C rvs_library_test clean
-make -C rvs_library
-make -C rvs_library_test
+#make -C rvs_library clean
+#make -C rvs_library_test clean
+#make -C rvs_library
+#make -C rvs_library_test
+
 
 pushd rvs_module
-make K=$PWD/..
+make K=$PWD/.. ARCH=powerpc CROSS_COMPILE=$PWD/../../linux-tools/bin/powerpc-eabi-
 popd
 
 tar xvzf ../L1_L2_kernel_modules.tar.gz 
@@ -33,16 +34,24 @@ modules clean:
 	make -C \$(K) M=\$(PWD) \$@
 
 EOF
-make K=$PWD/..
+make K=$PWD/.. ARCH=powerpc CROSS_COMPILE=$PWD/../../linux-tools/bin/powerpc-eabi- 
 popd
 
 
-tar cvzf 312_kernel_test.tar.gz lib/modules/ boot/ \
+tar cvzf 312_kernel_test.tar.gz \
+   --owner=root --group=root \
+   lib/modules/ boot/ \
    rvs_module/*.ko \
    L2_and_Branching/*.ko \
    rvs_library/librvs.a \
    rvs_library/librvs.h \
-   rvs_library_test/rvs_library_test
-cp 312_kernel_test.tar.gz /tmp
+   rvs_library_test/rvs_library_test \
+   rvs_loop_test/rvs_loop_test
+
+tar cvzf module_and_library.tar.gz \
+   --owner=root --group=root \
+   rvs_module rvs_library rvs_loop_test rvs_example
+
+cp 312_kernel_test.tar.gz module_and_library.tar.gz /tmp
 
 
