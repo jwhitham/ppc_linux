@@ -58,6 +58,9 @@ int main (void)
          case RVS_TIMER_EXIT:
          case RVS_SYS_EXIT:
          case RVS_SWITCH_TO:
+            if (!kernel_flag) {
+               printf ("%1.0f: kernel\n", (double) fixed_tstamp);
+            }
             kernel_flag = 1;
             break;
          case 9999:
@@ -65,7 +68,8 @@ int main (void)
                uint64_t delta = fixed_tstamp - prev_tstamp;
 
                if (delta > 50) {
-                  printf ("jump after %u bytes %1.0f cycles %1.0f delta\n",
+                  printf ("%1.0f: jump after %u bytes %1.0f cycles %1.0f delta\n",
+                          (double) fixed_tstamp,
                           bytes, (double) (fixed_tstamp - jump_tstamp), (double) delta);
                   jump_tstamp = fixed_tstamp;
                   bytes = 0;
