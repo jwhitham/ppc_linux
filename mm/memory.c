@@ -67,6 +67,8 @@
 #include <asm/tlbflush.h>
 #include <asm/pgtable.h>
 
+#include <trace/events/fault.h>
+
 #include "internal.h"
 
 #ifdef LAST_NID_NOT_IN_PAGE_FLAGS
@@ -1821,8 +1823,10 @@ long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 				if (foll_flags & FOLL_NOWAIT)
 					fault_flags |= (FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_RETRY_NOWAIT);
 
+            trace_page_fault_entry (0, start, fault_flags & FAULT_FLAG_WRITE);
 				ret = handle_mm_fault(mm, vma, start,
 							fault_flags);
+            trace_page_fault_exit (ret);
 
 				if (ret & VM_FAULT_ERROR) {
 					if (ret & VM_FAULT_OOM)

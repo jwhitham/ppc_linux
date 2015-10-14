@@ -10,6 +10,9 @@ int main (void)
 {
    unsigned       i;
    unsigned       kernel_flag, bytes;
+   unsigned       ld_count = 0;
+   unsigned       sd_count = 0;
+   unsigned       pf_count = 0;
    FILE *         fd;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
@@ -50,13 +53,20 @@ int main (void)
          case RVS_END_WRITE:
             printf ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
             return 1;
-         case RVS_SWITCH_FROM:
+         case RVS_PFAULT_ENTRY:
+         case RVS_PFAULT_EXIT:
+            if (!kernel_flag) {
+               pf_count ++;
+            }
+            kernel_flag = 1;
+            break;
          case RVS_TIMER_ENTRY:
          case RVS_IRQ_ENTRY:
          case RVS_SYS_ENTRY:
          case RVS_IRQ_EXIT:
          case RVS_TIMER_EXIT:
          case RVS_SYS_EXIT:
+         case RVS_SWITCH_FROM:
          case RVS_SWITCH_TO:
             if (!kernel_flag) {
                printf ("%1.0f: kernel\n", (double) fixed_tstamp);
@@ -73,6 +83,9 @@ int main (void)
                           bytes, (double) (fixed_tstamp - jump_tstamp), (double) delta);
                   jump_tstamp = fixed_tstamp;
                   bytes = 0;
+                  ld_count ++;
+               } else {
+                  sd_count ++;
                }
             }
             kernel_flag = 0;
@@ -84,6 +97,8 @@ int main (void)
       }
    }
    fclose (fd);
+   printf ("%u page faults, %u short deltas, %u large deltas\n",
+          pf_count, sd_count, ld_count);
    return 0;
 }
 

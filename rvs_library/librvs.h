@@ -8,6 +8,8 @@ extern "C" {
 
 #ifndef RVS_TIMER_ENTRY
 /* Context switch markers in the trace. */
+#define RVS_PFAULT_ENTRY   0xfffffffb     /* page fault entry */
+#define RVS_PFAULT_EXIT    0xfffffffa     /* page fault exit */
 #define RVS_TIMER_ENTRY    0xfffffff9     /* timer interrupt entry */
 #define RVS_TIMER_EXIT     0xfffffff8     /* timer interrupt exit */
 #define RVS_SYS_ENTRY      0xfffffff7     /* syscall entry */

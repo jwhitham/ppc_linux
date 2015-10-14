@@ -1,0 +1,9 @@
+#!/bin/bash -xe
+
+rm -rf lib/modules/*
+
+/usr/bin/make \
+   ARCH=powerpc CROSS_COMPILE=$PWD/../linux-tools/bin/powerpc-eabi- \
+   INSTALL_MOD_PATH=$PWD INSTALL_PATH=$PWD uImage modules modules_install
+
+
