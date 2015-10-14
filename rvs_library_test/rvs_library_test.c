@@ -36,6 +36,7 @@ int main (void)
    uint64_t       last_kernel_exit = 0;
    uint64_t       min_loop_time = 0;
    uint32_t       kernel_depth = 0;
+   uint32_t       hwm = 0;
    const uint32_t loop_cycles = 100000;
 
    printf ("Calling RVS_Init()\n");
@@ -95,20 +96,25 @@ int main (void)
          case RVS_TIMER_ENTRY:
          case RVS_IRQ_ENTRY:
          case RVS_SYS_ENTRY:
+         case RVS_PFAULT_ENTRY:
             last_kernel_exit = 0;
             kernel_depth ++;
             if (kernel_depth == 1) {
                enter_kernel_tstamp = fixed_tstamp;
             }
-            if (kernel_depth > 10) {
+            if (kernel_depth > 100) {
                printf ("Too many nested kernel entries\n");
                return 1;
+            }
+            if (kernel_depth > hwm) {
+               hwm = kernel_depth;
             }
             break;
          case RVS_IRQ_EXIT:
          case RVS_TIMER_EXIT:
          case RVS_SYS_EXIT:
          case RVS_SWITCH_TO:
+         case RVS_PFAULT_EXIT:
             last_kernel_exit = 0;
             if (kernel_depth <= 0) {
                kernel_depth = 0;
@@ -175,6 +181,7 @@ int main (void)
    fclose (fd);
    fclose (fd2);
    fclose (fd3);
+   printf ("Maximum kernel depth: %u\n", hwm);
    printf ("Test passed\n");
    return 0;
 }
