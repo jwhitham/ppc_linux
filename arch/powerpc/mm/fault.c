@@ -433,9 +433,9 @@ good_area:
 	 * make sure we exit gracefully rather than endlessly redo
 	 * the fault.
 	 */
-   trace_page_fault_entry (regs, address, flags & FAULT_FLAG_WRITE);
+	trace_page_fault_entry (regs, address, flags & FAULT_FLAG_WRITE);
 	fault = handle_mm_fault(mm, vma, address, flags);
-   trace_page_fault_exit (fault);
+	trace_page_fault_exit (fault);
 	if (unlikely(fault & (VM_FAULT_RETRY|VM_FAULT_ERROR))) {
 		rc = mm_fault_error(regs, address, fault);
 		if (rc >= MM_FAULT_RETURN)

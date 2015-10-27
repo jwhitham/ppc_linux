@@ -12,6 +12,9 @@
 #include <asm/sfp-machine.h>
 #include <math-emu/double.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/mathemu.h>
+
 #define FLOATFUNC(x)	extern int x(void *, void *, void *, void *)
 
 /* The instructions list which may be not implemented by a hardware FPU */
@@ -431,7 +434,9 @@ do_mathemu(struct pt_regs *regs)
 	 */
 	flush_fp_to_thread(current);
 
+	trace_mathemu_entry (regs, pc, insn);
 	eflag = func(op0, op1, op2, op3);
+	trace_mathemu_exit (eflag);
 
 	if (insn & 1) {
 		regs->ccr &= ~(0x0f000000);

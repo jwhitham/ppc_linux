@@ -31,6 +31,8 @@ struct rvs_stats {
 #define RVS_FILE_NAME		"/dev/rvs"
 
 /* Context switch markers in the trace. */
+#define RVS_MATHEMU_ENTRY  0xfffffffd     /* mathemu entry */
+#define RVS_MATHEMU_EXIT   0xfffffffc     /* mathemu exit */
 #define RVS_PFAULT_ENTRY   0xfffffffb     /* page fault entry */
 #define RVS_PFAULT_EXIT    0xfffffffa     /* page fault exit */
 #define RVS_TIMER_ENTRY    0xfffffff9     /* timer interrupt entry */

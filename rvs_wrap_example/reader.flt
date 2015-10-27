@@ -6,6 +6,8 @@ read.reset_start_time;
 <c_script>
 
 /* Context switch markers in the trace. */
+#define RVS_MATHEMU_ENTRY  0xfffffffd     /* mathemu entry */
+#define RVS_MATHEMU_EXIT   0xfffffffc     /* mathemu exit */
 #define RVS_PFAULT_ENTRY   0xfffffffb     /* page fault entry */
 #define RVS_PFAULT_EXIT    0xfffffffa     /* page fault exit */
 #define RVS_TIMER_ENTRY    0xfffffff9     /* timer interrupt entry */
@@ -29,6 +31,8 @@ void filter_block (t_trace_elts trace, unsigned int * last)
 	
 	for (i = j = 0; i < (*last); i++) {
       switch (trace[i].i) {
+         case RVS_MATHEMU_ENTRY:
+         case RVS_MATHEMU_EXIT:
          case RVS_SWITCH_FROM:
          case RVS_BEGIN_WRITE:
          case RVS_TIMER_ENTRY:
