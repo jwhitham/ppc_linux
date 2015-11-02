@@ -97,6 +97,11 @@ struct rvs_task {
 /* Global tracer state (just the hash table for now). */
 static struct rvs_tracer rvs_tracer;
 
+
+static unsigned spr512;
+static const unsigned Mask_Off = 0xFFFFFF00;
+static const unsigned Mask_On  = 0x00000034;
+
 static inline void rvs_add_entry(struct rvs_task *taskp, pid_t tid, u32 tstamp)
 {
    unsigned pos = taskp->last & ((1U << taskp->buf_shift) - 1);
@@ -666,15 +671,28 @@ static void rvs_init_cpu(void *info)
    rvs_init_arch();
 }
 
+
+
 static int __init rvs_init(void)
 {
    struct rvs_tracer *tracer = &rvs_tracer;
    int i, r;
+   unsigned l1;
 
    BUILD_BUG_ON(sizeof(struct rvs_entry) != RVS_ENTRY_SIZE);
 
    preempt_disable();
    printk(KERN_INFO "rvs: loading tracer.\n");
+
+   asm volatile("mfspr %0, 512" : "=r" (l1)); 
+   printk(KERN_INFO "mfspr of SPR 512 at module load: %u\n", l1);
+   spr512 = l1 & Mask_Off;
+   asm volatile("mtspr 512 , %0;\n"
+                "isync;"
+               : /* no output */
+               : "r" (spr512));
+   asm volatile("mfspr %0, 512" : "=r" (l1));
+   printk(KERN_INFO "mfspr of SPR 512 after masking: %u\n", l1);
 
    /* Init on all other CPUs */
    r = smp_call_function(rvs_init_cpu, NULL, 1);
@@ -706,8 +724,20 @@ out:
 
 static void __exit rvs_exit(void)
 {
+   unsigned l1;
+
    printk(KERN_INFO "rvs: unloading tracer\n");
    misc_deregister(&rvs_dev);
+
+   asm volatile("mfspr %0, 512" : "=r" (l1));
+   spr512 = l1 | Mask_On;
+   asm volatile("mtspr 512 , %0;\n"
+      "isync;"
+      : /* no output */
+      : "r" (spr512));
+
+   asm volatile("mfspr %0, 512" : "=r" (l1));   /* get cycles */
+   printk(KERN_INFO "Restored mfspr of SPR 512: %u\n", l1);
 }
 
 module_init(rvs_init);
