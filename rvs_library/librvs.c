@@ -33,6 +33,10 @@ int32_t nolib_syscall (int32_t nr, ...);
 #define KERNEL_BUFFER_SIZE   (1 << 20) /* 1M entries */
 #define MERGED_BUFFER_SIZE   (USER_BUFFER_SIZE + KERNEL_BUFFER_SIZE)
 
+struct rvs_uentry {
+   unsigned id;
+   unsigned tstamp;
+};
 
 /* User RVS interface. */
 
@@ -41,7 +45,7 @@ static int32_t rvs_trace_fd = -1;
 static struct rvs_uentry user_buffer[USER_BUFFER_SIZE];
 static struct rvs_uentry kernel_buffer[KERNEL_BUFFER_SIZE];
 static struct rvs_uentry merged_buffer[MERGED_BUFFER_SIZE];
-struct rvs_uentry * user_pos = &user_buffer[0];
+static struct rvs_uentry * user_pos = &user_buffer[0];
 static struct rvs_uentry * merged_pos = &merged_buffer[0];
 static uint32_t kernel_loaded, kernel_read;
 static uint32_t user_loaded, user_read;
@@ -98,6 +102,29 @@ void RVS_Init(void)
    if (rvs_trace_fd < 0) {
       fatal_error ("RVS_Init: could not create " TRACE_FILE_NAME);
    }
+}
+
+void RVS_Ipoint (unsigned id)
+{
+   if (!user_pos) {
+      return;
+   }
+
+   user_pos->tstamp = rvs_get_cycles ();
+   user_pos->id = id;
+
+   if (user_pos == &user_buffer[USER_BUFFER_SIZE - 1]) {
+      /* flush the trace */
+      user_pos->id = RVS_BEGIN_WRITE;
+      user_pos ++;
+      merge_buffers_now ();
+      user_pos->tstamp = rvs_get_cycles ();
+      user_pos->id = RVS_END_WRITE;
+      user_pos ++;
+      user_pos->tstamp = rvs_get_cycles ();
+      user_pos->id = id;
+   }
+   user_pos ++;
 }
 
 static void download_kernel_trace (void)

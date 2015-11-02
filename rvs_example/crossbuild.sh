@@ -6,7 +6,7 @@ echo 'preprocessing example.c'
 powerpc-eabi-gcc -E example.c > example.p
 
 echo 'instrumenting example.c'
-cins --exf tmp.exf example.p  -c rvs_ipoint.h
+cins --exf tmp.exf example.p  -c rvs_ipoint.h --ignore-warning W60007
 
 echo 'compile instrumented code'
 powerpc-eabi-gcc -c -x c example.p.i -g -O2 -I../rvs_library
