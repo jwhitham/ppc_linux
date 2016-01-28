@@ -1,0 +1,89 @@
+#!/bin/bash -xe
+# Build the kernel modules and libraries, then create an installer package.
+# Assumes the kernel was already compiled (e.g. by "crossbuild_kernel").
+
+rm -rf boot out L2_and_Branching
+mkdir -p boot/tools out
+
+export ROOT=$PWD
+pushd ../linux-tools
+   export LINUX_TOOLS=$PWD
+   export CROSS_CC=$PWD/bin/powerpc-eabi-gcc
+popd
+
+export TIMESTAMP=`date +%Y%m%d%H%M%S`
+export INSTALLER=RVS_ppc_linux_$TIMESTAMP
+
+tar xzf $LINUX_TOOLS/L1_L2_kernel_modules.tar.gz 
+
+./scripts/dtc/dtc arch/powerpc/boot/dts/p1020rdb.dts -I dts -o boot/p1020rdbT.dtb -O dtb
+./scripts/dtc/dtc arch/powerpc/boot/dts/p1022ds_32b.dts -I dts -o boot/p1022ds_32bT.dtb -O dtb
+./scripts/dtc/dtc arch/powerpc/boot/dts/p1022ds_36b.dts -I dts -o boot/p1022ds_36bT.dtb -O dtb
+
+cp .config boot/configT.txt
+cp arch/powerpc/boot/uImage boot/uImageT
+cp System.map boot/
+
+git clean -x -f -d rvs*
+
+make -C rvs_library CC=$CROSS_CC
+make -C rvs_loop_test CC=$CROSS_CC
+
+pushd rvs_module
+   make K=$ROOT ARCH=powerpc CROSS_COMPILE=$LINUX_TOOLS/bin/powerpc-eabi-
+popd
+
+pushd L2_and_Branching
+   cat > Makefile <<EOF
+obj-m += L2-disabler.o
+obj-m += L-dis.o
+obj-m += B-dis.o
+
+modules clean:
+	make -C \$(K) M=\$(PWD) \$@
+
+EOF
+   make K=$ROOT ARCH=powerpc CROSS_COMPILE=$LINUX_TOOLS/bin/powerpc-eabi-
+   test -e L2-disabler.ko
+popd
+
+
+tar czf out/tmp.tar.gz \
+   lib/modules/ boot/ \
+   rvs_* \
+   L2_and_Branching
+
+pushd out
+   tar xzf tmp.tar.gz
+
+   pushd lib/modules/*
+      rm -f source build
+   popd
+
+   mkdir -p opt/rvs
+   pushd opt/rvs
+      export TARGET=$PWD
+   popd
+
+   mv */*.ko $TARGET
+   mv rvs_library/librvs.a $TARGET
+   mv rvs_library/librvs.h $TARGET
+   mv rvs_loop_test/rvs_loop_test $TARGET
+popd
+mv out $INSTALLER
+
+
+tar czf $INSTALLER.tar.gz \
+   --owner=root --group=root \
+   $INSTALLER/boot \
+   $INSTALLER/opt \
+   $INSTALLER/lib
+ln -sf $INSTALLER.tar.gz latest.tar.gz
+
+# cleanup
+mv $INSTALLER out
+rm -rf out
+rm rvs_loop_test/rvs_loop_test
+
+
+

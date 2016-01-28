@@ -15,14 +15,13 @@
    License along with the GNU C Library; if not, see
    <http://www.gnu.org/licenses/>.  */
 
-#include <features.h>
 
    .text
-   .globl   nolib_syscall
-   .type nolib_syscall,@function
+   .globl   ppc_syscall
+   .type ppc_syscall,@function
    .align  2
 
-nolib_syscall:
+ppc_syscall:
    mr 0,3
    mr 3,4
    mr 4,5
@@ -36,5 +35,5 @@ nolib_syscall:
 	li 3,-1
    blr
 
-   .size nolib_syscall,.-nolib_syscall
+   .size ppc_syscall,.-ppc_syscall
 

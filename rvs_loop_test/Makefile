@@ -2,7 +2,8 @@ all: rvs_loop_test
 
 MFLAGS=-mcpu=8548 -mhard-float \
    -mfloat-gprs=double -mspe -mabi=spe
-CFLAGS += -I../rvs_library -I. -Wall -Werror -g -O2 -I../rvs_library/ppc_headers $(MFLAGS)
+CFLAGS += -I../rvs_library -I. -Wall -Werror -g -O2 -I../rvs_library/ppc_headers \
+      -I../rvs_library/ppc_headers/powerpc-linux-gnu $(MFLAGS)
 OBJS := rvs_loop_test.o testing.o
 LDFLAGS += -L../rvs_library -lrvs $(MFLAGS)
 

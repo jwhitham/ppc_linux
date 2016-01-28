@@ -1,0 +1,24 @@
+#!/bin/bash -xe
+# Download a test program onto target board and run it.
+# Needs root SSH key setup for target and assumes hostname
+# of target board is "p1022ds".
+
+cd ..
+pushd ../linux-tools
+   export CROSS_CC=$PWD/bin/powerpc-eabi-gcc
+popd
+
+# library built with cross compiler as usual
+make -C rvs_library clean
+make -C rvs_library CC=$CROSS_CC
+
+# test sent to target for compilation
+# (uses the system C library, so can't be cross compiled)
+
+ssh p1022ds rm -rf /tmp/rvs_library_test /tmp/rvs_library
+scp -r rvs_library_test rvs_library p1022ds:/tmp/
+ssh p1022ds make -C /tmp/rvs_library_test RVS_LIB_DIR=/tmp/rvs_library
+ssh p1022ds /tmp/rvs_library_test/rvs_library_test
+
+
+

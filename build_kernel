@@ -1,8 +1,0 @@
-#!/bin/bash -xe
-
-rm -rf lib/modules/*
-
-/usr/bin/make \
-   INSTALL_MOD_PATH=$PWD INSTALL_PATH=$PWD uImage modules modules_install
-
-

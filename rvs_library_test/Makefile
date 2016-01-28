@@ -1,14 +1,14 @@
+# No cross compiler: this can only be built on the target board
+# as it statically links against libc.
+
+RVS_LIB_DIR=/opt/rvs
+CFLAGS += -I$(RVS_LIB_DIR) -I. -Wall -Werror -g -O2
+OBJS := rvs_library_test.o loopN.o tip.o
+LDFLAGS += -L$(RVS_LIB_DIR) -lrvs
+
 all: rvs_library_test
 
-CFLAGS += -I../rvs_library -I. -Wall -Werror -g -O2
-OBJS := rvs_library_test.o loopN.o
-LDFLAGS += -L../rvs_library -lrvs
-
-
-../rvs_library/librvs.a:
-	make -C ../rvs_library librvs.a
-
-rvs_library_test: ../rvs_library/librvs.a $(OBJS)
+rvs_library_test: $(OBJS)
 	gcc -o rvs_library_test -static $(OBJS) $(LDFLAGS)
 
 .PHONY: clean

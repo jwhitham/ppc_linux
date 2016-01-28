@@ -1,0 +1,20 @@
+#!/bin/bash -xe
+# Download a test program onto target board and run it.
+# Needs root SSH key setup for target and assumes hostname
+# of target board is "p1022ds".
+
+cd ..
+pushd ../linux-tools
+   export CROSS_CC=$PWD/bin/powerpc-eabi-gcc
+popd
+
+make -C rvs_library clean
+make -C rvs_loop_test clean
+make -C rvs_library CC=$CROSS_CC
+make -C rvs_loop_test CC=$CROSS_CC
+
+scp rvs_loop_test/rvs_loop_test p1022ds:/tmp/
+ssh p1022ds /tmp/rvs_loop_test
+
+
+

@@ -1,22 +1,26 @@
-#include <sys/syscall.h>
+/*=========================================================================
+ * RapiTime    : a tool for Measurement-Based Execution Time Analysis
+ * Module      : rvs_library for PPC Linux
+ * File        : rvs_loop_test.c
+ * Description :
+ * Test timing capture with some simple loops: this test was originally
+ * created to search for cases where the kernel is doing something that
+ * takes a long time *and* we're not aware of it.
+ *
+ * Copyright (c) 2016 Rapita Systems Ltd.               All rights reserved
+ *=========================================================================
+*/
 #include <unistd.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include "librvs.h"
+#include "ppc_linux.h"
 
 
 const unsigned LOOP_SIZE = 10000;
 const unsigned IPOINT_COUNT = 4;
 
-int nolib_syscall (int nr, ...);
-
 void testing (double * ptr);
-
-void exit (int rc)
-{
-   nolib_syscall (__NR_exit, rc, 0, 0);
-   while (1) {}
-}
 
 void print (const char * text)
 {
@@ -24,7 +28,7 @@ void print (const char * text)
 
    for (sz = 0; text[sz] != '\0'; sz++) {}
 
-   nolib_syscall (__NR_write, STDOUT_FILENO, text, sz);
+   ppc_write (STDOUT_FILENO, text, sz);
 }
 
 void printdec (unsigned x)
@@ -34,19 +38,23 @@ void printdec (unsigned x)
       printdec (x / 10);
    }
    ch = '0' + (x % 10);
-   nolib_syscall (__NR_write, STDOUT_FILENO, &ch, 1);
+   ppc_write (STDOUT_FILENO, &ch, 1);
 }
 
-int _start (void)
+int main (void)
 {
    unsigned       i;
    unsigned       kernel_flag, bytes;
    unsigned       sd_count = 0;
    unsigned       pf_count = 0;
    unsigned       tstamp = 0;
+   unsigned       four = 0;
+   unsigned       five = 0;
+   unsigned       six = 0;
    unsigned       id = 0;
    uint64_t       offset = 0;
    unsigned       old_tstamp = 0;
+   unsigned       write_count = 0;
    unsigned       total_time[IPOINT_COUNT];
    unsigned       min_time[IPOINT_COUNT];
    unsigned       max_time[IPOINT_COUNT];
@@ -57,8 +65,19 @@ int _start (void)
    int            fd;
    char *         ptr;
 
+   /* Test: ipoints before RVS_Init are ignored */
+   RVS_Ipoint (1);
+   RVS_Ipoint (2);
+   RVS_Ipoint (3);
+
    print ("Calling RVS_Init()\n");
-   RVS_Init();
+   RVS_Init ();
+   RVS_Ipoint (4);
+
+   /* Test: calling RVS_Init() twice is ignored */
+   RVS_Init ();
+   RVS_Ipoint (5);
+   RVS_Init ();
 
    for (i = 0; i < IPOINT_COUNT; i++) {
       total_time[i] = max_time[i] = count[i] = 0;
@@ -99,18 +118,25 @@ int _start (void)
       RVS_Ipoint (1003);
    }
    RVS_Ipoint (0);
+   RVS_Ipoint (6);
 
    RVS_Output();
+   /* Test: multiple calls to RVS_Output/ipoints after RVS_Ipoint */
+   RVS_Ipoint (1);
+   RVS_Output();
+   RVS_Output();
+   RVS_Ipoint (2);
+   RVS_Ipoint (3);
 
-   fd = nolib_syscall (__NR_open, "trace.bin", O_RDONLY, 0);
+   fd = ppc_open_rdwr ("trace.bin");
    if (fd < 0) {
       print ("unable to read trace.bin\n");
-      exit (1);
+      ppc_exit (1);
    }
    bytes = kernel_flag = 0;
 
-   while ((4 == nolib_syscall (__NR_read, fd, &id, 4))
-   && (4 == nolib_syscall (__NR_read, fd, &tstamp, 4))) {
+   while ((4 == ppc_read (fd, &id, 4))
+   && (4 == ppc_read (fd, &tstamp, 4))) {
       if (tstamp < old_tstamp) {
          offset += 1ULL << 32ULL;
       }
@@ -122,11 +148,16 @@ int _start (void)
          case RVS_MATHEMU_ENTRY:
          case RVS_MATHEMU_EXIT:
             print ("Unexpected MATHEMU ipoint: FP instruction was emulated.\n");
-            exit (1);
+            ppc_exit (1);
          case RVS_BEGIN_WRITE:
+            if (write_count != 0) {
+               print ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
+               ppc_exit (1);
+            }
+            write_count ++;
+            break;
          case RVS_END_WRITE:
-            print ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
-            exit (1);
+            break;
          case RVS_PFAULT_ENTRY:
          case RVS_PFAULT_EXIT:
             if (!kernel_flag) {
@@ -174,14 +205,23 @@ int _start (void)
             kernel_flag = 0;
             prev_tstamp = fixed_tstamp;
             break;
+         case 4:
+            four ++;
+            break;
+         case 5:
+            five ++;
+            break;
+         case 6:
+            six ++;
+            break;
          default:
             print ("Invalid ipoint id ");
             printdec (id);
             print ("\n");
-            exit (1);
+            ppc_exit (1);
       }
    }
-   nolib_syscall (__NR_close, fd, 0, 0);
+   ppc_close (fd);
    printdec (pf_count);
    print (" page faults\n");
 
@@ -197,7 +237,19 @@ int _start (void)
       print ("\n");
    }
 
-   exit (0);
+   if ((four != 1) || (five != 1) || (six != 1)) {
+      /* This would indicate bad behaviour after RVS_Init/RVS_Output */
+      print ("Invalid count for special ipoints 4, 5, 6\n");
+      ppc_exit (1);
+   }
+
+   print ("Test ok\n");
+   ppc_exit (0);
    return 0;
+}
+
+int _start (void)
+{
+   return main ();
 }
 

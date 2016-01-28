@@ -1,3 +1,13 @@
+/*=========================================================================
+ * RapiTime    : a tool for Measurement-Based Execution Time Analysis
+ * Module      : rvs_library for PPC Linux
+ * File        : rvs_library_test.c
+ * Description :
+ * Test librvs.a and rvs.ko API.
+ *
+ * Copyright (c) 2016 Rapita Systems Ltd.               All rights reserved
+ *=========================================================================
+*/
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -5,6 +15,7 @@
 #include <stdlib.h>
 #include "librvs.h"
 
+#define TRACE_NAME "trace.bin"
 
 void loopN (unsigned count);
 
@@ -14,6 +25,10 @@ static inline uint32_t rvs_get_cycles(void)
    asm volatile("mfspr %0, 526" : "=r" (l1));
    return l1;
 }
+
+void test_ipoint_1 (int v);
+void test_ipoint_2 (void);
+void test_ipoint_3 (void);
 
 int main (void)
 {
@@ -37,12 +52,110 @@ int main (void)
    uint64_t       min_loop_time = 0;
    uint32_t       kernel_depth = 0;
    uint32_t       hwm = 0;
+   uint32_t       check = 0;
+   uint32_t       begin_write = 0;
+   uint32_t       end_write = 0;
    const uint32_t loop_cycles = 100000;
 
-   printf ("Calling RVS_Init()\n");
+   printf ("Testing librvs.a and rvs.ko\n\n");
+   fflush (stdout);
+
+   printf ("Ipoints before first RVS_Init? (API misuse)\n");
+   for (i = 0; i < 100; i++) {
+      RVS_Ipoint (999); /* does not appear in trace */
+   }
+   printf ("Calling RVS_Init() - first time\n");
    RVS_Init();
 
-   printf ("Starting test:\n");
+   printf ("Repeated calls to RVS_Init()? (API misuse)\n");
+   for (i = 0; i < 100; i++) {
+      RVS_Init ();
+      RVS_Ipoint (999); /* appears in output trace */
+      check ++;
+   }
+
+   printf ("Calling RVS_Output() - first time\n");
+   RVS_Output();
+
+   printf ("Repeated calls to RVS_Output()? (API misuse)\n");
+   for (i = 0; i < 100; i++) {
+      RVS_Ipoint (999); /* does not appear in trace */
+      RVS_Output ();
+   }
+
+   printf ("Testing trace\n");
+   if ((fd = fopen (TRACE_NAME, "rb")) == NULL) {
+      perror ("reading " TRACE_NAME);
+      return 1;
+   }
+   while ((fread (&id, 4, 1, fd) == 1) && (fread (&tstamp, 4, 1, fd) == 1)) {
+      if (id == 999) {
+         check --;
+      }
+   }
+   fclose (fd);
+
+   if (check != 0) {
+      fputs ("Unexpected number of '999' test ipoints in trace\n", stderr);
+      return 1;
+   }
+
+   printf ("Calling RVS_Init_Ex() - reinitialise with tiny buffer\n");
+   RVS_Init_Ex (TRACE_NAME, RVS_SMALL_BUFFER);
+
+   /* Fill tiny buffer repeatedly, causing flushes to disk */
+   for (i = 0; i < 100000; i ++) {
+      test_ipoint_1 (1999);
+      test_ipoint_2 ();
+      test_ipoint_3 ();
+      RVS_Ipoint (1999);
+      check += 4;
+   }
+   RVS_Output ();
+   printf ("%u ipoints written\n", check);
+
+   if ((fd = fopen (TRACE_NAME, "rb")) == NULL) {
+      perror ("reading " TRACE_NAME);
+      return 1;
+   }
+   while ((fread (&id, 4, 1, fd) == 1) && (fread (&tstamp, 4, 1, fd) == 1)) {
+      if (id == 1999) {
+         check --;
+      } else if (id < 1000000) {
+         fputs ("Unexpected low-value ipoint in trace\n", stderr);
+         return 1;
+      } else if (id == RVS_BEGIN_WRITE) {
+         begin_write ++;
+      } else if (id == RVS_END_WRITE) {
+         end_write ++;
+      }
+   }
+   fclose (fd);
+   printf ("%u disk writes\n", begin_write);
+
+   if (begin_write != end_write) {
+      fputs ("begin_write and end_write don't match\n", stderr);
+      return 1;
+   }
+   /* Write 400000 elements to the trace. With a buffer holding
+    * at most 16K elements, the expected result is at least 24
+    * disk writes: more are possible. */
+
+   if (begin_write < 24) {
+      fputs ("unexpectedly small number of disk writes\n", stderr);
+      return 1;
+   }
+   if (begin_write > 100) {
+      fputs ("unexpectedly large number of disk writes\n", stderr);
+      return 1;
+   }
+   if (check != 0) {
+      fputs ("Unexpected number of '1999' test ipoints in trace\n", stderr);
+      return 1;
+   }
+
+   printf ("Calling RVS_Init() - run with big buffer now:\n");
+   RVS_Init();
    fflush (stdout);
 
    for (i = 0; i < 10000; i++) {
@@ -55,6 +168,7 @@ int main (void)
 
    printf ("Examining results\n");
 
+   begin_write = end_write = 0;
    if ((fd3 = fopen ("trace.txt", "wt")) == NULL) {
       perror ("creating trace.txt");
       return 1;
@@ -63,8 +177,8 @@ int main (void)
       perror ("creating results.txt");
       return 1;
    }
-   if ((fd = fopen ("trace.bin", "rb")) == NULL) {
-      perror ("reading trace.bin");
+   if ((fd = fopen (TRACE_NAME, "rb")) == NULL) {
+      perror ("reading " TRACE_NAME);
       return 1;
    }
 
@@ -77,9 +191,11 @@ int main (void)
 
       switch (id) {
          case RVS_BEGIN_WRITE:
+            begin_write ++;
+            break;
          case RVS_END_WRITE:
-            printf ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
-            return 1;
+            end_write ++;
+            break;
          case RVS_SWITCH_FROM:
             if ((kernel_depth == 0) && last_kernel_exit) {
                /* Special case. The scheduler is invoked after the interrupt
@@ -151,7 +267,7 @@ int main (void)
             fprintf (fd2, "%1.0f %1.0f %u %u %u %u\n",
                (double) (fixed_tstamp - start_tstamp),
                (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
-               timer_events, sys_events, irq_events, sched_events);
+               (unsigned) timer_events, (unsigned) sys_events, (unsigned) irq_events, (unsigned) sched_events);
             if ((timer_events + sys_events + irq_events + sched_events) == 0) {
                if ((!min_loop_time) || ((fixed_tstamp - start_tstamp) < min_loop_time)) {
                   min_loop_time = (fixed_tstamp - start_tstamp);
@@ -167,21 +283,25 @@ int main (void)
                      (double) (fixed_tstamp - start_tstamp),
                      (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
                      (double) ((fixed_tstamp - start_tstamp) - total_kernel_time - min_loop_time),
-                     timer_events, sys_events, irq_events, sched_events);
+                     (unsigned) timer_events, (unsigned) sys_events, (unsigned) irq_events, (unsigned) sched_events);
                }
             }
             break;
          default:
-            printf ("Invalid ipoint id %u\n", id);
+            printf ("Invalid ipoint id %u\n", (unsigned) id);
             return 1;
       }
-      fprintf (fd3, "%08x %14.0f %14.0f\n", id, (double) fixed_tstamp,
+      fprintf (fd3, "%08x %14.0f %14.0f\n", (unsigned) id, (double) fixed_tstamp,
                (double) ((fixed_tstamp - start_tstamp) - total_kernel_time));
    }
    fclose (fd);
    fclose (fd2);
    fclose (fd3);
-   printf ("Maximum kernel depth: %u\n", hwm);
+   if ((begin_write != 1) || (end_write != 1)) {
+      printf ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE count in short trace\n");
+      return 1;
+   }
+   printf ("Maximum kernel depth: %u\n", (unsigned) hwm);
    printf ("Test passed\n");
    return 0;
 }
