@@ -17,7 +17,7 @@
 
 #define TRACE_NAME "trace.bin"
 #define INNER_LOOP_CYCLES 100000
-#define OUTER_LOOP_CYCLES 10000
+#define OUTER_LOOP_CYCLES 5000
 
 void run_loop (unsigned count);
 
@@ -34,7 +34,7 @@ typedef struct s_delta_data {
    unsigned pollution_count;
 } t_delta_data;
 
-static t_delta_data delta_list[OUTER_LOOP_CYCLES];
+static t_delta_data delta_list[OUTER_LOOP_CYCLES + 1];
 
 void test_ipoint_1 (int v);
 void test_ipoint_2 (void);
@@ -52,6 +52,15 @@ static int cmp_delta (const void *p1, const void *p2)
    }
 }
 
+static int cmp_index (const void *p1, const void *p2)
+{
+   t_delta_data * d1 = (t_delta_data *) p1;
+   t_delta_data * d2 = (t_delta_data *) p2;
+
+   return d1->index - d2->index;
+}
+
+static int do_measurement (const char * label, unsigned pad, void (* do_run_loop) (unsigned count));
 
 int main (void)
 {
@@ -59,24 +68,6 @@ int main (void)
    unsigned       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
-   unsigned       timer_events = 0;
-   unsigned       sys_events = 0;
-   unsigned       irq_events = 0;
-   unsigned       sched_events = 0;
-   unsigned       mathemu_events = 0;
-   uint32_t       old_tstamp = 0;
-   uint64_t       offset = 0;
-   uint64_t       fixed_tstamp = 0;
-   uint64_t       enter_kernel_tstamp = 0;
-   uint64_t       start_tstamp = 0;
-   uint64_t       total_kernel_time = 0;
-   uint64_t       min_loop_time = ~0;
-   uint64_t       max_loop_time = 0;
-   unsigned       interrupted_count = 0;
-   unsigned       uninterrupted_count = 0;
-   unsigned       pollution_count = 0;
-   unsigned       kernel_depth = 0;
-   unsigned       hwm = 0;
    unsigned       check = 0;
    unsigned       begin_write = 0;
    unsigned       end_write = 0;
@@ -178,19 +169,63 @@ int main (void)
       return 1;
    }
 
-   printf ("Calling RVS_Init() - run with big buffer now\n");
+   printf ("\n\nRun with RVS_Ipoint (10) aligned to page\n");
+   if (do_measurement ("loop, pad = 0", 0, run_loop)) {
+      return 1;
+   }
+
+   printf ("\n\nRun with RVS_Ipoint (10) NOT aligned to page\n");
+   if (do_measurement ("loop, pad = 1", 1, run_loop)) {
+      return 1;
+   }
+
+   return 0;
+}
+
+
+static int do_measurement (const char * label, unsigned pad, void (* do_run_loop) (unsigned count))
+{
+   FILE *         fd;
+   unsigned       i;
+   uint32_t       tstamp = 0;
+   uint32_t       id = 0;
+   unsigned       timer_events = 0;
+   unsigned       sys_events = 0;
+   unsigned       irq_events = 0;
+   unsigned       sched_events = 0;
+   unsigned       mathemu_events = 0;
+   uint32_t       old_tstamp = 0;
+   uint64_t       offset = 0;
+   uint64_t       fixed_tstamp = 0;
+   uint64_t       enter_kernel_tstamp = 0;
+   uint64_t       start_tstamp = 0;
+   uint64_t       total_kernel_time = 0;
+   unsigned       interrupted_count = 0;
+   unsigned       uninterrupted_count = 0;
+   unsigned       pollution_count = 0;
+   unsigned       kernel_depth = 0;
+   unsigned       hwm = 0;
+   unsigned       check = 0;
+   unsigned       begin_write = 0;
+   unsigned       end_write = 0;
+
+   printf ("%s: start test\n", label);
    fflush (stdout);
-   run_loop (10); /* warm up icache */
    RVS_Init();
 
+   while (pad) {
+      pad --;
+      RVS_Ipoint (12);
+   }
+
    for (i = 1; i <= OUTER_LOOP_CYCLES; i++) {
-      run_loop (INNER_LOOP_CYCLES);
+      do_run_loop (INNER_LOOP_CYCLES);
    }
    check = OUTER_LOOP_CYCLES;
 
    RVS_Output();
 
-   printf ("Examining results\n");
+   printf ("%s: examine results\n", label);
    fflush (stdout);
 
    begin_write = end_write = 0;
@@ -279,23 +314,20 @@ int main (void)
                /* loop should have got 100% of CPU */
                uint64_t delta = fixed_tstamp - start_tstamp;
 
-               if (delta < min_loop_time) {
-                  min_loop_time = delta;
-               }
-               if (delta > max_loop_time) {
-                  max_loop_time = delta;
-               }
                if (uninterrupted_count >= OUTER_LOOP_CYCLES) {
                   fputs ("delta_list overflow\n", stderr);
                   return 1;
                }
                delta_list[uninterrupted_count].delta = (unsigned) delta;
-               delta_list[uninterrupted_count].index = uninterrupted_count;
+               delta_list[uninterrupted_count].index = uninterrupted_count + interrupted_count;
                delta_list[uninterrupted_count].pollution_count = pollution_count;
                uninterrupted_count ++;
                pollution_count = 0;
             }
             check --;
+            break;
+         case 12:
+            /* padding element */
             break;
          default:
             fprintf (stderr, "Invalid ipoint id %u (0x%x)\n", (unsigned) id, (unsigned) id);
@@ -315,40 +347,88 @@ int main (void)
    printf ("Uninterrupted loops: %u\n", uninterrupted_count);
    printf ("Interrupted loops: %u (%1.1f%%)\n", interrupted_count,
       100.0 * ((double) interrupted_count / (double) (uninterrupted_count + interrupted_count)));
-   printf ("Clock cycles per loop cycle: %1.0f\n", (double) (min_loop_time / INNER_LOOP_CYCLES));
-   printf ("Minimum uninterrupted exec time: %1.0f clock cycles\n", (double) min_loop_time);
-   printf ("Maximum uninterrupted exec time: %1.0f clock cycles\n", (double) max_loop_time);
-   printf ("Span: %1.0f clock cycles\n", (double) (max_loop_time - min_loop_time));
 
-   if (max_loop_time > (min_loop_time + 100)) {
-      /* typical span would be about 40 clock cycles */
-      fprintf (stderr, "Unexpectedly large min/max span: some kernel event is not accounted for\n");
+   if (uninterrupted_count < (OUTER_LOOP_CYCLES / 4)) {
+      fputs ("Not enough uninterrupted loops\n", stderr);
       return 1;
    }
+
+   delta_list[uninterrupted_count].delta = 0; /* sentinel after final element */
+   delta_list[uninterrupted_count].index = ~0;
+
+   /* sort delta list in descending order */
    qsort (delta_list, uninterrupted_count, sizeof (t_delta_data), cmp_delta);
 
-   for (i = 0; (i < uninterrupted_count) && (i < 10); i++) {
-      printf (" time %8u @ %08x pol %u\n",
-         delta_list[i].delta, delta_list[i].index, delta_list[i].pollution_count);
-   }
-
    {
-      unsigned outputs = 0;
-      unsigned same_count = 1;
-      unsigned same_value = delta_list[0].delta;
-      delta_list[uninterrupted_count].delta = 0;
-      for (i = 1; (i <= uninterrupted_count) && (outputs < 10); i++) {
-         if (delta_list[i].delta == same_value) {
-            same_count ++;
-         } else {
-            printf (" time %8u appears %u times\n", same_value, same_count);
-            same_count = 1;
-            same_value = delta_list[i].delta;
-            outputs ++;
+      unsigned first_loop_time = delta_list[0].delta;
+      unsigned max_loop_time = delta_list[1].delta;
+      unsigned min_loop_time = delta_list[uninterrupted_count - 1].delta;
+      unsigned max_expected_time = min_loop_time + 100;
+
+      printf ("Clock cycles per loop cycle: %u\n", (min_loop_time / INNER_LOOP_CYCLES));
+
+      printf ("First uninterrupted loop exec time: %u clock cycles\n", first_loop_time);
+      printf ("Minimum uninterrupted exec time: %u clock cycles\n", min_loop_time);
+      printf ("Maximum uninterrupted exec time: %u clock cycles\n", max_loop_time);
+      printf ("Maximum - minimum = %u clock cycles\n", (max_loop_time - min_loop_time));
+
+      printf ("Greatest execution times (first appearance):\n");
+      for (i = 0; (i < uninterrupted_count) && (i < 5); i++) {
+         printf (" time %8u @ %6u 0x%06x pol %u\n",
+            delta_list[i].delta,
+            delta_list[i].index,
+            delta_list[i].index,
+            delta_list[i].pollution_count);
+      }
+
+      printf ("Greatest execution times (number of appearances):\n");
+      {
+         unsigned outputs = 0;
+         unsigned same_count = 1;
+         unsigned same_value = delta_list[0].delta;
+         for (i = 1; (i <= uninterrupted_count) && (outputs < 5); i++) {
+            if (delta_list[i].delta == same_value) {
+               same_count ++;
+            } else {
+               printf (" time %8u appears %u times\n", same_value, same_count);
+               same_count = 1;
+               same_value = delta_list[i].delta;
+               outputs ++;
+            }
          }
       }
+
+      if (max_loop_time < max_expected_time) {
+         printf ("This result is within expected limits.\n");
+      } else {
+         unsigned outputs = 0;
+         unsigned previous = 0;
+         printf ("This result is NOT within expected limits; here are the big spikes:\n");
+
+         /* sort delta list in index order */
+         qsort (delta_list, uninterrupted_count, sizeof (t_delta_data), cmp_index);
+
+         for (i = 0; (i < uninterrupted_count) && (outputs < 10); i++) {
+            if (delta_list[i].delta >= max_expected_time) {
+               printf (" time %8u @ %6u 0x%06x pol %u, gap from previous %u\n",
+                  delta_list[i].delta,
+                  delta_list[i].index,
+                  delta_list[i].index,
+                  delta_list[i].pollution_count,
+                  delta_list[i].index - previous);
+               previous = delta_list[i].index;
+               outputs ++;
+            }
+         }
+         fflush (stdout);
+
+         fprintf (stderr, "Unexpectedly large min/max span %u: "
+               "some kernel event is not accounted for\n",
+               max_loop_time - min_loop_time);
+         return 1;
+      }
    }
-   printf ("Test passed\n");
+   printf ("%s: test passed\n\n", label);
    return 0;
 }
 

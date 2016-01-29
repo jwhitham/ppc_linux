@@ -57,11 +57,9 @@ static void reset_buffer_pointer (void)
 {
    intptr_t p = (intptr_t) &unaligned_user_start[0];
 
-   /* align to RVS_UENTRY_SIZE so that an rvs_uentry will be on exactly 1 page */
-   if (p & (RVS_UENTRY_SIZE - 1)) {
-      p |= RVS_UENTRY_SIZE - 1;
-      p ++;
-   }
+   /* Align to beginning of next page */
+   p |= (PAGE_SIZE - 1);
+   p ++;
    /* Offset by -4, because of stwu instruction */
    p -= 4;
    rvs_user_trace_write_pointer = (unsigned *) p;

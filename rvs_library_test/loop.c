@@ -14,7 +14,6 @@ void loopN (unsigned count);
 
 void run_loop (unsigned count)
 {
-   asm volatile ("isync"); /* serialise pipeline */
    RVS_Ipoint (10);
    loopN (count);
    RVS_Ipoint (11);
