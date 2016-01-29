@@ -16,8 +16,10 @@
 #include "librvs.h"
 
 #define TRACE_NAME "trace.bin"
+#define INNER_LOOP_CYCLES 100000
+#define OUTER_LOOP_CYCLES 10000
 
-void loopN (unsigned count);
+void run_loop (unsigned count);
 
 static inline uint32_t rvs_get_cycles(void)
 {
@@ -26,36 +28,58 @@ static inline uint32_t rvs_get_cycles(void)
    return l1;
 }
 
+typedef struct s_delta_data {
+   unsigned index;
+   unsigned delta;
+   unsigned pollution_count;
+} t_delta_data;
+
+static t_delta_data delta_list[OUTER_LOOP_CYCLES];
+
 void test_ipoint_1 (int v);
 void test_ipoint_2 (void);
 void test_ipoint_3 (void);
 
+static int cmp_delta (const void *p1, const void *p2)
+{
+   t_delta_data * d1 = (t_delta_data *) p1;
+   t_delta_data * d2 = (t_delta_data *) p2;
+
+   if (d1->delta == d2->delta) {
+      return d1->index - d2->index;
+   } else {
+      return d2->delta - d1->delta;
+   }
+}
+
+
 int main (void)
 {
    FILE *         fd;
-   FILE *         fd3;
-   FILE *         fd2;
-   uint32_t       i;
+   unsigned       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
-   uint32_t       timer_events = 0;
-   uint32_t       sys_events = 0;
-   uint32_t       irq_events = 0;
-   uint32_t       sched_events = 0;
+   unsigned       timer_events = 0;
+   unsigned       sys_events = 0;
+   unsigned       irq_events = 0;
+   unsigned       sched_events = 0;
+   unsigned       mathemu_events = 0;
    uint32_t       old_tstamp = 0;
    uint64_t       offset = 0;
    uint64_t       fixed_tstamp = 0;
    uint64_t       enter_kernel_tstamp = 0;
    uint64_t       start_tstamp = 0;
    uint64_t       total_kernel_time = 0;
-   uint64_t       last_kernel_exit = 0;
-   uint64_t       min_loop_time = 0;
-   uint32_t       kernel_depth = 0;
-   uint32_t       hwm = 0;
-   uint32_t       check = 0;
-   uint32_t       begin_write = 0;
-   uint32_t       end_write = 0;
-   const uint32_t loop_cycles = 100000;
+   uint64_t       min_loop_time = ~0;
+   uint64_t       max_loop_time = 0;
+   unsigned       interrupted_count = 0;
+   unsigned       uninterrupted_count = 0;
+   unsigned       pollution_count = 0;
+   unsigned       kernel_depth = 0;
+   unsigned       hwm = 0;
+   unsigned       check = 0;
+   unsigned       begin_write = 0;
+   unsigned       end_write = 0;
 
    printf ("Testing librvs.a and rvs.ko\n\n");
    fflush (stdout);
@@ -112,7 +136,7 @@ int main (void)
       check += 4;
    }
    RVS_Output ();
-   printf ("%u ipoints written\n", check);
+   printf ("ipoints written: %u\n", check);
 
    if ((fd = fopen (TRACE_NAME, "rb")) == NULL) {
       perror ("reading " TRACE_NAME);
@@ -131,7 +155,7 @@ int main (void)
       }
    }
    fclose (fd);
-   printf ("%u disk writes\n", begin_write);
+   printf ("disk writes: %u\n", begin_write);
 
    if (begin_write != end_write) {
       fputs ("begin_write and end_write don't match\n", stderr);
@@ -154,33 +178,27 @@ int main (void)
       return 1;
    }
 
-   printf ("Calling RVS_Init() - run with big buffer now:\n");
-   RVS_Init();
+   printf ("Calling RVS_Init() - run with big buffer now\n");
    fflush (stdout);
+   run_loop (10); /* warm up icache */
+   RVS_Init();
 
-   for (i = 0; i < 10000; i++) {
-      RVS_Ipoint (10);
-      loopN (loop_cycles);
-      RVS_Ipoint (11);
+   for (i = 1; i <= OUTER_LOOP_CYCLES; i++) {
+      run_loop (INNER_LOOP_CYCLES);
    }
+   check = OUTER_LOOP_CYCLES;
 
    RVS_Output();
 
    printf ("Examining results\n");
+   fflush (stdout);
 
    begin_write = end_write = 0;
-   if ((fd3 = fopen ("trace.txt", "wt")) == NULL) {
-      perror ("creating trace.txt");
-      return 1;
-   }
-   if ((fd2 = fopen ("results.txt", "wt")) == NULL) {
-      perror ("creating results.txt");
-      return 1;
-   }
    if ((fd = fopen (TRACE_NAME, "rb")) == NULL) {
       perror ("reading " TRACE_NAME);
       return 1;
    }
+   pollution_count = 9999;
 
    while ((fread (&id, 4, 1, fd) == 1) && (fread (&tstamp, 4, 1, fd) == 1)) {
       if (tstamp < old_tstamp) {
@@ -197,29 +215,17 @@ int main (void)
             end_write ++;
             break;
          case RVS_SWITCH_FROM:
-            if ((kernel_depth == 0) && last_kernel_exit) {
-               /* Special case. The scheduler is invoked after the interrupt
-                * has been serviced, before returning to user code. This is done
-                * from code in arch/powerpc/kernel/entry_32.S:
-                * ret_from_except -> do_work -> do_resched -> recheck -> schedule
-                *
-                * Ignore the time between the end of the interrupt and the start
-                * of the scheduler.
-                */
-               total_kernel_time += fixed_tstamp - last_kernel_exit;
-            }
-            /* fall through */
          case RVS_TIMER_ENTRY:
          case RVS_IRQ_ENTRY:
          case RVS_SYS_ENTRY:
          case RVS_PFAULT_ENTRY:
-            last_kernel_exit = 0;
+         case RVS_MATHEMU_ENTRY:
             kernel_depth ++;
             if (kernel_depth == 1) {
                enter_kernel_tstamp = fixed_tstamp;
             }
-            if (kernel_depth > 100) {
-               printf ("Too many nested kernel entries\n");
+            if (kernel_depth > 1000) {
+               fprintf (stderr, "Too many nested kernel entries: last is 0x%x\n", (unsigned) id);
                return 1;
             }
             if (kernel_depth > hwm) {
@@ -231,7 +237,7 @@ int main (void)
          case RVS_SYS_EXIT:
          case RVS_SWITCH_TO:
          case RVS_PFAULT_EXIT:
-            last_kernel_exit = 0;
+         case RVS_MATHEMU_EXIT:
             if (kernel_depth <= 0) {
                kernel_depth = 0;
             } else {
@@ -241,7 +247,6 @@ int main (void)
                }
                switch (id) {
                   case RVS_TIMER_EXIT:
-                     last_kernel_exit = fixed_tstamp;
                      timer_events ++;
                      break;
                   case RVS_SYS_EXIT:
@@ -253,55 +258,96 @@ int main (void)
                   case RVS_SWITCH_TO:
                      sched_events ++;
                      break;
+                  case RVS_MATHEMU_EXIT:
+                     mathemu_events ++;
+                     break;
                }
             }
             break;
          case 10:
-            last_kernel_exit = 0;
             timer_events = sys_events = irq_events = sched_events = 0;
+            mathemu_events = 0;
             total_kernel_time = 0;
             start_tstamp = fixed_tstamp;
             break;
          case 11:
-            last_kernel_exit = 0;
-            fprintf (fd2, "%1.0f %1.0f %u %u %u %u\n",
-               (double) (fixed_tstamp - start_tstamp),
-               (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
-               (unsigned) timer_events, (unsigned) sys_events, (unsigned) irq_events, (unsigned) sched_events);
-            if ((timer_events + sys_events + irq_events + sched_events) == 0) {
-               if ((!min_loop_time) || ((fixed_tstamp - start_tstamp) < min_loop_time)) {
-                  min_loop_time = (fixed_tstamp - start_tstamp);
-                  printf ("Uninterrupted loop execution time is %1.0f\n",
-                          (double) min_loop_time);
-               }
+            if ((timer_events + sys_events + irq_events + sched_events + mathemu_events) != 0) {
+               /* loop was interrupted by at least one thing */
+               interrupted_count ++;
+               pollution_count ++;
             } else {
-               if (min_loop_time) {
-                  printf ("Loop %1.0f to %1.0f is: %1.0f wall-clock, %1.0f execution, "
-                        "%1.0f extra from %u timer events, %u sys events, %u irq events, %u sched_events\n",
-                     (double) start_tstamp,
-                     (double) fixed_tstamp,
-                     (double) (fixed_tstamp - start_tstamp),
-                     (double) ((fixed_tstamp - start_tstamp) - total_kernel_time),
-                     (double) ((fixed_tstamp - start_tstamp) - total_kernel_time - min_loop_time),
-                     (unsigned) timer_events, (unsigned) sys_events, (unsigned) irq_events, (unsigned) sched_events);
+               /* loop should have got 100% of CPU */
+               uint64_t delta = fixed_tstamp - start_tstamp;
+
+               if (delta < min_loop_time) {
+                  min_loop_time = delta;
                }
+               if (delta > max_loop_time) {
+                  max_loop_time = delta;
+               }
+               if (uninterrupted_count >= OUTER_LOOP_CYCLES) {
+                  fputs ("delta_list overflow\n", stderr);
+                  return 1;
+               }
+               delta_list[uninterrupted_count].delta = (unsigned) delta;
+               delta_list[uninterrupted_count].index = uninterrupted_count;
+               delta_list[uninterrupted_count].pollution_count = pollution_count;
+               uninterrupted_count ++;
+               pollution_count = 0;
             }
+            check --;
             break;
          default:
-            printf ("Invalid ipoint id %u\n", (unsigned) id);
+            fprintf (stderr, "Invalid ipoint id %u (0x%x)\n", (unsigned) id, (unsigned) id);
             return 1;
       }
-      fprintf (fd3, "%08x %14.0f %14.0f\n", (unsigned) id, (double) fixed_tstamp,
-               (double) ((fixed_tstamp - start_tstamp) - total_kernel_time));
    }
    fclose (fd);
-   fclose (fd2);
-   fclose (fd3);
    if ((begin_write != 1) || (end_write != 1)) {
-      printf ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE count in short trace\n");
+      fprintf (stderr, "Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE count in short trace\n");
+      return 1;
+   }
+   if (check != 0) {
+      fputs ("Unexpected number of test ipoints in trace\n", stderr);
       return 1;
    }
    printf ("Maximum kernel depth: %u\n", (unsigned) hwm);
+   printf ("Uninterrupted loops: %u\n", uninterrupted_count);
+   printf ("Interrupted loops: %u (%1.1f%%)\n", interrupted_count,
+      100.0 * ((double) interrupted_count / (double) (uninterrupted_count + interrupted_count)));
+   printf ("Clock cycles per loop cycle: %1.0f\n", (double) (min_loop_time / INNER_LOOP_CYCLES));
+   printf ("Minimum uninterrupted exec time: %1.0f clock cycles\n", (double) min_loop_time);
+   printf ("Maximum uninterrupted exec time: %1.0f clock cycles\n", (double) max_loop_time);
+   printf ("Span: %1.0f clock cycles\n", (double) (max_loop_time - min_loop_time));
+
+   if (max_loop_time > (min_loop_time + 100)) {
+      /* typical span would be about 40 clock cycles */
+      fprintf (stderr, "Unexpectedly large min/max span: some kernel event is not accounted for\n");
+      return 1;
+   }
+   qsort (delta_list, uninterrupted_count, sizeof (t_delta_data), cmp_delta);
+
+   for (i = 0; (i < uninterrupted_count) && (i < 10); i++) {
+      printf (" time %8u @ %08x pol %u\n",
+         delta_list[i].delta, delta_list[i].index, delta_list[i].pollution_count);
+   }
+
+   {
+      unsigned outputs = 0;
+      unsigned same_count = 1;
+      unsigned same_value = delta_list[0].delta;
+      delta_list[uninterrupted_count].delta = 0;
+      for (i = 1; (i <= uninterrupted_count) && (outputs < 10); i++) {
+         if (delta_list[i].delta == same_value) {
+            same_count ++;
+         } else {
+            printf (" time %8u appears %u times\n", same_value, same_count);
+            same_count = 1;
+            same_value = delta_list[i].delta;
+            outputs ++;
+         }
+      }
+   }
    printf ("Test passed\n");
    return 0;
 }

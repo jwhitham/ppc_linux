@@ -3,7 +3,7 @@
 
 RVS_LIB_DIR=/opt/rvs
 CFLAGS += -I$(RVS_LIB_DIR) -I. -Wall -Werror -g -O2
-OBJS := rvs_library_test.o loopN.o tip.o
+OBJS := rvs_library_test.o loopN.o tip.o loop.o
 LDFLAGS += -L$(RVS_LIB_DIR) -lrvs
 
 all: rvs_library_test
