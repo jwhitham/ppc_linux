@@ -1,0 +1,109 @@
+Source files containing the TLBWE instruction (and therefore
+with the potential to affect the MMU in some way).
+
+ source name                           in vmlinux?
+
+./include/asm/reg_a2.h                 no
+./kernel/cpu_setup_a2.S                no
+./kernel/exceptions-64e.S              no
+./kernel/fsl_booke_entry_mapping.S     yes
+./kernel/head_40x.S                    no
+./kernel/head_44x.S                    no
+./kernel/head_fsl_booke.S              yes
+./kernel/misc_32.S                     yes
+./kvm/44x_emulate.c                    no
+./kvm/44x_tlb.c                        no
+./kvm/44x_tlb.h                        no
+./kvm/e500.c                           yes
+./kvm/e500_emulate.c                   yes
+./kvm/e500.h                           yes
+./kvm/e500mc.c                         no
+./kvm/e500_mmu.c                       yes
+./kvm/e500_mmu_host.c                  yes
+./mm/44x_mmu.c                         no
+./mm/hugetlbpage-book3e.c              no
+./mm/tlb_low_64e.S                     no
+./mm/tlb_nohash_low.S                  yes
+./platforms/85xx/sleep.S               yes
+./platforms/wsp/scom_smp.c             no
+./xmon/ppc-opc.c                       no
+
+
+Purpose of these files
+
+./kernel/head_fsl_booke.S
+./kernel/fsl_booke_entry_mapping.S
+
+   Kernel entry point; the head #includes the second file.
+   These files implement the code that runs immediately after the
+   boot loader. The kernel's own MMU usage is setup here.
+
+   AND. The interrupt vector code is also here.
+   Each entry point has to be 16-byte aligned. The addresses of the
+   vectors are individually loaded into SPRs known as IVORs, rather than 
+   being fixed locations or fixed offsets from a single location.
+
+   Data Storage and Instruction storage exceptions are for things like
+   "tried to write to read-only page" or "tried to execute code
+   from a non-executable page".
+   
+   "Data TLB error" and "instruction TLB error" interrupts are more
+   interesting, these are triggered by L2 TLB misses. It seems
+   the hardware is able to automatically load from L2 -> L1 TLB,
+   but loading the L2 MMU's pages is the kernel's job.
+
+./platforms/85xx/sleep.S
+
+   Not relevant. Power management code.
+
+./mm/tlb_nohash_low.S
+   
+   Working low-level parts of the MMU driver.
+   There are several different MMU drivers in here, activated by
+   preprocessor macros. The working symbols are:
+
+   _GLOBAL(_tlbil_all)     Flush TLB for everything on this CPU
+   _GLOBAL(_tlbil_pid)     Flush for a particular PID?
+   _GLOBAL(__tlbil_va)     Flush for a particular address
+   _GLOBAL(loadcam_entry)  Load L2 TLB's internal memory
+
+./kvm/e500_mmu_host.c
+./kvm/e500_emulate.c
+./kvm/e500_mmu.c
+./kvm/e500.c
+./kvm/e500.h
+   
+   Looks like this is intended to emulate E500 while running on E500, i.e. KVM
+   literally corresponds to the virtualisation feature, rather than just the
+   kernel itself. There seems to be code to give the impression of direct hardware
+   access to the MMU's registers, while the accesses are actually handled in software.
+   Not relevant.
+
+./kernel/misc_32.S
+
+   The MMU driver code in this module is all dead. Looks like it was for other
+   sorts of PowerPC CPU.
+
+-------------
+
+
+Interrupts/exception handlers always call one of:
+   crit_transfer_to_handler
+   mcheck_transfer_to_handler
+   transfer_to_handler
+   transfer_to_handler_full
+   finish_tlb_load
+   load_up_spe
+   debug_transfer_to_handler
+
+so these may be used to detect exception activity
+These fall to transfer_to_handler:
+   crit_transfer_to_handler
+   mcheck_transfer_to_handler
+   debug_transfer_to_handler
+   transfer_to_handler_full
+
+These are not yet clear to me:
+   finish_tlb_load
+   load_up_spe
+

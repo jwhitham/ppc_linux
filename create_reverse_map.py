@@ -40,7 +40,7 @@ def main():
       elif line[8] == ':' and line[9] == '\t':
          # Address and instruction
          try:
-            address = int(line[:8], 16)
+            address = int(line[:8], 16) + 4
          except:
             pass
      
