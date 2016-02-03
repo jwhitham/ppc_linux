@@ -11,6 +11,7 @@ popd
 rm -rf lib/modules/*
 /usr/bin/make \
    ARCH=powerpc CROSS_COMPILE=$LINUX_TOOLS/bin/powerpc-eabi- \
-   INSTALL_MOD_PATH=$ROOT INSTALL_PATH=$ROOT uImage modules modules_install
+   INSTALL_MOD_PATH=$ROOT INSTALL_PATH=$ROOT -j4 \
+   uImage modules modules_install
 
 

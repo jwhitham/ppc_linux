@@ -43,6 +43,7 @@
 #include <asm/cache.h>
 #include <asm/ptrace.h>
 #include "head_booke.h"
+#include "trace_rvs.h"
 
 /* As with the other PowerPC ports, it is expected that when code
  * execution begins here, the following registers contain valid, yet
@@ -572,6 +573,15 @@ END_FTR_SECTION_IFSET(CPU_FTR_EMB_HV)
 	START_EXCEPTION(SPEUnavailable)
 	NORMAL_EXCEPTION_PROLOG(SPE_ALTIVEC_UNAVAIL)
 	beq	1f
+
+	/* ...not in the kernel... */
+#ifdef CONFIG_BOOKE
+	/* RVS tracing code */
+	/* Registers available: r3, r4, r5 restored by fast_exception_return */
+	li	r3, 0xffffffee
+	TRACE_RVS_ASM(r3, r4, r5, cr0)
+#endif
+
 	bl	load_up_spe
 	b	fast_exception_return
 1:	addi	r3,r1,STACK_FRAME_OVERHEAD
@@ -776,6 +786,19 @@ END_MMU_FTR_SECTION_IFSET(MMU_FTR_BIG_PHYS)
 tlb_write_entry:
 	tlbwe
 
+#ifdef CONFIG_BOOKE
+	/* RVS tracing code */
+	/* Registers available: r10, r11, r12, r13, cr0 */
+	mfspr	r11, SPRN_SRR1
+	andi.	r11, r11, MSR_PR
+	beq	10f	/* branch if TLB exception from kernel mode */
+
+	/* record in trace */
+	li	r12, 0xffffffef
+	TRACE_RVS_ASM(r12, r11, r13, cr0)
+10:
+#endif
+
 	/* Done...restore registers and get out of here.  */
 	mfspr	r10, SPRN_SPRG_THREAD
 #ifdef CONFIG_HUGETLB_PAGE
@@ -873,6 +896,11 @@ KernelSPE:
 /*
  * Global functions
  */
+
+/* Record an ipoint in the trace (without attempting mutual exclusion) */
+_GLOBAL(trace_rvs_ipoint_asm)
+	TRACE_RVS_ASM(r3, r4, r5, cr0)
+	blr
 
 /* Adjust or setup IVORs for e200 */
 _GLOBAL(__setup_e200_ivors)

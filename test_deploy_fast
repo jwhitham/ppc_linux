@@ -1,0 +1,52 @@
+#!/bin/bash -xe
+# Download the installer onto the target board, and then
+# check that we can compile the rvs_library_test program.
+# Needs root SSH key setup for target and assumes hostname
+# of target board is "p1022ds".
+
+cat <<EOF > latest.sh
+#!/bin/bash -xe
+cd /tmp
+
+# extract in /tmp
+rm -rf install
+mkdir install
+cd install
+export INSTALL=\$PWD
+tar xzf ../latest.tar.gz
+
+# do the install
+cd RVS*
+pushd opt/rvs
+   export TARGET=\$PWD
+popd
+rm -rf /opt/rvs/
+cp -r * /
+
+# test deployment of library and header
+cd /tmp/
+tar xzf librarytest.tar.gz
+cd /tmp/rvs_library_test
+make clean
+make
+cp rvs_library_test \$TARGET
+cp rvs_library_test /opt/rvs/
+
+# done
+sync
+EOF
+
+# send the things we want to run:
+git clean -x -f -d rvs_library_test
+tar czf librarytest.tar.gz rvs_library_test
+ssh root@p1022ds rm -f /tmp/latest.tar.gz /tmp/latest.sh /tmp/librarytest.tar.gz
+scp latest.tar.gz latest.sh librarytest.tar.gz root@p1022ds:/tmp/
+ssh root@p1022ds chmod a+x /tmp/latest.sh
+
+# run the script (above)
+ssh root@p1022ds /tmp/latest.sh
+
+# done, cleanup and reboot
+rm librarytest.tar.gz latest.sh
+ssh -n root@p1022ds /sbin/reboot &
+

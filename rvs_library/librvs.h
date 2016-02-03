@@ -16,23 +16,12 @@
 extern "C" {
 #endif
 
-#ifndef RVS_TIMER_ENTRY
 /* Context switch markers in the trace. */
-#define RVS_MATHEMU_ENTRY  0xfffffffd     /* mathemu entry */
-#define RVS_MATHEMU_EXIT   0xfffffffc     /* mathemu exit */
-#define RVS_PFAULT_ENTRY   0xfffffffb     /* page fault entry */
-#define RVS_PFAULT_EXIT    0xfffffffa     /* page fault exit */
-#define RVS_TIMER_ENTRY    0xfffffff9     /* timer interrupt entry */
-#define RVS_TIMER_EXIT     0xfffffff8     /* timer interrupt exit */
-#define RVS_SYS_ENTRY      0xfffffff7     /* syscall entry */
-#define RVS_SYS_EXIT       0xfffffff6     /* syscall exit */
-#define RVS_IRQ_ENTRY      0xfffffff5     /* interrupt entry */
-#define RVS_IRQ_EXIT       0xfffffff4     /* interrupt exit */
-#define RVS_SWITCH_FROM    0xfffffff3     /* task suspended */
-#define RVS_SWITCH_TO      0xfffffff2     /* task resumed */
+#define RVS_ENTRY_MASK     0xffffff80     /* anything matching this mask is a kernel event, except: */
 #define RVS_BEGIN_WRITE    0xfffffff1     /* userspace: librvs began writing trace to disk */
 #define RVS_END_WRITE      0xfffffff0     /* userspace: librvs finished writing trace to disk */
-#endif
+#define RVS_ENTRY_COUNT    0x80           /* maximum of 0x80 event codes */
+
 
 /* Flags for RVS_Init_Ex */
 #define RVS_SMALL_BUFFER   1  /* use smaller buffers and dump more frequently */

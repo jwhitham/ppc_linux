@@ -46,7 +46,6 @@ int main (void)
    unsigned       i;
    unsigned       kernel_flag, bytes;
    unsigned       sd_count = 0;
-   unsigned       pf_count = 0;
    unsigned       tstamp = 0;
    unsigned       four = 0;
    unsigned       five = 0;
@@ -62,6 +61,7 @@ int main (void)
    uint64_t       fixed_tstamp = 0;
    uint64_t       prev_tstamp = 0;
    double         buffer[3];
+   unsigned       event_counter[RVS_ENTRY_COUNT];
    int            fd;
    char *         ptr;
 
@@ -134,6 +134,9 @@ int main (void)
       ppc_exit (1);
    }
    bytes = kernel_flag = 0;
+   for (i = 0; i < RVS_ENTRY_COUNT; i++) {
+      event_counter[i] = 0;
+   }
 
    while ((4 == ppc_read (fd, &id, 4))
    && (4 == ppc_read (fd, &tstamp, 4))) {
@@ -145,10 +148,6 @@ int main (void)
       bytes += 8;
 
       switch (id) {
-         case RVS_MATHEMU_ENTRY:
-         case RVS_MATHEMU_EXIT:
-            print ("Unexpected MATHEMU ipoint: FP instruction was emulated.\n");
-            ppc_exit (1);
          case RVS_BEGIN_WRITE:
             if (write_count != 0) {
                print ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
@@ -157,28 +156,6 @@ int main (void)
             write_count ++;
             break;
          case RVS_END_WRITE:
-            break;
-         case RVS_PFAULT_ENTRY:
-         case RVS_PFAULT_EXIT:
-            if (!kernel_flag) {
-               pf_count ++;
-            }
-            kernel_flag = 1;
-            break;
-         case RVS_TIMER_ENTRY:
-         case RVS_IRQ_ENTRY:
-         case RVS_SYS_ENTRY:
-         case RVS_IRQ_EXIT:
-         case RVS_TIMER_EXIT:
-         case RVS_SYS_EXIT:
-         case RVS_SWITCH_FROM:
-         case RVS_SWITCH_TO:
-            if (!kernel_flag) {
-               print ("kernel event: ");
-               printdec (id);
-               print ("\n");
-            }
-            kernel_flag = 1;
             break;
          case 0:
             /* loop to loop transition */
@@ -215,15 +192,19 @@ int main (void)
             six ++;
             break;
          default:
-            print ("Invalid ipoint id ");
-            printdec (id);
-            print ("\n");
-            ppc_exit (1);
+            if ((id & RVS_ENTRY_MASK) != RVS_ENTRY_MASK) {
+               print ("Invalid ipoint id ");
+               printdec (id);
+               print ("\n");
+               ppc_exit (1);
+               return 1;
+            }
+            event_counter[id & (RVS_ENTRY_COUNT - 1)] ++;
+            kernel_flag = 1;
+            break;
       }
    }
    ppc_close (fd);
-   printdec (pf_count);
-   print (" page faults\n");
 
    for (i = 0; i < IPOINT_COUNT; i++) {
       print ("Alt");
@@ -235,6 +216,15 @@ int main (void)
       print (" mean ET is ");
       printdec (total_time[i] / count[i]);
       print ("\n");
+   }
+   for (i = 0; i < RVS_ENTRY_COUNT; i++) {
+      if (event_counter[i]) {
+         print ("  interruption type ");
+         printdec (i);
+         print (" count ");
+         printdec (event_counter[i]);
+         print ("\n");
+      }
    }
 
    if ((four != 1) || (five != 1) || (six != 1)) {

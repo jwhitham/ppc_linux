@@ -20,6 +20,7 @@
 #define OUTER_LOOP_CYCLES 5000
 
 void run_loop (unsigned count);
+void run_major_test_loop (unsigned count);
 
 static inline uint32_t rvs_get_cycles(void)
 {
@@ -27,6 +28,15 @@ static inline uint32_t rvs_get_cycles(void)
    asm volatile("mfspr %0, 526" : "=r" (l1));
    return l1;
 }
+
+void explosion (unsigned r3, unsigned r4, unsigned r5)
+{
+	fprintf (stderr, 
+		"\nloop test failed, r3 = %08x, r4 = %08x, r5 = %08x\n", r3, r4, r5);
+	exit (1);
+}
+
+
 
 typedef struct s_delta_data {
    unsigned index;
@@ -62,7 +72,7 @@ static int cmp_index (const void *p1, const void *p2)
 
 static int do_measurement (const char * label, unsigned pad, void (* do_run_loop) (unsigned count));
 
-int main (void)
+int main (int argc, char ** argv)
 {
    FILE *         fd;
    unsigned       i;
@@ -74,6 +84,36 @@ int main (void)
 
    printf ("Testing librvs.a and rvs.ko\n\n");
    fflush (stdout);
+
+   printf ("Loop ok? ");
+   fflush (stdout);
+	run_major_test_loop (10);
+	printf ("yes\n");
+
+	if ((argc > 1) && argv[1][0] == '-') {
+		switch (argv[1][1]) {
+			case 'm':
+				printf ("\n\nmajor loop test (instrumentation):\n");
+				fflush (stdout);
+				RVS_Init();
+				goto major_loop;
+			case 'M':
+				printf ("\n\nmajor loop test (no instrumentation):\n");
+				fflush (stdout);
+			major_loop:
+				for (i = 0; i < 10000; i++) {
+					printf ("\r%u", i);
+					fflush (stdout);
+					run_major_test_loop (1 << 24);
+				}
+				RVS_Output ();
+				printf ("\nok\n");
+				exit (0);
+			default:
+				break;
+		}
+	}
+
 
    printf ("Ipoints before first RVS_Init? (API misuse)\n");
    for (i = 0; i < 100; i++) {
@@ -189,25 +229,18 @@ static int do_measurement (const char * label, unsigned pad, void (* do_run_loop
    unsigned       i;
    uint32_t       tstamp = 0;
    uint32_t       id = 0;
-   unsigned       timer_events = 0;
-   unsigned       sys_events = 0;
-   unsigned       irq_events = 0;
-   unsigned       sched_events = 0;
-   unsigned       mathemu_events = 0;
+   unsigned       kernel_events = 0;
    uint32_t       old_tstamp = 0;
    uint64_t       offset = 0;
    uint64_t       fixed_tstamp = 0;
-   uint64_t       enter_kernel_tstamp = 0;
    uint64_t       start_tstamp = 0;
-   uint64_t       total_kernel_time = 0;
    unsigned       interrupted_count = 0;
    unsigned       uninterrupted_count = 0;
    unsigned       pollution_count = 0;
-   unsigned       kernel_depth = 0;
-   unsigned       hwm = 0;
    unsigned       check = 0;
    unsigned       begin_write = 0;
    unsigned       end_write = 0;
+   unsigned       event_counter[RVS_ENTRY_COUNT];
 
    printf ("%s: start test\n", label);
    fflush (stdout);
@@ -234,6 +267,7 @@ static int do_measurement (const char * label, unsigned pad, void (* do_run_loop
       return 1;
    }
    pollution_count = 9999;
+   memset (event_counter, 0, sizeof (event_counter));
 
    while ((fread (&id, 4, 1, fd) == 1) && (fread (&tstamp, 4, 1, fd) == 1)) {
       if (tstamp < old_tstamp) {
@@ -249,64 +283,12 @@ static int do_measurement (const char * label, unsigned pad, void (* do_run_loop
          case RVS_END_WRITE:
             end_write ++;
             break;
-         case RVS_SWITCH_FROM:
-         case RVS_TIMER_ENTRY:
-         case RVS_IRQ_ENTRY:
-         case RVS_SYS_ENTRY:
-         case RVS_PFAULT_ENTRY:
-         case RVS_MATHEMU_ENTRY:
-            kernel_depth ++;
-            if (kernel_depth == 1) {
-               enter_kernel_tstamp = fixed_tstamp;
-            }
-            if (kernel_depth > 1000) {
-               fprintf (stderr, "Too many nested kernel entries: last is 0x%x\n", (unsigned) id);
-               return 1;
-            }
-            if (kernel_depth > hwm) {
-               hwm = kernel_depth;
-            }
-            break;
-         case RVS_IRQ_EXIT:
-         case RVS_TIMER_EXIT:
-         case RVS_SYS_EXIT:
-         case RVS_SWITCH_TO:
-         case RVS_PFAULT_EXIT:
-         case RVS_MATHEMU_EXIT:
-            if (kernel_depth <= 0) {
-               kernel_depth = 0;
-            } else {
-               kernel_depth --;
-               if (kernel_depth == 0) {
-                  total_kernel_time += fixed_tstamp - enter_kernel_tstamp;
-               }
-               switch (id) {
-                  case RVS_TIMER_EXIT:
-                     timer_events ++;
-                     break;
-                  case RVS_SYS_EXIT:
-                     sys_events ++;
-                     break;
-                  case RVS_IRQ_EXIT:
-                     irq_events ++;
-                     break;
-                  case RVS_SWITCH_TO:
-                     sched_events ++;
-                     break;
-                  case RVS_MATHEMU_EXIT:
-                     mathemu_events ++;
-                     break;
-               }
-            }
-            break;
          case 10:
-            timer_events = sys_events = irq_events = sched_events = 0;
-            mathemu_events = 0;
-            total_kernel_time = 0;
+            kernel_events = 0;
             start_tstamp = fixed_tstamp;
             break;
          case 11:
-            if ((timer_events + sys_events + irq_events + sched_events + mathemu_events) != 0) {
+            if (kernel_events) {
                /* loop was interrupted by at least one thing */
                interrupted_count ++;
                pollution_count ++;
@@ -330,8 +312,13 @@ static int do_measurement (const char * label, unsigned pad, void (* do_run_loop
             /* padding element */
             break;
          default:
-            fprintf (stderr, "Invalid ipoint id %u (0x%x)\n", (unsigned) id, (unsigned) id);
-            return 1;
+            if ((id & RVS_ENTRY_MASK) != RVS_ENTRY_MASK) {
+               fprintf (stderr, "Invalid ipoint id %u (0x%x)\n", (unsigned) id, (unsigned) id);
+               return 1;
+            }
+            event_counter[id & (RVS_ENTRY_COUNT - 1)] ++;
+            kernel_events ++;
+            break;
       }
    }
    fclose (fd);
@@ -343,11 +330,15 @@ static int do_measurement (const char * label, unsigned pad, void (* do_run_loop
       fputs ("Unexpected number of test ipoints in trace\n", stderr);
       return 1;
    }
-   printf ("Maximum kernel depth: %u\n", (unsigned) hwm);
    printf ("Uninterrupted loops: %u\n", uninterrupted_count);
    printf ("Interrupted loops: %u (%1.1f%%)\n", interrupted_count,
       100.0 * ((double) interrupted_count / (double) (uninterrupted_count + interrupted_count)));
 
+   for (i = 0; i < RVS_ENTRY_COUNT; i++) {
+      if (event_counter[i]) {
+         printf ("  entry type 0x%02x count %u\n", i, event_counter[i]);
+      }
+   }
    if (uninterrupted_count < (OUTER_LOOP_CYCLES / 4)) {
       fputs ("Not enough uninterrupted loops\n", stderr);
       return 1;

@@ -1,3 +1,14 @@
+/*
+ *  RVS Tracing API
+ *
+ *  Author: Jack Whitham (jwhitham@rapitasystems.com)
+ *
+ *  RVS trace point module. Implements /dev/rvs, and enables
+ *  access to the trace buffer implemented in arch/powerpc/kernel/
+ *
+ *  Copyright (C) 2016 Rapita Systems Ltd.
+ *
+ */
 #ifndef __RVS_H__
 #define __RVS_H__
 
@@ -5,7 +16,7 @@
 #include <linux/types.h>
 
 /* API Version. */
-#define RVS_API_VERSION		0
+#define RVS_API_VERSION		2
 
 /* ioctl()'s supported */
 #define RVSIO	0xaf
@@ -13,89 +24,18 @@
 /* ioctl()'s */
 #define RVS_GET_VERSION		_IOW(RVSIO, 0x00, __u32)
 #define RVS_RESET		_IO(RVSIO, 0x01)
-#define RVS_SET_BUFSHIFT	_IOR(RVSIO, 0x02, __u32)
-#define RVS_GET_BUFSHIFT	_IOW(RVSIO, 0x03, __u32)
 
 #define RVS_ENABLE		_IO(RVSIO, 0x04)
 #define RVS_DISABLE		_IO(RVSIO, 0x05)
 
-/* Tracing statistics. */
-struct rvs_stats {
-   __s32 missed;
-   __s32 written;
-   __s32 read;
-};
-#define RVS_GET_STATS		_IOW(RVSIO, 0x06, struct rvs_stats)
-
 /* Device name. */
 #define RVS_FILE_NAME		"/dev/rvs"
-
-/* Context switch markers in the trace. */
-#define RVS_MATHEMU_ENTRY  0xfffffffd     /* mathemu entry */
-#define RVS_MATHEMU_EXIT   0xfffffffc     /* mathemu exit */
-#define RVS_PFAULT_ENTRY   0xfffffffb     /* page fault entry */
-#define RVS_PFAULT_EXIT    0xfffffffa     /* page fault exit */
-#define RVS_TIMER_ENTRY    0xfffffff9     /* timer interrupt entry */
-#define RVS_TIMER_EXIT     0xfffffff8     /* timer interrupt exit */
-#define RVS_SYS_ENTRY      0xfffffff7     /* syscall entry */
-#define RVS_SYS_EXIT       0xfffffff6     /* syscall exit */
-#define RVS_IRQ_ENTRY      0xfffffff5     /* interrupt entry */
-#define RVS_IRQ_EXIT       0xfffffff4     /* interrupt exit */
-#define RVS_SWITCH_FROM    0xfffffff3     /* task suspended */
-#define RVS_SWITCH_TO      0xfffffff2     /* task resumed */
-#define RVS_BEGIN_WRITE    0xfffffff1     /* userspace: librvs began writing trace to disk */
-#define RVS_END_WRITE      0xfffffff0     /* userspace: librvs finished writing trace to disk */
 
 static inline __s32 rvs_time_before(__u32 a, __u32 b)
 {
    return (__s32)a - (__s32)b < 0;
 }
 
-#ifdef CONFIG_X86
-static inline __u32 rvs_get_cycles(void)
-{
-   __u32 high, low;
-
-   asm volatile ("rdtsc" : "=a"(low), "=d"(high));
-   return low;
-}
-
-static inline void rvs_init_arch(void)
-{
-}
-#else
-#ifdef CONFIG_ARM
-
-static inline __u32 rvs_get_cycles(void)
-{
-   __u32 tstamp;
-
-   asm volatile ("\tmrc p15, 0, %0, c9, c13, 0\t\n":"=r"(tstamp));
-   return tstamp;
-}
-
-static inline void rvs_init_arch(void)
-{
-#ifndef LIBRVS
-   printk(KERN_INFO "rvs: rvs_ini_arch. CPU : %d\n", smp_processor_id());
-#endif
-
-   /* Enable user mode access. */
-   asm volatile ("\tmcr p15, 0, %0, c9, c14, 0\t\n"::"r"(1));
-
-   /* Disable overflow notifications. */
-   asm volatile ("\tmcr p15, 0, %0, c9, c14, 2\t\n"::"r"(0x8000000f));
-
-   /* Reset all counters. */
-   asm volatile ("\tmcr p15, 0, %0, c9, c12, 0\t\n"::"r"(0x17));
-
-   /* Enable them. */
-   asm volatile ("\tmcr p15, 0, %0, c9, c12, 1\t\n"::"r"(0x8000000f));
-
-   /* Clear overflows (XXX shouldn't this come before the enable?). */
-   asm volatile ("\tmcr p15, 0, %0, c9, c12, 3\t\n"::"r"(0x8000000f));
-}
-#else
 #ifdef CONFIG_PPC
 static inline __u32 rvs_get_cycles(void)
 {
@@ -103,14 +43,8 @@ static inline __u32 rvs_get_cycles(void)
    asm volatile("mfspr %0, 526" : "=r" (l1));
    return l1;
 }
-
-static inline void rvs_init_arch(void)
-{
-}
 #else
-#error "This module only supports PPC, x86 and ARM platforms"
+#error "This module only supports the PowerPC platform"
 #endif /* PPC */
-#endif /* ARM */
-#endif /* X86 */
 #endif /* !__RVS_H__ */
 

@@ -36,6 +36,10 @@
 #undef SHOW_SYSCALLS
 #undef SHOW_SYSCALLS_TASK
 
+#ifdef CONFIG_BOOKE
+#include "trace_rvs.h"
+#endif
+
 /*
  * MSR_KERNEL is > 0x10000 on 4xx/Book-E since it include MSR_CE.
  */
@@ -143,10 +147,28 @@ transfer_to_handler:
 	stw	r12,_NIP(r11)
 	stw	r9,_MSR(r11)
 	andi.	r2,r9,MSR_PR
+
 	mfctr	r12
 	mfspr	r2,SPRN_XER
 	stw	r12,_CTR(r11)
 	stw	r2,_XER(r11)
+
+#ifdef CONFIG_BOOKE
+	/* RVS tracing code */
+	/* Registers available: r2, r9, r12, cr1 */
+	beq	10f	/* branch if exception from kernel mode */
+
+	/* exception from user mode: get trap number */
+	lwz	r12,_TRAP(r11)
+	li	r2,0xffffff80
+	srawi	r9, r12, 8
+	or	r12, r9, r2
+
+	/* record in trace */
+	TRACE_RVS_ASM(r12, r9, r2, cr1)
+10:
+#endif
+
 	mfspr	r12,SPRN_SPRG_THREAD
 	addi	r2,r12,-THREAD
 	tovirt(r2,r2)			/* set r2 to current */

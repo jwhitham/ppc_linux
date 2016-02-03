@@ -27,7 +27,7 @@
 #define PAGE_SIZE             4096  /* must match system page size */
 #define USER_BUFFER_SIZE      (1 << 25) /* 32M entries */
 #define SMALL_USER_BUFFER_SIZE (1 << 14) /* 16K entries (must be less than USER_BUFFER_SIZE) */
-#define KERNEL_BUFFER_SIZE    (1 << 20) /* 1M entries */
+#define KERNEL_BUFFER_SIZE    (128 * 1024) /* 128K entries */
 #define MERGED_BUFFER_SIZE    (USER_BUFFER_SIZE + KERNEL_BUFFER_SIZE)
 
 
@@ -69,19 +69,15 @@ static void reset_buffer_pointer (void)
 static void download_kernel_trace (void)
 {
    int32_t           r;
-   struct rvs_stats  s;
 
    if (kernel_loaded > kernel_read) {
       /* buffer not consumed, don't download again yet */
       return;
    }
-   s.missed = 0;
-   r = ppc_ioctl (rvs_device_fd, RVS_GET_STATS, &s);
+
+   r = ppc_ioctl (rvs_device_fd, RVS_DISABLE, 0);
    if (r < 0) {
-      ppc_fatal_error ("rvslib: download_kernel_trace: ioctl RVS_GET_STATS error");
-   }
-   if (s.missed) {
-      ppc_fatal_error ("rvslib: kernel reports some trace events were missed");
+      ppc_fatal_error("rvslib: failed to disable kernel tracing before read");
    }
 
    r = ppc_read (rvs_device_fd, kernel_buffer, KERNEL_BUFFER_SIZE * sizeof(struct rvs_uentry));
@@ -92,10 +88,15 @@ static void download_kernel_trace (void)
       ppc_fatal_error ("rvslib: unexpected kernel behaviour (1)");
    }
    if (r > (KERNEL_BUFFER_SIZE * sizeof(struct rvs_uentry))) {
-      ppc_fatal_error ("rvslib: unexpected kernel behaviour (12");
+      ppc_fatal_error ("rvslib: unexpected kernel behaviour (1)");
    }
    kernel_loaded = r / sizeof(struct rvs_uentry);
    kernel_read = 0;
+
+   r = ppc_ioctl (rvs_device_fd, RVS_ENABLE, 0);
+   if (r < 0) {
+      ppc_fatal_error("rvslib: failed to re-enable kernel tracing");
+   }
 }
 
 /* write trace buffer to disk (while merging) */
@@ -282,7 +283,7 @@ void RVS_Init(void)
  * after program startup. */
 void RVS_Init_Ex (const char * trace_file_name, unsigned flags)
 {
-   int32_t r;
+   int32_t r, v;
 
    if (rvs_device_fd >= 0) {
       /* RVS_Init_Ex has been called twice. Be tolerant. */
@@ -296,6 +297,14 @@ void RVS_Init_Ex (const char * trace_file_name, unsigned flags)
    }
    if ((USER_BUFFER_SIZE < 4) || (KERNEL_BUFFER_SIZE < 4)) {
       ppc_fatal_error ("buffers are too small");
+   }
+   v = 0;
+   r = ppc_ioctl (rvs_device_fd, RVS_GET_VERSION, &v);
+   if (r < 0) {
+      ppc_fatal_error("RVS_Init: failed to get version");
+   }
+   if (v != RVS_API_VERSION) {
+      ppc_fatal_error("RVS_Init: kernel module API version does not match librvs.a");
    }
    r = ppc_ioctl (rvs_device_fd, RVS_RESET, 0);
    if (r < 0) {
