@@ -10,11 +10,26 @@ handle_overflow_imminent:
 	.p2align 4,,15
 	.type	handle_segfault, @function
 handle_segfault:
-	lwz 9,48(5)
+	stwu 1,-16(1)
+	mflr 0
+	stw 31,12(1)
+	stw 0,20(1)
+	lwz 31,48(5)
 	lwz 5,12(4)
-	lwz 3,128(9)
-	mr 4,9
-	b rvs_segfault_signal
+	lwz 3,128(31)
+	mr 4,31
+	bl rvs_segfault_signal
+	cmpwi 7,3,0
+	beq 7,.L2
+	lwz 9,128(31)
+	addi 9,9,4
+	stw 9,128(31)
+.L2:
+	lwz 0,20(1)
+	lwz 31,12(1)
+	addi 1,1,16
+	mtlr 0
+	blr
 	.size	handle_segfault,.-handle_segfault
 	.align 2
 	.p2align 4,,15
@@ -27,16 +42,16 @@ ppc_fatal_error:
 	stw 0,20(1)
 	lbz 9,0(3)
 	cmpwi 7,9,0
-	beq 7,.L6
+	beq 7,.L12
 	mr 10,3
 	li 6,0
 	.p2align 4,,15
-.L5:
+.L11:
 	lbzu 9,1(10)
 	addi 6,6,1
 	cmpwi 7,9,0
-	bne 7,.L5
-.L4:
+	bne 7,.L11
+.L10:
 	li 4,2
 	li 3,4
 	crxor 6,6,6
@@ -48,18 +63,24 @@ ppc_fatal_error:
 	li 3,4
 	crxor 6,6,6
 	bl ppc_syscall
-	lwz 0,20(1)
-	li 3,1
 	li 4,1
 	li 5,0
-	mtlr 0
 	li 6,0
-	addi 1,1,16
+	li 3,1
 	crxor 6,6,6
-	b ppc_syscall
-.L6:
+	bl ppc_syscall
+#APP
+ # 67 "ppc_linux.c" 1
+	0: trap; b 0b
+ # 0 "" 2
+#NO_APP
+	lwz 0,20(1)
+	addi 1,1,16
+	mtlr 0
+	blr
+.L12:
 	li 6,0
-	b .L4
+	b .L10
 	.size	ppc_fatal_error,.-ppc_fatal_error
 	.align 2
 	.p2align 4,,15
@@ -120,10 +141,11 @@ ppc_open_rdwr:
 	.globl ppc_creat
 	.type	ppc_creat, @function
 ppc_creat:
+	lis 5,0x1
 	mr 4,3
-	li 5,436
-	li 3,8
-	li 6,0
+	ori 5,5,577
+	li 3,5
+	li 6,436
 	crxor 6,6,6
 	b ppc_syscall
 	.size	ppc_creat,.-ppc_creat
@@ -170,12 +192,24 @@ ppc_mprotect_rdwr:
 	.globl ppc_exit
 	.type	ppc_exit, @function
 ppc_exit:
+	stwu 1,-16(1)
 	mr 4,3
+	mflr 0
 	li 5,0
-	li 3,1
 	li 6,0
+	li 3,1
+	stw 0,20(1)
 	crxor 6,6,6
-	b ppc_syscall
+	bl ppc_syscall
+#APP
+ # 114 "ppc_linux.c" 1
+	0: trap; b 0b
+ # 0 "" 2
+#NO_APP
+	lwz 0,20(1)
+	addi 1,1,16
+	mtlr 0
+	blr
 	.size	ppc_exit,.-ppc_exit
 	.align 2
 	.p2align 4,,15
@@ -194,13 +228,13 @@ ppc_restore_signal_handler:
 	crxor 6,6,6
 	bl ppc_syscall
 	cmpwi 7,3,0
-	bne 7,.L22
+	bne 7,.L28
 	lwz 0,20(1)
 	addi 1,1,16
 	mtlr 0
 	blr
 	.p2align 4,,15
-.L22:
+.L28:
 	lwz 0,20(1)
 	lis 3,.LC1@ha
 	la 3,.LC1@l(3)
@@ -223,9 +257,9 @@ ppc_install_signal_handler:
 	addi 9,1,23
 	mr 31,3
 	.p2align 4,,15
-.L24:
+.L30:
 	stbu 10,1(9)
-	bdnz .L24
+	bdnz .L30
 	lis 9,handle_segfault@ha
 	lis 6,.LANCHOR0@ha
 	la 9,handle_segfault@l(9)
@@ -240,8 +274,8 @@ ppc_install_signal_handler:
 	crxor 6,6,6
 	bl ppc_syscall
 	cmpwi 7,3,0
-	bne 7,.L35
-.L25:
+	bne 7,.L41
+.L31:
 	lis 9,handle_overflow_imminent@ha
 	li 3,173
 	la 9,handle_overflow_imminent@l(9)
@@ -255,22 +289,22 @@ ppc_install_signal_handler:
 	crxor 6,6,6
 	bl ppc_syscall
 	cmpwi 7,3,0
-	beq 7,.L23
+	beq 7,.L29
 	lis 3,.LC3@ha
 	la 3,.LC3@l(3)
 	bl ppc_fatal_error
-.L23:
+.L29:
 	lwz 0,52(1)
 	lwz 31,44(1)
 	addi 1,1,48
 	mtlr 0
 	blr
 	.p2align 4,,15
-.L35:
+.L41:
 	lis 3,.LC2@ha
 	la 3,.LC2@l(3)
 	bl ppc_fatal_error
-	b .L25
+	b .L31
 	.size	ppc_install_signal_handler,.-ppc_install_signal_handler
 	.section	.rodata.str1.4,"aMS",@progbits,1
 	.align 2

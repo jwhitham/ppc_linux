@@ -51,7 +51,7 @@ static struct kernel_sigaction old_segv_signal_handler;
 int ppc_syscall (int nr, ...);
 
 /* rvs_*_signal implemented in librvs.c */
-void rvs_segfault_signal (unsigned * trigger_pc, unsigned * gregs, unsigned * addr);
+int rvs_segfault_signal (unsigned * trigger_pc, unsigned * gregs, unsigned * addr);
 void rvs_overflow_imminent_signal (void);
 
 /* error reporting function */
@@ -64,6 +64,7 @@ void ppc_fatal_error (const char * s)
    ppc_write (STDERR_FILENO, s, sz);
    ppc_write (STDERR_FILENO, "\n", 1);
    ppc_syscall (__NR_exit, 1, 0, 0);
+   asm volatile ("0: trap; b 0b"); /* should be unreachable */
 }
 
 /* minimalist interface to system calls: */
@@ -89,7 +90,7 @@ int ppc_open_rdwr (const char * filename)
 
 int ppc_creat (const char * filename)
 {
-   return ppc_syscall (__NR_creat, filename, 0664, 0);
+   return ppc_syscall (__NR_open, filename, O_CREAT | O_WRONLY | O_TRUNC | O_LARGEFILE, 0664);
 }
 
 int ppc_close (int fd)
@@ -110,6 +111,7 @@ int ppc_mprotect_rdwr (void * base, unsigned size)
 void ppc_exit (int rc)
 {
    ppc_syscall (__NR_exit, rc, 0, 0);
+   asm volatile ("0: trap; b 0b"); /* should be unreachable */
 }
 
 /* call signal handler in librvs.c with correct information from kernel */
@@ -119,7 +121,10 @@ static void handle_segfault (int n, siginfo_t * si, void * _uc)
    unsigned * gregs = (unsigned *) uc->uc_mcontext.uc_regs->gregs;
    unsigned * trigger_pc = (unsigned *) ((intptr_t) gregs[PC_REG_OFFSET]);
 
-   rvs_segfault_signal (trigger_pc, gregs, (unsigned *) si->si_addr);
+   if (rvs_segfault_signal (trigger_pc, gregs, (unsigned *) si->si_addr)) {
+      /* skip instruction */
+      gregs[PC_REG_OFFSET] += 4;
+   }
 }
 
 static void handle_overflow_imminent (int n, siginfo_t * si, void * _uc)

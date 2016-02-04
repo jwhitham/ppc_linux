@@ -28,7 +28,7 @@
 #define USER_BUFFER_SIZE      (1 << 25) /* 32M entries */
 #define SMALL_USER_BUFFER_SIZE (1 << 14) /* 16K entries (must be less than USER_BUFFER_SIZE) */
 #define KERNEL_BUFFER_SIZE    (128 * 1024) /* 128K entries */
-#define MERGED_BUFFER_SIZE    (USER_BUFFER_SIZE + KERNEL_BUFFER_SIZE)
+#define OUTPUT_BUFFER_SIZE    (16 * 1024) /* 16K entries: the most we write to disk at a time */
 
 #define NUM_TRIGGER_PAGES     3
 #define FORCE_FLUSH_TRIGGER_A 0
@@ -44,17 +44,15 @@ static int32_t rvs_device_fd = -1;
 static int32_t rvs_trace_fd = -1;
 static uint32_t segfault_handler_installed = 0;
 static struct rvs_uentry kernel_buffer[KERNEL_BUFFER_SIZE];
-static struct rvs_uentry merged_buffer[MERGED_BUFFER_SIZE];
+static struct rvs_uentry output_buffer[OUTPUT_BUFFER_SIZE];
 static uint8_t unaligned_user_start[RVS_UENTRY_SIZE * USER_BUFFER_SIZE];
-static struct rvs_uentry * merged_pos = NULL;
-static uint32_t kernel_loaded = 0, kernel_read = 0;
 static unsigned * trigger_page[NUM_TRIGGER_PAGES] = {NULL, NULL, NULL};
 
 /* Initial value of this pointer is set so that there is
  * somewhere valid for ipoints to go, if the user calls RVS_Ipoint before
  * calling RVS_Init. These ipoints are lost. */
 struct rvs_uentry_opaque * rvs_user_trace_write_pointer =
-    (struct rvs_uentry_opaque *) &merged_buffer[0];
+    (struct rvs_uentry_opaque *) &output_buffer[0];
 
 
 /* reset the buffer pointer to the beginning of the user buffer */
@@ -70,68 +68,84 @@ static void reset_buffer_pointer (void)
    rvs_user_trace_write_pointer = (struct rvs_uentry_opaque *) p;
 }
 
-/* get trace data from kernel (while merging) */
-static void download_kernel_trace (void)
+/* check write pointer is appropriately positioned and aligned */
+static void check_write_pos (intptr_t pos)
 {
-   int32_t           r;
+   intptr_t left = (intptr_t) &unaligned_user_start[0];
+   intptr_t right = (intptr_t) &unaligned_user_start[sizeof (unaligned_user_start)];
 
-   if (kernel_loaded > kernel_read) {
-      /* buffer not consumed, don't download again yet */
-      return;
+   if ((pos % RVS_UENTRY_SIZE) != 0) {
+      ppc_fatal_error ("rvslib: write pointer is not correctly aligned");
    }
+   if (pos < left) {
+      ppc_fatal_error ("rvslib: write pointer is below the user buffer");
+   }
+   if (pos >= right) {
+      ppc_fatal_error ("rvslib: write pointer is above the user buffer");
+   }
+}
 
+/* uninstall FORCE_FLUSH_TRIGGER pages A and B */
+static void uninstall_trigger_AB (void)
+{
+   if (trigger_page[FORCE_FLUSH_TRIGGER_A]) {
+      if (ppc_mprotect_rdwr (trigger_page[FORCE_FLUSH_TRIGGER_A], PAGE_SIZE) != 0) {
+         goto fail;
+      }
+      trigger_page[FORCE_FLUSH_TRIGGER_A] = NULL;
+   }
+   if (trigger_page[FORCE_FLUSH_TRIGGER_B]) {
+      if (ppc_mprotect_rdwr (trigger_page[FORCE_FLUSH_TRIGGER_B], PAGE_SIZE) != 0) {
+         goto fail;
+      }
+      trigger_page[FORCE_FLUSH_TRIGGER_B] = NULL;
+   }
+   return;
+fail:
+   ppc_fatal_error ("unable to uninstall force flush trigger");
+}
+
+/* download kernel trace, do merge, and flush trace to disk */
+static void merge_buffers_now (unsigned prepend_oi_signal, unsigned reenable)
+{
+   unsigned start_tstamp = rvs_get_cycles();
+   struct rvs_uentry * user_start = NULL;
+   struct rvs_uentry * user_ptr = NULL;
+   struct rvs_uentry * user_end = NULL;
+   struct rvs_uentry * kernel_start = NULL;
+   struct rvs_uentry * kernel_ptr = NULL;
+   struct rvs_uentry * kernel_end = NULL;
+   struct rvs_uentry * output_start = NULL;
+   struct rvs_uentry * output_ptr = NULL;
+   struct rvs_uentry * output_end = NULL;
+   int r, todo;
+
+   /* uninstall special trigger pages if present */
+   uninstall_trigger_AB ();
+
+   /* kernel: stop writing! */
    r = ppc_ioctl (rvs_device_fd, RVS_DISABLE, 0);
    if (r < 0) {
-      ppc_fatal_error("rvslib: failed to disable kernel tracing before read");
+      ppc_fatal_error("rvslib: failed to disable kernel tracing before write to disk");
    }
 
+   /* download new data from kernel - we read the whole kernel buffer in one go */
    r = ppc_read (rvs_device_fd, kernel_buffer, KERNEL_BUFFER_SIZE * sizeof(struct rvs_uentry));
    if (r < 0) {
       ppc_fatal_error ("rvslib: download_kernel_trace: read error (check 'dmesg' output)");
    }
-   if ((r % sizeof(struct rvs_uentry)) != 0) {
+   if ((r % sizeof (struct rvs_uentry)) != 0) {
       ppc_fatal_error ("rvslib: unexpected kernel behaviour (1)");
    }
    if (r > (KERNEL_BUFFER_SIZE * sizeof(struct rvs_uentry))) {
       ppc_fatal_error ("rvslib: unexpected kernel behaviour (2)");
    }
-   kernel_loaded = r / sizeof(struct rvs_uentry);
-   kernel_read = 0;
+   kernel_start = &kernel_buffer[0];
+   kernel_end = &kernel_buffer[r / sizeof (struct rvs_uentry)];
 
-   r = ppc_ioctl (rvs_device_fd, RVS_ENABLE, 0);
-   if (r < 0) {
-      ppc_fatal_error("rvslib: failed to re-enable kernel tracing");
-   }
-}
-
-/* write trace buffer to disk (while merging) */
-static void flush_merged_buffer (int force)
-{
-   int32_t total = 0;
-   int32_t todo = 0;
-
-   if (force || (merged_pos == &merged_buffer[MERGED_BUFFER_SIZE])) {
-      todo = (merged_pos - merged_buffer) * sizeof (struct rvs_uentry);
-      if (todo) {
-         total = ppc_write (rvs_trace_fd, merged_buffer, todo);
-         if (total != todo) {
-            ppc_fatal_error ("rvslib: unable to write all trace elements to disk");
-         }
-      } 
-      merged_pos = &merged_buffer[0];
-   }
-}
-
-/* do merge and flush trace to disk */
-static void merge_buffers_now (unsigned prepend_oi_signal)
-{
-   struct rvs_uentry * user_start;
-   struct rvs_uentry * user_end;
-   uint32_t user_loaded = 0, user_read = 0;
-   struct rvs_uentry write_event[2];
-
-   /* Notify start of write operation */
-   write_event[0].tstamp = rvs_get_cycles ();
+   /* output buffer */
+   output_start = &output_buffer[0];
+   output_end = &output_buffer[OUTPUT_BUFFER_SIZE];
 
    /* find start/end of user buffer */
    user_end =  /* offset by +4 because of stwu instruction: */
@@ -139,114 +153,144 @@ static void merge_buffers_now (unsigned prepend_oi_signal)
    reset_buffer_pointer ();
    user_start =
       (struct rvs_uentry *) (((intptr_t) rvs_user_trace_write_pointer) + 4);
+   check_write_pos ((intptr_t) user_start);
+   check_write_pos ((intptr_t) user_end);
 
-   /* Merge user and kernel buffers */
-   merged_pos = &merged_buffer[0];
-   user_loaded = user_end - user_start;
-   user_read = 0;
-   flush_merged_buffer (1);
-   download_kernel_trace ();
+   /* merge loop */
+   kernel_ptr = kernel_start;
+   user_ptr = user_start;
 
-   /* While both buffers contain data */
-   while ((kernel_read < kernel_loaded) && (user_read < user_loaded)) {
-      if (rvs_time_before (kernel_buffer[kernel_read].tstamp, user_start[user_read].tstamp)) {
-         (* merged_pos) = kernel_buffer[kernel_read];
-         kernel_read++;
-         merged_pos++;
-         flush_merged_buffer (0);
-         download_kernel_trace ();
-      } else {
-         (* merged_pos) = user_start[user_read];
-         user_read++;
-         merged_pos++;
+   /* output loop (repeatedly output up to 16K trace records) */
+   do {
+
+      /* merge loops: */
+      for (output_ptr = output_start;
+            (output_ptr < output_end)
+            && (user_ptr < user_end)
+            && (kernel_ptr < kernel_end); output_ptr ++) {
+
+         if (rvs_time_before (user_ptr->tstamp, kernel_ptr->tstamp)) {
+            /* merge from user */
+            output_ptr->id = user_ptr->id;
+            output_ptr->tstamp = user_ptr->tstamp;
+            user_ptr ++;
+         } else {
+            /* merge from kernel */
+            output_ptr->id = kernel_ptr->id;
+            output_ptr->tstamp = kernel_ptr->tstamp;
+            kernel_ptr ++;
+         }
       }
-   }
+      /* additional data from kernel? */
+      for (; (output_ptr < output_end) && (kernel_ptr < kernel_end); output_ptr ++) {
+         output_ptr->id = kernel_ptr->id;
+         output_ptr->tstamp = kernel_ptr->tstamp;
+         kernel_ptr ++;
+      }
+      /* additional data from user? */
+      for (; (output_ptr < output_end) && (user_ptr < user_end); output_ptr ++) {
+         output_ptr->id = user_ptr->id;
+         output_ptr->tstamp = user_ptr->tstamp;
+         user_ptr ++;
+      }
+      /* no data at all? then we are done */
+      if (output_ptr == output_start) {
+         break;
+      }
 
-   /* One buffer is empty now */
-   while (kernel_read < kernel_loaded) {
-      (* merged_pos) = kernel_buffer[kernel_read];
-      kernel_read++;
-      merged_pos++;
-   }
+      /* Write merged data to disk */
+      todo = (output_ptr - output_start) * sizeof (struct rvs_uentry);
+      r = ppc_write (rvs_trace_fd, output_start, todo);
+      if (r != todo) {
+         ppc_fatal_error ("rvslib: unable to write all trace elements to disk (write error)");
+      }
+   } while (1);
 
-   while (user_read < user_loaded) {
-      (* merged_pos) = user_start[user_read];
-      user_read++;
-      merged_pos++;
-   }
-
-   flush_merged_buffer (1);
-
-   /* Ready for more trace data now */
+   /* ready for more trace data now */
    reset_buffer_pointer ();
 
    /* notify time spent writing and merging */
+   output_ptr = output_start;
    if (prepend_oi_signal) {
-      write_event[0].id = RVS_OI_SIGNAL;
-      if (sizeof (struct rvs_uentry) !=
-            ppc_write (rvs_trace_fd, write_event, sizeof (struct rvs_uentry))) {
-         ppc_fatal_error ("rvslib: unable to write oi_signal event to disk");
+      output_ptr->id = RVS_OI_SIGNAL;
+      output_ptr->tstamp = start_tstamp;
+      output_ptr++;
+   }
+   output_ptr->id = RVS_BEGIN_WRITE;
+   output_ptr->tstamp = start_tstamp;
+   output_ptr++;
+   output_ptr->id = RVS_END_WRITE;
+   output_ptr->tstamp = rvs_get_cycles();
+   output_ptr++;
+
+   /* reset and reenable */
+   r = ppc_ioctl (rvs_device_fd, RVS_RESET, 0);
+   if (r < 0) {
+      ppc_fatal_error("RVS_Init: failed to reset module");
+   }
+   if (reenable) {
+      r = ppc_ioctl (rvs_device_fd, RVS_ENABLE, 0);
+      if (r < 0) {
+         ppc_fatal_error("rvslib: failed to re-enable kernel tracing after write to disk");
       }
    }
-
-   write_event[0].id = RVS_BEGIN_WRITE;
-   write_event[1].id = RVS_END_WRITE;
-   write_event[1].tstamp = rvs_get_cycles ();
-   if (sizeof (write_event) != ppc_write (rvs_trace_fd, write_event, sizeof (write_event))) {
+   /* write notification to disk */
+   todo = (output_ptr - output_start) * sizeof (struct rvs_uentry);
+   r = ppc_write (rvs_trace_fd, output_start, todo);
+   if (r != todo) {
       ppc_fatal_error ("rvslib: unable to write begin/end write event to disk");
    }
 }
 
 /* signal handler: invoked when the RVS_Ipoint function attempts to write
- * to the trigger page at the end of the user trace buffer */
-void rvs_segfault_signal (unsigned * trigger_pc, unsigned * gregs, unsigned * addr)
+ * to the trigger page at the end of the user trace buffer. Returns non-zero if
+ * the instruction should be skipped. */
+int rvs_segfault_signal (unsigned * trigger_pc, unsigned * gregs, unsigned * addr)
 {
+   const unsigned mask = 0xfc00ffffU;
+   const unsigned stwu = 0x95490004U & mask;    /* stwu r10, 4(r9) */
+   const unsigned mfspr = 0x7d0e82a6U & mask;   /* mfspr r8, 526 */
+   unsigned i, triggered_by = ~0;
+
+   /* reinstall old signal handler while we are here */
+   if (segfault_handler_installed) {
+      ppc_restore_signal_handler ();
+      segfault_handler_installed = 0;
+   }
+
    /* check that this segfault is in the ipoint routine (possibly inlined)
     * by inspecting the machine code: 
 
          180051c:       95 49 00 04     stwu    r10,4(r9) <-- may write to trigger page
          1800520:       7d 0e 82 a6     mfspr   r8,526
-         1800524:       95 09 00 04     stwu    r8,4(r9)
+         1800524:       95 09 00 04     stwu    r8,4(r9) <-- may also write to trigger page
+                                                            in special circumstances 
 
       (addresses and register numbers will be different)
    */
 
-   unsigned store_id = trigger_pc[0];
-   unsigned get_timestamp = trigger_pc[1];
-   unsigned store_timestamp = trigger_pc[2];
+   if (rvs_device_fd < 0) {
+      /* RVS device not open, so whatever is causing this segfault, it's 
+       * not the trace code. */
 
-   if (((get_timestamp & 0xffff) == 0x82a6)
-   && ((get_timestamp >> 26) == 0x1f)
-   && ((store_id & 0xffff) == 0x0004) 
-   && ((store_id >> 26) == 0x25)
-   && ((store_timestamp & 0xffff) == 0x0004) 
-   && ((store_timestamp >> 26) == 0x25)
-   && (rvs_device_fd >= 0)) {
+   } else if ((trigger_pc[0] & mask) != stwu) {
+      /* PC does not point at an stwu operation, so this can't be trace code. */
 
-      /* This segfault was generated by the expected instruction: */
-      unsigned ptr_reg = (store_id >> 16) & 0x1f;
-      unsigned * ptr_val = (unsigned *) ((intptr_t) gregs[ptr_reg]);
-      unsigned i, triggered_by = ~0;
-      intptr_t pos = (intptr_t) (ptr_val + 1);
+   } else if (((trigger_pc[-1] & mask) == mfspr)
+   && ((trigger_pc[-2] & mask) == stwu)) {
+      /* PC points at the *second* stwu. Happens in the rare circumstance
+       * that the "overflow imminent" signal arrives between the two "stwu"
+       * instructions, so the first succeeds and the second fails. */
       intptr_t fault_address = (intptr_t) addr;
-      unsigned * page = (unsigned *) (pos & ~(PAGE_SIZE - 1));
-
-      /* Debug error conditions caused by SIGSEGV being generated
-       * by inconsistent addresses */
+      unsigned * page = (unsigned *) (fault_address & ~(PAGE_SIZE - 1));
+      unsigned ptr_reg = (trigger_pc[0] >> 16) & 0x1f;
+      intptr_t pos = gregs[ptr_reg] + 4;
+      unsigned data_reg = (trigger_pc[0] >> 21) & 0x1f;
 
       if (fault_address != pos) {
-         if (fault_address == 0) {
-            /* "Thus, if a general register is required by the instruction, you could use
-             * either the "r" or "b" constraint. The "b" constraint is of interest, 
-             * because many instructions use the designation of register 0 specially –-
-             * a designation of register 0 does not mean that r0 is used, but instead a
-             * literal value of 0."
-             * ... If you get here, you may have an "stw rX, 0(0)".
-             */
-            ppc_fatal_error ("fault_address seems to be 0");
-         }
-         ppc_fatal_error ("faulting instruction behaved unexpectedly");
+         ppc_fatal_error ("rvslib: faulting instruction behaved unexpectedly");
       }
+      check_write_pos (pos + 4);
 
       /* Which trigger page actually caused this? */
       for (i = 0; i < NUM_TRIGGER_PAGES; i++) {
@@ -255,47 +299,90 @@ void rvs_segfault_signal (unsigned * trigger_pc, unsigned * gregs, unsigned * ad
             break;
          }
       }
-
       if (triggered_by >= NUM_TRIGGER_PAGES) {
-         /* Error: don't know what triggered this */
-         intptr_t left = (intptr_t) &unaligned_user_start[0];
-         intptr_t right = (intptr_t) &unaligned_user_start[sizeof (unaligned_user_start)];
+         ppc_fatal_error ("rvslib: segfault pointer is not within any trigger page (2nd stwu)");
+      }
+      if (triggered_by == END_BUF_TRIGGER) {
+         ppc_fatal_error ("rvslib: unexpectedly reached end of buffer on 2nd stwu");
+      }
 
-         if (pos < left) {
-            ppc_fatal_error ("segfault pointer is below the user buffer");
-         }
-         if (pos >= right) {
-            ppc_fatal_error ("segfault pointer is above the user buffer");
-         }
-         if (pos & (RVS_UENTRY_SIZE - 1)) {
-            ppc_fatal_error ("segfault pointer is not correctly aligned");
-         }
-         ppc_fatal_error ("segfault pointer is not within any trigger page");
+      /* uninstall trigger, repeat store, reinstall trigger */
+      if (ppc_mprotect_rdwr (page, PAGE_SIZE) != 0) {
+         ppc_fatal_error ("rvslib: unable to uninstall force flush trigger for 2nd stwu");
       }
-      if (triggered_by != END_BUF_TRIGGER) {
-         /* Triggered by one of the special trigger pages, which we will now remove */
-         if ((ppc_mprotect_rdwr (trigger_page[FORCE_FLUSH_TRIGGER_A], PAGE_SIZE) != 0)
-         || (ppc_mprotect_rdwr (trigger_page[FORCE_FLUSH_TRIGGER_B], PAGE_SIZE) != 0)) {
-            ppc_fatal_error ("unable to uninstall force flush trigger");
-         }
-         trigger_page[FORCE_FLUSH_TRIGGER_A] = NULL;
-         trigger_page[FORCE_FLUSH_TRIGGER_B] = NULL;
+
+      (* ((unsigned *) pos)) = gregs[data_reg];
+      gregs[ptr_reg] = pos;
+
+      if (ppc_mprotect_read (page, PAGE_SIZE) != 0) {
+         ppc_fatal_error ("rvslib: unable to reinstall force flush trigger for 2nd stwu");
       }
+
+      /* reinstall segfault handler */
+      if (!segfault_handler_installed) {
+         segfault_handler_installed = 1;
+         ppc_install_signal_handler (SIG_RVS_IMMINENT_OVERFLOW);
+      }
+      /* skip this instruction */
+      return 1;
+
+   } else if (((trigger_pc[1] & mask) == mfspr)
+   && ((trigger_pc[2] & mask) == stwu)) {
+      /* PC points at the first stwu instruction */
+      unsigned ptr_reg = (trigger_pc[0] >> 16) & 0x1f;
+      unsigned * ptr_val = (unsigned *) ((intptr_t) gregs[ptr_reg]);
+      intptr_t pos = ((intptr_t) ptr_val) + 4;
+      intptr_t fault_address = (intptr_t) addr;
+      unsigned * page = (unsigned *) (pos & ~(PAGE_SIZE - 1));
+
+      /* Debug error conditions caused by SIGSEGV being generated
+       * by inconsistent addresses */
+      if (fault_address != pos) {
+         ppc_fatal_error ("rvslib: faulting instruction behaved unexpectedly");
+      }
+
+      /* Error handler for segfaults not corresponding to a trigger page */
+      check_write_pos (pos);
+
+      /* Which trigger page actually caused this? */
+      for (i = 0; i < NUM_TRIGGER_PAGES; i++) {
+         if (trigger_page[i] && (page == trigger_page[i])) {
+            triggered_by = i;
+            break;
+         }
+      }
+      if (triggered_by >= NUM_TRIGGER_PAGES) {
+         ppc_fatal_error ("rvslib: segfault pointer is not within any trigger page");
+      }
+
+      /* Overflow imminent condition: uninstall the trigger now */
+      uninstall_trigger_AB ();
 
       /* write trace buffer to disk */
       rvs_user_trace_write_pointer = (struct rvs_uentry_opaque *) ptr_val;
-      merge_buffers_now (triggered_by != END_BUF_TRIGGER);
+      check_write_pos (4 + ((intptr_t) rvs_user_trace_write_pointer));
+
+      merge_buffers_now (triggered_by != END_BUF_TRIGGER, 1);
 
       /* continue at the beginning of the buffer: we rerun the store instruction
        * with ptr_val reset to beginning of buffer. */
       gregs[ptr_reg] = (intptr_t) rvs_user_trace_write_pointer;
-      return;
+      check_write_pos (4 + ((intptr_t) rvs_user_trace_write_pointer));
+
+      /* reinstall segfault handler */
+      if (!segfault_handler_installed) {
+         segfault_handler_installed = 1;
+         ppc_install_signal_handler (SIG_RVS_IMMINENT_OVERFLOW);
+      }
+      return 0;
+   } else {
+      /* stwu operation isn't related to trace code (not next to mfspr) */
    }
 
-   /* some other segfault: reinstall old signal handler */
-   ppc_restore_signal_handler ();
-
-   /* return to code: segfault will happen again immediately */
+   /* Some other segfault - what caused it? The following
+    * label may be used to set a breakpoint. */
+   asm volatile ("rvs_unhandled_segfault: nop\n");
+   return 0;
 }
 
 /* signal handler: invoked when the kernel trace buffer is about to overflow */
@@ -308,26 +395,33 @@ void rvs_overflow_imminent_signal (void)
     * is used to do the flush, when the user next writes an ipoint. */
    intptr_t p;
 
+   if (rvs_device_fd < 0) {
+      return; /* do nothing, not tracing */
+   }
    if (trigger_page[FORCE_FLUSH_TRIGGER_A]) {
       return; /* do nothing, force flush pages already present */
    }
 
    p = (intptr_t) rvs_user_trace_write_pointer;
+   p += 4; /* undo the -4 offset used for stwu instruction */
    p &= ~(PAGE_SIZE - 1);
-   if ((unsigned *) p == trigger_page[END_BUF_TRIGGER]) {
-      return; /* do nothing, about to trigger user flush anyway */
-   }
+
+   check_write_pos (p);
+   
    p += PAGE_SIZE;
-   if ((unsigned *) p == trigger_page[END_BUF_TRIGGER]) {
+   if (p >= (intptr_t) trigger_page[END_BUF_TRIGGER]) {
       return; /* do nothing, about to trigger user flush anyway */
    }
-   trigger_page[FORCE_FLUSH_TRIGGER_A] = (unsigned *) p;
    p -= PAGE_SIZE;
+
+   /* setup trigger on this page and the one after it */
+   trigger_page[FORCE_FLUSH_TRIGGER_A] = (unsigned *) p;
+   p += PAGE_SIZE;
    trigger_page[FORCE_FLUSH_TRIGGER_B] = (unsigned *) p;
 
    if ((ppc_mprotect_read (trigger_page[FORCE_FLUSH_TRIGGER_A], PAGE_SIZE) != 0)
    || (ppc_mprotect_read (trigger_page[FORCE_FLUSH_TRIGGER_B], PAGE_SIZE) != 0)) {
-      ppc_fatal_error ("rvs: unable to install force flush trigger");
+      ppc_fatal_error ("rvslib: unable to install force flush trigger");
    }
 }
 
@@ -366,7 +460,7 @@ void RVS_Init_Ex (const char * trace_file_name, unsigned flags)
       ppc_fatal_error ("RVS_Init: could not open " RVS_FILE_NAME);
    }
    if ((USER_BUFFER_SIZE < 4) || (KERNEL_BUFFER_SIZE < 4)) {
-      ppc_fatal_error ("buffers are too small");
+      ppc_fatal_error ("rvslib: buffers are too small");
    }
    v = 0;
    r = ppc_ioctl (rvs_device_fd, RVS_GET_VERSION, &v);
@@ -434,13 +528,18 @@ void RVS_Output (void)
       return;
    }
       
+   if (segfault_handler_installed) {
+      ppc_restore_signal_handler ();
+      segfault_handler_installed = 0;
+   }
+
    r = ppc_ioctl (rvs_device_fd, RVS_DISABLE, 0);
    if (r < 0) {
       ppc_fatal_error ("RVS_Output: failed to disable kernel tracing");
    }
 
    if (rvs_trace_fd >= 0) {
-      merge_buffers_now (0);
+      merge_buffers_now (0, 0);
       ppc_close (rvs_trace_fd);
       rvs_trace_fd = -1;
    }
@@ -452,7 +551,6 @@ void RVS_Output (void)
          trigger_page[i] = NULL;
       }
    }
-   merged_pos = NULL;
    reset_buffer_pointer ();
 
    if (rvs_device_fd >= 0) {
