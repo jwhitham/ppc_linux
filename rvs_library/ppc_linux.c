@@ -42,7 +42,7 @@ typedef struct kernel_sigaction {
    uint8_t sa_mask[SA_MASK_SIZE];
 } _kernel_sigaction;
 
-static struct kernel_sigaction old_signal_handler;
+static struct kernel_sigaction old_segv_signal_handler;
 
 
 
@@ -50,8 +50,9 @@ static struct kernel_sigaction old_signal_handler;
 /* ppc_syscall implemented in ppc_syscall.S */
 int ppc_syscall (int nr, ...);
 
-/* rvs_segfault_signal implemented in librvs.c */
+/* rvs_*_signal implemented in librvs.c */
 void rvs_segfault_signal (unsigned * trigger_pc, unsigned * gregs, unsigned * addr);
+void rvs_overflow_imminent_signal (void);
 
 /* error reporting function */
 void ppc_fatal_error (const char * s)
@@ -111,7 +112,7 @@ void ppc_exit (int rc)
    ppc_syscall (__NR_exit, rc, 0, 0);
 }
 
-/* call segfault handler in librvs.c with correct information from kernel */
+/* call signal handler in librvs.c with correct information from kernel */
 static void handle_segfault (int n, siginfo_t * si, void * _uc)
 {
    ucontext_t * uc = (ucontext_t *) _uc;
@@ -121,17 +122,24 @@ static void handle_segfault (int n, siginfo_t * si, void * _uc)
    rvs_segfault_signal (trigger_pc, gregs, (unsigned *) si->si_addr);
 }
 
+static void handle_overflow_imminent (int n, siginfo_t * si, void * _uc)
+{
+   rvs_overflow_imminent_signal ();
+}
+
 /* signal handler management */
 void ppc_restore_signal_handler (void)
 {
-   if (ppc_syscall (__NR_rt_sigaction, SIGSEGV, &old_signal_handler, NULL, SA_MASK_SIZE) != 0) {
+   if (ppc_syscall (__NR_rt_sigaction, SIGSEGV, &old_segv_signal_handler, NULL, SA_MASK_SIZE) != 0) {
       ppc_fatal_error ("sigaction (SIGSEGV) reinstall of old handler failed");
    }
+   /* SIG_RVS_IMMINENT_OVERFLOW handler is never uninstalled */
 }
 
-void ppc_install_signal_handler (void)
+void ppc_install_signal_handler (int sig_rvsoi)
 {
    struct kernel_sigaction sa;
+   struct kernel_sigaction old_rvsoi_signal_handler;
    unsigned i;
 
    /* zero the sigaction struct */
@@ -141,8 +149,15 @@ void ppc_install_signal_handler (void)
    sa.func = handle_segfault;
    sa.sa_flags = SA_SIGINFO;
 
-   if (ppc_syscall (__NR_rt_sigaction, SIGSEGV, &sa, &old_signal_handler, SA_MASK_SIZE) != 0) {
+   if (ppc_syscall (__NR_rt_sigaction, SIGSEGV, &sa, &old_segv_signal_handler, SA_MASK_SIZE) != 0) {
       ppc_fatal_error ("RVS_Init: sigaction (SIGSEGV) install failed");
+   }
+
+   sa.func = handle_overflow_imminent;
+   sa.sa_flags = SA_SIGINFO;
+
+   if (ppc_syscall (__NR_rt_sigaction, sig_rvsoi, &sa, &old_rvsoi_signal_handler, SA_MASK_SIZE) != 0) {
+      ppc_fatal_error ("RVS_Init: sigaction (SIG_RVS_IMMINENT_OVERFLOW) install failed");
    }
 }
 

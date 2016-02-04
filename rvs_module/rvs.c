@@ -30,6 +30,7 @@
 #include <trace/syscall.h>
 #include <asm/pgtable.h>
 #include <asm/trace.h>
+#include <asm/siginfo.h>
 
 #include <linux/trace_rvs.h>
 
@@ -67,9 +68,12 @@ typedef enum {
 
 static spinlock_t lock;  /* Data structure lock (for state) */
 static rvs_state_t state = MODULE_UNLOADED;
+static int overflow_signal_sent = 0;
 
 /* valid if state >= DEVICE_OPEN: */
-static pid_t rvs_task_pid;
+static pid_t rvs_task_pid = 0;
+static uid_t rvs_task_uid = 0;
+struct pid * rvs_signal_pid = NULL;
 
 /* valid if state >= TRACE_ENABLED_TASK_SUSPENDED: */
 static struct preempt_notifier notifier;  
@@ -81,53 +85,90 @@ struct rvs_task {
 static struct rvs_task dummy_ptr;
 
 
+static void send_overflow_signal (void)
+{
+   int rc;
+
+   spin_lock (&lock);
+   if ((!overflow_signal_sent) 
+   && ((state == TRACE_ENABLED_TASK_RUNNING)
+         || (state == TRACE_ENABLED_TASK_SUSPENDED))) {
+
+      /* Send signal to indicate imminent overflow */
+      spin_unlock (&lock);
+      rc = kill_pid (rvs_signal_pid, SIG_RVS_IMMINENT_OVERFLOW, 0);
+      spin_lock (&lock);
+      if (rc == 0) {
+         /* Sending the signal may fail if the system is busy. */
+         overflow_signal_sent = 1;
+      }
+   }
+   spin_unlock (&lock);
+}
+
+static inline void detect_overflow_imminent (int overflow)
+{
+   if (!overflow) {
+      return;
+   }
+   if (overflow_signal_sent) {
+      return;
+   }
+   send_overflow_signal ();
+}
 
 static void rvs_sched_in(struct preempt_notifier *pn, int cpu)
 {
+   int overflow = 0;
    spin_lock (&lock);
    if (state == TRACE_ENABLED_TASK_SUSPENDED) {
       state = TRACE_ENABLED_TASK_RUNNING;
       trace_rvs_start ();
-      trace_rvs_ipoint (RVS_SWITCH_TO);
+      overflow = trace_rvs_ipoint (RVS_SWITCH_TO);
    }
    spin_unlock (&lock);
+   detect_overflow_imminent (overflow);
 }
 
 static void rvs_sched_out(struct preempt_notifier *pn,
            struct task_struct *next)
 {
+   int overflow = 0;
    spin_lock (&lock);
    if (state == TRACE_ENABLED_TASK_RUNNING) {
       state = TRACE_ENABLED_TASK_SUSPENDED;
-      trace_rvs_ipoint (RVS_SWITCH_FROM);
+      /* task will be suspended so there is no point looking for
+       * the overflow condition now, hence (void) */
+      overflow = trace_rvs_ipoint (RVS_SWITCH_FROM);
       trace_rvs_stop ();
    }
    spin_unlock (&lock);
+   detect_overflow_imminent (overflow);
 }
 
 static void rvs_timer_entry (void *data, struct pt_regs *regs)
 {
-   trace_rvs_ipoint (RVS_TIMER_ENTRY);
+   detect_overflow_imminent (trace_rvs_ipoint (RVS_TIMER_ENTRY));
 }
 
 static void rvs_irq_entry (void *data, struct pt_regs *regs)
 {
-   trace_rvs_ipoint (RVS_IRQ_ENTRY);
+   detect_overflow_imminent (trace_rvs_ipoint (RVS_IRQ_ENTRY));
 }
 
 static void rvs_sys_entry (void *data, struct pt_regs *regs, long id)
 {
-   trace_rvs_ipoint (RVS_SYS_ENTRY);
+   detect_overflow_imminent (trace_rvs_ipoint (RVS_SYS_ENTRY));
 }
 
 static void rvs_page_fault_entry (void *data, struct pt_regs *regs, unsigned long address, int write_access)
 {
-   trace_rvs_ipoint (RVS_PFAULT_ENTRY);
+   detect_overflow_imminent (trace_rvs_ipoint (RVS_PFAULT_ENTRY));
 }
 
 static void rvs_mathemu_entry (void *data, struct pt_regs *regs, unsigned long address, unsigned long insn)
 {
-   trace_rvs_ipoint (RVS_MATHEMU_ENTRY);
+   detect_overflow_imminent (trace_rvs_ipoint (RVS_MATHEMU_ENTRY));
 }
 
 static struct preempt_ops rvs_preempt_ops = {
@@ -223,6 +264,7 @@ static long rvs_ioctl_reset(struct file *filp, void __user *argp)
          break;
       case DEVICE_OPEN:
          trace_rvs_reset ();
+         overflow_signal_sent = 0;
          rc = 0;
          break;
       default: BUG (); break;
@@ -335,6 +377,9 @@ static ssize_t rvs_read(struct file *filp, char __user *buf,
    spin_lock (&lock);
    BUG_ON (state != TRACE_DOWNLOAD);
    state = DEVICE_OPEN;
+   if (rc >= 0) {
+      overflow_signal_sent = 0;
+   }
 err:
    spin_unlock (&lock);
    return rc;
@@ -354,10 +399,13 @@ static int rvs_open(struct inode *inode, struct file *filp)
       case MODULE_UNLOADED: BUG (); break;
       case MODULE_LOADED:
          state = DEVICE_OPEN;
+         rvs_signal_pid = task_pid (current);
          rvs_task_pid = task_pid_vnr (current);
+         rvs_task_uid = from_kuid_munged (current_user_ns(), current_uid());
          filp->private_data = &dummy_ptr;
          trace_rvs_stop (); /* defensive */
          trace_rvs_reset (); /* defensive */
+         overflow_signal_sent = 0;
          rc = 0;
          break;
       case TRACE_ENABLED_TASK_RUNNING:
@@ -396,6 +444,9 @@ static int rvs_release(struct inode *inode, struct file *filp)
          trace_rvs_reset ();
          state = MODULE_LOADED;
          rvs_task_pid = 0;
+         rvs_task_uid = 0;
+         rvs_signal_pid = NULL;
+         overflow_signal_sent = 0;
          break;
       default: BUG (); break;
    }
@@ -466,6 +517,7 @@ static int __init rvs_init(void)
    preempt_notifier_init (&notifier, &rvs_preempt_ops);
    spin_lock_init(&lock);
    state = MODULE_LOADED;
+   overflow_signal_sent = 0;
    trace_rvs_stop (); /* defensive */
    trace_rvs_reset (); /* defensive */
 out:

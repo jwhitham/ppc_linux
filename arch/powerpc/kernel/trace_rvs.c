@@ -15,13 +15,23 @@
 #include <linux/trace_rvs.h>
 
 
+/* The total capacity of the kernel trace buffer: */
 #define NUM_ENTRIES		(128 * 1024)
 
+/* The minimum number of trace entries needed to trigger the
+ * "imminent overflow" condition - where we send a signal to
+ * the process to tell it to flush the buffer: */
+#define OVERFLOW_POINT	((NUM_ENTRIES * 25) / 100)
+
+/* The processor ID register for the process we are tracing: */
 unsigned trace_rvs_pir = ~0;
 
+/* Trace data storage: */
 struct rvs_entry trace_rvs_buffer[NUM_ENTRIES];
 struct rvs_entry *trace_rvs_write_p = (void *) 0;
 struct rvs_entry *trace_rvs_end_p = (void *) 0;
+
+
 
 void trace_rvs_reset (void)
 {
@@ -56,12 +66,17 @@ void trace_rvs_stop (void)
 
 void trace_rvs_ipoint_asm (unsigned id); /* defined in head_fsl_booke.S */
 
-void trace_rvs_ipoint (unsigned id)
+int trace_rvs_ipoint (unsigned id)
 {
 	unsigned long flags;
+	const struct rvs_entry *overflow_p = &trace_rvs_buffer[OVERFLOW_POINT];
+	int overflow;
+
 	local_irq_save (flags);
 	trace_rvs_ipoint_asm (id);
+	overflow = (trace_rvs_write_p > overflow_p);
 	local_irq_restore (flags);
+	return overflow;
 }
 
 ssize_t trace_rvs_download (struct rvs_entry __user *target_p, size_t target_size)

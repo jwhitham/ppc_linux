@@ -16,7 +16,7 @@
 #include <linux/types.h>
 
 /* API Version. */
-#define RVS_API_VERSION		2
+#define RVS_API_VERSION		3
 
 /* ioctl()'s supported */
 #define RVSIO	0xaf
@@ -27,6 +27,9 @@
 
 #define RVS_ENABLE		_IO(RVSIO, 0x04)
 #define RVS_DISABLE		_IO(RVSIO, 0x05)
+
+/* signal sent to user process if kernel buffer is about to overflow */
+#define SIG_RVS_IMMINENT_OVERFLOW	50
 
 /* Device name. */
 #define RVS_FILE_NAME		"/dev/rvs"

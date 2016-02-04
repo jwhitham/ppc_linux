@@ -19,7 +19,7 @@ struct rvs_entry {
 void trace_rvs_reset (void);
 void trace_rvs_start (void);
 void trace_rvs_stop (void);
-void trace_rvs_ipoint (unsigned id);
+int trace_rvs_ipoint (unsigned id);
 ssize_t trace_rvs_download (struct rvs_entry __user *target_p, size_t target_size);
 
 #endif

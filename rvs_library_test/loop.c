@@ -12,6 +12,8 @@
 
 void loopN (unsigned count);
 unsigned loopN2 (unsigned count);
+void spe_one (unsigned count);
+void spe_two (unsigned count);
 
 void explosion (unsigned r3, unsigned r4, unsigned r5);
 
@@ -24,11 +26,26 @@ void run_loop (unsigned count)
 
 void run_major_test_loop (unsigned count)
 {
-	unsigned rc;
+   unsigned rc;
    RVS_Ipoint (20);
    rc = loopN2 (count);
    RVS_Ipoint (21);
-	if (rc != 0) {
-		explosion (rc, ~0, ~0);
-	}
+   if (rc != 0) {
+      explosion (rc, ~0, ~0);
+   }
 }
+
+void run_spe_one (unsigned count)
+{
+   RVS_Ipoint (10);
+   spe_one (count);
+   RVS_Ipoint (11);
+}
+
+void run_spe_two (unsigned count)
+{
+   RVS_Ipoint (10);
+   spe_two (count);
+   RVS_Ipoint (11);
+}
+

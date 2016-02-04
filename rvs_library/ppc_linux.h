@@ -23,7 +23,7 @@ int ppc_mprotect_read (void * base, unsigned size);
 int ppc_mprotect_rdwr (void * base, unsigned size);
 void ppc_exit (int rc);
 void ppc_restore_signal_handler (void);
-void ppc_install_signal_handler (void);
+void ppc_install_signal_handler (int sig_rvsoi);
 
 #endif
 
