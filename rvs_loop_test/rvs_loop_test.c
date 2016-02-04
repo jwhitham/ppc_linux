@@ -17,7 +17,7 @@
 #include "ppc_linux.h"
 
 
-const unsigned LOOP_SIZE = 10000;
+const unsigned LOOP_SIZE = 1000;
 const unsigned IPOINT_COUNT = 4;
 
 void testing (double * ptr);
@@ -62,8 +62,11 @@ int main (void)
    uint64_t       prev_tstamp = 0;
    double         buffer[3];
    unsigned       event_counter[RVS_ENTRY_COUNT];
+   unsigned       last_id = 0;
    int            fd;
    char *         ptr;
+
+   print ("Testing librvs.a and rvs.ko (without libc)\n\n");
 
    /* Test: ipoints before RVS_Init are ignored */
    RVS_Ipoint (1);
@@ -151,6 +154,9 @@ int main (void)
          case RVS_BEGIN_WRITE:
             if (write_count != 0) {
                print ("Unexpected RVS_BEGIN_WRITE/RVS_END_WRITE markers in short trace\n");
+               print ("Followed ID ");
+               printdec (last_id);
+               print ("\n");
                ppc_exit (1);
             }
             write_count ++;
@@ -165,6 +171,7 @@ int main (void)
          case 1001:
          case 1002:
          case 1003:
+            last_id = id;
             if (!kernel_flag) {
                uint64_t delta = fixed_tstamp - prev_tstamp;
 
@@ -207,15 +214,39 @@ int main (void)
    ppc_close (fd);
 
    for (i = 0; i < IPOINT_COUNT; i++) {
-      print ("Alt");
-      printdec (i);
-      print (": min ET is ");
-      printdec (min_time[i]);
-      print (" max ET is ");
-      printdec (max_time[i]);
-      print (" mean ET is ");
-      printdec (total_time[i] / count[i]);
-      print ("\n");
+      switch (i) {
+         case 0: print ("NOP loop"); break;
+         case 1: print ("Unaligned access"); break;
+         case 2: print ("Aligned access"); break;
+         case 3: print ("SPE operation"); break;
+      }
+      if (!count[i]) {
+         print (": no measurements\n");
+      } else {
+         print (": min ET is ");
+         printdec (min_time[i]);
+         print (" max ET is ");
+         printdec (max_time[i]);
+         print (" mean ET is ");
+         printdec (total_time[i] / count[i]);
+         print ("\n");
+      }
+      switch (i) {
+         case 0:
+         case 2:
+         case 3:
+            if (min_time[i] > 50) {
+               print ("\nTook much longer than expected. Test failed.\n");
+               ppc_exit (1);
+            }
+				break;
+         case 1:
+            if (count[i]) {
+               print ("\nShould not have obtained any measurements. Test failed.\n");
+               ppc_exit (1);
+            }
+				break;
+      }
    }
    for (i = 0; i < RVS_ENTRY_COUNT; i++) {
       if (event_counter[i]) {

@@ -99,7 +99,7 @@ int main (int argc, char ** argv)
    unsigned       begin_write = 0;
    unsigned       end_write = 0;
 
-   printf ("Testing librvs.a and rvs.ko\n\n");
+   printf ("Testing librvs.a and rvs.ko (with libc)\n\n");
    fflush (stdout);
 
    printf ("Loop test: ");
