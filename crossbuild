@@ -5,7 +5,6 @@
 export GITREP=$PWD
 cd ../linux-tools
 export LINUX_TOOLS=$PWD
-export CROSS_CC=$PWD/bin/powerpc-eabi-gcc
 cd $GITREP
 
 rm -rf lib/modules/* boot
@@ -14,7 +13,12 @@ mkdir boot
 /usr/bin/make \
    ARCH=powerpc CROSS_COMPILE=$LINUX_TOOLS/bin/powerpc-eabi- \
    INSTALL_MOD_PATH=$GITREP INSTALL_PATH=$GITREP -j4 \
-   uImage modules modules_install
+   uImage
+   
+/usr/bin/make \
+   ARCH=powerpc CROSS_COMPILE=$LINUX_TOOLS/bin/powerpc-eabi- \
+   INSTALL_MOD_PATH=$GITREP INSTALL_PATH=$GITREP \
+   modules modules_install
 
 ./scripts/dtc/dtc arch/powerpc/boot/dts/p1020rdb.dts -I dts -o boot/p1020rdbT.dtb -O dtb
 ./scripts/dtc/dtc arch/powerpc/boot/dts/p1022ds_32b.dts -I dts -o boot/p1022ds_32bT.dtb -O dtb
