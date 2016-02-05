@@ -20,7 +20,6 @@
 #define TRACE_NAME "trace.bin"
 #define OUTER_LOOP_CYCLES 5000
 
-#define RVS_OI_SIGNAL      0xffffffec     /* overflow signal marker */
 #define RVS_TLB_EVENT      0xffffffef
 #define RVS_SYS_EVENT      0xffffff8c
 
@@ -102,6 +101,7 @@ int main (int argc, char ** argv)
    printf ("Testing librvs.a and rvs.ko (with libc)\n\n");
    fflush (stdout);
 
+   printf ("librvs.a API version: %d\n", RVS_Get_Version ());
    printf ("Loop test: ");
    fflush (stdout);
    run_major_test_loop (10);

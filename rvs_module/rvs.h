@@ -16,7 +16,7 @@
 #include <linux/types.h>
 
 /* API Version. */
-#define RVS_API_VERSION		3
+#define RVS_API_VERSION		4
 
 /* ioctl()'s supported */
 #define RVSIO	0xaf

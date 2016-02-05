@@ -17,19 +17,28 @@ extern "C" {
 #endif
 
 /* Context switch markers in the trace. */
-#define RVS_ENTRY_MASK     0xffffff80     /* anything matching this mask is a kernel event, except: */
-#define RVS_BEGIN_WRITE    0xfffffff1     /* userspace: librvs began writing trace to disk */
-#define RVS_END_WRITE      0xfffffff0     /* userspace: librvs finished writing trace to disk */
-#define RVS_OI_SIGNAL      0xffffffec     /* userspace: overflow imminent signal sent by kernel */
+#define RVS_ENTRY_MASK     0xffffff80U    /* anything matching this mask is a kernel event, except: */
+#define RVS_SUSPEND        0xffffffffU    /* filter: stop counting application execution time */
+#define RVS_RESUME         0xfffffffeU    /* filter: resume counting application execution time */
+#define RVS_BEGIN_WRITE    0xfffffff1U    /* userspace: librvs began writing trace to disk */
+#define RVS_END_WRITE      0xfffffff0U    /* userspace: librvs finished writing trace to disk */
+#define RVS_OI_SIGNAL      0xffffffecU    /* userspace: overflow imminent signal sent by kernel */
 #define RVS_ENTRY_COUNT    0x80           /* maximum of 0x80 event codes */
 
+/* Trace elements (as written to output file) */
+struct rvs_uentry {
+   unsigned id;
+   unsigned tstamp;
+};
+#define RVS_UENTRY_SIZE       8     /* must be power of 2 */
 
 /* Flags for RVS_Init_Ex */
 #define RVS_SMALL_BUFFER   1  /* use smaller buffers and dump more frequently */
 
 
+
 typedef struct rvs_uentry_opaque {
-	short dummy;
+   short dummy;
 } rvs_uentry_opaque;
 
 extern struct rvs_uentry_opaque * rvs_user_trace_write_pointer;
@@ -37,6 +46,7 @@ extern struct rvs_uentry_opaque * rvs_user_trace_write_pointer;
 void RVS_Init (void);
 void RVS_Init_Ex (const char * trace_file_name, unsigned flags);
 void RVS_Output (void);
+int RVS_Get_Version (void);
 
 static inline void RVS_Ipoint (unsigned id)
 {

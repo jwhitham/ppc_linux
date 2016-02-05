@@ -23,7 +23,6 @@
 #define NULL ((void*)0)
 #endif
 
-#define RVS_UENTRY_SIZE       8     /* must be power of 2 */
 #define PAGE_SIZE             4096  /* must match system page size */
 #define USER_BUFFER_SIZE      (1 << 25) /* 32M entries */
 #define SMALL_USER_BUFFER_SIZE (1 << 14) /* 16K entries (must be less than USER_BUFFER_SIZE) */
@@ -34,11 +33,6 @@
 #define FORCE_FLUSH_TRIGGER_A 0
 #define FORCE_FLUSH_TRIGGER_B 1
 #define END_BUF_TRIGGER       2 
-
-struct rvs_uentry {
-   unsigned id;
-   unsigned tstamp;
-};
 
 static int32_t rvs_device_fd = -1;
 static int32_t rvs_trace_fd = -1;
@@ -108,7 +102,7 @@ fail:
 /* download kernel trace, do merge, and flush trace to disk */
 static void merge_buffers_now (unsigned prepend_oi_signal, unsigned reenable)
 {
-   unsigned start_tstamp = rvs_get_cycles();
+   unsigned start_tstamp = 0;
    struct rvs_uentry * user_start = NULL;
    struct rvs_uentry * user_ptr = NULL;
    struct rvs_uentry * user_end = NULL;
@@ -128,6 +122,7 @@ static void merge_buffers_now (unsigned prepend_oi_signal, unsigned reenable)
    if (r < 0) {
       ppc_fatal_error("rvslib: failed to disable kernel tracing before write to disk");
    }
+   start_tstamp = rvs_get_cycles();
 
    /* download new data from kernel - we read the whole kernel buffer in one go */
    r = ppc_read (rvs_device_fd, kernel_buffer, KERNEL_BUFFER_SIZE * sizeof(struct rvs_uentry));
@@ -223,7 +218,14 @@ static void merge_buffers_now (unsigned prepend_oi_signal, unsigned reenable)
    output_ptr->tstamp = rvs_get_cycles();
    output_ptr++;
 
-   /* reset and reenable */
+   /* write notification to disk */
+   todo = (output_ptr - output_start) * sizeof (struct rvs_uentry);
+   r = ppc_write (rvs_trace_fd, output_start, todo);
+   if (r != todo) {
+      ppc_fatal_error ("rvslib: unable to write begin/end write event to disk");
+   }
+
+   /* reset and (possibly) reenable */
    r = ppc_ioctl (rvs_device_fd, RVS_RESET, 0);
    if (r < 0) {
       ppc_fatal_error("RVS_Init: failed to reset module");
@@ -233,12 +235,6 @@ static void merge_buffers_now (unsigned prepend_oi_signal, unsigned reenable)
       if (r < 0) {
          ppc_fatal_error("rvslib: failed to re-enable kernel tracing after write to disk");
       }
-   }
-   /* write notification to disk */
-   todo = (output_ptr - output_start) * sizeof (struct rvs_uentry);
-   r = ppc_write (rvs_trace_fd, output_start, todo);
-   if (r != todo) {
-      ppc_fatal_error ("rvslib: unable to write begin/end write event to disk");
    }
 }
 
@@ -558,3 +554,9 @@ void RVS_Output (void)
       rvs_device_fd = -1;
    }
 }
+
+int RVS_Get_Version (void)
+{
+   return RVS_API_VERSION;
+}
+
