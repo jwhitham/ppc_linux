@@ -88,6 +88,12 @@ static int do_measurement (const char * label, unsigned pad,
    void (* do_run_loop) (unsigned count), unsigned inner_loop_cycles);
 static int do_test_kernel_flush (int tlb);
 
+static void bad_build_id ()
+{
+   fputs ("\nIncorrect RVS_Build_Id sequence\n", stderr);
+   exit (1);
+}
+
 int main (int argc, char ** argv)
 {
    FILE *         fd;
@@ -97,6 +103,7 @@ int main (int argc, char ** argv)
    unsigned       check = 0;
    unsigned       begin_write = 0;
    unsigned       end_write = 0;
+   unsigned       build_id_state = 0;
 
    printf ("Testing librvs.a and rvs.ko (with libc)\n\n");
    fflush (stdout);
@@ -152,6 +159,7 @@ int main (int argc, char ** argv)
       RVS_Ipoint (999); /* appears in output trace */
       check ++;
    }
+   RVS_Build_Id ("AB");
 
    /* Calling RVS_Output() - first time */
    RVS_Output();
@@ -168,8 +176,27 @@ int main (int argc, char ** argv)
       return 1;
    }
    while ((fread (&id, 4, 1, fd) == 1) && (fread (&tstamp, 4, 1, fd) == 1)) {
-      if (id == 999) {
-         check --;
+      switch (id) {
+         case 999:
+            check --;
+            break;
+         case 7:
+            if (build_id_state != 0) { bad_build_id (); }
+            build_id_state ++; break;
+         case 5:
+            if (build_id_state != 1) { bad_build_id (); }
+            build_id_state ++; break;
+         case 'A':
+            if (build_id_state != 2) { bad_build_id (); }
+            build_id_state ++; break;
+         case 'B':
+            if (build_id_state != 3) { bad_build_id (); }
+            build_id_state ++; break;
+         case 0:
+            if (build_id_state != 4) { bad_build_id (); }
+            build_id_state ++; break;
+         default:
+            break;
       }
    }
    fclose (fd);
@@ -177,6 +204,9 @@ int main (int argc, char ** argv)
    if (check != 0) {
       fputs ("\nUnexpected number of '999' test ipoints in trace\n", stderr);
       return 1;
+   }
+   if (build_id_state != 5) {
+      bad_build_id ();
    }
 
    /* Calling RVS_Init_Ex() - reinitialise with tiny buffer */

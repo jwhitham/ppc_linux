@@ -228,7 +228,7 @@ static void merge_buffers_now (unsigned prepend_oi_signal, unsigned reenable)
    /* reset and (possibly) reenable */
    r = ppc_ioctl (rvs_device_fd, RVS_RESET, 0);
    if (r < 0) {
-      ppc_fatal_error("RVS_Init: failed to reset module");
+      ppc_fatal_error("rvslib: failed to reset module");
    }
    if (reenable) {
       r = ppc_ioctl (rvs_device_fd, RVS_ENABLE, 0);
@@ -555,8 +555,34 @@ void RVS_Output (void)
    }
 }
 
+/* Return the version of the librvs.a/rvs.ko API */
 int RVS_Get_Version (void)
 {
    return RVS_API_VERSION;
+}
+
+/* Set the build ID for the instrumented source code.
+ * The build ID is written to the trace, so you should first call RVS_Init
+ * or RVS_Init_Ex. Trace filters must be able to recognise build IDs. */
+void RVS_Build_Id (const char * build_id)
+{
+   unsigned i;
+
+   if (rvs_device_fd < 0) {
+      ppc_fatal_error ("RVS_Build_Id called before RVS_Init");
+   }
+   merge_buffers_now (0, 0);
+
+   /* 7,5 = build id */
+   RVS_Ipoint (7);
+   RVS_Ipoint (5);
+
+   /* 0 terminated string = build ID */
+   for (i = 0; build_id[i] != 0; i++) {
+      RVS_Ipoint (build_id[i]);
+   }
+   RVS_Ipoint (0);
+
+   merge_buffers_now (0, 1);
 }
 

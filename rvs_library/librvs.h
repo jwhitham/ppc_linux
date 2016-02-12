@@ -47,6 +47,7 @@ void RVS_Init (void);
 void RVS_Init_Ex (const char * trace_file_name, unsigned flags);
 void RVS_Output (void);
 int RVS_Get_Version (void);
+void RVS_Build_Id (const char * build_id);
 
 static inline void RVS_Ipoint (unsigned id)
 {
