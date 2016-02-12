@@ -16,7 +16,7 @@
 
 
 /* The total capacity of the kernel trace buffer: */
-#define NUM_ENTRIES		(128 * 1024)
+#define NUM_ENTRIES		(16 * 1024 * 1024 / 8) /* 16 megabytes */
 
 /* The minimum number of trace entries needed to trigger the
  * "imminent overflow" condition - where we send a signal to
