@@ -26,7 +26,7 @@
 #define PAGE_SIZE             4096  /* must match system page size */
 #define SMALL_USER_BUFFER_SIZE (1 << 14) /* 16K entries (must be less than USER_BUFFER_SIZE) */
 #define KERNEL_BUFFER_SIZE    (16 * 1024 * 1024 / 8) /* 16 megabytes */
-#define USER_BUFFER_SIZE      (KERNEL_BUFFER_SIZE) /* 16 megabytes */
+#define USER_BUFFER_SIZE      (64 * 1024 * 1024 / 8) /* 64 megabytes */
 #define OUTPUT_BUFFER_SIZE    (128 * 1024) /* 128K entries: the most we write to disk at a time */
 
 #define NUM_TRIGGER_PAGES     3

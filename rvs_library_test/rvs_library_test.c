@@ -671,6 +671,16 @@ static int do_test_kernel_flush (int tlb)
 
    RVS_Init_Ex ("3" TRACE_NAME, 0);
 
+   /* Flushing may happen after each system call, no need to run the loop too often. */
+   outer_loop_size = 250;
+
+   /* !tlb => Provoked 250*10240 events from the kernel, creating at least 2500K
+    * log events. The kernel buffer holds 2M elements, and overflow imminent is
+    * signalled at 25% capacity, so we should expect 2500K / 500K = 5 overflow
+    * signals, though more are possible. Expect at least 4. Typically about 9
+    * are detected. */
+   expected_minimum = 4;
+
    if (tlb) {
       page_size = sysconf (_SC_PAGESIZE);
       tmp_size = inner_loop_size * page_size;
@@ -679,26 +689,12 @@ static int do_test_kernel_flush (int tlb)
          fputs ("\nUnable to allocate memory for do_test_kernel_flush\n", stderr);
          return 1;
       }
-      /* Flushing mostly happens on timer interrupts, so we run
-       * the loop more times. */
-      outer_loop_size = 100;
-
-      /* tlb => there will be approx 100*10240 TLB misses, because "tmp" is larger
-       * than the L2 TLB. These aren't necessarily identified as soon as the
-       * buffer usage goes over 25%, as the buffer usage check is asynchronous.
-       * Say it's 50%, then 1000K / 96K = 10 overflow imminent signals are
-       * expected. Expect at least 8. Typically about 20 are detected. */
-      expected_minimum = 8;
-   } else {
-      /* Flushing may happen after each system call, no need to run the loop too often. */
-      outer_loop_size = 50;
-
-      /* !tlb => Provoked 50*10240 events from the kernel, creating at least 500K
-       * log events. The kernel buffer holds 128K elements, and overflow imminent is
-       * signalled at 25% capacity, so we should expect floor (500K / 32K) = 15 overflow
-       * signals, though more are possible. Expect at least 10. Typically about 26
-       * are detected. */
-      expected_minimum = 15;
+      /* Flushing mostly happens on timer interrupts. In this mode we're
+       * not doing system calls, so we have to wait for the timer interrupt
+       * before there is a flush. Consequently the buffer typically gets flushed
+       * at a higher fill level - not 25%, more like 30%. We'll run
+       * the loop more times to compensate. Expect about 7 overflows. */
+      outer_loop_size += 125;
    }
    
 
